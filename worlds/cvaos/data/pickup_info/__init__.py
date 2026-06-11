@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import csv
-from pathlib import Path
-from typing import Annotated
-
+from ..._pydantic_compat import BaseModel, parse_obj_as, validator
+from .._csv_resources import open_csv
 from ..parse_int import parse_hex
-
-from pydantic import BaseModel, BeforeValidator, TypeAdapter
 
 __all__ = [
     "PickupInfo",
@@ -15,7 +11,7 @@ __all__ = [
 
 class PickupInfo(BaseModel):
     pickup_number: int
-    ptr_address: Annotated[int, BeforeValidator(parse_hex)]
+    ptr_address: int
     simple_name: str
     specifier: str | None = None
     flag_offset: int
@@ -24,10 +20,12 @@ class PickupInfo(BaseModel):
     type_name: str
     subtype_num: int
     room_identifier: str
-    room_address: Annotated[int, BeforeValidator(parse_hex)]
+    room_address: int
     pickup_number_within_room: int
     x: int
     y: int
+
+    _parse_hex_addresses = validator("ptr_address", "room_address", pre=True, allow_reuse=True)(parse_hex)
 
     def _as_tuple(
         self,
@@ -109,21 +107,19 @@ class PickupInfo(BaseModel):
         return find(key)
 
 
-def _load_csv(path: Path) -> list[dict[str, str]]:
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        rows = []
-        for row in reader:
-            # Skip completely empty lines
-            if not any((v or "").strip() for v in row.values()):
-                continue
-            rows.append(row)
-        return rows
+def _load_csv(filename: str) -> list[dict[str, str]]:
+    rows = []
+    for row in open_csv(__name__, filename):
+        # Skip completely empty lines
+        if not any((v or "").strip() for v in row.values()):
+            continue
+        rows.append(row)
+    return rows
 
 
 def _merge_rows() -> list[PickupInfo]:
-    ident_rows = _load_csv(Path(__file__).with_name("pickup_identifiers.csv"))
-    room_rows = _load_csv(Path(__file__).with_name("pickup_rooms.csv"))
+    ident_rows = _load_csv("pickup_identifiers.csv")
+    room_rows = _load_csv("pickup_rooms.csv")
 
     by_pickup_number_ident = {int(r["pickup_number"]): r for r in ident_rows}
     by_pickup_number_room = {int(r["pickup_number"]): r for r in room_rows}
@@ -165,7 +161,7 @@ def _merge_rows() -> list[PickupInfo]:
             }
         )
 
-    return TypeAdapter(list[PickupInfo]).validate_python(merged)
+    return parse_obj_as(list[PickupInfo], merged)
 
 
 rows: tuple[PickupInfo, ...] = tuple(_merge_rows())
