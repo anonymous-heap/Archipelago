@@ -103,3 +103,9 @@ INVENTORY: dict[str, InventoryArray] = {
     "ability_soul": InventoryArray("ability_soul", 0x13392, 6,    True),
 }
 # Money (subtype 1) is not an inventory array — it adds to CURRENT_GOLD.
+
+# Index within the "consumable" array of the Skull Key — the placeholder AoS grants Soma whenever he
+# collects a pickup that belongs to another world (rom/patch.py ``_AP_PLACEHOLDER``). Its owned-count
+# is meaningless to AP (the location check rides the pickup save flag, not the grant), but it shares
+# the consumable cap of 9, so the client keeps it low to leave headroom for the next pickup.
+SKULL_KEY_CONSUMABLE_INDEX = 25

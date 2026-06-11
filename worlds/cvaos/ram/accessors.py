@@ -222,6 +222,23 @@ class AoSRAM:
         return await self.guarded_write(
             addr.CURRENT_GOLD, list(new_value.to_bytes(4, "little")), list(current))
     
+    async def cap_skull_keys(self, *, limit: int = 1) -> None:
+        """
+        Keep the Skull Key placeholder count from accumulating toward AoS's item cap.
+
+        Every pickup that belongs to another world grants Soma a Skull Key locally
+        (rom/patch.py ``_AP_PLACEHOLDER``); the count is junk to AP, since the location check
+        rides the pickup save flag, not the grant. But AoS caps every consumable at 9 and won't
+        count a pickup past the cap, so a player who lets Skull Keys pile up could stop registering
+        pickups -- and stop sending other worlds their items. We knock the count back down to
+        ``limit`` whenever it climbs above, always leaving headroom to collect the next pickup. The
+        write is unguarded and one-directional (never raises a real count): the value is meaningless,
+        so a lost race just self-corrects next tick.
+        """
+        offset = addr.INVENTORY["consumable"].base + addr.SKULL_KEY_CONSUMABLE_INDEX
+        if await self.read_u8(offset) > limit:
+            await self.write_u8(offset, limit)
+
     async def set_flag_bit(self, offset: int, bit: int, value: int) -> bool:
         """
         Sets (``value`` truthy) or clears bit ``bit`` (0-7) of the EWRAM byte at ``offset``,
