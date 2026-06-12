@@ -45,17 +45,24 @@ def _options(difficulty: int = LogicDifficultyPreset.default, **overrides: str) 
 
 
 class _State:
-    """CollectionState stand-in for access rules: has_all over a fixed item set."""
+    """CollectionState stand-in for access rules: has_all over a fixed item set, plus
+    can_reach_region over a fixed region-name set (for Tform rules)."""
 
-    def __init__(self, *items: str) -> None:
+    def __init__(self, *items: str, regions: tuple[str, ...] = ()) -> None:
         self.items = set(items)
+        self.regions = set(regions)
 
     def has_all(self, names, player) -> bool:
         return set(names) <= self.items
 
+    def can_reach_region(self, name, player) -> bool:
+        return name in self.regions
 
-def _rule(masks: tuple[int, ...], difficulty: int = LogicDifficultyPreset.default, **overrides: str):
-    world = SimpleNamespace(player=1, options=_options(difficulty, **overrides))
+
+def _rule(masks: tuple[int, ...], difficulty: int = LogicDifficultyPreset.default,
+          enemy_regions: dict[int, str] | None = None, **overrides: str):
+    world = SimpleNamespace(player=1, options=_options(difficulty, **overrides),
+                            enemy_region_name_by_number=enemy_regions or {})
     return _create_access_rule_from_routing(_StaticRouting(masks), world)
 
 
@@ -160,3 +167,36 @@ def test_rule_falls_back_to_other_way_through():
     assert rule is not None
     assert rule(_State("Giant Bat"))
     assert not rule(_State("Malphas"))
+
+
+# --- access-rule factory: Tform (transformation) gating ----------------------------------
+
+def _a_devil_number() -> int:
+    """A real Devil enemy_number from the loaded routing data."""
+    from .data import by_enemy_name_for_enemy_regions
+    return next(iter(by_enemy_name_for_enemy_regions["Devil"]))
+
+
+def test_rule_tform_needs_a_reachable_transformation_source():
+    """WWalk+Tform with no Devil/Manticore region reachable is closed, even with Undine."""
+    rule = _rule((int(AbilityCombo.WWalk | AbilityCombo.Tform),))
+    assert rule is not None
+    assert not rule(_State("Undine"))
+
+
+def test_rule_tform_gates_on_souls_once_source_is_reachable():
+    devil_region = "Enemy: Devil (test)"
+    rule = _rule((int(AbilityCombo.WWalk | AbilityCombo.Tform),),
+                 enemy_regions={_a_devil_number(): devil_region})
+    assert rule is not None
+    assert rule(_State("Undine", regions=(devil_region,)))
+    assert not rule(_State("Undine"))  # source region not reachable
+    assert not rule(_State(regions=(devil_region,)))  # missing Undine
+
+
+def test_rule_tform_only_mask_is_exactly_source_reachability():
+    devil_region = "Enemy: Devil (test)"
+    rule = _rule((int(AbilityCombo.Tform),), enemy_regions={_a_devil_number(): devil_region})
+    assert rule is not None
+    assert rule(_State(regions=(devil_region,)))
+    assert not rule(_State())

@@ -33,13 +33,19 @@ __all__ = [
 ]
 
 
+# Enemy types whose souls satisfy a Tform (transformation) requirement bit. In-game a Curly
+# soul works too, but Curly is deliberately not modeled (no Curly logic), which keeps logic
+# conservative: it never expects a transformation the player can't farm.
+TFORM_ENEMY_TYPES: frozenset[str] = frozenset({"Devil", "Manticore"})
+
 # Enemy types whose instances get regions so logic can ask "can the player reach a source
 # of this soul?". Kept deliberately small: only enemies the logic references. Flame Demon
 # and Succubus drop two of the true-ending souls (the third, Giant Bat, is a ground pickup
-# resolved via state.has). Graham is intentionally NOT here: its enemy rows aren't
-# routing-annotated, so "reached Graham" is modeled as can_reach_room("904") instead (see
-# _chaotic_realm_gate and the goal completion in __init__).
-LOGIC_ENEMY_TYPES: frozenset[str] = frozenset({"Flame Demon", "Succubus"})
+# resolved via state.has); Devil and Manticore drop transformation souls (Tform). Graham is
+# intentionally NOT here: its enemy rows aren't routing-annotated, so "reached Graham" is
+# modeled as can_reach_room("904") instead (see _chaotic_realm_gate and the goal completion
+# in __init__).
+LOGIC_ENEMY_TYPES: frozenset[str] = frozenset({"Flame Demon", "Succubus"}) | TFORM_ENEMY_TYPES
 
 
 def _enemy_region_name(enemy_number: int, enemy_name: str, specifier: str, room: str) -> str:
@@ -155,6 +161,11 @@ def create_regions(world: CVAOSWorld) -> None:
         if rule_factory is not None:
             special_gate_entrances.append((key, entrance))
 
+    # Entrances whose access rule consults Devil/Manticore enemy-region reachability
+    # (_tform_available); registered as indirect conditions of those regions at the end,
+    # once the enemy regions exist.
+    tform_gated_entrances: list[Entrance] = []
+
     # Connect regions based on routing information
     # Routing describes traversal within a room: from entry point to exit point
     # FROM = "{RoomID}:{From}" (entry point - door you came through)
@@ -181,7 +192,9 @@ def create_regions(world: CVAOSWorld) -> None:
         access_rule = _create_access_rule_from_routing(routing_info, world)
 
         # Connect the regions
-        from_region.connect(to_region, connection_name, access_rule)
+        entrance = from_region.connect(to_region, connection_name, access_rule)
+        if _requires_tform(routing_info):
+            tform_gated_entrances.append(entrance)
 
     # Special within-room routing for non-standard (portal) nodes - defined in code
     # (SPECIAL_ROOM_ROUTING) rather than entrance_to_entrance_requirements.csv, because those
@@ -195,7 +208,9 @@ def create_regions(world: CVAOSWorld) -> None:
             continue
         access_rule = _special_room_access_rule(abilities, world)
         connection_name = f"{room_id}:{from_neighbor} -> {room_id}:{to_neighbor} (special)"
-        from_region.connect(to_region, connection_name, access_rule)
+        entrance = from_region.connect(to_region, connection_name, access_rule)
+        if "Tform" in abilities:
+            tform_gated_entrances.append(entrance)
 
     # Build pickup_number -> identifier_key lookup
     pickup_number_to_identifier: dict[int, str] = {
@@ -234,7 +249,9 @@ def create_regions(world: CVAOSWorld) -> None:
         access_rule = _create_access_rule_from_routing(pickup_routing, world)
 
         # Connect entrance to pickup
-        entrance_region.connect(pickup_region, connection_name, access_rule)
+        entrance = entrance_region.connect(pickup_region, connection_name, access_rule)
+        if _requires_tform(pickup_routing):
+            tform_gated_entrances.append(entrance)
 
     # Create enemy regions (one per enemy instance) for the logic-relevant enemy types
     # only, and connect them from their entrances. Enemy regions hold NO locations - they
@@ -272,7 +289,9 @@ def create_regions(world: CVAOSWorld) -> None:
         entrance_id_unique = door_number_to_id_unique[door_number]
         connection_name = f"{entrance_id_unique} -> Enemy:{enemy_routing.enemy_number}"
         access_rule = _create_access_rule_from_routing(enemy_routing, world)
-        entrance_region.connect(enemy_region, connection_name, access_rule)
+        entrance = entrance_region.connect(enemy_region, connection_name, access_rule)
+        if _requires_tform(enemy_routing):
+            tform_gated_entrances.append(entrance)
 
     # Index entrance regions by room id (the part before ':') so can_reach_room can ask
     # whether any door of a room is reachable. Includes the auto-created portal nodes.
@@ -296,6 +315,15 @@ def create_regions(world: CVAOSWorld) -> None:
             multiworld.register_indirect_condition(
                 multiworld.get_region(region_name, player), gate_entrance)
 
+    # ... and for the Tform-gated entrances, whose rules read Devil/Manticore enemy-region
+    # reachability (_tform_available).
+    tform_regions = [enemy_regions[number] for number, (enemy_name, _, _) in
+                     enemy_meta_by_number.items()
+                     if enemy_name in TFORM_ENEMY_TYPES and number in enemy_regions]
+    for entrance in tform_gated_entrances:
+        for region in tform_regions:
+            multiworld.register_indirect_condition(region, entrance)
+
 
 # Soul-ability bit -> the AP item granting it.
 _ABILITY_TO_ITEM: dict[AbilityCombo, str] = {
@@ -314,11 +342,12 @@ _ABILITY_TO_ITEM: dict[AbilityCombo, str] = {
 _SOUL_BITS: int = int(functools.reduce(operator.or_, _ABILITY_TO_ITEM))
 
 # Technique bits that are facts about the room rather than player skill.
-# Tform is really "has a Devil/Curly/Manticore soul";
-# TODO(tform): require those souls (an OR within a conjunctive mask, which the
-# bit -> single-item model can't express yet) instead of treating it as free.
-_FREE_TECHNIQUE_BITS: int = int(
-    AbilityCombo.Vert | AbilityCombo.Floor | AbilityCombo.Ceil | AbilityCombo.Tform)
+_FREE_TECHNIQUE_BITS: int = int(AbilityCombo.Vert | AbilityCombo.Floor | AbilityCombo.Ceil)
+
+# Tform (transformation) is neither a soul item nor option-gated: it is satisfied when the
+# player can farm a transformation soul, i.e. reach any TFORM_ENEMY_TYPES enemy region
+# (_tform_available).
+_TFORM_BIT: int = int(AbilityCombo.Tform)
 
 
 def _create_access_rule_from_routing(
@@ -335,9 +364,11 @@ def _create_access_rule_from_routing(
     and are fixed once generation starts, so they resolve here at build time: a mask
     demanding an out-of-logic technique is pruned (Impossible prunes the same way, never
     being in logic), and world-fact bits (_FREE_TECHNIQUE_BITS) are always satisfied.
+    Tform is the exception: it stays in the per-state rule as "a transformation-soul
+    source is reachable" (_tform_available).
 
     Returns None when some way through requires nothing (always accessible), an
-    always-False rule when every way through is out of logic, and a soul-item rule
+    always-False rule when every way through is out of logic, and a per-state rule
     otherwise.
     """
     requirement_masks = routing_info.get_requirement_bitmasks()
@@ -348,26 +379,43 @@ def _create_access_rule_from_routing(
 
     in_logic_bits = _FREE_TECHNIQUE_BITS | int(resolve_allowed_techniques(world.options))
 
-    needs: list[tuple[str, ...]] = []
+    needs: list[tuple[tuple[str, ...], bool]] = []
     for mask in map(int, requirement_masks):
-        if mask & ~_SOUL_BITS & ~in_logic_bits:
+        if mask & ~_SOUL_BITS & ~in_logic_bits & ~_TFORM_BIT:
             continue  # demands Impossible or an out-of-logic technique; try next mask
         items = tuple(item for bit, item in _ABILITY_TO_ITEM.items() if mask & bit)
-        if not items:
+        needs_tform = bool(mask & _TFORM_BIT)
+        if not items and not needs_tform:
             return None  # needs no souls and its techniques are in logic: always open
-        needs.append(items)
+        needs.append((items, needs_tform))
 
     if not needs:
         return lambda state: False  # every way through is out of logic at these options
 
-    # Masks that differed only in now-resolved technique bits collapse to one soul set.
+    # Masks that differed only in now-resolved technique bits collapse together.
     soul_needs = tuple(dict.fromkeys(needs))
     player = world.player
 
     def access_rule(state: CollectionState) -> bool:
-        return any(state.has_all(items, player) for items in soul_needs)
+        return any(
+            state.has_all(items, player) and (not needs_tform or _tform_available(state, world))
+            for items, needs_tform in soul_needs)
 
     return access_rule
+
+
+def _requires_tform(routing_info) -> bool:
+    """Whether any of the routing's requirement masks carries the Tform bit. Used to
+    register the connection's entrance as an indirect condition of the TFORM_ENEMY_TYPES
+    enemy regions its rule reads (see create_regions)."""
+    return any(int(mask) & _TFORM_BIT for mask in routing_info.get_requirement_bitmasks())
+
+
+def _tform_available(state: CollectionState, world: CVAOSWorld) -> bool:
+    """A transformation-soul source is reachable: any Devil or Manticore enemy region
+    (TFORM_ENEMY_TYPES). In-game a Curly soul also works; Curly is deliberately not
+    modeled, so logic under-approximates rather than over-promises."""
+    return any(can_reach_any_enemy(state, world, name) for name in TFORM_ENEMY_TYPES)
 
 
 def can_reach_any_enemy(state: CollectionState, world: CVAOSWorld, enemy_name: str) -> bool:
