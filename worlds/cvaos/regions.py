@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import functools
+import operator
 from typing import TYPE_CHECKING, Callable
 
 from BaseClasses import Entrance, Region
@@ -16,6 +18,7 @@ from .data import (
     transdoor_connection_collection,
 )
 from .locations import CVAOSLocation, location_name_to_id
+from .options import resolve_allowed_techniques
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -294,6 +297,30 @@ def create_regions(world: CVAOSWorld) -> None:
                 multiworld.get_region(region_name, player), gate_entrance)
 
 
+# Soul-ability bit -> the AP item granting it.
+_ABILITY_TO_ITEM: dict[AbilityCombo, str] = {
+    AbilityCombo.Glide: "Flying Armor",
+    AbilityCombo.Slide: "Skeleton Blaze",
+    AbilityCombo.DJump: "Malphas",
+    AbilityCombo.HJump: "Hippogryph",
+    AbilityCombo.WWalk: "Undine",
+    AbilityCombo.Dive: "Skula",
+    AbilityCombo.Panth: "Black Panther",
+    AbilityCombo.Bat: "Giant Bat",
+    AbilityCombo.BDash: "Grave Keeper",
+    AbilityCombo.Kick: "Kicker Skeleton",
+}
+
+_SOUL_BITS: int = int(functools.reduce(operator.or_, _ABILITY_TO_ITEM))
+
+# Technique bits that are facts about the room rather than player skill.
+# Tform is really "has a Devil/Curly/Manticore soul";
+# TODO(tform): require those souls (an OR within a conjunctive mask, which the
+# bit -> single-item model can't express yet) instead of treating it as free.
+_FREE_TECHNIQUE_BITS: int = int(
+    AbilityCombo.Vert | AbilityCombo.Floor | AbilityCombo.Ceil | AbilityCombo.Tform)
+
+
 def _create_access_rule_from_routing(
     routing_info,
     world: CVAOSWorld,
@@ -301,11 +328,17 @@ def _create_access_rule_from_routing(
     """
     Create an access rule function from RoutingInfo.
 
-    The RoutingInfo contains requirement bitmasks where each mask represents
-    a different way to satisfy the requirement (disjunctive options).
-    Each bit in a mask represents a required ability (conjunctive).
+    The RoutingInfo contains requirement bitmasks where each mask represents a different
+    way to satisfy the requirement (disjunctive options). Each bit in a mask is one
+    required ability (conjunctive). Soul-ability bits gate on their items per state.
+    Technique bits gate on the resolved logic options (options.resolve_allowed_techniques)
+    and are fixed once generation starts, so they resolve here at build time: a mask
+    demanding an out-of-logic technique is pruned (Impossible prunes the same way, never
+    being in logic), and world-fact bits (_FREE_TECHNIQUE_BITS) are always satisfied.
 
-    Returns a lambda that checks if the player has any of the requirement combinations.
+    Returns None when some way through requires nothing (always accessible), an
+    always-False rule when every way through is out of logic, and a soul-item rule
+    otherwise.
     """
     requirement_masks = routing_info.get_requirement_bitmasks()
 
@@ -313,64 +346,26 @@ def _create_access_rule_from_routing(
         # No requirements means always accessible
         return None
 
-    # Ability flags to item names
-    ability_to_item: dict[AbilityCombo, str] = {
-        AbilityCombo.Glide: "Flying Armor",
-        AbilityCombo.Slide: "Skeleton Blaze",
-        AbilityCombo.DJump: "Malphas",
-        AbilityCombo.HJump: "Hippogryph",
-        AbilityCombo.WWalk: "Undine",
-        AbilityCombo.Dive: "Skula",
-        AbilityCombo.Panth: "Black Panther",
-        AbilityCombo.Bat: "Giant Bat",
-        AbilityCombo.BDash: "Grave Keeper",
-        AbilityCombo.Kick: "Kicker Skeleton",
-    }
+    in_logic_bits = _FREE_TECHNIQUE_BITS | int(resolve_allowed_techniques(world.options))
+
+    needs: list[tuple[str, ...]] = []
+    for mask in map(int, requirement_masks):
+        if mask & ~_SOUL_BITS & ~in_logic_bits:
+            continue  # demands Impossible or an out-of-logic technique; try next mask
+        items = tuple(item for bit, item in _ABILITY_TO_ITEM.items() if mask & bit)
+        if not items:
+            return None  # needs no souls and its techniques are in logic: always open
+        needs.append(items)
+
+    if not needs:
+        return lambda state: False  # every way through is out of logic at these options
+
+    # Masks that differed only in now-resolved technique bits collapse to one soul set.
+    soul_needs = tuple(dict.fromkeys(needs))
+    player = world.player
 
     def access_rule(state: CollectionState) -> bool:
-        """
-        Check if any of the requirement combinations are satisfied.
-        """
-        player = world.player
-
-        for mask in requirement_masks:
-            # Check if this particular combination of abilities is satisfied
-            requirements_met = True
-
-            # Special case: mask == 0 means no requirements (always accessible)
-            if mask == 0:
-                return True
-
-            # Check for Impossible flag
-            if mask & AbilityCombo.Impossible:
-                continue  # This path is impossible, try next mask
-
-            # Check each ability bit
-            for ability_flag, item_name in ability_to_item.items():
-                if mask & ability_flag:
-                    # This ability is required for this combination
-                    if not state.has(item_name, player):
-                        requirements_met = False
-                        break
-
-            # Special handling for technical requirements
-            # These might need different logic based on your game's rules
-            if mask & AbilityCombo.Enemy:
-                # TODO: Implement enemy presence logic if needed
-                pass
-            if mask & AbilityCombo.PixPer:
-                # TODO: Implement pixel-perfect platforming logic if needed
-                # This might be controlled by an option
-                pass
-            if mask & AbilityCombo.Clip:
-                # TODO: Implement platform clip logic if needed
-                pass
-
-            if requirements_met:
-                return True
-
-        # None of the requirement combinations were satisfied
-        return False
+        return any(state.has_all(items, player) for items in soul_needs)
 
     return access_rule
 
