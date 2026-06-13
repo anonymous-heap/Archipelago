@@ -103,19 +103,27 @@ class CVAOSClient(BizHawkClient):
             self.death_causes.append(data.get("cause") or f"{source} killed you without a word!")
 
     async def game_watcher(self, ctx: "BizHawkClientContext") -> None:
-        # Per-tick orchestrator: gate on safe gameplay, then run each concern (each its own helper).
+        # Per-tick orchestrator: read the run state once, relay DeathLink every tick, and run the
+        # in-gameplay-only concerns (checks/items/goal) when it is safe to read & write game memory.
         if ctx.server is None or ctx.slot is None:
             return
         try:
             ram = AoSRAM(ctx.bizhawk_ctx)
-            # Only read/act in normal in-room gameplay (not paused, transitioning, in a menu, or
-            # game-over), so we never read garbage or act at an unsafe time.
-            if not await ram.is_in_gameplay():
-                return
-            await self._send_location_checks(ctx, ram)
-            await self._receive_items(ctx, ram)
-            await self._relay_deathlink(ctx, ram)
-            await self._report_goal(ctx, ram)
+            game_state, menu_state = await ram.get_run_state()
+            in_gameplay = (game_state == addr.GameState.INGAME
+                           and menu_state == addr.MENU_STATE_NORMAL)
+            # DeathLink must run even when NOT in gameplay: a death is, by definition, the game
+            # leaving normal gameplay (the death fade, then the game-over screen). Gating it behind
+            # is_in_gameplay() was the bug -- it could only catch the ~1-frame window where HP hit 0
+            # while still in normal play, which a 0.125s poll almost always skipped.
+            await self._relay_deathlink(ctx, ram, game_state, menu_state, in_gameplay)
+            # Reading checks / injecting items is only safe in normal in-room gameplay (not paused,
+            # transitioning, in a menu, dying, or game-over), so we never read garbage or write at
+            # an unsafe time.
+            if in_gameplay:
+                await self._send_location_checks(ctx, ram)
+                await self._receive_items(ctx, ram)
+                await self._report_goal(ctx, ram)
         except bizhawk.RequestFailedError:
             # Emulator/connection hiccup; retry next tick.
             return
@@ -168,9 +176,17 @@ class CVAOSClient(BizHawkClient):
             received += 1
             granted_this_tick += 1
 
-    async def _relay_deathlink(self, ctx: "BizHawkClientContext", ram: AoSRAM) -> None:
-        # DeathLink (Strategy A: RAM poke): enable from slot_data, broadcast Soma's death when HP
-        # hits 0, apply an incoming death by zeroing HP (kill_player), re-arm once he's alive again.
+    async def _relay_deathlink(self, ctx: "BizHawkClientContext", ram: AoSRAM,
+                               game_state: int, menu_state: int, in_gameplay: bool) -> None:
+        # DeathLink (Strategy A: RAM poke): enable from slot_data, broadcast Soma's death the moment
+        # the engine enters its death sub-state or the game-over screen, apply an incoming death by
+        # zeroing HP (kill_player) during gameplay, and re-arm once Soma is alive in normal play.
+        #
+        # We key off the death STATE, not HP==0: every death (combat, spikes, overkill laser) routes
+        # through one damage routine that clamps HP to exactly 0 and then the player-death handler
+        # sets MENU_STATE=2 the same frame, holding it through the multi-frame fade before GAME_STATE
+        # flips to GAME_OVER. That state persists for many frames, so a 0.125s poll reliably sees it;
+        # the old HP==0-during-normal-gameplay test only had a ~1-frame window and usually missed it.
         from CommonClient import logger
 
         # Enable DeathLink once if the seed wants it; update_death_link adds the "DeathLink" tag, so
@@ -178,25 +194,33 @@ class CVAOSClient(BizHawkClient):
         if ctx.slot_data["death_link"] and "DeathLink" not in ctx.tags:
             await ctx.update_death_link(True)
 
-        # One HP read drives both directions: broadcast when we hit 0, re-arm when alive again.
-        hp = await ram.get_current_hp()
-        if "DeathLink" in ctx.tags and hp == 0 and not self.currently_dead:
+        # Dead/dying: the in-game death fade (MENU_STATE==DEATH while still INGAME) or the game-over
+        # screen. The sub-state is gated on INGAME so we never misread the byte outside gameplay.
+        dead = ((game_state == addr.GameState.INGAME and menu_state == addr.MENU_STATE_DEATH)
+                or game_state == addr.GameState.GAME_OVER)
+
+        # Re-arm first: once Soma is alive again in normal play, clear the latch so the next death in
+        # either direction is detected. The hp>0 guard covers the brief frame right after we poke an
+        # incoming death (state still NORMAL, but HP is the 0 we just wrote), so we don't re-arm and
+        # then immediately re-broadcast that same death.
+        if self.currently_dead and in_gameplay and await ram.get_current_hp() > 0:
+            self.currently_dead = False
+
+        if "DeathLink" in ctx.tags and dead and not self.currently_dead:
             # Died on our own. Mark dead BEFORE awaiting so a same-tick re-entry can't double-send.
             self.currently_dead = True
             await ctx.send_death(f"{ctx.player_names[ctx.slot]} was slain. Dracula has won!")
             # Record AP's timestamp so on_package can filter our own echo (overwritten later).
             self.time_of_sent_death = ctx.last_death_link
 
-        if self.death_causes and not self.currently_dead:
-            # Apply an incoming death (on_package queued the cause). The currently_dead gate keeps
-            # us from re-killing Soma for a death already in progress.
+        if self.death_causes and not self.currently_dead and in_gameplay:
+            # Apply an incoming death (on_package queued the cause). Only while in normal gameplay --
+            # poking HP during the fade/menu is unsafe. The currently_dead gate keeps us from
+            # re-killing Soma (and from re-broadcasting) for a death already in progress.
             cause = self.death_causes.pop(0)
             await ram.kill_player()
             self.currently_dead = True
             logger.info("CVAoS DeathLink: %s", cause)
-        elif hp > 0 and self.currently_dead:
-            # Alive again (respawn or reload): re-arm for the next death in either direction.
-            self.currently_dead = False
 
     async def _report_goal(self, ctx: "BizHawkClientContext", ram: AoSRAM) -> None:
         """

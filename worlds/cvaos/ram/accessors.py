@@ -39,6 +39,9 @@ class AoSRAM:
     async def read_u16(self, offset: int, domain: str = EWRAM) -> int:
         return int.from_bytes(await self.read(offset, 2, domain), "little")
 
+    async def read_s16(self, offset: int, domain: str = EWRAM) -> int:
+        return int.from_bytes(await self.read(offset, 2, domain), "little", signed=True)
+
     async def read_u32(self, offset: int, domain: str = EWRAM) -> int:
         return int.from_bytes(await self.read(offset, 4, domain), "little")
 
@@ -66,16 +69,27 @@ class AoSRAM:
             self.ctx, [(offset, list(data), domain)], [(offset, list(expected), domain)])
 
     # --- gameplay state -----------------------------------------------------
-    async def is_in_gameplay(self) -> bool:
+    async def get_run_state(self) -> tuple[int, int]:
         """
-        True only when it is safe to read checks / inject items: normal in-room
-        gameplay, not paused / transitioning / in a menu / game-over (sec. 5b).
+        ``(GAME_STATE, MENU_STATE)`` in a single round-trip. GAME_STATE is a
+        ``GameState`` value (INGAME / GAME_OVER / ...); MENU_STATE is the in-room
+        sub-state (NORMAL / ROOM_TRANSITION / PAUSE / SHOP, plus the death-fade
+        value ``MENU_STATE_DEATH``). The DeathLink relay needs both even when not
+        in gameplay, so it reads them here and derives ``is_in_gameplay`` itself.
         """
         state, menu = await bizhawk.read(self.ctx, [
             (addr.GAME_STATE, 1, EWRAM),
             (addr.MENU_STATE, 1, EWRAM),
         ])
-        return state[0] == addr.GameState.INGAME and menu[0] == addr.MENU_STATE_NORMAL
+        return state[0], menu[0]
+
+    async def is_in_gameplay(self) -> bool:
+        """
+        True only when it is safe to read checks / inject items: normal in-room
+        gameplay, not paused / transitioning / in a menu / game-over (sec. 5b).
+        """
+        game_state, menu_state = await self.get_run_state()
+        return game_state == addr.GameState.INGAME and menu_state == addr.MENU_STATE_NORMAL
 
     # --- location detection -------------------------------------------------
     async def read_pickup_flags(self) -> bytes:
@@ -121,10 +135,12 @@ class AoSRAM:
 
     async def get_current_hp(self) -> int:
         """
-        Lean single-field read for the DeathLink poll. See `get_vitals` for the
-        whole typed block.
+        Current HP as a SIGNED s16 -- the engine stores and tests it signed, and an
+        overkill hit can leave it briefly negative before being clamped to 0, so a
+        ``> 0`` test (used to confirm a real respawn) must read it signed. See
+        `get_vitals` for the whole typed block.
         """
-        return await self.read_u16(addr.CURRENT_HP)
+        return await self.read_s16(addr.CURRENT_HP)
 
     async def get_max_hp(self) -> int:
         """
