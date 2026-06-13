@@ -32,9 +32,18 @@ class GameState(IntEnum):
 
 
 MENU_STATE_NORMAL = 0x01            # in-room, not transitioning/paused/shopping
+MENU_STATE_DEATH = 0x02            # death/game-over fade sub-state (drives DeathLink detection)
 MENU_STATE_ROOM_TRANSITION = 0x03
 MENU_STATE_PAUSE = 0x06
 MENU_STATE_SHOP = 0x09
+# MENU_STATE_DEATH is undocumented in the cvaos-decomp RAM map (which lists only 1/3/6/9), but
+# verified in the decomp: the single player-death handler sub_0801AF20 writes this sub-state
+# (unk_64 = 2) on the very frame a lethal hit lands -- for combat, spikes, and overkill alike,
+# since every death routes through the one damage routine that clamps HP to exactly 0 -- and
+# holds it through the multi-frame death fade (GameModeInGameUpdate's case 2 runs the fade),
+# while GAME_STATE stays INGAME until the fade ends and flips to GAME_OVER. This persistent
+# sub-state is what DeathLink keys off, instead of the ~1-frame (INGAME, NORMAL, hp==0)
+# coincidence that a 0.125s poll almost always skipped.
 
 
 # --- Location detection: collected-pickup save flags ---
