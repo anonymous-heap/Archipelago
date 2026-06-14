@@ -21,6 +21,14 @@ EWRAM_BASE = 0x02000000
 GAME_STATE = 0x00010      # 0x02000010 u8
 MENU_STATE = 0x00064      # 0x02000064 u8
 
+# 0x020000A1 u8 "current game mode": low nibble is the character (Soma=1 / Julius=0), high nibble
+# is the difficulty (normal=0 / hard=1). The game writes it only at new-game / mode-select; the
+# damage scaling, soul-drop rates, and the HARD_PICKUP spawn gate all read it live, so forcing the
+# high nibble to 1 makes the game behave as Hard Mode (verified in cvaos-decomp).
+GAME_MODE = 0x000A1
+GAME_MODE_DIFFICULTY_MASK = 0xF0   # high nibble
+GAME_MODE_HARD = 0x10              # high nibble == 1
+
 
 class GameState(IntEnum):
     KONAMI_LOGO = 0x00

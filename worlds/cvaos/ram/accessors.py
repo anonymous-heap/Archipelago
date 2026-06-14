@@ -91,6 +91,20 @@ class AoSRAM:
         game_state, menu_state = await self.get_run_state()
         return game_state == addr.GameState.INGAME and menu_state == addr.MENU_STATE_NORMAL
 
+    # --- hard mode ----------------------------------------------------------
+    async def ensure_hard_mode(self) -> bool:
+        """
+        Force the difficulty nibble of the game-mode byte to Hard, preserving the character
+        nibble. Returns True if a write was needed. The game only writes this byte at
+        new-game / mode-select, so re-applying it per tick holds without fighting the game;
+        damage scaling, soul-drop rates, and the HARD_PICKUP spawn gate read it live.
+        """
+        mode = await self.read_u8(addr.GAME_MODE)
+        if (mode & addr.GAME_MODE_DIFFICULTY_MASK) == addr.GAME_MODE_HARD:
+            return False
+        await self.write_u8(addr.GAME_MODE, (mode & ~addr.GAME_MODE_DIFFICULTY_MASK) | addr.GAME_MODE_HARD)
+        return True
+
     # --- location detection -------------------------------------------------
     async def read_pickup_flags(self) -> bytes:
         return await self.read(addr.PICKUP_FLAGS, addr.PICKUP_FLAGS_LEN)
