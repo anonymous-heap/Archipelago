@@ -102,6 +102,15 @@ class PickupInfo(BaseModel):
             return f"{int(self.simple_name)} Gold{suffix}"
         return f"{self.simple_name}{suffix}"
 
+    @property
+    def is_hard_mode_only(self) -> bool:
+        """
+        True for HARD_PICKUP entities (type 5), which the game spawns only in Hard Mode (as
+        Soma). They share the same save-flag bitfield as normal pickups, so the only difference
+        is whether they exist at all in a given game.
+        """
+        return self.type_num == 5
+
     @classmethod
     def find(cls, key: int | str) -> "PickupInfo":
         return find(key)

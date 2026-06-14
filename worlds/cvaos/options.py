@@ -40,6 +40,20 @@ class Goal(Choice):
     default = option_chaos
 
 
+class HardMode(Toggle):
+    """
+    Shuffle the game's Hard Mode pickups (Kaiser Knuckle, Death's Sickle, Death's Robe,
+    Silver Gun, Tear of Blood). The game only spawns those five in Hard Mode, so when this is
+    off they are excluded from the location pool and item pool entirely.
+
+    NOTE: in-game Hard Mode enforcement -- forcing the ROM/save into Hard Mode so those pickups
+    actually appear -- is not wired up yet. With this on, the five locations are shuffled for
+    logic purposes but will not be obtainable until that support lands, so leave it off for now.
+    """
+    display_name = "Hard Mode"
+    default = 0
+
+
 class LogicDifficultyPreset(Choice):
     """
     How much execution skill the logic may expect, beyond having the right souls.
@@ -142,6 +156,7 @@ class CVAOSOptions(PerGameCommonOptions):
     accessibility: ItemsAccessibility
     randomize_pickups: RandomizePickups
     goal: Goal
+    hard_mode: HardMode
     logic_difficulty_preset: LogicDifficultyPreset
     kickable_enemy_logic: KickableEnemyLogic
     platform_clip_logic: PlatformClipLogic
