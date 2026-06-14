@@ -254,11 +254,12 @@ def _entrance_identifiers_from_cell(room_id: str, cell: str | None) -> set[str]:
     Interpret the dest_room_identifier column and return the set of entrance identifiers
     for arrivals in room_id.
 
-    For "Any", returns all entrance nodes that arrive in room_id according to
-    by_from_entrance_for_transdoor. For a specific neighbor room (or comma-separated list),
-    constructs f"{neighbor}:{room_id}" and includes it only if it exists in
-    by_from_entrance_for_transdoor. This means removing a door from
-    default_transdoor_entrance_connections.csv automatically excludes it here.
+    For "Any", returns all entrance nodes that arrive in room_id according to _arrivals_by_room
+    -- the door on room_id's own side of each transdoor, so it sits behind any gate on the
+    crossing. For a specific neighbor room (or comma-separated list), constructs
+    f"{room_id}:{neighbor}" and includes it only if it exists in by_from_entrance_for_transdoor.
+    This means removing a door from default_transdoor_entrance_connections.csv automatically
+    excludes it here.
     """
     if cell is None:
         return set()
@@ -272,7 +273,7 @@ def _entrance_identifiers_from_cell(room_id: str, cell: str | None) -> set[str]:
 
     identifiers: set[str] = set()
     for neighbor in (part.strip() for part in text.split(",") if part.strip()):
-        entrance = f"{neighbor}:{room_id}"
+        entrance = f"{room_id}:{neighbor}"
         if entrance in by_from_entrance_for_transdoor:
             identifiers.add(entrance)
     return identifiers
@@ -527,8 +528,11 @@ by_from_entrance_for_transdoor: dict[str, TransdoorConnection] = {
 }
 _arrivals_by_room: dict[str, set[str]] = {}
 for _r in transdoor_connection_rows:
-    _, _dest_room = _r.from_entrance.split(":", 1)
-    _arrivals_by_room.setdefault(_dest_room, set()).add(_r.from_entrance)
+    # The arrival node is the door on the side you end up at -- the to_entrance, whose
+    # room_identifier is room_id. Using from_entrance would attach pickups/enemies to the
+    # neighbor's side of the door, i.e. in front of any gate on the crossing.
+    _arrival_room, _ = _r.to_entrance.split(":", 1)
+    _arrivals_by_room.setdefault(_arrival_room, set()).add(_r.to_entrance)
 
 pickup_region_rows: tuple[EntranceToPickupRegionInfo, ...] = _load_pickup_region_requirements()
 by_pickup_number_for_pickup_regions: dict[int, list[EntranceToPickupRegionInfo]] = {}
