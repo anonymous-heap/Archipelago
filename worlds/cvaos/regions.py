@@ -461,11 +461,19 @@ def can_reach_room(state: CollectionState, world: CVAOSWorld, room_id: str) -> b
 
 
 def _chaotic_realm_gate(world: CVAOSWorld):
-    """Access rule for the 507 -> 506 door into the Chaotic Realm (the true-ending gate):
-    the Giant Bat soul (a ground pickup) plus the Flame Demon and Succubus souls (enemy
-    drops), plus having reached Graham (room 904). The reverse crossing (506 -> 507) is free.
-    Since the realm is reachable only through this door, ``can_reach_room(B14)`` inherits the
-    whole requirement, which is why the Chaos goal can just check B14."""
+    """Access rule for the true-ending gate into the Chaotic Realm: the Giant Bat soul (a ground
+    pickup) plus the Flame Demon and Succubus souls (enemy drops), plus having reached Graham
+    (room 904). Used on both realm entrances -- the 507 -> 506 door (toward Chaos/B14) and the
+    904 -> 900 floor-break into the realm pocket (Dracula's Tunic / Black Panther). The reverse
+    crossings are free.
+
+    For randomization, reaching room 904 and reaching the souls is treated as equivalent to
+    having beaten Graham with them, so can_reach_room("904") is the "defeated Graham" term. On
+    the 904 -> 900 crossing that term is trivially true (you cross from a room-904 door), so the
+    effective added cost there is just the three souls -- correct, since reaching/beating Graham
+    needs no souls but descending into the realm pocket does. The Chaos arena (B14) is reachable
+    only through 507 -> 506, so can_reach_room("B14") still inherits the whole requirement, which
+    is why the Chaos goal can just check B14."""
     player = world.player
 
     def rule(state: CollectionState) -> bool:
@@ -496,10 +504,12 @@ def _chaotic_realm_gate_deps(world: CVAOSWorld) -> list[str]:
 # are factories returning the access-rule callable; ``DEPS`` values return the region names
 # that rule reads, for indirect-condition registration.
 SPECIAL_TRANSDOOR_RULES: dict[tuple[str, str], object] = {
-    ("507:506", "506:507"): _chaotic_realm_gate,
+    ("507:506", "506:507"): _chaotic_realm_gate,   # 507 -> 506: toward Chaos (B14)
+    ("904:900", "900:904"): _chaotic_realm_gate,   # 904 -> 900: floor-break into the realm pocket
 }
 SPECIAL_TRANSDOOR_DEPS: dict[tuple[str, str], object] = {
     ("507:506", "506:507"): _chaotic_realm_gate_deps,
+    ("904:900", "900:904"): _chaotic_realm_gate_deps,
 }
 
 
