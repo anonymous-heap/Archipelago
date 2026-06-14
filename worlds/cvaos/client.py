@@ -117,6 +117,11 @@ class CVAOSClient(BizHawkClient):
             # is_in_gameplay() was the bug -- it could only catch the ~1-frame window where HP hit 0
             # while still in normal play, which a 0.125s poll almost always skipped.
             await self._relay_deathlink(ctx, ram, game_state, menu_state, in_gameplay)
+            # Hard Mode: keep the game-mode difficulty nibble forced to Hard while a game is loaded
+            # (any in-game sub-state, so it is set before room transitions load HARD_PICKUP entities).
+            # The game only writes this nibble at new-game/menu, so the per-tick poke holds.
+            if game_state == addr.GameState.INGAME and ctx.slot_data.get("hard_mode"):
+                await ram.ensure_hard_mode()
             # Reading checks / injecting items is only safe in normal in-room gameplay (not paused,
             # transitioning, in a menu, dying, or game-over), so we never read garbage or write at
             # an unsafe time.
