@@ -85,6 +85,15 @@ class AbilityCombo(IntFlag):
     QSave = auto()   # Quick Save entrance reset
     """Quick Save entrance reset"""
 
+    # Enemy/guardian souls used as gating items, appended here so adding them doesn't shift the
+    # bit values of the abilities above. Galamoth is a real ground-pickup soul (gated on
+    # ``state.has`` via ``_ABILITY_TO_ITEM`` in regions.py); Chronomage has no pickup, so gating
+    # on it resolves to an item that is never placed and is therefore always inert.
+    Galamoth = auto()
+    """Galamoth soul"""
+    Chronomage = auto()
+    """Chronomage soul (enemy-only; the gate is inert)"""
+
 # Canonical enum-key -> bitflag
 _ABILITY_BY_NAME: dict[str, AbilityCombo] = {
     "None": AbilityCombo.None_,
@@ -107,6 +116,9 @@ _ABILITY_BY_NAME: dict[str, AbilityCombo] = {
     "Ceil": AbilityCombo.Ceil,
     "Vert": AbilityCombo.Vert,
     "QSave": AbilityCombo.QSave,
+    "Galamoth": AbilityCombo.Galamoth,
+    # Chronomage has no pickup, so this resolves to an item that is never placed -- an inert gate.
+    "Chronomage": AbilityCombo.Chronomage,
 }
 
 
