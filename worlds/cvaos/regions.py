@@ -337,6 +337,11 @@ _ABILITY_TO_ITEM: dict[AbilityCombo, str] = {
     AbilityCombo.Bat: "Giant Bat",
     AbilityCombo.BDash: "Grave Keeper",
     AbilityCombo.Kick: "Kicker Skeleton",
+    AbilityCombo.Galamoth: "Galamoth",
+    # Chronomage has no pickup/location, so this item is never created or placed and
+    # ``state.has("Chronomage")`` is always False -- the Chronomage option is a permanent no-op
+    # (always OR'd with Galamoth, which carries the requirement).
+    AbilityCombo.Chronomage: "Chronomage",
 }
 
 _SOUL_BITS: int = int(functools.reduce(operator.or_, _ABILITY_TO_ITEM))
