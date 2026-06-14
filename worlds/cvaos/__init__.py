@@ -112,6 +112,7 @@ class CVAOSWorld(World):
         return {
             "randomize_pickups": self.options.randomize_pickups.value,
             "goal": self.options.goal.value,
+            "hard_mode": self.options.hard_mode.value,
             "death_link": self.options.death_link.value,
         }
 

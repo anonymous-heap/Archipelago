@@ -110,8 +110,14 @@ def create_regions(world: CVAOSWorld) -> None:
             multiworld.regions.append(region)
         return region
 
-    # Create pickup regions (one per pickup in the game)
+    # Create pickup regions (one per pickup in the game). Hard-Mode-only pickups (HARD_PICKUP
+    # entities) only spawn in the game's Hard Mode, so include them only when that option is set;
+    # the item pool is gated the same way in items.create_itempool. Routing connections to a
+    # skipped pickup resolve to None and are dropped below.
+    include_hard = bool(world.options.hard_mode)
     for pickup_info in pickup_info_collection:
+        if pickup_info.is_hard_mode_only and not include_hard:
+            continue
         region_name = f"Pickup: {pickup_info.display_name}"
         region = Region(region_name, player, multiworld)
         pickup_regions[pickup_info.identifier_key] = region

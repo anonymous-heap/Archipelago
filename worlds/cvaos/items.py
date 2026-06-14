@@ -82,8 +82,14 @@ def _build_item_table() -> Dict[str, ItemData]:
 
 item_table: Dict[str, ItemData] = _build_item_table()
 
-# Convenience map for the World class.
+# Convenience map for the World class. Kept complete (every pickup, Hard-Mode ones included) so
+# item ids stay stable for the data package; per-seed inclusion is decided in create_itempool.
 item_name_to_id: Dict[str, int] = {name: data.code for name, data in item_table.items()}
+
+# Items that exist only in the game's Hard Mode (the HARD_PICKUP entities). Excluded from the
+# pool unless the Hard Mode option is on; mirrors the location gating in regions.create_regions.
+_HARD_PICKUP_ITEM_NAMES: frozenset[str] = frozenset(
+    p.display_name for p in pickup_infos if p.is_hard_mode_only)
 
 
 def create_item(world: "CVAOSWorld", name: str) -> CVAOSItem:
@@ -92,5 +98,8 @@ def create_item(world: "CVAOSWorld", name: str) -> CVAOSItem:
 
 
 def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
-    # One of each defined pickup for now; adjust counts/filters as the world logic matures.
-    return [create_item(world, name) for name in item_table]
+    # One item per pickup. Hard-Mode-only pickups are included only when the Hard Mode option is
+    # set, so the pool stays balanced with the locations created in regions.create_regions.
+    include_hard = bool(world.options.hard_mode)
+    return [create_item(world, name) for name in item_table
+            if include_hard or name not in _HARD_PICKUP_ITEM_NAMES]
