@@ -29,6 +29,13 @@ GAME_MODE = 0x000A1
 GAME_MODE_DIFFICULTY_MASK = 0xF0   # high nibble
 GAME_MODE_HARD = 0x10              # high nibble == 1
 
+# 0x02000060 u32 "cleared-data" flags. The game sets this to 3 (bits 0+1) when you beat it
+# (sub_080137FC, persisted to SRAM). Value 3 marks a cleared file: cutscenes become Start-
+# skippable, and the new-game menu's Hard Mode prompt is offered (it checks bit 1). We force it
+# for every randomized ROM so cutscenes are skippable; the bits live in the low byte.
+GAME_CLEARED_FLAGS = 0x00060
+GAME_CLEARED_VALUE = 0x03          # bits 0+1 set == game beaten once
+
 
 class GameState(IntEnum):
     KONAMI_LOGO = 0x00

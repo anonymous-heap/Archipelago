@@ -47,7 +47,36 @@ class EnsureHardModeTest(unittest.IsolatedAsyncioTestCase):
         write.assert_awaited_once_with(addr.GAME_MODE, 0x11)
 
 
-class GameWatcherHardModeTest(unittest.IsolatedAsyncioTestCase):
+class EnsureGameClearedTest(unittest.IsolatedAsyncioTestCase):
+    async def _run(self, current_byte: int):
+        ram = AoSRAM.__new__(AoSRAM)
+        ram.read_u8 = AsyncMock(return_value=current_byte)
+        ram.write_u8 = AsyncMock()
+        changed = await ram.ensure_game_cleared()
+        return changed, ram.write_u8
+
+    async def test_not_cleared_becomes_cleared(self):
+        changed, write = await self._run(0x00)
+        self.assertTrue(changed)
+        write.assert_awaited_once_with(addr.GAME_CLEARED_FLAGS, 0x03)
+
+    async def test_already_cleared_is_a_no_op(self):
+        changed, write = await self._run(0x03)
+        self.assertFalse(changed)
+        write.assert_not_awaited()
+
+    async def test_sets_the_missing_bit(self):
+        changed, write = await self._run(0x01)  # only bit 0 set
+        self.assertTrue(changed)
+        write.assert_awaited_once_with(addr.GAME_CLEARED_FLAGS, 0x03)
+
+    async def test_preserves_unrelated_bits(self):
+        changed, write = await self._run(0x04)
+        self.assertTrue(changed)
+        write.assert_awaited_once_with(addr.GAME_CLEARED_FLAGS, 0x07)
+
+
+class GameWatcherRamForcingTest(unittest.IsolatedAsyncioTestCase):
     async def _watch(self, *, hard_mode, game_state, menu_state=addr.MENU_STATE_NORMAL):
         client = CVAOSClient.__new__(CVAOSClient)
         client._relay_deathlink = AsyncMock()
@@ -57,25 +86,30 @@ class GameWatcherHardModeTest(unittest.IsolatedAsyncioTestCase):
 
         fake_ram = AsyncMock()
         fake_ram.get_run_state = AsyncMock(return_value=(game_state, menu_state))
-        fake_ram.ensure_hard_mode = AsyncMock()
 
         ctx = SimpleNamespace(server=object(), slot=1, bizhawk_ctx=object(),
                               slot_data={"hard_mode": hard_mode, "death_link": 0})
         with patch("worlds.cvaos.client.AoSRAM", return_value=fake_ram):
             await client.game_watcher(ctx)
-        return fake_ram.ensure_hard_mode
+        return fake_ram
 
-    async def test_enforced_when_hard_and_ingame(self):
-        m = await self._watch(hard_mode=1, game_state=INGAME)
-        m.assert_awaited()
+    async def test_hard_mode_enforced_when_hard_and_ingame(self):
+        fr = await self._watch(hard_mode=1, game_state=INGAME)
+        fr.ensure_hard_mode.assert_awaited()
 
-    async def test_not_enforced_when_option_off(self):
-        m = await self._watch(hard_mode=0, game_state=INGAME)
-        m.assert_not_awaited()
+    async def test_hard_mode_not_enforced_when_option_off(self):
+        fr = await self._watch(hard_mode=0, game_state=INGAME)
+        fr.ensure_hard_mode.assert_not_awaited()
 
-    async def test_not_enforced_outside_ingame(self):
-        m = await self._watch(hard_mode=1, game_state=int(addr.GameState.TITLE), menu_state=0)
-        m.assert_not_awaited()
+    async def test_cleared_flag_set_for_all_seeds_in_game(self):
+        # Even with Hard Mode off, every seed gets the cleared-data flag while in-game.
+        fr = await self._watch(hard_mode=0, game_state=INGAME)
+        fr.ensure_game_cleared.assert_awaited()
+
+    async def test_nothing_forced_outside_ingame(self):
+        fr = await self._watch(hard_mode=1, game_state=int(addr.GameState.TITLE), menu_state=0)
+        fr.ensure_hard_mode.assert_not_awaited()
+        fr.ensure_game_cleared.assert_not_awaited()
 
 
 if __name__ == "__main__":
