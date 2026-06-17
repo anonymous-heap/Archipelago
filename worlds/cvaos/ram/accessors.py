@@ -105,6 +105,19 @@ class AoSRAM:
         await self.write_u8(addr.GAME_MODE, (mode & ~addr.GAME_MODE_DIFFICULTY_MASK) | addr.GAME_MODE_HARD)
         return True
 
+    async def ensure_game_cleared(self) -> bool:
+        """
+        Mark the file as cleared-data (cutscenes become Start-skippable) by ORing the cleared
+        flags' low byte to the beaten value. Returns True if a write was needed. The game writes
+        this only on game completion, so re-applying it per tick holds; the flags live in the low
+        byte of the 0x02000060 word.
+        """
+        flags = await self.read_u8(addr.GAME_CLEARED_FLAGS)
+        if (flags & addr.GAME_CLEARED_VALUE) == addr.GAME_CLEARED_VALUE:
+            return False
+        await self.write_u8(addr.GAME_CLEARED_FLAGS, flags | addr.GAME_CLEARED_VALUE)
+        return True
+
     # --- location detection -------------------------------------------------
     async def read_pickup_flags(self) -> bytes:
         return await self.read(addr.PICKUP_FLAGS, addr.PICKUP_FLAGS_LEN)
