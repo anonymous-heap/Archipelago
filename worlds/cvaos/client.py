@@ -150,10 +150,12 @@ class CVAOSClient(BizHawkClient):
             await ctx.send_msgs([{"cmd": "LocationChecks", "locations": sorted(new_checks)}])
 
         # Collecting another world's pickup grants Soma a junk Skull Key (rom/patch.py
-        # _AP_PLACEHOLDER). AoS caps consumables at 9 and stops counting pickups past the cap, so a
+        # _AP_PLACEHOLDER). AoS caps consumables at 9 and stops allowing pickups past the cap, so a
         # hoard of Skull Keys could stall pickup detection -- and stall sending out other worlds'
         # items. Knock the count back down each tick so there's always room for the next pickup.
-        await ram.cap_skull_keys()
+        # With the Skull Key Warp option on, also floor it at 1 so the warp item is always available
+        # (the cap clamps from above, the floor from below -- they never fight).
+        await ram.cap_skull_keys(floor=1 if ctx.slot_data.get("skull_key_warp") else 0)
 
     async def _receive_items(self, ctx: "BizHawkClientContext", ram: AoSRAM) -> None:
         # Receive items from the server: grant each not-yet-given item, then advance the saved
