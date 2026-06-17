@@ -14,7 +14,7 @@ resolves them with this priority:
 from dataclasses import dataclass
 from enum import IntEnum
 
-from Options import Choice, DeathLink, ItemsAccessibility, PerGameCommonOptions, Toggle
+from Options import Choice, DeathLink, DefaultOnToggle, ItemsAccessibility, PerGameCommonOptions, Toggle
 
 from .data import AbilityCombo
 
@@ -52,6 +52,14 @@ class HardMode(Toggle):
     """
     display_name = "Hard Mode"
     default = 0
+
+
+class SkullKeyWarp(DefaultOnToggle):
+    """
+    Turn the Skull Key into a warp item: using it from the Consumables menu teleports Soma to the
+    starting room.
+    """
+    display_name = "Skull Key Warp"
 
 
 class LogicDifficultyPreset(Choice):
@@ -157,6 +165,7 @@ class CVAOSOptions(PerGameCommonOptions):
     randomize_pickups: RandomizePickups
     goal: Goal
     hard_mode: HardMode
+    skull_key_warp: SkullKeyWarp
     logic_difficulty_preset: LogicDifficultyPreset
     kickable_enemy_logic: KickableEnemyLogic
     platform_clip_logic: PlatformClipLogic

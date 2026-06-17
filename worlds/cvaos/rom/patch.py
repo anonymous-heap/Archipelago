@@ -12,6 +12,7 @@ from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTok
 
 from ..data.pickup_info import rows as pickup_infos
 from ..items import item_table
+from . import skull_key_warp
 from .entity import GBA_ROM_BASE
 
 if TYPE_CHECKING:
@@ -114,5 +115,10 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
     patch.write_token(APTokenTypes.WRITE, ARCHIPELAGO_IDENTIFIER_START,
                       ARCHIPELAGO_IDENTIFIER.encode("ascii"))
     patch.write_token(APTokenTypes.WRITE, AUTH_NUMBER_START, bytes(world.auth))
+
+    # Skull Key -> warp consumable hook (the "Skull Key Warp" option; see rom/skull_key_warp.py).
+    if world.options.skull_key_warp:
+        for offset, data in skull_key_warp.build_writes().items():
+            patch.write_token(APTokenTypes.WRITE, offset, data)
 
     patch.write_file("token_data.bin", patch.get_token_binary())

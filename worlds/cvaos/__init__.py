@@ -113,6 +113,7 @@ class CVAOSWorld(World):
             "randomize_pickups": self.options.randomize_pickups.value,
             "goal": self.options.goal.value,
             "hard_mode": self.options.hard_mode.value,
+            "skull_key_warp": self.options.skull_key_warp.value,
             "death_link": self.options.death_link.value,
         }
 
