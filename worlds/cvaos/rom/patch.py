@@ -12,7 +12,7 @@ from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTok
 
 from ..data.pickup_info import rows as pickup_infos
 from ..items import item_table
-from . import skull_key_warp
+from . import deathlink_hook, skull_key_warp
 from .entity import GBA_ROM_BASE
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ CVAOS_USA_HASH = "e7470df4d241f73060d14437011b90ce"
 # last real data at 0x651163. ARCHIPELAGO_IDENTIFIER doubles as the client/patch compatibility
 # gate; bump it whenever the patch/client contract changes.
 ARCHIPELAGO_IDENTIFIER_START = 0x660000   # 13 bytes
-ARCHIPELAGO_IDENTIFIER = "CVAOS_AP_V0.1"
+ARCHIPELAGO_IDENTIFIER = "CVAOS_AP_V0.2"
 AUTH_NUMBER_START = 0x660010              # 16 bytes
 
 
@@ -119,6 +119,12 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
     # Skull Key -> warp consumable hook (the "Skull Key Warp" option; see rom/skull_key_warp.py).
     if world.options.skull_key_warp:
         for offset, data in skull_key_warp.build_writes().items():
+            patch.write_token(APTokenTypes.WRITE, offset, data)
+
+    # DeathLink "real kill" hook (the "Death Link" option; see rom/deathlink_hook.py). Lets the
+    # client trigger the game's actual death routine via a flag instead of zeroing HP.
+    if world.options.death_link:
+        for offset, data in deathlink_hook.build_writes().items():
             patch.write_token(APTokenTypes.WRITE, offset, data)
 
     patch.write_file("token_data.bin", patch.get_token_binary())
