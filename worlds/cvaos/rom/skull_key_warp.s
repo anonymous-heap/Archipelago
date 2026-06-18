@@ -44,7 +44,14 @@ DoWarp:
     ldr   r0, =0x02000060
     ldr   r4, =(0x08011AD0 + 1)
     bl    CallR4
-    movs  r0, #1                 @ return 1 -> caller decrements the Skull Key
+    @ sub_08047B44 (above) ran EntityDelete on the menu-state object (gEwramData+0xE2C), which
+    @ DMA-zeroes the whole struct -- including menuState[0x17], the selected-item index the caller's
+    @ consume (sub_0804B808) reads. Left at 0, the consume does itemInventory[0] -= 1, i.e. it
+    @ decrements Potion. Restore it to the Skull Key index (25) so the consume hits the Skull Key.
+    ldr   r4, =0x02000E43        @ menuState (gEwramData+0xE2C) + 0x17 = selected consumable index
+    movs  r0, #25
+    strb  r0, [r4]
+    movs  r0, #1                 @ return 1 -> caller consumes the (restored) Skull Key index
     pop   {r4, r5, pc}           @ restore r4/r5 and return to caller (saved lr has thumb bit)
 
 CallR4:
