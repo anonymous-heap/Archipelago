@@ -189,9 +189,9 @@ class CVAOSClient(BizHawkClient):
 
     async def _relay_deathlink(self, ctx: "BizHawkClientContext", ram: AoSRAM,
                                game_state: int, menu_state: int, in_gameplay: bool) -> None:
-        # DeathLink (Strategy A: RAM poke): enable from slot_data, broadcast Soma's death the moment
-        # the engine enters its death sub-state or the game-over screen, apply an incoming death by
-        # zeroing HP (kill_player) during gameplay, and re-arm once Soma is alive in normal play.
+        # DeathLink: enable from slot_data, broadcast Soma's death the moment the engine enters its
+        # death sub-state or the game-over screen, apply an incoming death by asking the ROM hook to
+        # run the real death routine (request_kill) during gameplay, and re-arm once Soma is alive.
         #
         # We key off the death STATE, not HP==0: every death (combat, spikes, overkill laser) routes
         # through one damage routine that clamps HP to exactly 0 and then the player-death handler
@@ -210,11 +210,12 @@ class CVAOSClient(BizHawkClient):
         dead = ((game_state == addr.GameState.INGAME and menu_state == addr.MENU_STATE_DEATH)
                 or game_state == addr.GameState.GAME_OVER)
 
-        # Re-arm first: once Soma is alive again in normal play, clear the latch so the next death in
-        # either direction is detected. The hp>0 guard covers the brief frame right after we poke an
-        # incoming death (state still NORMAL, but HP is the 0 we just wrote), so we don't re-arm and
-        # then immediately re-broadcast that same death.
-        if self.currently_dead and in_gameplay and await ram.get_current_hp() > 0:
+        # Re-arm first: once Soma is alive again in normal play and no kill is still pending, clear the
+        # latch so the next death in either direction is detected. The pending-kill guard covers the
+        # frames between requesting an incoming death and the ROM hook running it (state still NORMAL,
+        # flag still set), so we don't re-arm and then immediately re-broadcast that same death.
+        if (self.currently_dead and in_gameplay and await ram.get_current_hp() > 0
+                and not await ram.get_kill_request()):
             self.currently_dead = False
 
         if "DeathLink" in ctx.tags and dead and not self.currently_dead:
@@ -226,10 +227,10 @@ class CVAOSClient(BizHawkClient):
 
         if self.death_causes and not self.currently_dead and in_gameplay:
             # Apply an incoming death (on_package queued the cause). Only while in normal gameplay --
-            # poking HP during the fade/menu is unsafe. The currently_dead gate keeps us from
+            # requesting the kill during the fade/menu is unsafe. The currently_dead gate keeps us from
             # re-killing Soma (and from re-broadcasting) for a death already in progress.
             cause = self.death_causes.pop(0)
-            await ram.kill_player()
+            await ram.request_kill()
             self.currently_dead = True
             logger.info("CVAoS DeathLink: %s", cause)
 

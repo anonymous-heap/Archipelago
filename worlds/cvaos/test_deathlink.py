@@ -45,18 +45,23 @@ class FakeCtx:
 
 
 class FakeRam:
-    """Fake AoSRAM: HP is whatever we set; kill_player zeroes it like the real poke."""
+    """Fake AoSRAM: HP is whatever we set. request_kill sets the kill-request flag (the real ROM hook
+    would consume it and run the death routine the next frame); it does NOT touch HP."""
 
     def __init__(self, hp: int = 100) -> None:
         self.hp = hp
         self.kill_calls = 0
+        self.kill_request = False
 
     async def get_current_hp(self) -> int:
         return self.hp
 
-    async def kill_player(self) -> None:
+    async def request_kill(self) -> None:
         self.kill_calls += 1
-        self.hp = 0
+        self.kill_request = True
+
+    async def get_kill_request(self) -> bool:
+        return self.kill_request
 
 
 def _new_client() -> CVAOSClient:
@@ -115,11 +120,24 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
         await self.relay(INGAME, DEATH, hp=0)       # a second, independent death
         self.assertEqual(len(self.ctx.sent_deaths), 2)
 
-    async def test_does_not_rearm_while_hp_zero_in_normal_state(self) -> None:
-        # The 1-frame window right after an incoming poke: state back to NORMAL but HP still 0.
+    async def test_does_not_rearm_while_kill_pending(self) -> None:
+        # The window right after we request an incoming kill: the hook hasn't run yet, so state is back
+        # to NORMAL and HP is untouched, but the kill-request flag is still set. Re-arming here would
+        # let the impending death echo back out as our own.
         self.client.currently_dead = True
-        await self.relay(INGAME, NORMAL, hp=0)
-        self.assertTrue(self.client.currently_dead, "hp==0 must not count as a respawn")
+        self.ram.kill_request = True
+        await self.relay(INGAME, NORMAL, hp=100)
+        self.assertTrue(self.client.currently_dead, "a pending kill must not count as a respawn")
+
+    async def test_rearms_after_incoming_kill_consumed(self) -> None:
+        # Once the hook has consumed the request (flag clear) and Soma is alive again, re-arm.
+        self.client.currently_dead = True
+        self.ram.kill_request = True
+        await self.relay(INGAME, NORMAL, hp=100)        # pending -> no re-arm
+        self.assertTrue(self.client.currently_dead)
+        self.ram.kill_request = False                   # hook ran (death, then respawn)
+        await self.relay(INGAME, NORMAL, hp=100)        # alive, nothing pending -> re-arm
+        self.assertFalse(self.client.currently_dead)
 
     async def test_applies_incoming_death_during_gameplay(self) -> None:
         await self.relay(INGAME, NORMAL)            # enable tag
@@ -140,7 +158,7 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
         # Applying an incoming death must not later echo back out as our own broadcast.
         await self.relay(INGAME, NORMAL)
         self.client.death_causes.append("Someone else died")
-        await self.relay(INGAME, NORMAL, hp=100)    # apply incoming -> currently_dead, hp poked to 0
+        await self.relay(INGAME, NORMAL, hp=100)    # apply incoming -> currently_dead, kill requested
         self.assertEqual(self.ram.kill_calls, 1)
         sent_before = len(self.ctx.sent_deaths)
         await self.relay(INGAME, DEATH, hp=0)       # the game now enters its death fade
