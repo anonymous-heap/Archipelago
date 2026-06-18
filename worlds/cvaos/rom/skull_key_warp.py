@@ -55,12 +55,12 @@ WARPHOOK_BASE_FILE_OFFSET = WARPHOOK_BASE_GBA - 0x08000000   # 0x660100
 # its literal pool bakes in absolute addresses (DestRecord, sub_08011F44+1, sub_08011AD0+1,
 # 0x0804B375, &unk_60), so WARPHOOK_BASE_GBA must stay 0x08660100 unless reassembled.
 WARPHOOK_BLOB = bytes.fromhex(
-    "cb7d192b05d0f0b5474680b4041c0f4b184730b50e4c00f011f80e4c2068a188"
-    "e2882389658920b40b4c00f007f801b00a480b4c00f002f8012030bd2047c046"
-    "9cef5008100100020000000075b30408457b040840016608451f010860000002"
-    "d11a0108"
+    "cb7d192b05d0f0b5474680b4041c104b184730b50f4c00f014f80f4c2068a188"
+    "e2882389658920b40c4c00f00af801b00b480c4c00f005f80b4c192020700120"
+    "30bd20479cef5008100100020000000075b30408457b040844016608451f0108"
+    "60000002d11a0108430e0002"
 )
-assert len(WARPHOOK_BLOB) == 100
+assert len(WARPHOOK_BLOB) == 108
 
 # NOTE: both "start with 1" and "never drop below 1" are handled by the CLIENT, not the ROM.
 # ram/accessors.py ``cap_skull_keys(floor=1)`` runs every poll while in-game: it clamps the Skull
@@ -72,7 +72,7 @@ assert len(WARPHOOK_BLOB) == 100
 
 # The 12-byte destination record lives inside the blob (struct SkullKeyWarpDestination):
 #   u32 room_ptr; u16 x; u16 y; s16 x_offset; s16 y_offset
-DEST_RECORD_OFFSET = 0x40
+DEST_RECORD_OFFSET = 0x44
 _DEST_STRUCT = "<IHHhh"
 assert struct.calcsize(_DEST_STRUCT) == 12
 
