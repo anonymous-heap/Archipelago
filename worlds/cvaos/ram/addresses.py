@@ -95,6 +95,11 @@ CURRENT_GOLD = 0x13290             # 0x02013290 u32
 
 AP_RECEIVED_COUNT = 0x1328A        # 0x0201328A u16 (pad_1328A: verified-dead, saved, zeroed-on-new-game)
 
+# DeathLink kill-request flag: the client writes 1; the ROM hook (rom/deathlink_hook.py) calls the
+# game's real death routine and clears it. pad_1324C, verified dead live (mGBA) -- never written by
+# the engine across combat / menus / shop / save / load.
+KILL_REQUEST = 0x1324C             # 0x0201324C u8
+
 
 @dataclass(frozen=True)
 class InventoryArray:

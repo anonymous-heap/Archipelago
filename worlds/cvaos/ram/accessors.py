@@ -176,9 +176,24 @@ class AoSRAM:
         """
         return await self.read_u16(addr.MAX_HP)
 
+    async def request_kill(self) -> None:
+        """
+        Applies an incoming DeathLink by asking the ROM hook to run the game's *real* death routine:
+        set the kill-request flag; the hook (rom/deathlink_hook.py) calls the death handler the next
+        frame and clears the flag. Deterministic and regen-proof, unlike ``kill_player``. Requires a
+        ROM patched with the hook (DeathLink-enabled seeds, identifier >= CVAOS_AP_V0.2).
+        """
+        await self.write_u8(addr.KILL_REQUEST, 1)
+
+    async def get_kill_request(self) -> bool:
+        """True while a DeathLink kill-request is still pending (the ROM hook hasn't consumed it yet)."""
+        return bool(await self.read_u8(addr.KILL_REQUEST))
+
     async def kill_player(self) -> None:
         """
-        Sets current HP to zero. Used to apply an incoming DeathLink.
+        Legacy DeathLink kill: zero current HP and let the engine's per-frame HP check notice. Racy
+        (HP regen can cancel it; skipped in some states). Kept as a fallback; ``request_kill`` is the
+        current path for hook-patched ROMs.
         """
         await self.write_u16(addr.CURRENT_HP, 0)
 
