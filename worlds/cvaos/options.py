@@ -81,7 +81,7 @@ class ItemSmoothing(Choice):
     option_off = 0
     option_loose = 1
     option_strict = 2
-    default = option_off
+    default = option_strict
 
 
 class ItemSmoothingOrder(Choice):
