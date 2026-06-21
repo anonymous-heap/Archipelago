@@ -1,0 +1,123 @@
+[
+  {
+    "tier": "S",
+    "items": [
+      "Giant Bat",
+      "Hippogryph",
+      "Black Panther",
+      "Laevatain",
+      "Claimh Solais",
+      "Balmung",
+      "Dracula's Tunic",
+      "Eversing",
+      "Death's Robe"
+    ]
+  },
+  {
+    "tier": "A",
+    "items": [
+      "Malphas",
+      "Skula",
+      "Undine",
+      "Hrunting",
+      "Ronginus' Spear",
+      "Mystletain",
+      "Satan's Ring"
+    ]
+  },
+  {
+    "tier": "B",
+    "items": [
+      "Milican's Sword",
+      "Gungner",
+      "Ninja Suit",
+      "Death's Sickle",
+      "Samurai Armor"
+    ]
+  },
+  {
+    "tier": "C",
+    "items": [
+      "Flying Armor",
+      "Armor of Fire",
+      "Armor of Water",
+      "Rahab's Sword",
+      "Grave Keeper"
+    ]
+  },
+  {
+    "tier": "D",
+    "items": [
+      "Dainslef",
+      "Kaladbolg",
+      "Joyeuse",
+      "Olrox's Suit",
+      "Pitch Black Suit",
+      "Tear of Blood",
+      "Silver Gun",
+      "Galamoth",
+      "Melon (+600HP)",
+      "Super Potion (+Full HP)",
+      "Mana Prism"
+    ]
+  },
+  {
+    "tier": "E",
+    "items": [
+      "Skeleton Blaze",
+      "Vijaya",
+      "Broadsword",
+      "Burtgang",
+      "Bastard Sword",
+      "Gold Ring",
+      "Tallhammer",
+      "Lance",
+      "Rapier",
+      "Copper Plate",
+      "Handgun",
+      "High Potion (+400HP)",
+      "High Mind Up",
+      "Sherman Ring",
+      "Rune Ring",
+      "Rare Ring",
+      "2000 Gold",
+      "1000 Gold",
+      "500 Gold"
+    ]
+  },
+  {
+    "tier": "F",
+    "items": [
+      "Tasty Meat (+290HP)",
+      "Pudding (+200HP)",
+      "Ancient Book 2",
+      "Ancient Book 3",
+      "Ancient Book 1",
+      "Bamboo Sword",
+      "Osafune",
+      "Short Sword",
+      "Yasutsuna",
+      "Whip Sword",
+      "Cutall",
+      "Hammer",
+      "Elfin Robe",
+      "Silk Robe",
+      "Black Cloak",
+      "Cape",
+      "CASTLE MAP 3",
+      "Scarf",
+      "Leather Plate",
+      "CASTLE MAP 1",
+      "Potion (+100HP)",
+      "Mind Up",
+      "Uncurse Potion",
+      "Anti-Venom",
+      "Cestus",
+      "Kaiser Knuckle",
+      "Pendant",
+      "Lucky Charm",
+      "Heart Pendant",
+      "100 Gold"
+    ]
+  }
+]
