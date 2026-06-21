@@ -465,26 +465,26 @@ def can_reach_room(state: CollectionState, world: CVAOSWorld, room_id: str) -> b
         for region_name in world.entrance_region_names_by_room.get(room_id, ())
     )
 
+ANCIENT_BOOKS = ("Ancient Book 1", "Ancient Book 2", "Ancient Book 3")
 
 def _chaotic_realm_gate(world: CVAOSWorld):
-    """Access rule for the true-ending gate into the Chaotic Realm: the Giant Bat soul (a ground
-    pickup) plus the Flame Demon and Succubus souls (enemy drops), plus having reached Graham
-    (room 904). Used on both realm entrances -- the 507 -> 506 door (toward Chaos/B14) and the
-    904 -> 900 floor-break into the realm pocket (Dracula's Tunic / Black Panther). The reverse
-    crossings are free.
+    """
+    Access rule for the true-ending entrance-crossings: all three Ancient Books in hand,
+    the Giant Bat soul (pickup) plus the Flame Demon and Succubus souls (enemy drops), plus
+    having reached Graham (room 904). Used on the 507 -> 506 door (Julius)
+    and that of 904 -> 900 (post-Graham). The reverse crossings are free.
 
     For randomization, reaching room 904 and reaching the souls is treated as equivalent to
-    having beaten Graham with them, so can_reach_room("904") is the "defeated Graham" term. On
-    the 904 -> 900 crossing that term is trivially true (you cross from a room-904 door), so the
-    effective added cost there is just the three souls -- correct, since reaching/beating Graham
-    needs no souls but descending into the realm pocket does. The Chaos arena (B14) is reachable
-    only through 507 -> 506, so can_reach_room("B14") still inherits the whole requirement, which
-    is why the Chaos goal can just check B14."""
+    having beaten Graham with them, so can_reach_room("904") is the "defeated Graham" term.
+    The ability to cross into 507 from 506 (and therefore the ability to defeat Chaos)
+       is gated by all of the above.
+    """
     player = world.player
 
     def rule(state: CollectionState) -> bool:
         return (
-            state.has("Giant Bat", player)
+            state.has_all(ANCIENT_BOOKS, player)
+            and state.has("Giant Bat", player)
             and can_reach_any_enemy(state, world, "Flame Demon")
             and can_reach_any_enemy(state, world, "Succubus")
             and can_reach_room(state, world, "904")
