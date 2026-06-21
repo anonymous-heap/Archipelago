@@ -49,8 +49,10 @@ LOGIC_ENEMY_TYPES: frozenset[str] = frozenset({"Flame Demon", "Succubus"}) | TFO
 
 
 def _enemy_region_name(enemy_number: int, enemy_name: str, specifier: str, room: str) -> str:
-    """Region name for one enemy instance. enemy_number makes it globally unique
-    (enemy_name+specifier is only unique within a room)."""
+    """
+    Region name for one enemy instance. enemy_number makes it globally unique
+    (enemy_name+specifier is only unique within a room).
+    """
     return f"Enemy: {enemy_name}{specifier} ({room}#{enemy_number})"
 
 def create_regions(world: CVAOSWorld) -> None:
@@ -344,9 +346,11 @@ _ABILITY_TO_ITEM: dict[AbilityCombo, str] = {
     AbilityCombo.BDash: "Grave Keeper",
     AbilityCombo.Kick: "Kicker Skeleton",
     AbilityCombo.Galamoth: "Galamoth",
-    # Chronomage has no pickup/location, so this item is never created or placed and
-    # ``state.has("Chronomage")`` is always False -- the Chronomage option is a permanent no-op
-    # (always OR'd with Galamoth, which carries the requirement).
+    # Chronomage currently has no pickup/location (b/c Galamoth accomplishes
+    # essentially the same thing)
+    # If its soul gets shuffled in the future, this may need to change.
+    # Maybe also need to revisit if Sky Fish ever becomes one of the
+    # three Ancient Book souls?
     AbilityCombo.Chronomage: "Chronomage",
 }
 

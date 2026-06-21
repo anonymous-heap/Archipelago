@@ -9,7 +9,7 @@ import settings
 from .constants import USA_ROM_HASH
 from .items import CVAOSItem, item_name_to_id, create_item, create_itempool
 from .locations import location_name_to_id
-from .options import CVAOSOptions, Goal
+from .options import CVAOSOptions, Goal, cvaos_option_groups
 from .regions import create_regions, can_reach_room
 from .client import CVAOSClient  # noqa: F401  (imported for its registration side effect)
 
@@ -26,6 +26,8 @@ class CVAOSSettings(settings.Group):
 
 class CVAOSWebWorld(WebWorld):
     theme = "ice"
+
+    option_groups = cvaos_option_groups
 
     setup_en = Tutorial(
         "Multiworld Setup Guide",
@@ -92,6 +94,28 @@ class CVAOSWorld(World):
 
     def create_item(self, name: str) -> CVAOSItem:
         return create_item(self, name)
+
+    def pre_fill(self) -> None:
+        # Logic-aware placement before the main fill, gated on item_smoothing ("off" keeps vanilla):
+        #  - bias the gating mobility souls (double jump early; Hippogryph/Giant Bat late), and
+        #  - spread the Ancient Books across early/mid/late (rough pass; refined post-fill, and
+        #    logic-safe even once the books are required to reach Graham for the good ending).
+        if self.options.item_smoothing.current_key != "off":
+            from .item_smoothing import bias_progression_souls, spread_ancient_books
+            bias_progression_souls(self)
+            spread_ancient_books(self)
+
+    @classmethod
+    def stage_post_fill(cls, multiworld: MultiWorld) -> None:
+        # First refine the gating mobility souls and the Ancient Books to their target run-positions
+        # (verified-safe swaps), then re-order placed non-progression items so weaker items come earlier
+        # and stronger later. Runs once for all cvaos slots; no-op for any slot with item_smoothing off.
+        from .item_smoothing import refine_ancient_books, refine_soul_positions, smooth_placed_items
+        for world in multiworld.get_game_worlds(cls.game):
+            if world.options.item_smoothing.current_key != "off":
+                refine_soul_positions(world)
+                refine_ancient_books(world)
+        smooth_placed_items(multiworld, cls.game)
 
     def generate_output(self, output_directory: str) -> None:
         from .rom import CVAOSProcedurePatch, get_location_data, patch_rom

@@ -1,0 +1,133 @@
+[
+  {
+    "tier": "Required for progression",
+    "items": [
+      "Flying Armor",
+      "Galamoth",
+      "Giant Bat",
+      "Grave Keeper",
+      "Hippogryph",
+      "Malphas",
+      "Skeleton Blaze",
+      "Skula",
+      "Undine"
+    ]
+  },
+  {
+    "tier": "Cracked",
+    "items": [
+      "Balmung",
+      "Black Cloak",
+      "Black Panther",
+      "Claimh Solais",
+      "Death's Robe",
+      "Death's Sickle",
+      "Dracula's Tunic",
+      "Eversing",
+      "Kaladbolg",
+      "Olrox's Suit",
+      "Rare Ring",
+      "Rune Ring",
+      "Satan's Ring",
+      "Silver Gun",
+      "Tear of Blood"
+    ]
+  },
+  {
+    "tier": "Mid and late game",
+    "items": [
+      "Armor of Fire",
+      "Armor of Water",
+      "Burtgang",
+      "Dainslef",
+      "Elfin Robe",
+      "Gungner",
+      "Handgun",
+      "Hrunting",
+      "Laevatain",
+      "Mystletain",
+      "Osafune",
+      "Pitch Black Suit",
+      "Rahab's Sword",
+      "Ronginus' Spear",
+      "Samurai Armor",
+      "Tallhammer",
+      "Vijaya",
+      "Yasutsuna"
+    ]
+  },
+  {
+    "tier": "Early game only",
+    "items": [
+      "Bastard Sword",
+      "Broadsword",
+      "Cape",
+      "Copper Plate",
+      "Cutall",
+      "Hammer",
+      "Heart Pendant",
+      "Lance",
+      "Leather Plate",
+      "Lucky Charm",
+      "Ninja Suit",
+      "Pendant",
+      "Rapier",
+      "Scarf",
+      "Short Sword",
+      "Silk Robe",
+      "Whip Sword"
+    ]
+  },
+  {
+    "tier": "Niche Equipment",
+    "items": [
+      "Gold Ring",
+      "Joyeuse",
+      "Sherman Ring",
+      "Cestus",
+      "Kaiser Knuckle",
+      "Milican's Sword"
+    ]
+  },
+  {
+    "tier": "Good Consumable",
+    "items": [
+      "High Mind Up",
+      "High Potion (+400HP)",
+      "Mana Prism",
+      "Melon (+600HP)",
+      "Super Potion (+Full HP)",
+      "Tasty Meat (+290HP)"
+    ]
+  },
+  {
+    "tier": "It wiggles and jiggles",
+    "items": [
+      "Pudding (+200HP)"
+    ]
+  },
+  {
+    "tier": "Bad Consumable",
+    "items": [
+      "Anti-Venom",
+      "Mind Up",
+      "Potion (+100HP)",
+      "Uncurse Potion"
+    ]
+  },
+  {
+    "tier": "Useless",
+    "items": [
+      "100 Gold",
+      "500 Gold",
+      "1000 Gold",
+      "2000 Gold",
+      "Ancient Book 1",
+      "Ancient Book 2",
+      "Ancient Book 3",
+      "Bamboo Sword",
+      "CASTLE MAP 1",
+      "CASTLE MAP 3"
+    ]
+  }
+]

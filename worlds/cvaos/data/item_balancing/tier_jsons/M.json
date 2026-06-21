@@ -1,0 +1,123 @@
+[
+  {
+    "tier": "Strong progression + Best equips",
+    "items": [
+      "Giant Bat",
+      "Hippogryph",
+      "Malphas",
+      "Skula",
+      "Claimh Solais",
+      "Dracula's Tunic"
+    ]
+  },
+  {
+    "tier": "Weaker progression + Strong equips",
+    "items": [
+      "Undine",
+      "Black Panther",
+      "Flying Armor",
+      "Skeleton Blaze",
+      "Galamoth",
+      "Balmung",
+      "Death's Sickle",
+      "Death's Robe",
+      "Olrox's Suit",
+      "Satan's Ring",
+      "Eversing"
+    ]
+  },
+  {
+    "tier": "QoL/Very weak progression + Good equips",
+    "items": [
+      "Grave Keeper",
+      "Armor of Fire",
+      "Armor of Water",
+      "Pitch Black Suit",
+      "Ronginus' Spear",
+      "Mystletain",
+      "Laevatain",
+      "Rahab's Sword",
+      "Hrunting",
+      "Vijaya",
+      "Dainslef",
+      "Ninja Suit",
+      "Elfin Robe",
+      "Samurai Armor"
+    ]
+  },
+  {
+    "tier": "Can be useful",
+    "items": [
+      "Kaladbolg",
+      "Gungner",
+      "Joyeuse",
+      "Super Potion (+Full HP)",
+      "Melon (+600HP)",
+      "High Potion (+400HP)",
+      "Tasty Meat (+290HP)",
+      "Pudding (+200HP)",
+      "Tear of Blood",
+      "Black Cloak",
+      "Mana Prism",
+      "High Mind Up",
+      "Rune Ring"
+    ]
+  },
+  {
+    "tier": "Just okay",
+    "items": [
+      "Whip Sword",
+      "Osafune",
+      "Yasutsuna",
+      "Kaiser Knuckle",
+      "Tallhammer",
+      "Milican's Sword",
+      "Burtgang",
+      "Broadsword",
+      "Silk Robe",
+      "Copper Plate",
+      "Lance",
+      "Hammer",
+      "Potion (+100HP)",
+      "Mind Up",
+      "Uncurse Potion",
+      "Anti-Venom"
+    ]
+  },
+  {
+    "tier": "Barely any use",
+    "items": [
+      "Rapier",
+      "Bastard Sword",
+      "Cutall",
+      "Short Sword",
+      "Leather Plate",
+      "Cape",
+      "Scarf",
+      "Heart Pendant",
+      "Silver Gun",
+      "Handgun",
+      "Cestus",
+      "Rare Ring"
+    ]
+  },
+  {
+    "tier": "Useless as of current version + Generally useless",
+    "items": [
+      "Ancient Book 1",
+      "Ancient Book 2",
+      "Ancient Book 3",
+      "Gold Ring",
+      "2000 Gold",
+      "1000 Gold",
+      "500 Gold",
+      "100 Gold",
+      "Sherman Ring",
+      "Bamboo Sword",
+      "CASTLE MAP 1",
+      "CASTLE MAP 3",
+      "Lucky Charm",
+      "Pendant"
+    ]
+  }
+]

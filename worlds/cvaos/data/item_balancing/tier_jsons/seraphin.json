@@ -1,0 +1,123 @@
+[
+  {
+    "tier": "S",
+    "items": [
+      "Giant Bat",
+      "Black Panther",
+      "Hippogryph",
+      "Laevatain",
+      "Balmung",
+      "Claimh Solais",
+      "Eversing",
+      "Dracula's Tunic",
+      "Death's Robe"
+    ]
+  },
+  {
+    "tier": "A",
+    "items": [
+      "Malphas",
+      "Skula",
+      "Undine",
+      "Hrunting",
+      "Mystletain",
+      "Ronginus' Spear",
+      "Milican's Sword",
+      "Satan's Ring"
+    ]
+  },
+  {
+    "tier": "B",
+    "items": [
+      "Gungner",
+      "Ninja Suit",
+      "Samurai Armor"
+    ]
+  },
+  {
+    "tier": "C",
+    "items": [
+      "Flying Armor",
+      "Death's Sickle",
+      "Armor of Fire",
+      "Armor of Water"
+    ]
+  },
+  {
+    "tier": "D",
+    "items": [
+      "Silver Gun",
+      "Dainslef",
+      "Rahab's Sword",
+      "Vijaya",
+      "Kaladbolg",
+      "Joyeuse",
+      "Gold Ring",
+      "Olrox's Suit",
+      "Pitch Black Suit",
+      "Super Potion (+Full HP)",
+      "Mana Prism",
+      "Melon (+600HP)"
+    ]
+  },
+  {
+    "tier": "E",
+    "items": [
+      "Galamoth",
+      "Broadsword",
+      "Bastard Sword",
+      "Rapier",
+      "Burtgang",
+      "Lance",
+      "Handgun",
+      "Copper Plate",
+      "Tasty Meat (+290HP)",
+      "Pudding (+200HP)",
+      "Ancient Book 1",
+      "Ancient Book 2",
+      "Ancient Book 3",
+      "Sherman Ring",
+      "Rare Ring",
+      "Rune Ring",
+      "High Potion (+400HP)",
+      "High Mind Up",
+      "1000 Gold",
+      "2000 Gold"
+    ]
+  },
+  {
+    "tier": "F",
+    "items": [
+      "Grave Keeper",
+      "Skeleton Blaze",
+      "Bamboo Sword",
+      "Short Sword",
+      "Cutall",
+      "Osafune",
+      "Yasutsuna",
+      "Whip Sword",
+      "Hammer",
+      "Tallhammer",
+      "Cestus",
+      "Kaiser Knuckle",
+      "Leather Plate",
+      "Silk Robe",
+      "Elfin Robe",
+      "Cape",
+      "Black Cloak",
+      "Lucky Charm",
+      "Heart Pendant",
+      "Pendant",
+      "Scarf",
+      "Tear of Blood",
+      "Mind Up",
+      "Potion (+100HP)",
+      "Anti-Venom",
+      "Uncurse Potion",
+      "CASTLE MAP 1",
+      "CASTLE MAP 3",
+      "100 Gold",
+      "500 Gold"
+    ]
+  }
+]

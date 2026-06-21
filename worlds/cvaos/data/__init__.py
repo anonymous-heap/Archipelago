@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .entrance_info import EntranceInfo, entrance_info_collection
+from .item_balancing import DesirabilityInfo, desirability_collection
 from .item_info import ItemInfo, item_info_collection
 from .pickup_info import PickupInfo, pickup_info_collection
 from .room_info import RoomInfo, room_info_collection
@@ -24,6 +25,7 @@ from .routing_info import (
 
 __all__ = [
     "AbilityCombo",
+    "DesirabilityInfo",
     "EntranceInfo",
     "EntranceToPickupRegionInfo",
     "EntranceToEnemyRegionInfo",
@@ -35,6 +37,7 @@ __all__ = [
     "by_enemy_name_for_enemy_regions",
     "by_enemy_number_for_enemy_regions",
     "by_from_entrance_for_transdoor",
+    "desirability_collection",
     "enemy_meta_by_number",
     "entrance_info_collection",
     "entrance_to_entrance_info_collection",
