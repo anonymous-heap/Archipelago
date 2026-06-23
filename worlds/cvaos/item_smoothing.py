@@ -262,7 +262,8 @@ def smoothable_locations_in_order(multiworld: MultiWorld, player: int, spheres: 
                   and loc.parent_region is not None
                   and not loc.locked
                   and loc.progress_type != LocationProgressType.EXCLUDED
-                  and not loc.item.advancement]
+                  and (not loc.item.advancement
+                       or loc.item.name in logic_only_progression_names)]
     if by_map_distance:
         candidates.sort(key=lambda loc: (depth.get(loc.parent_region.name, _UNREACHED_DEPTH), loc.name))
     else:
@@ -576,96 +577,10 @@ def refine_ancient_books(world: "CVAOSWorld") -> None:
                 break
 
 
-# --- pass 0c: smooth the logic-only progression items (ceiling/floor breakers) ----------------
-
-BREAKER_REFINE_TRIES = 8  # post-fill swap candidates to try per breaker before leaving it put
-
-
-def _desirability_positions() -> Dict[str, float]:
-    """
-    Rank-position in [0, 1] of every rated item by desirability, over the whole list of items.
-    e.g. the most desirable item is 1.0, the least is 0.0, and the rest are evenly spaced in between.
-    """
-    ranked = sorted(desirability_data.by_name.items(), key=lambda kv: kv[1].desirability)
-    denom = max(1, len(ranked) - 1)
-    return {name: index / denom for index, (name, _info) in enumerate(ranked)}
-
-
-_DESIRABILITY_POSITION: Dict[str, float] = _desirability_positions()
-
-
-def _breaker_target(item: Item, params: SmoothingParams, rng) -> float:
-    """
-    A breaker's desirability-based target position in [0, 1], with the same long-tailed jitter
-    and wildcard the equipment smoothing uses.
-
-    "Breakers" here are items (including souls) that let you break floors and ceilings.
-    """
-    if rng.random() < params.eps:
-        return rng.random()
-    base_name = _base_name(item.name)
-    info = desirability_data.by_name.get(base_name)
-    position = _DESIRABILITY_POSITION.get(base_name, rng.random())
-    scale = params.sigma_base + (params.k * info.disagreement if info is not None else 0.0)
-    return position + scale * _student_t(params.nu, rng)
-
-
-def refine_breaker_positions(world: "CVAOSWorld") -> None:
-    """
-    Smooth the ceiling/floor breakers by desirability.
-
-    They're technically progression (well, ceiling-breaking isn't really in a normal run, but if
-    shuffle the starting soul it will be), so ``smooth_placed_items`` can't reassign them.
-    Instead, we nudge each toward its desirability target run-position via logic-verified swaps
-    with a non-progression item.
-    
-    Each candidate is reachable *without* the breaker (so it is never placed behind its own gate),
-    and each swap is kept only if the whole multiworld still fulfills accessibility, so it can never
-    make a seed unbeatable. A breaker that can't be moved safely stays where fill left it.
-    
-    Runs before the equipment smoothing.
-    """
-    multiworld = world.multiworld
-    player = world.player
-    params = PARAMS_BY_KEY[world.options.item_smoothing.current_key]
-    rng = world.random
-    # Breakers are equipment, so order them on the same axis as the equipment smoothing.
-    by_map_distance = world.options.item_smoothing_order.current_key == "map_distance"
-
-    breaker_items = [loc.item for loc in multiworld.get_locations(player)
-                     if loc.item is not None and loc.item.player == player
-                     and loc.item.name in logic_only_progression_names]
-    if not breaker_items:
-        return
-
-    # Breaker names are unique in the pool; target each by its desirability. Earliest target first,
-    # so a later breaker positions against spheres that already reflect the earlier ones.
-    targets = {item.name: _breaker_target(item, params, rng) for item in breaker_items}
-    for name in sorted(targets, key=targets.get):
-        breaker_loc = next((loc for loc in multiworld.get_locations(player)
-                            if loc.item is not None and loc.item.player == player
-                            and loc.item.name == name), None)
-        if breaker_loc is None:
-            continue
-        breaker = breaker_loc.item
-        # State reachable with every placed item except this breaker -> a location reachable here
-        # doesn't need it, so moving it there can't strand it (or anything gated behind it).
-        without_breaker = CollectionState(multiworld)
-        for loc in multiworld.get_filled_locations():
-            if loc.item is not breaker:
-                multiworld.worlds[loc.item.player].collect(without_breaker, loc.item)
-        without_breaker.sweep_for_advancements()
-
-        position = _run_position(multiworld, player, by_map_distance=by_map_distance)
-        target = targets[name]
-        candidates = sorted(
-            (loc for loc in position if loc is not breaker_loc and loc.item is not None
-             and loc.item.player == player and not loc.item.advancement and not loc.locked
-             and loc.can_reach(without_breaker)),
-            key=lambda loc: (abs(position[loc] - target), loc.name))
-        for dest in candidates[:BREAKER_REFINE_TRIES]:
-            if _swap_if_safe(multiworld, breaker_loc, dest):
-                break
+# Ceiling/floor breakers are no longer refined by a separate swap pass: they're advancement (so fill
+# keeps them reachable) but `smoothable_locations_in_order` lets them into the normal equipment
+# smoothing, where they spread by desirability with the other gear. `smooth_placed_items` then verifies
+# accessibility and reverts only the breakers if the distribution ever strands a floor/ceiling gate.
 
 
 # --- pass 1: spread the Ancient Books (pre_fill) ----------------------------------------------
@@ -752,10 +667,31 @@ def smooth_placed_items(multiworld: MultiWorld, game: str) -> None:
                                                 by_map_distance=by_map_distance)
         if not ordered:
             continue
+        # Ceiling/floor breakers ride the normal distribution here (smoothable_locations_in_order lets
+        # them in), so they spread by desirability like any other equipment. They're advancement and
+        # the bulk reassign doesn't check reachability, so remember where fill put each one first.
+        breaker_homes = {loc.item: loc for loc in ordered
+                         if loc.item.name in logic_only_progression_names}
         items = [loc.item for loc in ordered]
         targets = _assign_targets(items, params, world.random)
         items.sort(key=lambda it: targets[it])  # ascending t == least desirable first
         _reassign(ordered, items, multiworld.state)
+        # If riding the distribution stranded a floor/ceiling gate, put the breakers back where fill
+        # had them (guaranteed reachable); the non-advancement items keep their smoothed spots, since
+        # they don't affect logic. Verified to essentially never trigger, but keeps seeds beatable.
+        if breaker_homes and not _accessible(multiworld):
+            _restore_breakers(breaker_homes)
+
+
+def _restore_breakers(breaker_homes: Dict[Item, Location]) -> None:
+    """Swap each breaker back to its pre-smoothing (fill) location, undoing only the breaker moves."""
+    for breaker, home in breaker_homes.items():
+        current = breaker.location
+        if current is home:
+            continue
+        displaced = home.item
+        current.item, home.item = displaced, breaker
+        breaker.location, displaced.location = home, current
 
 
 def _reassign(ordered_locs: List[Location], sorted_items: List[Item], state: CollectionState) -> None:
