@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ..._pydantic_compat import BaseModel, parse_obj_as
-from .._csv_resources import open_csv
+from .._csv_resources import open_csv, open_csv_if_exists
 
 __all__ = [
     "ItemInfo",
@@ -17,8 +17,10 @@ class ItemInfo(BaseModel):
     progression: bool = False
     useful: bool = False
     filler: bool = False
+    breaks_ceilings: bool = False
+    breaks_floors: bool = False
 
-    def _as_tuple(self) -> tuple[str, int, str, int, bool, bool, bool]:
+    def _as_tuple(self) -> tuple[str, int, str, int, bool, bool, bool, bool, bool]:
         return (
             self.item_category,
             self.id,
@@ -27,6 +29,8 @@ class ItemInfo(BaseModel):
             self.progression,
             self.useful,
             self.filler,
+            self.breaks_ceilings,
+            self.breaks_floors,
         )
 
     def __iter__(self):
@@ -59,6 +63,13 @@ def _load() -> list[ItemInfo]:
         if any((v or "").strip() for v in row.values())
     }
 
+    extended_reader = open_csv_if_exists(__name__, "item_info_extended.csv")
+    extended_rows = {
+        row["name"]: row
+        for row in (extended_reader or ())
+        if any((v or "").strip() for v in row.values())
+    }
+
     merged: list[dict] = []
     for row in open_csv(__name__, "item_info.csv"):
         if not any((v or "").strip() for v in row.values()):
@@ -68,6 +79,7 @@ def _load() -> list[ItemInfo]:
         if importance is None:
             raise ValueError(f"item_importance.csv missing entry for item '{row['name']}'")
 
+        extended = extended_rows.get(row["name"])
         merged.append(
             {
                 "item_category": row["item_category"],
@@ -77,6 +89,8 @@ def _load() -> list[ItemInfo]:
                 "progression": _parse_bool(importance.get("progression")),
                 "useful": _parse_bool(importance.get("useful")),
                 "filler": _parse_bool(importance.get("filler")),
+                "breaks_ceilings": _parse_bool(extended.get("breaks_ceilings") if extended else None),
+                "breaks_floors": _parse_bool(extended.get("breaks_floors") if extended else None),
             }
         )
 

@@ -26,12 +26,23 @@ class ItemData(NamedTuple):
 # Grab ItemInfos by name for classification flags.
 _item_info_by_name: Dict[str, object] = {info.name: info for info in item_info_collection}
 
+# Canonical progression: Items that you'd expect to give actual progression.
+canonical_progression_names: frozenset[str] = frozenset(
+    info.name for info in item_info_collection if info.progression)
+# Items that technically _can_ give progression (e.g. breaking a ceiling), but aren't
+# realistically going to be in most runs.
+logic_only_progression_names: frozenset[str] = frozenset(
+    info.name for info in item_info_collection
+    if (info.breaks_ceilings or info.breaks_floors) and not info.progression)
+
 
 def _classification_for_pickup(simple_name: str) -> ItemClassification:
     info = _item_info_by_name.get(simple_name)
     if info:
         if info.progression:
             return ItemClassification.progression
+        if info.breaks_ceilings or info.breaks_floors:
+            return ItemClassification.progression_skip_balancing
         if info.useful:
             return ItemClassification.useful
         if info.filler:
@@ -44,9 +55,11 @@ _MONEY_SUBTYPE = 1
 
 def _transfer_for(pickup) -> tuple[TransferCategory, int]:
     """
-    (category, id/value) for a pickup's AP code: money -> (MONEY, gold value), every other
-    pickup -> (PICKUP, item_info.item_number). Raises a ValueError
-    if a non-money pickup has no item_info row
+    (category, id/value) for a pickup's AP code:
+    - For money, (MONEY, gold value)
+    - for every other pickup, (PICKUP, item_info.item_number). 
+    
+    Raises a ValueError if a non-money pickup has no item_info row
     (possibly due to a name mismatch between pickup_info and item_info)
     so the gap fails loudly at load.
     """

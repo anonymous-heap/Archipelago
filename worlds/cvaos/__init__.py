@@ -110,11 +110,13 @@ class CVAOSWorld(World):
         # First refine the gating mobility souls and the Ancient Books to their target run-positions
         # (verified-safe swaps), then re-order placed non-progression items so weaker items come earlier
         # and stronger later. Runs once for all cvaos slots; no-op for any slot with item_smoothing off.
-        from .item_smoothing import refine_ancient_books, refine_soul_positions, smooth_placed_items
+        from .item_smoothing import (refine_ancient_books, refine_breaker_positions,
+                                      refine_soul_positions, smooth_placed_items)
         for world in multiworld.get_game_worlds(cls.game):
             if world.options.item_smoothing.current_key != "off":
                 refine_soul_positions(world)
                 refine_ancient_books(world)
+                refine_breaker_positions(world)
         smooth_placed_items(multiworld, cls.game)
 
     def generate_output(self, output_directory: str) -> None:

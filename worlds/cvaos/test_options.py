@@ -147,11 +147,13 @@ def test_rule_soulless_in_logic_way_is_always_open():
     assert _rule((int(AbilityCombo.QSave),), quick_save_reset_logic="in_logic") is None
 
 
-def test_rule_world_fact_bits_are_free():
-    """Vert is a room fact, not a trick: Vert+DJump gates only on Malphas, at any difficulty."""
+def test_rule_world_fact_bits_are_out_of_logic():
+    """Vert has no implemented requirement yet, so an option requiring it is pruned as out of logic:
+    a Vert+DJump-only way is unreachable, not satisfied by Malphas alone. (Floor/Ceil, by contrast,
+    now resolve to breaker items.) TODO: revisit once Vert is coded (see regions._ROOM_TECHNIQUE_BITS)."""
     rule = _rule((int(AbilityCombo.Vert | AbilityCombo.DJump),))
     assert rule is not None
-    assert rule(_State("Malphas"))
+    assert not rule(_State("Malphas"))
     assert not rule(_State())
 
 
