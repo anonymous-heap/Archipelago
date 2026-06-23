@@ -29,6 +29,7 @@ from BaseClasses import CollectionState, Item, Location, LocationProgressType, M
 
 from .data import item_balancing as desirability_data
 from .data import item_info
+from .items import logic_only_progression_names
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -427,20 +428,26 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
 SOUL_REFINE_TRIES = 8  # post-fill swap candidates to try per soul before leaving it where it is
 
 
-def _run_position(multiworld: MultiWorld, player: int) -> Dict[Location, float]:
+def _run_position(multiworld: MultiWorld, player: int, *,
+                  by_map_distance: bool = False) -> Dict[Location, float]:
     """
-    Fraction through this player's run (0 = first reached, 1 = last), by global sphere then map
-       depth.
-    This is the *real* post-fill position (what the distribution plots show); unlike the
-       pre-fill lateness proxy it needs spheres, so it is only available here.
+    Fraction through this player's run (0 = first reached, 1 = last). The ordering axis matches the
+       ``item_smoothing_order`` option, same as the equipment smoothing:
+
+    * default (``by_map_distance=False``): by global sphere then map depth -- the *real* post-fill,
+       seed-specific position (what the distribution plots show); needs spheres, so only available here.
+    * ``by_map_distance=True``: by structural map depth only (seed-independent), ignoring spheres.
     """
-    spheres = list(multiworld.get_spheres())
-    sphere_of = {loc: i for i, sphere in enumerate(spheres) for loc in sphere}
     depth = _region_depth(multiworld, player)
     locs = [loc for loc in multiworld.get_locations(player)
             if loc.address is not None and loc.item is not None and loc.parent_region is not None]
-    locs.sort(key=lambda loc: (sphere_of.get(loc, 10**9),
-                               depth.get(loc.parent_region.name, 10**9), loc.name))
+    if by_map_distance:
+        locs.sort(key=lambda loc: (depth.get(loc.parent_region.name, 10**9), loc.name))
+    else:
+        spheres = list(multiworld.get_spheres())
+        sphere_of = {loc: i for i, sphere in enumerate(spheres) for loc in sphere}
+        locs.sort(key=lambda loc: (sphere_of.get(loc, 10**9),
+                                   depth.get(loc.parent_region.name, 10**9), loc.name))
     denom = max(1, len(locs) - 1)
     return {loc: i / denom for i, loc in enumerate(locs)}
 
@@ -566,6 +573,98 @@ def refine_ancient_books(world: "CVAOSWorld") -> None:
             key=lambda loc: (abs(position[loc] - target), loc.name))
         for dest in candidates[:BOOK_REFINE_TRIES]:
             if _swap_if_safe(multiworld, book_loc, dest):
+                break
+
+
+# --- pass 0c: smooth the logic-only progression items (ceiling/floor breakers) ----------------
+
+BREAKER_REFINE_TRIES = 8  # post-fill swap candidates to try per breaker before leaving it put
+
+
+def _desirability_positions() -> Dict[str, float]:
+    """
+    Rank-position in [0, 1] of every rated item by desirability, over the whole list of items.
+    e.g. the most desirable item is 1.0, the least is 0.0, and the rest are evenly spaced in between.
+    """
+    ranked = sorted(desirability_data.by_name.items(), key=lambda kv: kv[1].desirability)
+    denom = max(1, len(ranked) - 1)
+    return {name: index / denom for index, (name, _info) in enumerate(ranked)}
+
+
+_DESIRABILITY_POSITION: Dict[str, float] = _desirability_positions()
+
+
+def _breaker_target(item: Item, params: SmoothingParams, rng) -> float:
+    """
+    A breaker's desirability-based target position in [0, 1], with the same long-tailed jitter
+    and wildcard the equipment smoothing uses.
+
+    "Breakers" here are items (including souls) that let you break floors and ceilings.
+    """
+    if rng.random() < params.eps:
+        return rng.random()
+    base_name = _base_name(item.name)
+    info = desirability_data.by_name.get(base_name)
+    position = _DESIRABILITY_POSITION.get(base_name, rng.random())
+    scale = params.sigma_base + (params.k * info.disagreement if info is not None else 0.0)
+    return position + scale * _student_t(params.nu, rng)
+
+
+def refine_breaker_positions(world: "CVAOSWorld") -> None:
+    """
+    Smooth the ceiling/floor breakers by desirability.
+
+    They're technically progression (well, ceiling-breaking isn't really in a normal run, but if
+    shuffle the starting soul it will be), so ``smooth_placed_items`` can't reassign them.
+    Instead, we nudge each toward its desirability target run-position via logic-verified swaps
+    with a non-progression item.
+    
+    Each candidate is reachable *without* the breaker (so it is never placed behind its own gate),
+    and each swap is kept only if the whole multiworld still fulfills accessibility, so it can never
+    make a seed unbeatable. A breaker that can't be moved safely stays where fill left it.
+    
+    Runs before the equipment smoothing.
+    """
+    multiworld = world.multiworld
+    player = world.player
+    params = PARAMS_BY_KEY[world.options.item_smoothing.current_key]
+    rng = world.random
+    # Breakers are equipment, so order them on the same axis as the equipment smoothing.
+    by_map_distance = world.options.item_smoothing_order.current_key == "map_distance"
+
+    breaker_items = [loc.item for loc in multiworld.get_locations(player)
+                     if loc.item is not None and loc.item.player == player
+                     and loc.item.name in logic_only_progression_names]
+    if not breaker_items:
+        return
+
+    # Breaker names are unique in the pool; target each by its desirability. Earliest target first,
+    # so a later breaker positions against spheres that already reflect the earlier ones.
+    targets = {item.name: _breaker_target(item, params, rng) for item in breaker_items}
+    for name in sorted(targets, key=targets.get):
+        breaker_loc = next((loc for loc in multiworld.get_locations(player)
+                            if loc.item is not None and loc.item.player == player
+                            and loc.item.name == name), None)
+        if breaker_loc is None:
+            continue
+        breaker = breaker_loc.item
+        # State reachable with every placed item except this breaker -> a location reachable here
+        # doesn't need it, so moving it there can't strand it (or anything gated behind it).
+        without_breaker = CollectionState(multiworld)
+        for loc in multiworld.get_filled_locations():
+            if loc.item is not breaker:
+                multiworld.worlds[loc.item.player].collect(without_breaker, loc.item)
+        without_breaker.sweep_for_advancements()
+
+        position = _run_position(multiworld, player, by_map_distance=by_map_distance)
+        target = targets[name]
+        candidates = sorted(
+            (loc for loc in position if loc is not breaker_loc and loc.item is not None
+             and loc.item.player == player and not loc.item.advancement and not loc.locked
+             and loc.can_reach(without_breaker)),
+            key=lambda loc: (abs(position[loc] - target), loc.name))
+        for dest in candidates[:BREAKER_REFINE_TRIES]:
+            if _swap_if_safe(multiworld, breaker_loc, dest):
                 break
 
 
