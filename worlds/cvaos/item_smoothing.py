@@ -44,8 +44,6 @@ class SmoothingParams:
     sigma_base: float  # baseline jitter width (fraction of the run) every item gets
     k: float           # extra jitter width per unit of rater disagreement
     eps: float         # wildcard probability: ignore the target and place uniformly at random
-    gold_lo: float     # money band (stratified across all copies), low edge
-    gold_hi: float     # money band, high edge
 
 
 # Keyed by the option's current_key.
@@ -53,8 +51,8 @@ class SmoothingParams:
 # run an item drifts. nu is kept moderate so anomalous early finds land across the early game rather
 # than always cratering to the very first pickup.
 PARAMS_BY_KEY: Dict[str, SmoothingParams] = {
-    "loose":  SmoothingParams(nu=2.0, sigma_base=0.08, k=1.5, eps=0.05, gold_lo=0.0, gold_hi=0.55),
-    "strict": SmoothingParams(nu=4.0, sigma_base=0.03, k=0.8, eps=0.02, gold_lo=0.0, gold_hi=0.55),
+    "loose":  SmoothingParams(nu=2.0, sigma_base=0.08, k=1.5, eps=0.05),
+    "strict": SmoothingParams(nu=4.0, sigma_base=0.03, k=0.8, eps=0.02),
 }
 
 ANCIENT_BOOK_NAMES = ("Ancient Book 1", "Ancient Book 2", "Ancient Book 3")
@@ -149,8 +147,10 @@ def _assign_targets(items: List[Item], params: SmoothingParams, rng) -> Dict[Ite
 
     Two steps, so the long tail keeps a middle ground:
 
-    1. Put every item on a base in desirability space: money stratified across the early-to-mid band,
-       ranked items at their desirability, unranked at a uniform prior.
+    1. Put every item on a base in desirability space: ranked items at their desirability, unranked
+       at a uniform prior, and one copy of each gold denomination promoted to the very top. The
+       remaining gold is stratified directly across the whole run in position space (step 2), not via
+       desirability, since gold quantity (not rater desirability) should set where it lands.
     2. **Rank-transform** those bases into uniform positions in [0, 1], then add the long-tailed
        jitter to the *position*.
 
@@ -166,21 +166,52 @@ def _assign_targets(items: List[Item], params: SmoothingParams, rng) -> Dict[Ite
     base: Dict[Item, float] = {}
     scale: Dict[Item, float] = {}
 
-    # Money is stratified by copy across the early-to-mid band below, NOT ranked: the money rows in
+    # Money is stratified by copy across the whole run below, NOT ranked: the money rows in
     # desirability.csv are intentionally ignored here -- gold quantity stratification, not rater
     # desirability, sets where gold lands.
     golds = [it for it in items if _category(_base_name(it.name)) == "money"]
     rng.shuffle(golds)
-    span = params.gold_hi - params.gold_lo
-    count = len(golds)
-    for index, item in enumerate(golds):
-        lo = params.gold_lo + (index / count) * span
-        hi = params.gold_lo + ((index + 1) / count) * span
-        base[item] = rng.uniform(lo, hi)
-        scale[item] = params.sigma_base
+
+    # Pin some copies of each gold denomination at the very top of the order ("uppermost score"),
+    # above every rated item, so they land as late as the best loot; the rest are spread evenly across
+    # the whole run (below), keeping gold off the early ranks so the other items appear a bit earlier.
+    # 100 Gold is worthless, so none of it is pinned -- all of it is stratified; the larger
+    # denominations each keep one late "treat".
+    gold_uppermost_quota = {"100 Gold": 0}          # denominations not listed pin one copy
+    top_base = max((info.desirability for info in desirability_data.by_name.values()), default=1.0)
+    promoted_count: Dict[str, int] = {}
+    promoted_rank = 0
+    banded: List[Item] = []
+    for item in golds:
+        name = _base_name(item.name)
+        if promoted_count.get(name, 0) < gold_uppermost_quota.get(name, 1):
+            promoted_count[name] = promoted_count.get(name, 0) + 1
+            base[item] = top_base + 1.0 + promoted_rank  # strictly above all rated items
+            scale[item] = params.sigma_base
+            promoted_rank += 1
+        else:
+            scale[item] = params.sigma_base
+            banded.append(item)
+    banded_set = set(banded)
+
+    # Push selected copies of some mid-tier consumables into the *second half* of the run
+    # (positions 0.5..1.0) instead of their normal desirability spot, so not all your healing/mana
+    # shows up early. Per-type copy counts; rng picks which copies, the rest stay at their normal spot.
+    second_half_quota = {"High Potion": 2, "Super Potion": 3, "Mana Prism": 4, "High Mind Up": 1}
+    second_half: List[Item] = []
+    taken: Dict[str, int] = {}
+    candidates = [it for it in items if _base_name(it.name) in second_half_quota]
+    rng.shuffle(candidates)
+    for item in candidates:
+        name = _base_name(item.name)
+        if taken.get(name, 0) < second_half_quota[name]:
+            taken[name] = taken.get(name, 0) + 1
+            scale[item] = params.sigma_base
+            second_half.append(item)
+    second_half_set = set(second_half)
 
     for item in items:
-        if item in base:
+        if item in base or item in banded_set or item in second_half_set:
             continue
         info = desirability_data.by_name.get(_base_name(item.name))
         if info is not None:
@@ -190,10 +221,27 @@ def _assign_targets(items: List[Item], params: SmoothingParams, rng) -> Dict[Ite
             base[item] = rng.random()  # unranked: uniform prior over the whole run
             scale[item] = params.sigma_base
 
-    # Rank-transform the bases into evenly spaced positions, preserving order.
-    order = sorted(items, key=lambda it: base[it])
+    # Rank-transform the bases into evenly spaced positions, preserving order. The stratified gold and
+    # the second-half consumables are excluded from the rank-transform and instead get their positions
+    # set directly below -- so gold appears evenly across the whole run (and, being out of the rank,
+    # doesn't crowd the early ranks and push the rest later) and the chosen consumables land in back.
+    order = sorted((it for it in items if it not in banded_set and it not in second_half_set),
+                   key=lambda it: base[it])
     denom = max(1, len(order) - 1)
     position = {item: i / denom for i, item in enumerate(order)}
+
+    gold_count = len(banded)
+    for index, item in enumerate(banded):
+        lo = index / gold_count
+        hi = (index + 1) / gold_count
+        position[item] = rng.uniform(lo, hi)
+
+    # Selected consumables: stratify evenly across the back half of the run [0.5, 1.0].
+    sh_count = len(second_half)
+    for index, item in enumerate(second_half):
+        lo = 0.5 + (index / sh_count) * 0.5
+        hi = 0.5 + ((index + 1) / sh_count) * 0.5
+        position[item] = rng.uniform(lo, hi)
 
     targets: Dict[Item, float] = {}
     for item in items:
@@ -262,7 +310,8 @@ def smoothable_locations_in_order(multiworld: MultiWorld, player: int, spheres: 
                   and loc.parent_region is not None
                   and not loc.locked
                   and loc.progress_type != LocationProgressType.EXCLUDED
-                  and not loc.item.advancement]
+                  and (not loc.item.advancement
+                       or loc.item.name in logic_only_progression_names)]
     if by_map_distance:
         candidates.sort(key=lambda loc: (depth.get(loc.parent_region.name, _UNREACHED_DEPTH), loc.name))
     else:
@@ -576,96 +625,10 @@ def refine_ancient_books(world: "CVAOSWorld") -> None:
                 break
 
 
-# --- pass 0c: smooth the logic-only progression items (ceiling/floor breakers) ----------------
-
-BREAKER_REFINE_TRIES = 8  # post-fill swap candidates to try per breaker before leaving it put
-
-
-def _desirability_positions() -> Dict[str, float]:
-    """
-    Rank-position in [0, 1] of every rated item by desirability, over the whole list of items.
-    e.g. the most desirable item is 1.0, the least is 0.0, and the rest are evenly spaced in between.
-    """
-    ranked = sorted(desirability_data.by_name.items(), key=lambda kv: kv[1].desirability)
-    denom = max(1, len(ranked) - 1)
-    return {name: index / denom for index, (name, _info) in enumerate(ranked)}
-
-
-_DESIRABILITY_POSITION: Dict[str, float] = _desirability_positions()
-
-
-def _breaker_target(item: Item, params: SmoothingParams, rng) -> float:
-    """
-    A breaker's desirability-based target position in [0, 1], with the same long-tailed jitter
-    and wildcard the equipment smoothing uses.
-
-    "Breakers" here are items (including souls) that let you break floors and ceilings.
-    """
-    if rng.random() < params.eps:
-        return rng.random()
-    base_name = _base_name(item.name)
-    info = desirability_data.by_name.get(base_name)
-    position = _DESIRABILITY_POSITION.get(base_name, rng.random())
-    scale = params.sigma_base + (params.k * info.disagreement if info is not None else 0.0)
-    return position + scale * _student_t(params.nu, rng)
-
-
-def refine_breaker_positions(world: "CVAOSWorld") -> None:
-    """
-    Smooth the ceiling/floor breakers by desirability.
-
-    They're technically progression (well, ceiling-breaking isn't really in a normal run, but if
-    shuffle the starting soul it will be), so ``smooth_placed_items`` can't reassign them.
-    Instead, we nudge each toward its desirability target run-position via logic-verified swaps
-    with a non-progression item.
-    
-    Each candidate is reachable *without* the breaker (so it is never placed behind its own gate),
-    and each swap is kept only if the whole multiworld still fulfills accessibility, so it can never
-    make a seed unbeatable. A breaker that can't be moved safely stays where fill left it.
-    
-    Runs before the equipment smoothing.
-    """
-    multiworld = world.multiworld
-    player = world.player
-    params = PARAMS_BY_KEY[world.options.item_smoothing.current_key]
-    rng = world.random
-    # Breakers are equipment, so order them on the same axis as the equipment smoothing.
-    by_map_distance = world.options.item_smoothing_order.current_key == "map_distance"
-
-    breaker_items = [loc.item for loc in multiworld.get_locations(player)
-                     if loc.item is not None and loc.item.player == player
-                     and loc.item.name in logic_only_progression_names]
-    if not breaker_items:
-        return
-
-    # Breaker names are unique in the pool; target each by its desirability. Earliest target first,
-    # so a later breaker positions against spheres that already reflect the earlier ones.
-    targets = {item.name: _breaker_target(item, params, rng) for item in breaker_items}
-    for name in sorted(targets, key=targets.get):
-        breaker_loc = next((loc for loc in multiworld.get_locations(player)
-                            if loc.item is not None and loc.item.player == player
-                            and loc.item.name == name), None)
-        if breaker_loc is None:
-            continue
-        breaker = breaker_loc.item
-        # State reachable with every placed item except this breaker -> a location reachable here
-        # doesn't need it, so moving it there can't strand it (or anything gated behind it).
-        without_breaker = CollectionState(multiworld)
-        for loc in multiworld.get_filled_locations():
-            if loc.item is not breaker:
-                multiworld.worlds[loc.item.player].collect(without_breaker, loc.item)
-        without_breaker.sweep_for_advancements()
-
-        position = _run_position(multiworld, player, by_map_distance=by_map_distance)
-        target = targets[name]
-        candidates = sorted(
-            (loc for loc in position if loc is not breaker_loc and loc.item is not None
-             and loc.item.player == player and not loc.item.advancement and not loc.locked
-             and loc.can_reach(without_breaker)),
-            key=lambda loc: (abs(position[loc] - target), loc.name))
-        for dest in candidates[:BREAKER_REFINE_TRIES]:
-            if _swap_if_safe(multiworld, breaker_loc, dest):
-                break
+# Ceiling/floor breakers are no longer refined by a separate swap pass: they're advancement (so fill
+# keeps them reachable) but `smoothable_locations_in_order` lets them into the normal equipment
+# smoothing, where they spread by desirability with the other gear. `smooth_placed_items` then verifies
+# accessibility and reverts only the breakers if the distribution ever strands a floor/ceiling gate.
 
 
 # --- pass 1: spread the Ancient Books (pre_fill) ----------------------------------------------
@@ -752,10 +715,31 @@ def smooth_placed_items(multiworld: MultiWorld, game: str) -> None:
                                                 by_map_distance=by_map_distance)
         if not ordered:
             continue
+        # Ceiling/floor breakers ride the normal distribution here (smoothable_locations_in_order lets
+        # them in), so they spread by desirability like any other equipment. They're advancement and
+        # the bulk reassign doesn't check reachability, so remember where fill put each one first.
+        breaker_homes = {loc.item: loc for loc in ordered
+                         if loc.item.name in logic_only_progression_names}
         items = [loc.item for loc in ordered]
         targets = _assign_targets(items, params, world.random)
         items.sort(key=lambda it: targets[it])  # ascending t == least desirable first
         _reassign(ordered, items, multiworld.state)
+        # If riding the distribution stranded a floor/ceiling gate, put the breakers back where fill
+        # had them (guaranteed reachable); the non-advancement items keep their smoothed spots, since
+        # they don't affect logic. Verified to essentially never trigger, but keeps seeds beatable.
+        if breaker_homes and not _accessible(multiworld):
+            _restore_breakers(breaker_homes)
+
+
+def _restore_breakers(breaker_homes: Dict[Item, Location]) -> None:
+    """Swap each breaker back to its pre-smoothing (fill) location, undoing only the breaker moves."""
+    for breaker, home in breaker_homes.items():
+        current = breaker.location
+        if current is home:
+            continue
+        displaced = home.item
+        current.item, home.item = displaced, breaker
+        breaker.location, displaced.location = home, current
 
 
 def _reassign(ordered_locs: List[Location], sorted_items: List[Item], state: CollectionState) -> None:
