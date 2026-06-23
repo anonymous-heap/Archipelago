@@ -44,8 +44,6 @@ class SmoothingParams:
     sigma_base: float  # baseline jitter width (fraction of the run) every item gets
     k: float           # extra jitter width per unit of rater disagreement
     eps: float         # wildcard probability: ignore the target and place uniformly at random
-    gold_lo: float     # money band (stratified across all copies), low edge
-    gold_hi: float     # money band, high edge
 
 
 # Keyed by the option's current_key.
@@ -53,8 +51,8 @@ class SmoothingParams:
 # run an item drifts. nu is kept moderate so anomalous early finds land across the early game rather
 # than always cratering to the very first pickup.
 PARAMS_BY_KEY: Dict[str, SmoothingParams] = {
-    "loose":  SmoothingParams(nu=2.0, sigma_base=0.08, k=1.5, eps=0.05, gold_lo=0.0, gold_hi=0.55),
-    "strict": SmoothingParams(nu=4.0, sigma_base=0.03, k=0.8, eps=0.02, gold_lo=0.0, gold_hi=0.55),
+    "loose":  SmoothingParams(nu=2.0, sigma_base=0.08, k=1.5, eps=0.05),
+    "strict": SmoothingParams(nu=4.0, sigma_base=0.03, k=0.8, eps=0.02),
 }
 
 ANCIENT_BOOK_NAMES = ("Ancient Book 1", "Ancient Book 2", "Ancient Book 3")
@@ -149,8 +147,10 @@ def _assign_targets(items: List[Item], params: SmoothingParams, rng) -> Dict[Ite
 
     Two steps, so the long tail keeps a middle ground:
 
-    1. Put every item on a base in desirability space: money stratified across the early-to-mid band,
-       ranked items at their desirability, unranked at a uniform prior.
+    1. Put every item on a base in desirability space: ranked items at their desirability, unranked
+       at a uniform prior, and one copy of each gold denomination promoted to the very top. The
+       remaining gold is stratified directly across the whole run in position space (step 2), not via
+       desirability, since gold quantity (not rater desirability) should set where it lands.
     2. **Rank-transform** those bases into uniform positions in [0, 1], then add the long-tailed
        jitter to the *position*.
 
@@ -166,21 +166,52 @@ def _assign_targets(items: List[Item], params: SmoothingParams, rng) -> Dict[Ite
     base: Dict[Item, float] = {}
     scale: Dict[Item, float] = {}
 
-    # Money is stratified by copy across the early-to-mid band below, NOT ranked: the money rows in
+    # Money is stratified by copy across the whole run below, NOT ranked: the money rows in
     # desirability.csv are intentionally ignored here -- gold quantity stratification, not rater
     # desirability, sets where gold lands.
     golds = [it for it in items if _category(_base_name(it.name)) == "money"]
     rng.shuffle(golds)
-    span = params.gold_hi - params.gold_lo
-    count = len(golds)
-    for index, item in enumerate(golds):
-        lo = params.gold_lo + (index / count) * span
-        hi = params.gold_lo + ((index + 1) / count) * span
-        base[item] = rng.uniform(lo, hi)
-        scale[item] = params.sigma_base
+
+    # Pin some copies of each gold denomination at the very top of the order ("uppermost score"),
+    # above every rated item, so they land as late as the best loot; the rest are spread evenly across
+    # the whole run (below), keeping gold off the early ranks so the other items appear a bit earlier.
+    # 100 Gold is worthless, so none of it is pinned -- all of it is stratified; the larger
+    # denominations each keep one late "treat".
+    gold_uppermost_quota = {"100 Gold": 0}          # denominations not listed pin one copy
+    top_base = max((info.desirability for info in desirability_data.by_name.values()), default=1.0)
+    promoted_count: Dict[str, int] = {}
+    promoted_rank = 0
+    banded: List[Item] = []
+    for item in golds:
+        name = _base_name(item.name)
+        if promoted_count.get(name, 0) < gold_uppermost_quota.get(name, 1):
+            promoted_count[name] = promoted_count.get(name, 0) + 1
+            base[item] = top_base + 1.0 + promoted_rank  # strictly above all rated items
+            scale[item] = params.sigma_base
+            promoted_rank += 1
+        else:
+            scale[item] = params.sigma_base
+            banded.append(item)
+    banded_set = set(banded)
+
+    # Push selected copies of some mid-tier consumables into the *second half* of the run
+    # (positions 0.5..1.0) instead of their normal desirability spot, so not all your healing/mana
+    # shows up early. Per-type copy counts; rng picks which copies, the rest stay at their normal spot.
+    second_half_quota = {"High Potion": 2, "Super Potion": 3, "Mana Prism": 4, "High Mind Up": 1}
+    second_half: List[Item] = []
+    taken: Dict[str, int] = {}
+    candidates = [it for it in items if _base_name(it.name) in second_half_quota]
+    rng.shuffle(candidates)
+    for item in candidates:
+        name = _base_name(item.name)
+        if taken.get(name, 0) < second_half_quota[name]:
+            taken[name] = taken.get(name, 0) + 1
+            scale[item] = params.sigma_base
+            second_half.append(item)
+    second_half_set = set(second_half)
 
     for item in items:
-        if item in base:
+        if item in base or item in banded_set or item in second_half_set:
             continue
         info = desirability_data.by_name.get(_base_name(item.name))
         if info is not None:
@@ -190,10 +221,27 @@ def _assign_targets(items: List[Item], params: SmoothingParams, rng) -> Dict[Ite
             base[item] = rng.random()  # unranked: uniform prior over the whole run
             scale[item] = params.sigma_base
 
-    # Rank-transform the bases into evenly spaced positions, preserving order.
-    order = sorted(items, key=lambda it: base[it])
+    # Rank-transform the bases into evenly spaced positions, preserving order. The stratified gold and
+    # the second-half consumables are excluded from the rank-transform and instead get their positions
+    # set directly below -- so gold appears evenly across the whole run (and, being out of the rank,
+    # doesn't crowd the early ranks and push the rest later) and the chosen consumables land in back.
+    order = sorted((it for it in items if it not in banded_set and it not in second_half_set),
+                   key=lambda it: base[it])
     denom = max(1, len(order) - 1)
     position = {item: i / denom for i, item in enumerate(order)}
+
+    gold_count = len(banded)
+    for index, item in enumerate(banded):
+        lo = index / gold_count
+        hi = (index + 1) / gold_count
+        position[item] = rng.uniform(lo, hi)
+
+    # Selected consumables: stratify evenly across the back half of the run [0.5, 1.0].
+    sh_count = len(second_half)
+    for index, item in enumerate(second_half):
+        lo = 0.5 + (index / sh_count) * 0.5
+        hi = 0.5 + ((index + 1) / sh_count) * 0.5
+        position[item] = rng.uniform(lo, hi)
 
     targets: Dict[Item, float] = {}
     for item in items:
