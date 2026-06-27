@@ -88,12 +88,15 @@ def pack_destination(room_ptr: int, x: int, y: int, x_offset: int, y_offset: int
 
 
 # --- Skull Key menu description (re-pointed so the text reflects the warp behavior) ---
-# Menu strings are looked up through a pointer table at GBA 0x08506C64 (one u32 per entry).
-# Each string is `01 00` + ASCII (with 0x06 = line break) + `06 0a` (terminator). The Skull Key
-# *description* is entry 298 (consumable index 25 + 273). We write a new string into free space
-# and repoint that one entry; nothing else in the text block moves. The in-game description box
-# fits up to 2 lines of <= 34 chars (measured from the vanilla descriptions).
-DESC_TABLE_ENTRY_FILE_OFFSET = 0x50710C            # string-pointer table[298], file offset
+# All game text resolves through one string-pointer array, sUnk_08506B38 @ GBA 0x08506B38 (one u32 per
+# entry), indexed by a text-id (see AoS ROM Map.txt / USEFUL_FILE-OR-DIRECTORY_LOCATIONS.md §7). A
+# consumable's *description* text-id is 0x08506936[consumable_index] == 348 + index; for the Skull Key
+# (index 25) that is array index 373. Each string is `01 00` + ASCII (0x06 = line break) + `06 0a`
+# (terminator). We write a new string into free space and repoint just that one array entry; nothing
+# else moves. The description box fits up to 2 lines of <= 34 chars (measured from the vanilla strings).
+# (File offset = 0x506B38 + 373*4 = 0x50710C. Earlier comments framed this as "table 0x08506C64,
+#  entry 298 = idx25 + 273" -- that base/index pair is mislabeled but resolves to the same byte.)
+DESC_TABLE_ENTRY_FILE_OFFSET = 0x50710C            # sUnk_08506B38[373] (Skull Key desc text-id), file offset
 DESC_STRING_GBA = 0x08660200                       # new string in free space (clear of the blob)
 DESC_STRING_FILE_OFFSET = DESC_STRING_GBA - 0x08000000
 SKULL_KEY_DESCRIPTION_LINES: Tuple[str, ...] = (

@@ -12,7 +12,7 @@ from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTok
 
 from ..data.pickup_info import rows as pickup_infos
 from ..items import item_table
-from . import deathlink_hook, skull_key_warp
+from . import custom_pickups, deathlink_hook, inventory_menu, skull_key_warp
 from .entity import GBA_ROM_BASE
 
 if TYPE_CHECKING:
@@ -65,7 +65,11 @@ def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Di
     for loc in active_locations:
         rom_offset = loc.address - GBA_ROM_BASE
 
-        if loc.item.player == world.player:
+        custom = custom_pickups.CUSTOM_PICKUP_TEST_PLACEMENTS.get(loc.name)
+        if custom is not None:
+            # Dev placement: force this location to spawn a custom behaviour-pickup (rom/custom_pickups.py).
+            type_num, subtype_num, item_offset = custom_pickups.get_encoding(custom)
+        elif loc.item.player == world.player:
             type_num, subtype_num, item_offset = get_item_encoding(loc.item.code)
         else:
             type_num, subtype_num, item_offset = _AP_PLACEHOLDER
@@ -126,5 +130,19 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
     if world.options.death_link:
         for offset, data in deathlink_hook.build_writes().items():
             patch.write_token(APTokenTypes.WRITE, offset, data)
+
+    # Custom-pickup framework (rom/custom_pickups.py): the collect hook, the extended consumable-icon
+    # table (existing items unchanged), and the custom icons. Installed unconditionally -- it is inert
+    # unless a location actually spawns a custom item (var_b >= 32), which only the test placements or
+    # a future option do.
+    base_rom = get_base_rom_bytes()
+    for offset, data in custom_pickups.build_writes_from_rom(base_rom).items():
+        patch.write_token(APTokenTypes.WRITE, offset, data)
+
+    # Item-Use menu extension (rom/inventory_menu.py): shows custom "key items" in the pause Item-Use
+    # list (name + description, non-usable) by reading a shadow inventory in saved pad_133A0. Emitted
+    # only when at least one custom pickup has an inventory_name.
+    for offset, data in inventory_menu.build_writes(base_rom).items():
+        patch.write_token(APTokenTypes.WRITE, offset, data)
 
     patch.write_file("token_data.bin", patch.get_token_binary())
