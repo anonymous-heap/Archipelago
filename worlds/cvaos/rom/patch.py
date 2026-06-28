@@ -120,10 +120,19 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
                       ARCHIPELAGO_IDENTIFIER.encode("ascii"))
     patch.write_token(APTokenTypes.WRITE, AUTH_NUMBER_START, bytes(world.auth))
 
-    # Skull Key -> warp consumable hook (the "Skull Key Warp" option; see rom/skull_key_warp.py).
+    base_rom = get_base_rom_bytes()
+    # Working copy that accumulates any writes which REPOINT entries in the name/desc text-id tables or
+    # the string-pointer array. inventory_menu (below) RELOCATES those tables and repoints the text
+    # resolver to its copies, so a repoint left only in the originals would be masked. Any feature that
+    # edits those tables must be applied here before inventory_menu reads it.
+    working = bytearray(base_rom)
+
+    # Skull Key -> warp consumable hook (the "Skull Key Warp" option; see rom/skull_key_warp.py). It
+    # also repoints the Skull Key description, so its writes must reach inventory_menu's relocated array.
     if world.options.skull_key_warp:
         for offset, data in skull_key_warp.build_writes().items():
             patch.write_token(APTokenTypes.WRITE, offset, data)
+            working[offset:offset + len(data)] = data
 
     # DeathLink "real kill" hook (the "Death Link" option; see rom/deathlink_hook.py). Lets the
     # client trigger the game's actual death routine via a flag instead of zeroing HP.
@@ -135,14 +144,14 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
     # table (existing items unchanged), and the custom icons. Installed unconditionally -- it is inert
     # unless a location actually spawns a custom item (var_b >= 32), which only the test placements or
     # a future option do.
-    base_rom = get_base_rom_bytes()
     for offset, data in custom_pickups.build_writes_from_rom(base_rom).items():
         patch.write_token(APTokenTypes.WRITE, offset, data)
 
     # Item-Use menu extension (rom/inventory_menu.py): shows custom "key items" in the pause Item-Use
-    # list (name + description, non-usable) by reading a shadow inventory in saved pad_133A0. Emitted
-    # only when at least one custom pickup has an inventory_name.
-    for offset, data in inventory_menu.build_writes(base_rom).items():
+    # list (name + description, non-usable) via a transient shadow inventory in free EWRAM. Reads
+    # `working` so its relocated name/desc/string tables include the repoints applied above (e.g. the
+    # Skull Key warp description). Emitted only when at least one custom pickup has an inventory_name.
+    for offset, data in inventory_menu.build_writes(bytes(working)).items():
         patch.write_token(APTokenTypes.WRITE, offset, data)
 
     patch.write_file("token_data.bin", patch.get_token_binary())

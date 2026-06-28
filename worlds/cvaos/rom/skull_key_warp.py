@@ -3,10 +3,10 @@ Skull Key -> warp consumable ROM hook for Castlevania: Aria of Sorrow.
 
 Turns "use a Skull Key from the item menu" into a teleport to a fixed destination,
 by intercepting the consumable-effect dispatcher and reusing the game's own warp
-helpers. See ``worlds/cvaos/SKULL_KEY_WARP.md`` for the full design and the decomp
+helpers. See ``worlds/cvaos/SKULL_KEY_WARP.md`` for the full design and the ROM
 addresses this relies on.
 
-Mechanism (all verified against cvaos-decomp + the USA ROM):
+Mechanism (all verified against the USA ROM):
 
 * ``sub_0804B36C`` (GBA 0x0804B36C) is the consumable-effect dispatcher. The first
   8 bytes of its prologue are overwritten with a trampoline that long-jumps to the
@@ -66,9 +66,9 @@ assert len(WARPHOOK_BLOB) == 108
 # ram/accessors.py ``cap_skull_keys(floor=1)`` runs every poll while in-game: it clamps the Skull
 # Key count down (existing cap) AND up to 1 (the floor). The floor fires the instant a new game is
 # in-game, so the player effectively starts with one and always has at least one. (An earlier ROM
-# edit tried to add the Skull Key to a starting-items table, but that table -- sUnk_080E0DE4 in
-# code_08008750.c -- belongs to GameModeBossRushMenuUpdate, i.e. Boss Rush, not the normal new
-# game, so it did nothing in real play. The normal Soma new game starts with an empty inventory.)
+# edit tried to add the Skull Key to a starting-items table, but that table (sUnk_080E0DE4) belongs
+# to GameModeBossRushMenuUpdate, i.e. Boss Rush, not the normal new game, so it did nothing in real
+# play. The normal Soma new game starts with an empty inventory.)
 
 # The 12-byte destination record lives inside the blob (struct SkullKeyWarpDestination):
 #   u32 room_ptr; u16 x; u16 y; s16 x_offset; s16 y_offset
@@ -89,7 +89,7 @@ def pack_destination(room_ptr: int, x: int, y: int, x_offset: int, y_offset: int
 
 # --- Skull Key menu description (re-pointed so the text reflects the warp behavior) ---
 # All game text resolves through one string-pointer array, sUnk_08506B38 @ GBA 0x08506B38 (one u32 per
-# entry), indexed by a text-id (see AoS ROM Map.txt / USEFUL_FILE-OR-DIRECTORY_LOCATIONS.md §7). A
+# entry), indexed by a text-id. A
 # consumable's *description* text-id is 0x08506936[consumable_index] == 348 + index; for the Skull Key
 # (index 25) that is array index 373. Each string is `01 00` + ASCII (0x06 = line break) + `06 0a`
 # (terminator). We write a new string into free space and repoint just that one array entry; nothing

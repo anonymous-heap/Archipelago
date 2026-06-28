@@ -5,16 +5,21 @@ Makes the pause "Item Use" subscreen show the custom "key items" registered in `
 (``CustomPickup`` with an ``inventory_name``) -- shown like CASTLE MAP 1 (name + 2-line description +
 icon, non-usable) -- without touching the fixed 32-slot consumable inventory or save format.
 
-How (all verified vs cvaos-decomp + the USA ROM; see inventory_menu.s for the trampoline write-up):
+How (all verified vs the USA ROM; see inventory_menu.s for the trampoline write-up):
 
-* Storage: the new items' "owned" bytes live in the unused, SRAM-saved pad_133A0 (gEwramData+0x133A0,
-  76 bytes inside the 0x190 player struct). The collect hook (custom_pickups.s) writes pad_133A0[slot]
-  = 1. No save-code change (it is already inside the persisted 0x190 block; old saves read it as 0).
+* Storage: a TRANSIENT shadow count-array in free high-EWRAM (0x02030000, above the gEwramData struct
+  which ends at 0x02025554; never touched by game code after the boot zero-fill). It is NOT saved and
+  is rebuilt on every menu build/recount. Custom items' owned-state persists instead via the saved
+  behaviour flag each item sets on collection (the DESC_TABLE row's flag_field/flag_number) -- the
+  collect hook writes NO inventory byte. (pad_133A0 is unusable: 0x133A0..0x133EB is entirely soul
+  state -- bestiary bitfield + equip/sorted-soul lists -- so writing a shadow there corrupts souls.)
 
 * Menu read: the list builder sub_0804B494 (0x0804B494) and recount sub_0804B648 (0x0804B648) read
-  the consumable counts as base+0x38 and iterate index 0..0x1f. Entry trampolines (inventory_menu.s)
-  sync the real 32 counts into pad_133A0[0..31] and override the base to gEwramData+0x13368 so the
-  loop reads a 47-slot shadow at 0x133A0; the index cap 0x1f is bumped to ``menu_slot_bound()``.
+  the consumable counts as base+0x38, index 0..0x1f, LIVE (on open, on page-cross, after use -- never
+  cached). The entry trampolines (inventory_menu.s) therefore rebuild the whole shadow each call: copy
+  the 32 real counts into shadow[0..31], derive each custom slot from its DESC-row flag, then override
+  the base to gEwramData-relative SHADOW_BASE so the loop reads the shadow. The index cap 0x1f is
+  bumped to ``menu_slot_bound()``.
 
 * Per-row data: the menu reads item-table (0x08505B3C), name (0x08506734) and description
   (0x08506936) tables; the use-gate sub_0804B36C treats item-table +8 >= 4 as a non-usable key item.
@@ -47,21 +52,37 @@ EXT_DESC_TABLE_GBA = 0x08661700     # relocated DESC_TIDS (+ new items' desc tex
 EXT_STRINGPTR_GBA = 0x08662000      # relocated string-pointer array (+ appended new strings)
 NEW_STRINGS_GBA = 0x08665000        # the new name/description string blobs
 
-# --- Menu trampoline entry points (offsets within MENU_BLOB; from `nm` on inventory_menu.s) ---
-MENU_LIST_HOOK_GBA = MENU_BLOB_GBA + 0x00      # MenuListHook   (over sub_0804B494)
-MENU_RECOUNT_HOOK_GBA = MENU_BLOB_GBA + 0x24   # MenuRecountHook (over sub_0804B648)
+# --- Menu trampoline entry points (offsets within MENU_BLOB; from `arm-none-eabi-nm` on the .s) ---
+# These offsets MOVE whenever inventory_menu.s changes size, so re-derive them with `nm` after editing
+# the .s. A stale recount offset jumps the sub_0804B648 veneer into the middle of MenuListHook and
+# freezes the whole Item-Use menu -- the assert after MENU_BLOB guards against exactly that.
+MENU_LIST_HOOK_OFF = 0x00      # MenuListHook   (over sub_0804B494)
+MENU_RECOUNT_HOOK_OFF = 0x5A   # MenuRecountHook (over sub_0804B648)
+MENU_LIST_HOOK_GBA = MENU_BLOB_GBA + MENU_LIST_HOOK_OFF
+MENU_RECOUNT_HOOK_GBA = MENU_BLOB_GBA + MENU_RECOUNT_HOOK_OFF
 B494_ENTRY_FILE = 0x0004B494
 B648_ENTRY_FILE = 0x0004B648
 
 # Assembled from inventory_menu.s at -Ttext=0x08660500 (THUMB). Position-DEPENDENT (literal pool bakes
-# 0x02013294/0x020133A0/0x02013368 and the B494/B648 resume addresses). 92 bytes.
+# 0x02013294 real / 0x02030000 shadow / 0x0202FFC8 base / 0x02000000 gEwram / 0x08660400 desc-table /
+# the B494/B648 resume addresses). Each trampoline mirrors the 32 real counts AND derives the custom
+# slots from each DESC row's saved behaviour flag, so the transient shadow is rebuilt before every read.
 MENU_BLOB = bytes.fromhex(
-    "02b4114a114b202011781970013201330138f9d102bc0e48f0b557464e4645460c4b1847"
-    "02b4084a084b202011781970013201330138f9d102bc054870b58446002400230448004794"
-    "320102a0330102683301029db4040851b60408"
+    "02b4f0b42b4a2c4b202011781970013201330138f9d1294c274d294e294f2088b84211d02289002a"
+    "0cd06288a388b21859098900521812681f211940ca4001231a402a540c34eae7f0bc02bc1e48f0b5"
+    "57464e4645461d4b184702b4f0b4154a154b202011781970013201330138f9d1124c114d124e134f"
+    "2088b84211d02289002a0cd06288a388b21859098900521812681f211940ca4001231a402a540c34"
+    "eae7f0bc02bc084870b58446002400230748004794320102000003020004660800000002ffff0000"
+    "c8ff02029db4040851b60408"
 )
-assert len(MENU_BLOB) == 92, f"menu blob must be 92 bytes, got {len(MENU_BLOB)}"
+assert len(MENU_BLOB) == 212, f"menu blob must be 212 bytes, got {len(MENU_BLOB)}"
 assert cp.SHADOW_BASE_GBA.to_bytes(4, "little") in MENU_BLOB, "shadow base missing from menu blob"
+# Both hooks begin `push {r1}` (b402); MenuListHook ends `bx r3` (4718). Guard that MENU_RECOUNT_HOOK_OFF
+# still lands on MenuRecountHook's entry (push {r1}) immediately after MenuListHook's bx -- i.e. catch a
+# stale offset after editing inventory_menu.s (the bug that froze the menu when MenuListHook grew).
+assert MENU_BLOB[MENU_RECOUNT_HOOK_OFF - 2:MENU_RECOUNT_HOOK_OFF + 2] == bytes.fromhex("184702b4"), \
+    "MENU_RECOUNT_HOOK_OFF is stale -- re-run `arm-none-eabi-nm` on inventory_menu.s and update it"
+assert MENU_BLOB[MENU_LIST_HOOK_OFF:MENU_LIST_HOOK_OFF + 2] == bytes.fromhex("02b4"), "list hook moved"
 
 # --- Menu instruction-literal sites to repoint (file offsets), confirmed against the ROM ---
 # EVERY 0x08505B3C / 0x08506936 / 0x08506734 literal in the Item-Use cluster (0x4B36C..0x4B9D0) must

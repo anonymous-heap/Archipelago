@@ -24,7 +24,7 @@ MENU_STATE = 0x00064      # 0x02000064 u8
 # 0x020000A1 u8 "current game mode": low nibble is the character (Soma=1 / Julius=0), high nibble
 # is the difficulty (normal=0 / hard=1). The game writes it only at new-game / mode-select; the
 # damage scaling, soul-drop rates, and the HARD_PICKUP spawn gate all read it live, so forcing the
-# high nibble to 1 makes the game behave as Hard Mode (verified in cvaos-decomp).
+# high nibble to 1 makes the game behave as Hard Mode.
 GAME_MODE = 0x000A1
 GAME_MODE_DIFFICULTY_MASK = 0xF0   # high nibble
 GAME_MODE_HARD = 0x10              # high nibble == 1
@@ -51,8 +51,8 @@ MENU_STATE_DEATH = 0x02            # death/game-over fade sub-state (drives Deat
 MENU_STATE_ROOM_TRANSITION = 0x03
 MENU_STATE_PAUSE = 0x06
 MENU_STATE_SHOP = 0x09
-# MENU_STATE_DEATH is undocumented in the cvaos-decomp RAM map (which lists only 1/3/6/9), but
-# verified in the decomp: the single player-death handler sub_0801AF20 writes this sub-state
+# MENU_STATE_DEATH is not one of the usual documented sub-states (1/3/6/9), but the single
+# player-death handler sub_0801AF20 writes this sub-state
 # (unk_64 = 2) on the very frame a lethal hit lands -- for combat, spikes, and overkill alike,
 # since every death routes through the one damage routine that clamps HP to exactly 0 -- and
 # holds it through the multi-frame death fade (GameModeInGameUpdate's case 2 runs the fade),

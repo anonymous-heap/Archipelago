@@ -6,7 +6,7 @@
 @ has the same net effect as pressing the A01 Forbidden-Area press-button -- it sets MISC flag
 @ #48 so the paired barrier sinks/opens -- and plays the button's SFX (song 0x133).
 @
-@ ---- How a pickup is collected (verified against cvaos-decomp + the USA ROM) ----
+@ ---- How a pickup is collected (verified against the USA ROM) ----
 @ A room pickup entity is 12 bytes: x,y(s16) id,type,subtype,unk(u8) var_a,var_b(u16), where
 @ type=4 (PICKUP), var_a = the per-location "collected" save-flag index (0x02000360 bitfield),
 @ var_b = item_offset. The spawn dispatcher sub_0800F1FC (case 4) spawns the floating pickup via
@@ -29,14 +29,16 @@
 @ (ldr r3,[pc,#0]; bx r3; .word CustomPickupHook|1 -- r3 is dead at entry). This routine replicates
 @ the 4 stolen prologue insns + the first real insn (adds r4,r0,#0), then:
 @   - if the pickup is a consumable (category 2) whose var_b matches a row in DESC_TABLE: (optionally)
-@     mark it owned in the Item-Use shadow inventory + queue its "Got <name>" textbox, set its flag,
-@     play its SFX, despawn the floating pickup, and jump to the vanilla finish at 0x08044508 (writes
-@     the 0x360 collected flag from var_a, returns) -- no normal item is granted;
+@     queue its "Got <name>" textbox, set its flag, play its SFX, despawn the floating pickup, and jump
+@     to the vanilla finish at 0x08044508 (writes the 0x360 collected flag from var_a, returns) -- no
+@     normal item is granted. (Owned-state for the Item-Use menu is NOT written here; the menu derives
+@     it from the flag this sets -- see inventory_menu.s.);
 @   - else -> resume vanilla pickup-collect at 0x08044202.
 @ Custom items live at consumable var_b >= 32 (new item space added by repointing the spawn-path
 @ icon-table literal at file 0x440B4 to an extended table; existing consumables 0..31 are untouched).
-@ "Inventory" items additionally live at menu slot == var_b in the shadow inventory pad_133A0 and the
-@ relocated item/name/desc tables (see inventory_menu.py).
+@ "Inventory" items additionally appear at Item-Use menu slot == var_b via the relocated
+@ item/name/desc tables; the menu derives their owned-state from this item's behaviour flag into a
+@ transient shadow array (see inventory_menu.s) -- no per-item saved storage is used.
 @
 @ ---- DESC_TABLE (built + written by custom_pickups.py at CUSTOM_DESC_TABLE_GBA) ----
 @ Array of 12-byte rows, terminated by key == 0xFFFF:
@@ -64,7 +66,6 @@
     .equ DESC_TERMINATOR, 0xFFFF
     .equ DESC_STRIDE,     12           @ row = {var_b, flag_field, flag_number, sfx, name_text_id, _}
     .equ CONSUMABLE_CAT,  2
-    .equ SHADOW,          0x020133A0   @ gEwramData + pad_133A0 (the Item-Use shadow inventory)
     .equ GOTITEM,         0x0800EF98   @ sub_0800EF98(text_id): queues the "Got <name>" textbox
     .equ PLAYSONG,        0x080D7910
     .equ VANILLA_RESUME,  0x08044202   @ sub_080441F8 + 0xA (after the 5 stolen/replicated insns)
@@ -102,14 +103,13 @@ CustomPickupHook:
     bx   r3
 
 .Lfound:
-    @ r6 -> matched row, r4 = entity, r5 = var_b (also the menu slot / shadow index for inventory items).
-    @ Inventory item (name_text_id != 0): mark it owned in the SRAM-saved shadow and queue "Got <name>".
+    @ r6 -> matched row, r4 = entity, r5 = var_b. Inventory item (name_text_id != 0): queue the
+    @ "Got <name>" textbox. We do NOT store owned-state here: the Item-Use menu trampoline re-derives
+    @ it from this item's behaviour flag (set just below in .Lflag) into a transient shadow, so the
+    @ saved flag is the single source of truth and no inventory array is written on collection.
     ldrh r0, [r6, #8]             @ name_text_id
     cmp  r0, #0
     beq  .Lflag
-    ldr  r1, =SHADOW
-    movs r2, #1
-    strb r2, [r1, r5]            @ pad_133A0[var_b] = 1 (owned); the menu reads this shadow
     ldr  r3, =(GOTITEM + 1)      @ sub_0800EF98(name_text_id); r0 already holds name_text_id
     bl   .Lcall_r3
 

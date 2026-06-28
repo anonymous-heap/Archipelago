@@ -8,11 +8,14 @@ AoS pickup icons are loaded on demand by sub_0801232C: it DMAs 0x40 bytes (top h
 sheet_base+off and another 0x40 (bottom half) from sheet_base+off+0x200. So a 16x16 icon is
 0x80 bytes split into two 0x40 blocks; this tool emits that 0x80-byte blob.
 
-Palette: pickups use OBJ palette bank 6 (the shared items palette), so the tiles must index THAT
-palette's 16 colours. Pass bank 6's colours via --palette (BGR555 hwords, comma/space separated,
-e.g. dumped from BizHawk -- see dump_obj_palette.lua). Index 0 is transparent. If --palette is
-omitted, a palette is derived from the image itself (provisional: correct *structure*, but in-game
-colours will be wrong until re-run against the real bank 6).
+Palette: floor pickups all render through OBJ palette bank 6 -- the shared items palette, loaded for
+every pickup in every room (so it never gets clobbered). Bank 6 is items-palette sub-palette 2: its
+16 colours are static in the ROM at 0x082099FC + 4 + 2*0x20 = 0x08209A40 (a rainbow incl. gold
+#F8D848, tan #F8B070, greys #A0A0A8/#E8D8D0). Pass them via --palette (BGR555 hwords; they are also
+kept as ``BANK6_PALETTE`` in rom/custom_pickups.py). Index 0 is transparent. If --palette is omitted,
+a palette is derived from the image (provisional structure only; in-game colours wrong until re-run
+against bank 6). Nearest-colour can pull mid-tones to off-hues (e.g. dark brass -> brown/red); for a
+deliberate look, pre-map the source colours (see how custom_pickups._BUTTON_TILES was generated).
 
 Usage:
   python png_to_icon.py button_pickup.png                       # provisional (image's own colours)
@@ -126,6 +129,25 @@ def tile_4bpp(grid, tx: int, ty: int) -> bytes:
     return bytes(out)
 
 
+def fit_16x16(w, h, px):
+    """Crop the opaque bounding box and centre it in a 16x16 transparent canvas. Lets a tightly- or
+    loosely-cropped source (e.g. a 32x48 DSVEdit object frame) become a 16x16 icon."""
+    opaque = [(x, y) for y in range(h) for x in range(w) if px[y * w + x][3] != 0]
+    if not opaque:
+        raise SystemExit("image is fully transparent")
+    x0 = min(x for x, _ in opaque); x1 = max(x for x, _ in opaque)
+    y0 = min(y for _, y in opaque); y1 = max(y for _, y in opaque)
+    cw, ch = x1 - x0 + 1, y1 - y0 + 1
+    if cw > 16 or ch > 16:
+        raise SystemExit(f"opaque content is {cw}x{ch}; must be <= 16x16 to fit an icon")
+    ox, oy = (16 - cw) // 2, (16 - ch) // 2          # centre
+    out = [(0, 0, 0, 0)] * (16 * 16)
+    for y in range(ch):
+        for x in range(cw):
+            out[(oy + y) * 16 + (ox + x)] = px[(y0 + y) * w + (x0 + x)]
+    return 16, 16, out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("png")
@@ -133,7 +155,8 @@ def main() -> None:
                     help="16 BGR555 hwords (comma/space separated) = OBJ bank 6; omit to derive")
     args = ap.parse_args()
     w, h, px = decode_png_rgba(args.png)
-    assert (w, h) == (16, 16), f"expected 16x16, got {w}x{h}"
+    if (w, h) != (16, 16):
+        w, h, px = fit_16x16(w, h, px)   # crop transparent edges + centre into 16x16
 
     if args.palette:
         toks = [t for t in args.palette.replace(",", " ").split() if t]

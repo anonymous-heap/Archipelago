@@ -1,25 +1,27 @@
--- Dump OBJ palette bank 6 (the shared item-pickup palette) from a running AoS in BizHawk.
+-- Dump all 16 OBJ palette banks from a running AoS in BizHawk.
 --
--- Why: custom pickups reuse OBJ palette bank 6, so their icon tiles must be recoloured to bank 6's
--- 16 colours. That palette is loaded into PAL RAM by a runtime slot manager, so it's read live here.
+-- Why: custom-pickup icons render through OBJ palette bank 6 -- the shared items palette, loaded for
+-- every floor pickup (so it is reliable in every room; we no longer point pickups at spare banks).
+-- Bank 6 is items-palette sub-palette 2, static in the ROM at 0x08209A40 (= 0x082099FC + 4 header
+-- + 2*0x20). This tool prints every bank so we can confirm bank 6 in-game matches that static data
+-- (and inspect the others). Custom icon tiles are quantised against bank 6 -- see custom_pickups.py.
 --
--- Use: load this in BizHawk's Lua console with AoS running and a pickup/item icon ON SCREEN (so the
--- items palette is resident). It prints 16 BGR555 hwords. Paste them into:
---   python png_to_icon.py button_pickup.png --palette "<the 16 hwords>"
--- to regenerate the final ICON_TILES for custom_pickups.py.
+-- Use: in BizHawk's Lua console, with AoS running and a pickup (e.g. the Study Sealswitch) ON SCREEN,
+-- run this. Bank 6 should show the items rainbow (gold #F8D848, tan #F8B070, greys). Paste output back.
 --
--- OBJ palette RAM = 0x05000200; bank 6 = 0x05000200 + 6*0x20 = 0x050002C0 (16 colours).
+-- OBJ palette RAM = 0x05000200; bank N = 0x05000200 + N*0x20 (16 BGR555 colours).
 
-local function dump()
-    local ok = pcall(memory.usememorydomain, "PALRAM")   -- mGBA exposes PALRAM (0x000 BG, 0x200 OBJ)
-    local base = ok and (0x200 + 6 * 0x20) or (0x050002C0) -- PALRAM-relative, else System Bus
-    local parts = {}
-    for i = 0, 15 do
-        local c = ok and memory.read_u16_le(base + i * 2)
-                     or memory.read_u16_le(0x050002C0 + i * 2, "System Bus")
-        parts[#parts + 1] = string.format("0x%04x", c)
-    end
-    print("OBJ palette bank 6: " .. table.concat(parts, ","))
+local ok = pcall(memory.usememorydomain, "PALRAM")     -- mGBA exposes PALRAM (0x000 BG, 0x200 OBJ)
+local function read16(addr)
+    if ok then return memory.read_u16_le(0x200 + addr) end -- PALRAM-relative
+    return memory.read_u16_le(0x05000200 + addr, "System Bus")
 end
 
-dump()
+print("=== OBJ palette banks (BGR555) ===")
+for bank = 0, 15 do
+    local parts = {}
+    for i = 0, 15 do
+        parts[#parts + 1] = string.format("%04x", read16(bank * 0x20 + i * 2))
+    end
+    print(string.format("bank %2d: %s", bank, table.concat(parts, " ")))
+end
