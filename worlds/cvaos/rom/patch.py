@@ -12,8 +12,10 @@ from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTok
 
 from ..data.pickup_info import rows as pickup_infos
 from ..items import item_table
-from . import custom_pickups, deathlink_hook, inventory_menu, skull_key_warp
+from . import (custom_pickups, deathlink_hook, forbidden_area_button, inventory_menu,
+               skull_key_warp)
 from .entity import GBA_ROM_BASE
+from ..options import ForbiddenAreaButton
 
 if TYPE_CHECKING:
     from BaseClasses import Location
@@ -138,6 +140,12 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
     # client trigger the game's actual death routine via a flag instead of zeroing HP.
     if world.options.death_link:
         for offset, data in deathlink_hook.build_writes().items():
+            patch.write_token(APTokenTypes.WRITE, offset, data)
+
+    # Forbidden Area "pickup" mode (rom/forbidden_area_button.py): replace the A01 press-button with an
+    # inert candle so the barrier can only be opened by the shuffled Forbidden Area Key. Barrier intact.
+    if world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup:
+        for offset, data in forbidden_area_button.build_writes(base_rom).items():
             patch.write_token(APTokenTypes.WRITE, offset, data)
 
     # Custom-pickup framework (rom/custom_pickups.py): the collect hook, the extended consumable-icon

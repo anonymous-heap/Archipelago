@@ -65,6 +65,25 @@ class SkullKeyWarp(DefaultOnToggle):
     display_name = "Skull Key Warp"
 
 
+class ForbiddenAreaButton(Choice):
+    """
+    How the Forbidden Area (20D <-> A02 through A01) unlock is handled.
+
+    Vanilla: arriving in A01 from A02 lets you press a button that opens the 20D->A02 direction
+       permanently; arriving from 20D you can't reach it, so 20D->A02 is otherwise blocked. (The
+       A02->20D direction is always passable with a vertical-mobility soul.)
+
+    - off: vanilla. The press-button stays in A01; 20D->A02 is treated as blocked in logic.
+    - pickup: the button is removed and the unlock becomes a shuffled "Forbidden Area Key" item.
+       Receiving it (from anywhere in the multiworld) opens the barrier, and logic gates 20D->A02
+       on having it.
+    """
+    display_name = "Forbidden Area Button"
+    option_off = 0
+    option_pickup = 1
+    default = option_off
+
+
 class ItemSmoothing(Choice):
     """
     **This is the flag to turn off if you want a totally-random-yet-finishable run.**
@@ -253,6 +272,7 @@ class CVAOSOptions(PerGameCommonOptions):
     goal: Goal
     hard_mode: HardMode
     skull_key_warp: SkullKeyWarp
+    forbidden_area_button: ForbiddenAreaButton
     item_smoothing: ItemSmoothing
     item_smoothing_order: ItemSmoothingOrder
     early_mobility_souls: EarlyMobilitySouls

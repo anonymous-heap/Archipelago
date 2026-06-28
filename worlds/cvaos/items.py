@@ -7,6 +7,7 @@ from BaseClasses import Item, ItemClassification
 from .data.pickup_info import rows as pickup_infos
 from .data.item_info import item_info_collection
 from .item_granting import DISAMBIG_MAX, ID_MAX, TransferCategory, pack
+from .options import ForbiddenAreaButton
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -95,6 +96,18 @@ def _build_item_table() -> Dict[str, ItemData]:
 
 item_table: Dict[str, ItemData] = _build_item_table()
 
+# --- Synthetic, non-pickup items (shuffled into the pool only under specific options) ---
+# Forbidden Area Key: the shuffled unlock for ForbiddenAreaButton == pickup. It has no ground pickup;
+# receiving it sets MISC flag #48 (the Forbidden Area barrier flag), so the barrier opens however and
+# wherever the player gets the key. misc #48 = bit 16 of the u32 at EWRAM (0x344 + (48>>5)*4) = 0x348,
+# i.e. byte 0x34A bit 0.
+FORBIDDEN_AREA_KEY = "Forbidden Area Key"
+item_table[FORBIDDEN_AREA_KEY] = ItemData(
+    ItemClassification.progression,
+    pack(TransferCategory.FLAG_ONLY, 0, set_flag=True, flag_offset=0x34A, flag_bit=0, flag_value=1),
+)
+_SYNTHETIC_ITEM_NAMES: frozenset[str] = frozenset({FORBIDDEN_AREA_KEY})
+
 # Convenience map for the World class. Kept complete (every pickup, Hard-Mode ones included) so
 # item ids stay stable for the data package; per-seed inclusion is decided in create_itempool.
 item_name_to_id: Dict[str, int] = {name: data.code for name, data in item_table.items()}
@@ -114,5 +127,17 @@ def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
     # One item per pickup. Hard-Mode-only pickups are included only when the Hard Mode option is
     # set, so the pool stays balanced with the locations created in regions.create_regions.
     include_hard = bool(world.options.hard_mode)
-    return [create_item(world, name) for name in item_table
-            if include_hard or name not in _HARD_PICKUP_ITEM_NAMES]
+    pool = [create_item(world, name) for name in item_table
+            if name not in _SYNTHETIC_ITEM_NAMES
+            and (include_hard or name not in _HARD_PICKUP_ITEM_NAMES)]
+    if world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup:
+        # Shuffle in the Forbidden Area Key, displacing one filler so the pool size still equals the
+        # location count (the A01 button is removed, not turned into a new check).
+        key = create_item(world, FORBIDDEN_AREA_KEY)
+        for i, existing in enumerate(pool):
+            if existing.classification == ItemClassification.filler:
+                pool[i] = key
+                break
+        else:
+            raise Exception("CVAoS: no filler item available to displace for the Forbidden Area Key")
+    return pool

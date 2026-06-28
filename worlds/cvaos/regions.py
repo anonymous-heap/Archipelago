@@ -19,7 +19,7 @@ from .data import (
     transdoor_connection_collection,
 )
 from .locations import CVAOSLocation, location_name_to_id
-from .options import resolve_allowed_techniques
+from .options import ForbiddenAreaButton, resolve_allowed_techniques
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -199,6 +199,15 @@ def create_regions(world: CVAOSWorld) -> None:
 
         # Create an access rule based on the routing requirements
         access_rule = _create_access_rule_from_routing(routing_info, world)
+
+        # Bespoke per-direction override (e.g. the Forbidden Area unlock), keyed by
+        # (room, from, to). The factory returns a replacement rule, or None to keep the CSV rule.
+        _room_override = SPECIAL_ROOM_ENTRANCE_RULES.get(
+            (room_id, routing_info.from_room, routing_info.to_room))
+        if _room_override is not None:
+            _replacement = _room_override(world)
+            if _replacement is not None:
+                access_rule = _replacement
 
         # Connect the regions
         entrance = from_region.connect(to_region, connection_name, access_rule)
@@ -543,6 +552,27 @@ SPECIAL_TRANSDOOR_RULES: dict[tuple[str, str], object] = {
 SPECIAL_TRANSDOOR_DEPS: dict[tuple[str, str], object] = {
     ("507:506", "506:507"): _chaotic_realm_gate_deps,
     ("904:900", "900:904"): _chaotic_realm_gate_deps,
+}
+
+
+def _forbidden_area_forward_gate(world: CVAOSWorld):
+    """The within-A01 step 20D -> A02 (the barrier-blocked direction). With ForbiddenAreaButton ==
+    pickup the unlock is the shuffled "Forbidden Area Key" (it sets misc #48 on receipt), so gate the
+    forward direction on holding it. Otherwise return None to keep the CSV-derived rule (vanilla
+    Impossible -- the in-room press-button is not modeled in logic). The reverse A02 -> 20D is
+    untouched (the CSV already allows DJump / HJump / Giant Bat)."""
+    if world.options.forbidden_area_button.value != ForbiddenAreaButton.option_pickup:
+        return None
+    player = world.player
+    return lambda state: state.has("Forbidden Area Key", player)
+
+
+# Bespoke per-direction access rules on specific WITHIN-ROOM crossings, keyed by
+# (room_id, from_room, to_room). Consulted in create_regions' within-room routing loop. A factory
+# takes the world and returns the replacement access-rule callable, or None to keep the CSV rule.
+# (has-item rules need no indirect-condition registration, unlike the can_reach transdoor gates.)
+SPECIAL_ROOM_ENTRANCE_RULES: dict[tuple[str, str, str], object] = {
+    ("A01", "20D", "A02"): _forbidden_area_forward_gate,
 }
 
 
