@@ -127,8 +127,8 @@ class AoSRAM:
         """
         The collected-pickup flag id for ``bit`` of byte ``byte_index`` of the 0x02000360
         bitfield -- the single home of the bit-numbering convention. LSB-first within each byte
-        (byte 0 = ids 0-7, bit 0 = the 0x01 bit). VERIFIED against cvaos-decomp: the game
-        tests these flags as ``unk_360[id >> 5] & (1 << (id & 0x1F))`` (src/code_0800F1FC.c), i.e.
+        (byte 0 = ids 0-7, bit 0 = the 0x01 bit). The game tests these flags as
+        ``unk_360[id >> 5] & (1 << (id & 0x1F))``, i.e.
         LSB-first little-endian u32 -- identical to this per-byte form. For MSB-first, change to
         ``byte_index * 8 + (7 - bit)``.
         """

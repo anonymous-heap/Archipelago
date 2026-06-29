@@ -11,9 +11,11 @@ from settings import get_settings
 from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTokenTypes
 
 from ..data.pickup_info import rows as pickup_infos
-from ..items import item_table
-from . import deathlink_hook, skull_key_warp
+from ..items import FORBIDDEN_AREA_SWITCH, item_table
+from . import (custom_pickups, deathlink_hook, forbidden_area_button, inventory_menu,
+               skull_key_warp)
 from .entity import GBA_ROM_BASE
+from ..options import ForbiddenAreaButton
 
 if TYPE_CHECKING:
     from BaseClasses import Location
@@ -56,6 +58,12 @@ def get_item_encoding(item_code: int) -> tuple[int, int, int]:
 # the Phase 6 Strategy B ASM hook (see ROADMAP). Keep type=4 so the entity still sets its save flag.
 _AP_PLACEHOLDER = (4, 2, 25)  # Skull Key
 
+# Synthetic items (no ground pickup) that appear in the local world as a custom behaviour-pickup.
+# The Study Sealswitch AP item spawns the in-game Study Sealswitch custom pickup, which sets misc #48
+# on collection -- the same flag its FLAG_ONLY receive path sets, so the unlock works whether collected
+# locally or received from elsewhere. Keyed by item display name (codes are packed, not name-derived).
+_ITEM_CUSTOM_PICKUP = {FORBIDDEN_AREA_SWITCH: custom_pickups.STUDY_SEALSWITCH}
+
 # Location data lookup: Location number -> ROM bytes
 
 def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Dict[int, bytes]:
@@ -65,7 +73,15 @@ def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Di
     for loc in active_locations:
         rom_offset = loc.address - GBA_ROM_BASE
 
-        if loc.item.player == world.player:
+        custom = custom_pickups.CUSTOM_PICKUP_TEST_PLACEMENTS.get(loc.name)
+        if custom is None and loc.item.player == world.player:
+            # The local player's shuffled synthetic items (e.g. the Study Sealswitch) spawn their
+            # real in-game custom pickup. A foreign player's copy stays a placeholder and is delivered
+            # through its FLAG_ONLY receive path.
+            custom = _ITEM_CUSTOM_PICKUP.get(loc.item.name)
+        if custom is not None:
+            type_num, subtype_num, item_offset = custom_pickups.get_encoding(custom)
+        elif loc.item.player == world.player:
             type_num, subtype_num, item_offset = get_item_encoding(loc.item.code)
         else:
             type_num, subtype_num, item_offset = _AP_PLACEHOLDER
@@ -116,15 +132,44 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
                       ARCHIPELAGO_IDENTIFIER.encode("ascii"))
     patch.write_token(APTokenTypes.WRITE, AUTH_NUMBER_START, bytes(world.auth))
 
-    # Skull Key -> warp consumable hook (the "Skull Key Warp" option; see rom/skull_key_warp.py).
+    base_rom = get_base_rom_bytes()
+    # Working copy that accumulates any writes which REPOINT entries in the name/desc text-id tables or
+    # the string-pointer array. inventory_menu (below) RELOCATES those tables and repoints the text
+    # resolver to its copies, so a repoint left only in the originals would be masked. Any feature that
+    # edits those tables must be applied here before inventory_menu reads it.
+    working = bytearray(base_rom)
+
+    # Skull Key -> warp consumable hook (the "Skull Key Warp" option; see rom/skull_key_warp.py). It
+    # also repoints the Skull Key description, so its writes must reach inventory_menu's relocated array.
     if world.options.skull_key_warp:
         for offset, data in skull_key_warp.build_writes().items():
             patch.write_token(APTokenTypes.WRITE, offset, data)
+            working[offset:offset + len(data)] = data
 
     # DeathLink "real kill" hook (the "Death Link" option; see rom/deathlink_hook.py). Lets the
     # client trigger the game's actual death routine via a flag instead of zeroing HP.
     if world.options.death_link:
         for offset, data in deathlink_hook.build_writes().items():
             patch.write_token(APTokenTypes.WRITE, offset, data)
+
+    # Forbidden Area "pickup" mode (rom/forbidden_area_button.py): replace the A01 press-button with an
+    # inert candle so the barrier can only be opened by the shuffled Study Sealswitch. Barrier intact.
+    if world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup:
+        for offset, data in forbidden_area_button.build_writes(base_rom).items():
+            patch.write_token(APTokenTypes.WRITE, offset, data)
+
+    # Custom-pickup framework (rom/custom_pickups.py): the collect hook, the extended consumable-icon
+    # table (existing items unchanged), and the custom icons. Installed unconditionally -- it is inert
+    # unless a location actually spawns a custom item (var_b >= 32), which only the test placements or
+    # a future option do.
+    for offset, data in custom_pickups.build_writes_from_rom(base_rom).items():
+        patch.write_token(APTokenTypes.WRITE, offset, data)
+
+    # Item-Use menu extension (rom/inventory_menu.py): shows custom "key items" in the pause Item-Use
+    # list (name + description, non-usable) via a transient shadow inventory in free EWRAM. Reads
+    # `working` so its relocated name/desc/string tables include the repoints applied above (e.g. the
+    # Skull Key warp description). Emitted only when at least one custom pickup has an inventory_name.
+    for offset, data in inventory_menu.build_writes(bytes(working)).items():
+        patch.write_token(APTokenTypes.WRITE, offset, data)
 
     patch.write_file("token_data.bin", patch.get_token_binary())
