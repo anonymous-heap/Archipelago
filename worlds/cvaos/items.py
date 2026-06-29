@@ -97,16 +97,17 @@ def _build_item_table() -> Dict[str, ItemData]:
 item_table: Dict[str, ItemData] = _build_item_table()
 
 # --- Synthetic, non-pickup items (shuffled into the pool only under specific options) ---
-# Forbidden Area Key: the shuffled unlock for ForbiddenAreaButton == pickup. It has no ground pickup;
-# receiving it sets MISC flag #48 (the Forbidden Area barrier flag), so the barrier opens however and
-# wherever the player gets the key. misc #48 = bit 16 of the u32 at EWRAM (0x344 + (48>>5)*4) = 0x348,
-# i.e. byte 0x34A bit 0.
-FORBIDDEN_AREA_KEY = "Forbidden Area Key"
-item_table[FORBIDDEN_AREA_KEY] = ItemData(
+# Forbidden Area Switch: the shuffled unlock for ForbiddenAreaButton == pickup. It has no ground
+# pickup; receiving it sets MISC flag #48 (the Forbidden Area barrier flag), so the barrier opens
+# however and wherever the player gets it. In the local world it appears as the Study Sealswitch
+# custom pickup (rom/custom_pickups.py), which sets the same flag on collection. misc #48 = bit 16 of
+# the u32 at EWRAM (0x344 + (48>>5)*4) = 0x348, i.e. byte 0x34A bit 0.
+FORBIDDEN_AREA_SWITCH = "Forbidden Area Switch"
+item_table[FORBIDDEN_AREA_SWITCH] = ItemData(
     ItemClassification.progression,
     pack(TransferCategory.FLAG_ONLY, 0, set_flag=True, flag_offset=0x34A, flag_bit=0, flag_value=1),
 )
-_SYNTHETIC_ITEM_NAMES: frozenset[str] = frozenset({FORBIDDEN_AREA_KEY})
+_SYNTHETIC_ITEM_NAMES: frozenset[str] = frozenset({FORBIDDEN_AREA_SWITCH})
 
 # Convenience map for the World class. Kept complete (every pickup, Hard-Mode ones included) so
 # item ids stay stable for the data package; per-seed inclusion is decided in create_itempool.
@@ -131,13 +132,13 @@ def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
             if name not in _SYNTHETIC_ITEM_NAMES
             and (include_hard or name not in _HARD_PICKUP_ITEM_NAMES)]
     if world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup:
-        # Shuffle in the Forbidden Area Key, displacing one filler so the pool size still equals the
-        # location count (the A01 button is removed, not turned into a new check).
-        key = create_item(world, FORBIDDEN_AREA_KEY)
+        # Shuffle in the Forbidden Area Switch, displacing one filler so the pool size still equals
+        # the location count (the A01 button is removed, not turned into a new check).
+        switch = create_item(world, FORBIDDEN_AREA_SWITCH)
         for i, existing in enumerate(pool):
             if existing.classification == ItemClassification.filler:
-                pool[i] = key
+                pool[i] = switch
                 break
         else:
-            raise Exception("CVAoS: no filler item available to displace for the Forbidden Area Key")
+            raise Exception("CVAoS: no filler item available to displace for the Forbidden Area Switch")
     return pool

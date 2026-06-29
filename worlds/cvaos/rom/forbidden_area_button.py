@@ -1,6 +1,6 @@
 """
 Neutralise the Forbidden Area press-button so the barrier can only be opened via the shuffled
-"Forbidden Area Key" item (the ForbiddenAreaButton == pickup option). The barrier object is untouched.
+"Forbidden Area Switch" item (the ForbiddenAreaButton == pickup option). The barrier object is untouched.
 
 Background (verified against the USA ROM): room A01's object list -- pointed to by the room header at
 0x08521510, +0x14 = 0x08521B8C -- is a flat array of 12-byte entities (type at +0x05: 2=object;

@@ -2,7 +2,7 @@
 from BaseClasses import CollectionState, ItemClassification
 from test.bases import WorldTestBase
 
-FORBIDDEN_AREA_KEY = "Forbidden Area Key"
+FORBIDDEN_AREA_SWITCH = "Forbidden Area Switch"
 _FWD = "A01:20D -> A01:A02"   # the within-A01 forward (20D->A02) connection name prefix
 
 
@@ -14,7 +14,7 @@ class TestForbiddenAreaOff(_Base):
     options = {"forbidden_area_button": "off"}
 
     def test_no_key_in_pool(self):
-        self.assertNotIn(FORBIDDEN_AREA_KEY, [i.name for i in self.multiworld.itempool])
+        self.assertNotIn(FORBIDDEN_AREA_SWITCH, [i.name for i in self.multiworld.itempool])
 
     def test_forward_blocked(self):
         ent = next(e for e in self.multiworld.get_entrances()
@@ -28,10 +28,10 @@ class TestForbiddenAreaPickup(_Base):
 
     def test_exactly_one_key(self):
         names = [i.name for i in self.multiworld.itempool]
-        self.assertEqual(names.count(FORBIDDEN_AREA_KEY), 1)
+        self.assertEqual(names.count(FORBIDDEN_AREA_SWITCH), 1)
 
     def test_key_is_progression(self):
-        key = next(i for i in self.multiworld.itempool if i.name == FORBIDDEN_AREA_KEY)
+        key = next(i for i in self.multiworld.itempool if i.name == FORBIDDEN_AREA_SWITCH)
         self.assertEqual(key.classification, ItemClassification.progression)
 
     def test_pool_not_overfilled(self):
@@ -44,7 +44,7 @@ class TestForbiddenAreaPickup(_Base):
                    if e.player == self.player and e.name.startswith(_FWD))
         st = CollectionState(self.multiworld)
         self.assertFalse(ent.access_rule(st), "forward should be blocked without the Key")
-        st.collect(self.world.create_item(FORBIDDEN_AREA_KEY), prevent_sweep=True)
+        st.collect(self.world.create_item(FORBIDDEN_AREA_SWITCH), prevent_sweep=True)
         self.assertTrue(ent.access_rule(st), "forward should open with the Key")
 
 
@@ -69,8 +69,8 @@ def test_key_displaces_one_filler():
     off = _create_itempool(_mock_world(_FAB.option_off))
     pick = _create_itempool(_mock_world(_FAB.option_pickup))
     assert len(off) == len(pick), "Key should displace a filler, not grow the pool"
-    assert FORBIDDEN_AREA_KEY not in [i.name for i in off]
-    assert [i.name for i in pick].count(FORBIDDEN_AREA_KEY) == 1
+    assert FORBIDDEN_AREA_SWITCH not in [i.name for i in off]
+    assert [i.name for i in pick].count(FORBIDDEN_AREA_SWITCH) == 1
     n_filler = lambda pool: sum(i.classification == _IC.filler for i in pool)
     assert n_filler(pick) == n_filler(off) - 1, "exactly one filler should be displaced"
 

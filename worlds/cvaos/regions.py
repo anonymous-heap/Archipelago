@@ -557,14 +557,14 @@ SPECIAL_TRANSDOOR_DEPS: dict[tuple[str, str], object] = {
 
 def _forbidden_area_forward_gate(world: CVAOSWorld):
     """The within-A01 step 20D -> A02 (the barrier-blocked direction). With ForbiddenAreaButton ==
-    pickup the unlock is the shuffled "Forbidden Area Key" (it sets misc #48 on receipt), so gate the
+    pickup the unlock is the shuffled "Forbidden Area Switch" (it sets misc #48 on receipt), so gate the
     forward direction on holding it. Otherwise return None to keep the CSV-derived rule (vanilla
     Impossible -- the in-room press-button is not modeled in logic). The reverse A02 -> 20D is
     untouched (the CSV already allows DJump / HJump / Giant Bat)."""
     if world.options.forbidden_area_button.value != ForbiddenAreaButton.option_pickup:
         return None
     player = world.player
-    return lambda state: state.has("Forbidden Area Key", player)
+    return lambda state: state.has("Forbidden Area Switch", player)
 
 
 # Bespoke per-direction access rules on specific WITHIN-ROOM crossings, keyed by

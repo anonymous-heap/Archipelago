@@ -74,7 +74,7 @@ class ForbiddenAreaButton(Choice):
        A02->20D direction is always passable with a vertical-mobility soul.)
 
     - off: vanilla. The press-button stays in A01; 20D->A02 is treated as blocked in logic.
-    - pickup: the button is removed and the unlock becomes a shuffled "Forbidden Area Key" item.
+    - pickup: the button is removed and the unlock becomes a shuffled "Forbidden Area Switch" item.
        Receiving it (from anywhere in the multiworld) opens the barrier, and logic gates 20D->A02
        on having it.
     """
