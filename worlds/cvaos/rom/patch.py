@@ -11,7 +11,7 @@ from settings import get_settings
 from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTokenTypes
 
 from ..data.pickup_info import rows as pickup_infos
-from ..items import item_table
+from ..items import FORBIDDEN_AREA_SWITCH, item_table
 from . import (custom_pickups, deathlink_hook, forbidden_area_button, inventory_menu,
                skull_key_warp)
 from .entity import GBA_ROM_BASE
@@ -58,6 +58,12 @@ def get_item_encoding(item_code: int) -> tuple[int, int, int]:
 # the Phase 6 Strategy B ASM hook (see ROADMAP). Keep type=4 so the entity still sets its save flag.
 _AP_PLACEHOLDER = (4, 2, 25)  # Skull Key
 
+# Synthetic items (no ground pickup) that appear in the local world as a custom behaviour-pickup.
+# The Forbidden Area Switch spawns the Study Sealswitch, which sets misc #48 on collection -- the
+# same flag its FLAG_ONLY receive path sets, so the unlock works whether collected locally or
+# received from elsewhere. Keyed by item display name (codes are packed, not name-derived).
+_ITEM_CUSTOM_PICKUP = {FORBIDDEN_AREA_SWITCH: custom_pickups.STUDY_SEALSWITCH}
+
 # Location data lookup: Location number -> ROM bytes
 
 def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Dict[int, bytes]:
@@ -68,8 +74,12 @@ def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Di
         rom_offset = loc.address - GBA_ROM_BASE
 
         custom = custom_pickups.CUSTOM_PICKUP_TEST_PLACEMENTS.get(loc.name)
+        if custom is None and loc.item.player == world.player:
+            # The local player's shuffled synthetic items (e.g. the Forbidden Area Switch) spawn their
+            # real in-game custom pickup. A foreign player's copy stays a placeholder and is delivered
+            # through its FLAG_ONLY receive path.
+            custom = _ITEM_CUSTOM_PICKUP.get(loc.item.name)
         if custom is not None:
-            # Dev placement: force this location to spawn a custom behaviour-pickup (rom/custom_pickups.py).
             type_num, subtype_num, item_offset = custom_pickups.get_encoding(custom)
         elif loc.item.player == world.player:
             type_num, subtype_num, item_offset = get_item_encoding(loc.item.code)
@@ -143,7 +153,7 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
             patch.write_token(APTokenTypes.WRITE, offset, data)
 
     # Forbidden Area "pickup" mode (rom/forbidden_area_button.py): replace the A01 press-button with an
-    # inert candle so the barrier can only be opened by the shuffled Forbidden Area Key. Barrier intact.
+    # inert candle so the barrier can only be opened by the shuffled Forbidden Area Switch. Barrier intact.
     if world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup:
         for offset, data in forbidden_area_button.build_writes(base_rom).items():
             patch.write_token(APTokenTypes.WRITE, offset, data)
