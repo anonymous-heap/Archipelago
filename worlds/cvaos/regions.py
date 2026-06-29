@@ -126,8 +126,8 @@ def create_regions(world: CVAOSWorld) -> None:
         pickup_regions[pickup_info.identifier_key] = region
         multiworld.regions.append(region)
 
-        # Add the pickup as a location in its region
-        location_name = pickup_info.display_name
+        # Add the pickup as a location in its region (friendly name; see PickupInfo.location_name)
+        location_name = pickup_info.location_name
         location_id = location_name_to_id[location_name]
         location = CVAOSLocation(player, location_name, location_id, region)
         region.locations.append(location)

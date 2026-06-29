@@ -1,0 +1,121 @@
+pickup_number,room_identifier,simple_name,specifier,region,SchwartzGandhi's names
+1,000,Lucky Charm,,Castle Corridor,Entrance Parapet
+2,002,Vjaya,,Castle Corridor,Outside Warp Suspended Platform
+3,002,Cestus,,Castle Corridor,Outside Warp Alcove
+4,005,Short Sword,,Castle Corridor,Fountain Room Left Stairs
+5,005,Cape,,Castle Corridor,Fountain Room Top Staircase
+6,005,Grave Keeper,,Castle Corridor,Fountain Room In Front of Fountain
+7,009,Lance,,Castle Corridor,Tallest Ascent
+8,00B,Mind Up,_a,Castle Corridor,Secret Room Behind Peeping Eye
+9,00D,Potion,_a,Castle Corridor,White Dragon Hallway
+10,00F,Potion,_b,Castle Corridor,Marble Staircase Pyramid Left Ledge
+11,00F,Leather Plate,,Castle Corridor,Marble Staircase Pyramid Right Ledge
+12,010,Flying Armor,,Castle Corridor,Reservior Entrance
+13,019,Yasutsuna,,Castle Corridor,Tiny Alcove
+14,023,Castle Map 1,,Castle Corridor,Post-Creaking Skull Room
+15,026,Armor of Fire,,Castle Corridor,Marble Staircase Underhang Left Ledge
+16,026,Potion,_c,Castle Corridor,Marble Staircase Underhang Right Ledge
+17,027,Copper Plate,,Castle Corridor,Catobelpas Ledge
+18,028,Scarf,,Castle Corridor,White Dragon Ledge
+19,029,$500,_a,Castle Corridor,Eastern Reservoir Left Annex
+20,02C,Potion,_d,Castle Corridor,Eastern Reservoir Right Annex
+21,101,Anti-Venom,,Chapel,Cathedral Cache
+22,103,High Mind Up,_a,Chapel,Big Belfry Top Left Corner Left Ledge
+23,103,$100,_a,Chapel,Big Belfry Bottom Left
+24,103,Bamboo Sword,,Chapel,Big Belfry Center Left
+25,103,High Potion,_a,Chapel,Big Belfry Top Left Corner Right Ledge
+26,103,Mind Up,_b,Chapel,Big Belfry Top Right
+27,105,$100,_b,Chapel,Cathedral
+28,106,Tallhammer,,Chapel,Manticore Arena Alcove
+29,107,Rapier,,Chapel,Attic
+30,108,"$1,000",_a,Chapel,Grand Staircase Secret Cache
+31,108,$100,_c,Chapel,Grand Staircase Right Nook
+32,109,Silk Robe,,Chapel,Underneath Grand Staircase
+33,200,Melon,,Study,Secret Room Atop Stairs
+34,200,Kaiser Knuckle,,Study,Secret Room Hard Mode Item
+35,201,$100,_d,Study,Ectoplasm Room
+36,202,Uncurse Potion,,Study,Evil Butcher Hallway
+37,205,Malphas,,Study,Hammer's Room Malphas
+38,208,Hammer,,Study,Top Cache
+39,209,Heart Pendant,,Study,Box Room Ceiling
+40,20A,Broadsword,,Study,Box Room
+41,20B,Whip Sword,,Study,After Demon Door
+42,20E,Ancient Book 1,,Study,Behind Tunnel
+43,211,$100,_e,Study,Bottom Cache
+44,215,Bastard Sword,,Study,Student Witch Library
+45,301,Samurai Armor,,Dance Hall,Secret Room Behind Minotaur
+46,303,$100,_f,Dance Hall,Big Window Room Left Annex
+47,306,Cutall,,Dance Hall,Grand Ballroom
+48,307,Mana Prism,_a,Dance Hall,Big Window Room
+49,308,High Potion,_b,Dance Hall,Wine Cellar Underneath Killer Doll
+50,30A,Skeleton Blaze,,Dance Hall,Wine Cellar Basement
+51,30C,$100,_g,Dance Hall,Big Window Room Right Annex
+52,310,Sherman Ring,,Dance Hall,Secret Ceiling Room
+53,400,Dainslef,,Inner Quarters,West Wing Atrium Left Item
+54,400,Ancient Book 2,,Inner Quarters,West Wing Atrium Right Item
+55,403,High Mind Up,_b,Inner Quarters,Western Exit
+56,405,High Potion,_c,Inner Quarters,Secret Room
+57,409,Ninja Suit,,Inner Quarters,Secreter Room
+58,40A,Hrunting,,Inner Quarters,Stormy Tower Left Parapet
+59,40A,Undine,,Inner Quarters,Stormy Tower Right Parapet
+60,412,Mind Up,_c,Inner Quarters,Lower Quarters Lobby
+61,503,Castle Map 3,,Floating Garden,Terrace
+62,504,"$1,000",_b,Floating Garden,1st Island Left Ledge
+63,504,"$1,000",_c,Floating Garden,1st Island Right Ledge
+64,509,$500,_b,Floating Garden,6th Island
+65,50A,$500,_c,Floating Garden,5th Island
+66,50D,$500,_d,Floating Garden,2nd Island
+67,603,Pitch Black Suit,,Clock Tower,Basement
+68,609,Burtgang,,Clock Tower,Pendulum Parkour
+69,611,Skula,,Clock Tower,Clock Cache
+70,613,Death's Sickle,,Clock Tower,Death's Door Hard Mode Item
+71,615,"$2,000",_a,Clock Tower,Gearworks Floor
+72,617,Death's Robe,,Clock Tower,Gearworks Crevice Hard Mode Item
+73,61B,Mystletain,,Clock Tower,Secret Room
+74,700,Pendant,,Underground Reservoir,Canal Entrance
+75,701,Tasty Meat,,Underground Reservoir,Canal
+76,702,Elfin Robe,,Underground Reservoir,Canal Ceiling
+77,703,Rahab's Sword,,Underground Reservoir,Reservoir Air Bell
+78,708,High Mind Up,_c,Underground Reservoir,Cavern Air Bell
+79,709,Pudding,,Underground Reservoir,Secret Storage Cavern
+80,70C,Mana Prism,_b,Underground Reservoir,Cavern Attic
+81,70E,Super Potion,_a,Underground Reservoir,Aqueducts
+82,70F,Super Potion,_b,Underground Reservoir,Behind the Waterfall
+83,711,Milican's Sword,,Underground Reservoir,Boating Course
+84,715,Armor of Water,,Underground Reservoir,Watering Holes
+85,716,Galamoth,,Underground Reservoir,Cemetery Eastern Crypt
+86,718,Ronginus' Spear,,Underground Reservoir,Waterfall Aerie
+87,719,"$1,000",_d,Underground Reservoir,Boat Jump Alcove
+88,719,Handgun,,Underground Reservoir,Boat Jump Cache
+89,71C,Ancient Book 3,,Underground Reservoir,Eastern Reservoir Vertical Cavern
+90,71D,"$2,000",_b,Underground Reservoir,Eastern Reservoir
+91,71F,Rune Ring,,Underground Reservoir,Eastern Reservoir Right Cavern
+92,720,Osafune,,Underground Reservoir,Eastern Reservoir Secret Room
+93,721,Super Potion,_c,Underground Reservoir,Waterfall Crest
+94,721,Eversing,,Underground Reservoir,Waterfall Basin
+95,722,"$2,000",_c,Underground Reservoir,Cemetery Western Ambulatory
+96,733,High Potion,_d,Underground Reservoir,Cemetery Central Crypt
+97,736,Gold Ring,,Underground Reservoir,Cemetery Eastern Ambulatory
+98,800,Giant Bat,,The Arena,Catacomb Depths
+99,802,Laevatain,,The Arena,Giant Armory
+100,808,Black Cloak,,The Arena,Lavatory
+101,80F,Olrox's Suit,,The Arena,Wrecking Ball Trial Reward
+102,810,Silver Handgun,,The Arena,Conyeror Belt Trial Reward Hard Mode Item
+103,810,Balmung,,The Arena,Conyeror Belt Trial Reward On Altar
+104,811,Rare Ring,,The Arena,Simon Says Trial Reward
+105,812,High Potion,_e,The Arena,Iron Maiden Altar
+106,900,Dracula's Tunic,,Top Floor,Balcony Item by Railing
+107,900,Black Panther,,Top Floor,Balcony Center Item
+108,901,Mana Prism,_c,Top Floor,Final Staircase Under the Stairs
+109,901,Tear of Blood,,Top Floor,Final Staircase Hard Mode Item
+110,902,Gungner,,Top Floor,Secret Ceiling Room
+111,906,Hippogryph,,Top Floor,Secret Grave
+112,908,Satan's Ring,,Top Floor,Flaming Hall
+113,910,Mana Prism,_d,Top Floor,Outlook
+114,915,Super Potion,_d,Top Floor,Dragon Statue
+115,917,Kaladbolg,,Top Floor,Courtyard
+116,A04,Claimh Solais,,Forbidden Area,Secret Room by the Inferno
+117,A06,Joyeuse,,Forbidden Area,Treasure Chamber
+118,B18,Super Potion,_e,Chaotic Realm,Marble Annex
+119,B1C,High Mind Up,_d,Chaotic Realm,Chair Room
+120,B1D,Mana Prism,_e,Chaotic Realm,Hammer's Room

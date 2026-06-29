@@ -59,9 +59,10 @@ CUSTOM_PICKUPS: List[CustomPickup] = [STUDY_SEALSWITCH]
 # Backwards-compat alias (older references).
 FORBIDDEN_AREA_BUTTON = STUDY_SEALSWITCH
 
-# --- Test placements (dev): map a location's display_name -> a CustomPickup to force it to spawn
-# that custom pickup instead of its rolled item. Empty by default (the framework is inert without a
-# placement). To try the button in-game, e.g.:  {"Ancient Book 1": STUDY_SEALSWITCH}
+# --- Test placements (dev): map a location's NAME (PickupInfo.location_name, the friendly form) ->
+# a CustomPickup to force it to spawn that custom pickup instead of its rolled item. Empty by default
+# (the framework is inert without a placement). To try the button in-game, e.g.:
+#   {"Behind Tunnel [20E Ancient Book 1]": STUDY_SEALSWITCH}
 CUSTOM_PICKUP_TEST_PLACEMENTS: Dict[str, CustomPickup] = {}
 
 validate_registry(CUSTOM_PICKUPS)   # fail loudly on duplicate item_offset / icon_id
