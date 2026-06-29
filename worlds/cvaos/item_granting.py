@@ -40,6 +40,7 @@ class TransferCategory(IntEnum):
     MONEY = 3              # id = gold value -> add_gold
     EVENT = 4              # reserved
     TO_BE_IMPLEMENTED = 5  # reserved
+    FLAG_ONLY = 6          # set_flag is the entire grant (no item/gold transfer)
 
 
 # --- bit layout (shifts + masks) ---
@@ -127,6 +128,9 @@ async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction) -> bool:
     if category in (TransferCategory.PICKUP, TransferCategory.OTHER_ITEM):
         info = _by_item_number[action.id_or_value]
         return await ram.give_item(info.item_category, info.id)
+    if category == TransferCategory.FLAG_ONLY:
+        # The whole grant was the set_flag bit (already applied in grant()); nothing else to do.
+        return True
     # EVENT / TO_BE_IMPLEMENTED: reserved, not yet grantable. Skip loudly (never silently).
     from CommonClient import logger
     logger.warning("CVAoS: received reserved category %s; skipping.", category.name)

@@ -65,6 +65,24 @@ class SkullKeyWarp(DefaultOnToggle):
     display_name = "Skull Key Warp"
 
 
+class ForbiddenAreaButton(Choice):
+    """
+    How the Forbidden Area (gate at the bottom of the Study) is unlocked.
+
+    The Forbidden Area can normally not be accessed _first_ through the Study due to a metal
+        barrier that a button on the other side opens.
+    
+    This option replaces the button with a shufflable pickup.
+    
+    - off: the button is present in A01 and opens the barrier when pressed.
+    - pickup: the button is removed and the unlock becomes a shuffled "Study Sealswitch" pickup.
+    """
+    display_name = "Library-to-Forbidden-Area Button Handling (Study Sealswitch)"
+    option_off = 0
+    option_pickup = 1
+    default = option_off
+
+
 class ItemSmoothing(Choice):
     """
     **This is the flag to turn off if you want a totally-random-yet-finishable run.**
@@ -253,6 +271,7 @@ class CVAOSOptions(PerGameCommonOptions):
     goal: Goal
     hard_mode: HardMode
     skull_key_warp: SkullKeyWarp
+    forbidden_area_button: ForbiddenAreaButton
     item_smoothing: ItemSmoothing
     item_smoothing_order: ItemSmoothingOrder
     early_mobility_souls: EarlyMobilitySouls

@@ -11,9 +11,11 @@ from settings import get_settings
 from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTokenTypes
 
 from ..data.pickup_info import rows as pickup_infos
-from ..items import item_table
-from . import custom_pickups, deathlink_hook, inventory_menu, skull_key_warp
+from ..items import FORBIDDEN_AREA_SWITCH, item_table
+from . import (custom_pickups, deathlink_hook, forbidden_area_button, inventory_menu,
+               skull_key_warp)
 from .entity import GBA_ROM_BASE
+from ..options import ForbiddenAreaButton
 
 if TYPE_CHECKING:
     from BaseClasses import Location
@@ -56,6 +58,12 @@ def get_item_encoding(item_code: int) -> tuple[int, int, int]:
 # the Phase 6 Strategy B ASM hook (see ROADMAP). Keep type=4 so the entity still sets its save flag.
 _AP_PLACEHOLDER = (4, 2, 25)  # Skull Key
 
+# Synthetic items (no ground pickup) that appear in the local world as a custom behaviour-pickup.
+# The Study Sealswitch AP item spawns the in-game Study Sealswitch custom pickup, which sets misc #48
+# on collection -- the same flag its FLAG_ONLY receive path sets, so the unlock works whether collected
+# locally or received from elsewhere. Keyed by item display name (codes are packed, not name-derived).
+_ITEM_CUSTOM_PICKUP = {FORBIDDEN_AREA_SWITCH: custom_pickups.STUDY_SEALSWITCH}
+
 # Location data lookup: Location number -> ROM bytes
 
 def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Dict[int, bytes]:
@@ -66,6 +74,11 @@ def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Di
         rom_offset = loc.address - GBA_ROM_BASE
 
         custom = custom_pickups.CUSTOM_PICKUP_TEST_PLACEMENTS.get(loc.name)
+        if custom is None and loc.item.player == world.player:
+            # The local player's shuffled synthetic items (e.g. the Study Sealswitch) spawn their
+            # real in-game custom pickup. A foreign player's copy stays a placeholder and is delivered
+            # through its FLAG_ONLY receive path.
+            custom = _ITEM_CUSTOM_PICKUP.get(loc.item.name)
         if custom is not None:
             type_num, subtype_num, item_offset = custom_pickups.get_encoding(custom)
         elif loc.item.player == world.player:
@@ -137,6 +150,12 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
     # client trigger the game's actual death routine via a flag instead of zeroing HP.
     if world.options.death_link:
         for offset, data in deathlink_hook.build_writes().items():
+            patch.write_token(APTokenTypes.WRITE, offset, data)
+
+    # Forbidden Area "pickup" mode (rom/forbidden_area_button.py): replace the A01 press-button with an
+    # inert candle so the barrier can only be opened by the shuffled Study Sealswitch. Barrier intact.
+    if world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup:
+        for offset, data in forbidden_area_button.build_writes(base_rom).items():
             patch.write_token(APTokenTypes.WRITE, offset, data)
 
     # Custom-pickup framework (rom/custom_pickups.py): the collect hook, the extended consumable-icon
