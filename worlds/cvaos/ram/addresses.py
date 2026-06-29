@@ -24,13 +24,13 @@ MENU_STATE = 0x00064      # 0x02000064 u8
 # 0x020000A1 u8 "current game mode": low nibble is the character (Soma=1 / Julius=0), high nibble
 # is the difficulty (normal=0 / hard=1). The game writes it only at new-game / mode-select; the
 # damage scaling, soul-drop rates, and the HARD_PICKUP spawn gate all read it live, so forcing the
-# high nibble to 1 makes the game behave as Hard Mode (verified in cvaos-decomp).
+# high nibble to 1 makes the game behave as Hard Mode.
 GAME_MODE = 0x000A1
 GAME_MODE_DIFFICULTY_MASK = 0xF0   # high nibble
 GAME_MODE_HARD = 0x10              # high nibble == 1
 
-# 0x02000060 u32 "cleared-data" flags. The game sets this to 3 (bits 0+1) when you beat it
-# (sub_080137FC, persisted to SRAM). Value 3 marks a cleared file: cutscenes become Start-
+# 0x02000060 u32 "cleared-data" flags. The game sets this to 3 (bits 0+1) when you beat it.
+# Value 3 marks a cleared file: cutscenes become Start-
 # skippable, and the new-game menu's Hard Mode prompt is offered (it checks bit 1). We force it
 # for every randomized ROM so cutscenes are skippable; the bits live in the low byte.
 GAME_CLEARED_FLAGS = 0x00060
@@ -47,18 +47,10 @@ class GameState(IntEnum):
 
 
 MENU_STATE_NORMAL = 0x01            # in-room, not transitioning/paused/shopping
-MENU_STATE_DEATH = 0x02            # death/game-over fade sub-state (drives DeathLink detection)
+MENU_STATE_DEATH = 0x02             # death/game-over fade sub-state (drives DeathLink detection)
 MENU_STATE_ROOM_TRANSITION = 0x03
 MENU_STATE_PAUSE = 0x06
 MENU_STATE_SHOP = 0x09
-# MENU_STATE_DEATH is undocumented in the cvaos-decomp RAM map (which lists only 1/3/6/9), but
-# verified in the decomp: the single player-death handler sub_0801AF20 writes this sub-state
-# (unk_64 = 2) on the very frame a lethal hit lands -- for combat, spikes, and overkill alike,
-# since every death routes through the one damage routine that clamps HP to exactly 0 -- and
-# holds it through the multi-frame death fade (GameModeInGameUpdate's case 2 runs the fade),
-# while GAME_STATE stays INGAME until the fade ends and flips to GAME_OVER. This persistent
-# sub-state is what DeathLink keys off, instead of the ~1-frame (INGAME, NORMAL, hp==0)
-# coincidence that a 0.125s poll almost always skipped.
 
 
 # --- Location detection: collected-pickup save flags ---
