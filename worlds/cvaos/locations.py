@@ -29,14 +29,15 @@ def _build_location_tables() -> tuple[dict[str, int], dict[int, str]]:
     """
     Build location name <-> ID mappings from pickup_info_collection.
 
-    Location names use the format: "{simple_name}{specifier or ''}"
+    Location names use PickupInfo.location_name -- the friendly room-area name plus a bracketed
+    "<room> <item>" tag, e.g. "White Dragon Hallway [00D Potion (A)]".
     Location IDs are based on ptr_address to ensure uniqueness.
     """
     name_to_id: dict[str, int] = {}
     id_to_name: dict[int, str] = {}
 
     for pickup in pickup_info_collection:
-        location_name = pickup.display_name
+        location_name = pickup.location_name
         # Use ptr_address as the unique location ID
         location_id = pickup.ptr_address
 

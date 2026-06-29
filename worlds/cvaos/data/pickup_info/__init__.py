@@ -24,6 +24,7 @@ class PickupInfo(BaseModel):
     pickup_number_within_room: int
     x: int
     y: int
+    friendly_name: str | None = None
 
     _parse_hex_addresses = validator("ptr_address", "room_address", pre=True, allow_reuse=True)(parse_hex)
 
@@ -103,6 +104,18 @@ class PickupInfo(BaseModel):
         return f"{self.simple_name}{suffix}"
 
     @property
+    def location_name(self) -> str:
+        """
+        Human-readable AP *location* name: the friendly room-area name followed by a bracketed
+        tag of the room id and the item's ``display_name`` -- e.g. ``White Dragon Hallway [00D
+        Potion (A)]``. When no friendly name is mapped it falls back to the bare tag ``00D Potion
+        (A)``. This is the location (check) name only; ``display_name`` (the item name) and all
+        ids are unaffected.
+        """
+        tag = f"{self.room_identifier} {self.display_name}"
+        return f"{self.friendly_name} [{tag}]" if self.friendly_name else tag
+
+    @property
     def is_hard_mode_only(self) -> bool:
         """
         True for HARD_PICKUP entities (type 5), which the game spawns only in Hard Mode (as
@@ -129,9 +142,18 @@ def _load_csv(filename: str) -> list[dict[str, str]]:
 def _merge_rows() -> list[PickupInfo]:
     ident_rows = _load_csv("pickup_identifiers.csv")
     room_rows = _load_csv("pickup_rooms.csv")
+    friendly_rows = _load_csv("friendly_location_names.csv")
 
     by_pickup_number_ident = {int(r["pickup_number"]): r for r in ident_rows}
     by_pickup_number_room = {int(r["pickup_number"]): r for r in room_rows}
+    by_pickup_number_friendly = {int(r["pickup_number"]): r for r in friendly_rows}
+
+    # The friendly names live in this column.
+    _FRIENDLY_COL = "SchwartzGandhi's names"
+    if friendly_rows and _FRIENDLY_COL not in friendly_rows[0]:
+        raise ValueError(
+            f"friendly_location_names.csv is missing the {_FRIENDLY_COL!r} column "
+            f"(columns present: {list(friendly_rows[0])})")
 
     merged: list[dict] = []
     for pickup_number, ident in sorted(by_pickup_number_ident.items()):
@@ -151,6 +173,16 @@ def _merge_rows() -> list[PickupInfo]:
                 f"{ptr_ident} (identifiers) vs {ptr_room} (rooms)"
             )
 
+        # Friendly location name, joined by pickup_number. A missing/blank entry leaves
+        # friendly_name None and PickupInfo.location_name falls back to the bare "<room> <item>" tag.
+        friendly_row = by_pickup_number_friendly.get(pickup_number)
+        friendly_name = (friendly_row.get(_FRIENDLY_COL) or "").strip() if friendly_row else ""
+        if friendly_name and friendly_row.get("room_identifier", "").strip() != room["room_identifier"].strip():
+            raise ValueError(
+                f"friendly_location_names.csv room mismatch for pickup_number {pickup_number}: "
+                f"{friendly_row.get('room_identifier')!r} (friendly) vs {room['room_identifier']!r} (rooms)"
+            )
+
         merged.append(
             {
                 "pickup_number": pickup_number,
@@ -167,6 +199,7 @@ def _merge_rows() -> list[PickupInfo]:
                 "pickup_number_within_room": int(room["pickup_number_within_room"]),
                 "x": int(room["x"]),
                 "y": int(room["y"]),
+                "friendly_name": friendly_name or None,
             }
         )
 

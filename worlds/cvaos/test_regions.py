@@ -35,6 +35,16 @@ def test_location_names_unique():
     assert len(names) == len(set(names)), "Duplicate location names found"
 
 
+def test_location_names_use_friendly_format():
+    """Location (check) names are the friendly form '<area> [<room> <item>]', not the item name."""
+    # The data-package location names are exactly PickupInfo.location_name for every pickup.
+    assert set(location_name_to_id) == {p.location_name for p in pickup_info_collection}
+    # A known pickup renders in the documented format.
+    assert "White Dragon Hallway [00D Potion (A)]" in location_name_to_id
+    # The bare item display_name is NOT a location name (items and locations are now distinct).
+    assert "Potion (A)" not in location_name_to_id
+
+
 def test_entrance_data_loaded():
     """Test that entrance data was loaded."""
     assert len(entrance_info_collection) > 0, "No entrances were loaded"
