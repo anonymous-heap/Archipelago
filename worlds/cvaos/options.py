@@ -80,7 +80,7 @@ class ForbiddenAreaButton(Choice):
     display_name = "Library-to-Forbidden-Area Button Handling (Study Sealswitch)"
     option_off = 0
     option_pickup = 1
-    default = option_off
+    default = option_pickup
 
 
 class ItemSmoothing(Choice):
