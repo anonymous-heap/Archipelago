@@ -13,7 +13,7 @@ from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTok
 from ..data.pickup_info import rows as pickup_infos
 from ..items import FORBIDDEN_AREA_SWITCH, item_table
 from . import (custom_pickups, deathlink_hook, forbidden_area_button, inventory_menu,
-               skull_key_warp)
+               skull_key_warp, soul_drop_rates)
 from .entity import GBA_ROM_BASE
 from ..options import ForbiddenAreaButton
 
@@ -157,6 +157,10 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
     if world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup:
         for offset, data in forbidden_area_button.build_writes(base_rom).items():
             patch.write_token(APTokenTypes.WRITE, offset, data)
+
+    # Adjust selected enemy soul-drop rates (rom/soul_drop_rates.py)
+    for offset, data in soul_drop_rates.build_writes(base_rom).items():
+        patch.write_token(APTokenTypes.WRITE, offset, data)
 
     # Custom-pickup framework (rom/custom_pickups.py): the collect hook, the extended consumable-icon
     # table (existing items unchanged), and the custom icons. Installed unconditionally -- it is inert
