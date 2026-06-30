@@ -4,26 +4,26 @@ pickup_number,room_identifier,simple_name,specifier,region,SchwartzGandhi's name
 3,002,Cestus,,Castle Corridor,Outside Warp Alcove
 4,005,Short Sword,,Castle Corridor,Fountain Room Left Stairs
 5,005,Cape,,Castle Corridor,Fountain Room Top Staircase
-6,005,Grave Keeper,,Castle Corridor,Fountain Room In Front of Fountain
+6,005,Grave Keeper,,Castle Corridor,Fountain Room in Front of Fountain
 7,009,Lance,,Castle Corridor,Tallest Ascent
-8,00B,Mind Up,_a,Castle Corridor,Secret Room Behind Peeping Eye
+8,00B,Mind Up,_a,Castle Corridor,Secret Room behind Peeping Eye
 9,00D,Potion,_a,Castle Corridor,White Dragon Hallway
 10,00F,Potion,_b,Castle Corridor,Marble Staircase Pyramid Left Ledge
 11,00F,Leather Plate,,Castle Corridor,Marble Staircase Pyramid Right Ledge
-12,010,Flying Armor,,Castle Corridor,Reservior Entrance
+12,010,Flying Armor,,Castle Corridor,Reservoir Entrance
 13,019,Yasutsuna,,Castle Corridor,Tiny Alcove
 14,023,Castle Map 1,,Castle Corridor,Post-Creaking Skull Room
 15,026,Armor of Fire,,Castle Corridor,Marble Staircase Underhang Left Ledge
 16,026,Potion,_c,Castle Corridor,Marble Staircase Underhang Right Ledge
-17,027,Copper Plate,,Castle Corridor,Catobelpas Ledge
+17,027,Copper Plate,,Castle Corridor,Catoblepas Ledge
 18,028,Scarf,,Castle Corridor,White Dragon Ledge
-19,029,$500,_a,Castle Corridor,Eastern Reservoir Left Annex
-20,02C,Potion,_d,Castle Corridor,Eastern Reservoir Right Annex
+19,029,$500,_a,Castle Corridor,Right Reservoir: Left Annex
+20,02C,Potion,_d,Castle Corridor,Right Reservoir: Right Annex
 21,101,Anti-Venom,,Chapel,Cathedral Cache
-22,103,High Mind Up,_a,Chapel,Big Belfry Top Left Corner Left Ledge
+22,103,High Mind Up,_a,Chapel,Big Belfry Top-Left Corner Left Ledge
 23,103,$100,_a,Chapel,Big Belfry Bottom Left
 24,103,Bamboo Sword,,Chapel,Big Belfry Center Left
-25,103,High Potion,_a,Chapel,Big Belfry Top Left Corner Right Ledge
+25,103,High Potion,_a,Chapel,Big Belfry Top-Left Corner Right Ledge
 26,103,Mind Up,_b,Chapel,Big Belfry Top Right
 27,105,$100,_b,Chapel,Cathedral
 28,106,Tallhammer,,Chapel,Manticore Arena Alcove
@@ -31,7 +31,7 @@ pickup_number,room_identifier,simple_name,specifier,region,SchwartzGandhi's name
 30,108,"$1,000",_a,Chapel,Grand Staircase Secret Cache
 31,108,$100,_c,Chapel,Grand Staircase Right Nook
 32,109,Silk Robe,,Chapel,Underneath Grand Staircase
-33,200,Melon,,Study,Secret Room Atop Stairs
+33,200,Melon,,Study,Secret Room atop Stairs
 34,200,Kaiser Knuckle,,Study,Secret Room Hard Mode Item
 35,201,$100,_d,Study,Ectoplasm Room
 36,202,Uncurse Potion,,Study,Evil Butcher Hallway
@@ -43,19 +43,19 @@ pickup_number,room_identifier,simple_name,specifier,region,SchwartzGandhi's name
 42,20E,Ancient Book 1,,Study,Behind Tunnel
 43,211,$100,_e,Study,Bottom Cache
 44,215,Bastard Sword,,Study,Student Witch Library
-45,301,Samurai Armor,,Dance Hall,Secret Room Behind Minotaur
+45,301,Samurai Armor,,Dance Hall,Secret Room behind Minotaur
 46,303,$100,_f,Dance Hall,Big Window Room Left Annex
 47,306,Cutall,,Dance Hall,Grand Ballroom
 48,307,Mana Prism,_a,Dance Hall,Big Window Room
-49,308,High Potion,_b,Dance Hall,Wine Cellar Underneath Killer Doll
+49,308,High Potion,_b,Dance Hall,Wine Cellar underneath Killer Doll
 50,30A,Skeleton Blaze,,Dance Hall,Wine Cellar Basement
 51,30C,$100,_g,Dance Hall,Big Window Room Right Annex
 52,310,Sherman Ring,,Dance Hall,Secret Ceiling Room
-53,400,Dainslef,,Inner Quarters,West Wing Atrium Left Item
-54,400,Ancient Book 2,,Inner Quarters,West Wing Atrium Right Item
-55,403,High Mind Up,_b,Inner Quarters,Western Exit
+53,400,Dainslef,,Inner Quarters,Left Wing Atrium: Left Item
+54,400,Ancient Book 2,,Inner Quarters,Left Wing Atrium: Right Item
+55,403,High Mind Up,_b,Inner Quarters,Left Exit
 56,405,High Potion,_c,Inner Quarters,Secret Room
-57,409,Ninja Suit,,Inner Quarters,Secreter Room
+57,409,Ninja Suit,,Inner Quarters,Secret-er Room
 58,40A,Hrunting,,Inner Quarters,Stormy Tower Left Parapet
 59,40A,Undine,,Inner Quarters,Stormy Tower Right Parapet
 60,412,Mind Up,_c,Inner Quarters,Lower Quarters Lobby
@@ -83,30 +83,30 @@ pickup_number,room_identifier,simple_name,specifier,region,SchwartzGandhi's name
 82,70F,Super Potion,_b,Underground Reservoir,Behind the Waterfall
 83,711,Milican's Sword,,Underground Reservoir,Boating Course
 84,715,Armor of Water,,Underground Reservoir,Watering Holes
-85,716,Galamoth,,Underground Reservoir,Cemetery Eastern Crypt
+85,716,Galamoth,,Underground Reservoir,Cemetery: Right Crypt
 86,718,Ronginus' Spear,,Underground Reservoir,Waterfall Aerie
 87,719,"$1,000",_d,Underground Reservoir,Boat Jump Alcove
 88,719,Handgun,,Underground Reservoir,Boat Jump Cache
-89,71C,Ancient Book 3,,Underground Reservoir,Eastern Reservoir Vertical Cavern
-90,71D,"$2,000",_b,Underground Reservoir,Eastern Reservoir
-91,71F,Rune Ring,,Underground Reservoir,Eastern Reservoir Right Cavern
-92,720,Osafune,,Underground Reservoir,Eastern Reservoir Secret Room
+89,71C,Ancient Book 3,,Underground Reservoir,Right Reservoir: Vertical Cavern
+90,71D,"$2,000",_b,Underground Reservoir,Right Reservoir
+91,71F,Rune Ring,,Underground Reservoir,Right Reservoir: Right Cavern
+92,720,Osafune,,Underground Reservoir,Right Reservoir: Secret Room
 93,721,Super Potion,_c,Underground Reservoir,Waterfall Crest
 94,721,Eversing,,Underground Reservoir,Waterfall Basin
-95,722,"$2,000",_c,Underground Reservoir,Cemetery Western Ambulatory
-96,733,High Potion,_d,Underground Reservoir,Cemetery Central Crypt
-97,736,Gold Ring,,Underground Reservoir,Cemetery Eastern Ambulatory
+95,722,"$2,000",_c,Underground Reservoir,Cemetery: Left Ambulatory
+96,733,High Potion,_d,Underground Reservoir,Cemetery: Central Crypt
+97,736,Gold Ring,,Underground Reservoir,Cemetery: Right Ambulatory
 98,800,Giant Bat,,The Arena,Catacomb Depths
 99,802,Laevatain,,The Arena,Giant Armory
 100,808,Black Cloak,,The Arena,Lavatory
 101,80F,Olrox's Suit,,The Arena,Wrecking Ball Trial Reward
-102,810,Silver Handgun,,The Arena,Conyeror Belt Trial Reward Hard Mode Item
-103,810,Balmung,,The Arena,Conyeror Belt Trial Reward On Altar
+102,810,Silver Handgun,,The Arena,Conveyor Belt Trial Reward Hard Mode Item
+103,810,Balmung,,The Arena,Conveyor Belt Trial Reward on Altar
 104,811,Rare Ring,,The Arena,Simon Says Trial Reward
 105,812,High Potion,_e,The Arena,Iron Maiden Altar
 106,900,Dracula's Tunic,,Top Floor,Balcony Item by Railing
 107,900,Black Panther,,Top Floor,Balcony Center Item
-108,901,Mana Prism,_c,Top Floor,Final Staircase Under the Stairs
+108,901,Mana Prism,_c,Top Floor,Final Staircase under the Stairs
 109,901,Tear of Blood,,Top Floor,Final Staircase Hard Mode Item
 110,902,Gungner,,Top Floor,Secret Ceiling Room
 111,906,Hippogryph,,Top Floor,Secret Grave
