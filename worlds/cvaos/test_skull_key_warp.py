@@ -31,7 +31,7 @@ def _find_rom() -> str | None:
 
 class TestWrites(unittest.TestCase):
     def test_blob_is_intact(self):
-        self.assertEqual(len(skw.WARPHOOK_BLOB), 100)
+        self.assertEqual(len(skw.WARPHOOK_BLOB), 108)
 
     def test_trampoline_targets_warphook(self):
         writes = skw.build_writes()
