@@ -83,6 +83,41 @@ class ForbiddenAreaButton(Choice):
     default = option_pickup
 
 
+class SingleJumpDivekick(DefaultOnToggle):
+    """
+    Allows the divekick out of a first jump, before Malphas (Double Jump) is owned.
+       Still disallowed in water without Skula.
+       (From Xanthus's public AoS patch collection.)
+    """
+    display_name = "Single-Jump Divekick"
+
+
+class ClassicvaniaMovement(Toggle):
+    """
+    NES-style movement with no air control: jump trajectory is committed on takeoff, and walking
+       off a ledge drops nearly straight down. Direction can still be changed with Malphas (Double
+       Jump) or Hippogryph, and the flight souls (Flying Armor, Giant Bat) keep normal air control.
+       (From Xanthus's public AoS patch collection.)
+    """
+    display_name = "Classicvania Movement"
+    default = 0
+
+
+class OopsAllWhips(Toggle):
+    """
+    Every weapon attacks with the Whip Sword's swing animation.
+       (From Xanthus's public AoS patch collection.)
+    
+    WARNING this can technically softlock if you don't get an ability that lets you break the
+        ground. In practice, this is unlikely to the point of ignoring it, but there is a
+        chance you'll have to find a soul to let you hit the ground.
+
+    Weapon stats are untouched, but effective reach follows the whip swing.
+    """
+    display_name = "Oops! All Whips"
+    default = 0
+
+
 class ItemSmoothing(Choice):
     """
     **This is the flag to turn off if you want a totally-random-yet-finishable run.**
@@ -272,6 +307,9 @@ class CVAOSOptions(PerGameCommonOptions):
     hard_mode: HardMode
     skull_key_warp: SkullKeyWarp
     forbidden_area_button: ForbiddenAreaButton
+    single_jump_divekick: SingleJumpDivekick
+    classicvania_movement: ClassicvaniaMovement
+    oops_all_whips: OopsAllWhips
     item_smoothing: ItemSmoothing
     item_smoothing_order: ItemSmoothingOrder
     early_mobility_souls: EarlyMobilitySouls
@@ -297,6 +335,11 @@ cvaos_option_groups = [
         PlatformClipLogic,
         PixelPerfectLogic,
         QuickSaveResetLogic,
+    ]),
+    OptionGroup("Gameplay Tweaks", [
+        SingleJumpDivekick,
+        ClassicvaniaMovement,
+        OopsAllWhips,
     ]),
 ]
 

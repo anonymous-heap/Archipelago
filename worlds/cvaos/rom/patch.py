@@ -12,8 +12,9 @@ from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTok
 
 from ..data.pickup_info import rows as pickup_infos
 from ..items import FORBIDDEN_AREA_SWITCH, item_table
-from . import (custom_pickups, deathlink_hook, forbidden_area_button, inventory_menu,
-               skull_key_warp, soul_drop_rates)
+from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
+               inventory_menu, oops_all_whips, single_jump_divekick, skull_key_warp,
+               soul_drop_rates)
 from .entity import GBA_ROM_BASE
 from ..options import ForbiddenAreaButton
 
@@ -161,6 +162,20 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
     # Adjust selected enemy soul-drop rates (rom/soul_drop_rates.py)
     for offset, data in soul_drop_rates.build_writes(base_rom).items():
         patch.write_token(APTokenTypes.WRITE, offset, data)
+
+    # Gameplay tweaks ported from Xanthus's public AoS patch collection (see each module's
+    # docstring). All are pure byte-writes verified against the base ROM.
+    if world.options.single_jump_divekick:
+        for offset, data in single_jump_divekick.build_writes(base_rom).items():
+            patch.write_token(APTokenTypes.WRITE, offset, data)
+
+    if world.options.classicvania_movement:
+        for offset, data in classicvania_movement.build_writes(base_rom).items():
+            patch.write_token(APTokenTypes.WRITE, offset, data)
+
+    if world.options.oops_all_whips:
+        for offset, data in oops_all_whips.build_writes(base_rom).items():
+            patch.write_token(APTokenTypes.WRITE, offset, data)
 
     # Custom-pickup framework (rom/custom_pickups.py): the collect hook, the extended consumable-icon
     # table (existing items unchanged), and the custom icons. Installed unconditionally -- it is inert
