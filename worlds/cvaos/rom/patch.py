@@ -3,6 +3,7 @@ ROM patching for Castlevania: Aria of Sorrow.
 """
 from __future__ import annotations
 
+import json
 import os
 from typing import TYPE_CHECKING, Dict, List
 
@@ -106,6 +107,49 @@ def get_base_rom_bytes() -> bytes:
 class CVAOSPatchExtension(APPatchExtension):
     game = "Castlevania - Aria of Sorrow"
 
+    @staticmethod
+    def apply_rom_features(caller: APProcedurePatch, rom: bytes, config_file_name: str) -> bytes:
+        """
+        Apply the ROM-reading feature patches at patch-apply time (non-host side)
+        """
+
+        config = json.loads(caller.get_file(config_file_name).decode("utf-8"))
+        working = bytearray(rom)
+
+        def apply(writes: Dict[int, bytes]) -> None:
+            for offset, data in writes.items():
+                working[offset:offset + len(data)] = data
+
+        # Skull Key -> warp consumable hook (rom/skull_key_warp.py).
+        if config["skull_key_warp"]:
+            apply(skull_key_warp.build_writes())
+
+        # Forbidden Area gate-unlock pickup toggle (replaces the A01 press-button
+        # with a candle and a shuffled Study Sealswitch).
+        if config["forbidden_area_pickup"]:
+            apply(forbidden_area_button.build_writes(bytes(working)))
+
+        # Adjust selected enemy soul-drop rates (rom/soul_drop_rates.py).
+        apply(soul_drop_rates.build_writes(bytes(working)))
+
+        # Gameplay tweaks ported from Xanthus's AoS patches (see each module's docstring).
+        if config["single_jump_divekick"]:
+            apply(single_jump_divekick.build_writes(bytes(working)))
+        if config["classicvania_movement"]:
+            apply(classicvania_movement.build_writes(bytes(working)))
+        if config["oops_all_whips"]:
+            apply(oops_all_whips.build_writes(bytes(working)))
+
+        # Custom-pickup framework (rom/custom_pickups.py): collect hook, extended consumable-icon
+        # table, and the apply icons.
+        apply(custom_pickups.build_writes_from_rom(bytes(working)))
+
+        # Item-Use menu extension (rom/inventory_menu.py): relocated name/desc/string tables built
+        # from the current rom state, so all repoints above are included.
+        apply(inventory_menu.build_writes(bytes(working)))
+
+        return bytes(working)
+
 
 class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
     hash = [CVAOS_USA_HASH]
@@ -115,6 +159,7 @@ class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
 
     procedure = [
         ("apply_tokens", ["token_data.bin"]),
+        ("apply_rom_features", ["rom_config.json"]),
     ]
 
     @classmethod
@@ -123,7 +168,9 @@ class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
 
 
 def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[int, bytes]) -> None:
-    """Write all item placement tokens into the patch."""
+    """Fill the patch container. ROM-free: tokens for everything derivable without the base ROM,
+    plus ``rom_config.json`` telling ``apply_rom_features`` (patch-apply time, on the player's
+    machine) which ROM-reading features this seed enabled."""
     for offset, data in offset_data.items():
         patch.write_token(APTokenTypes.WRITE, offset, data)
 
@@ -133,62 +180,22 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
                       ARCHIPELAGO_IDENTIFIER.encode("ascii"))
     patch.write_token(APTokenTypes.WRITE, AUTH_NUMBER_START, bytes(world.auth))
 
-    base_rom = get_base_rom_bytes()
-    # Working copy that accumulates any writes which REPOINT entries in the name/desc text-id tables or
-    # the string-pointer array. inventory_menu (below) RELOCATES those tables and repoints the text
-    # resolver to its copies, so a repoint left only in the originals would be masked. Any feature that
-    # edits those tables must be applied here before inventory_menu reads it.
-    working = bytearray(base_rom)
-
-    # Skull Key -> warp consumable hook (the "Skull Key Warp" option; see rom/skull_key_warp.py). It
-    # also repoints the Skull Key description, so its writes must reach inventory_menu's relocated array.
-    if world.options.skull_key_warp:
-        for offset, data in skull_key_warp.build_writes().items():
-            patch.write_token(APTokenTypes.WRITE, offset, data)
-            working[offset:offset + len(data)] = data
-
-    # DeathLink "real kill" hook (the "Death Link" option; see rom/deathlink_hook.py). Lets the
-    # client trigger the game's actual death routine via a flag instead of zeroing HP.
+    # DeathLink "real kill" hook (the "Death Link" option; see rom/deathlink_hook.py). A fixed
+    # blob + veneer needing no ROM reads, so it can stay a plain token.
     if world.options.death_link:
         for offset, data in deathlink_hook.build_writes().items():
             patch.write_token(APTokenTypes.WRITE, offset, data)
 
-    # Forbidden Area "pickup" mode (rom/forbidden_area_button.py): replace the A01 press-button with an
-    # inert candle so the barrier can only be opened by the shuffled Study Sealswitch. Barrier intact.
-    if world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup:
-        for offset, data in forbidden_area_button.build_writes(base_rom).items():
-            patch.write_token(APTokenTypes.WRITE, offset, data)
-
-    # Adjust selected enemy soul-drop rates (rom/soul_drop_rates.py)
-    for offset, data in soul_drop_rates.build_writes(base_rom).items():
-        patch.write_token(APTokenTypes.WRITE, offset, data)
-
-    # Gameplay tweaks ported from Xanthus's public AoS patch collection (see each module's
-    # docstring). All are pure byte-writes verified against the base ROM.
-    if world.options.single_jump_divekick:
-        for offset, data in single_jump_divekick.build_writes(base_rom).items():
-            patch.write_token(APTokenTypes.WRITE, offset, data)
-
-    if world.options.classicvania_movement:
-        for offset, data in classicvania_movement.build_writes(base_rom).items():
-            patch.write_token(APTokenTypes.WRITE, offset, data)
-
-    if world.options.oops_all_whips:
-        for offset, data in oops_all_whips.build_writes(base_rom).items():
-            patch.write_token(APTokenTypes.WRITE, offset, data)
-
-    # Custom-pickup framework (rom/custom_pickups.py): the collect hook, the extended consumable-icon
-    # table (existing items unchanged), and the custom icons. Installed unconditionally -- it is inert
-    # unless a location actually spawns a custom item (var_b >= 32), which only the test placements or
-    # a future option do.
-    for offset, data in custom_pickups.build_writes_from_rom(base_rom).items():
-        patch.write_token(APTokenTypes.WRITE, offset, data)
-
-    # Item-Use menu extension (rom/inventory_menu.py): shows custom "key items" in the pause Item-Use
-    # list (name + description, non-usable) via a transient shadow inventory in free EWRAM. Reads
-    # `working` so its relocated name/desc/string tables include the repoints applied above (e.g. the
-    # Skull Key warp description). Emitted only when at least one custom pickup has an inventory_name.
-    for offset, data in inventory_menu.build_writes(bytes(working)).items():
-        patch.write_token(APTokenTypes.WRITE, offset, data)
+    # Everything that must READ the base ROM (guards, relocated tables, icon extraction) is
+    # deferred to apply_rom_features via this config. Keys must match what it looks up.
+    rom_config = {
+        "skull_key_warp": bool(world.options.skull_key_warp),
+        "forbidden_area_pickup":
+            world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup,
+        "single_jump_divekick": bool(world.options.single_jump_divekick),
+        "classicvania_movement": bool(world.options.classicvania_movement),
+        "oops_all_whips": bool(world.options.oops_all_whips),
+    }
+    patch.write_file("rom_config.json", json.dumps(rom_config).encode("utf-8"))
 
     patch.write_file("token_data.bin", patch.get_token_binary())
