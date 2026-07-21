@@ -14,10 +14,10 @@ excludes any `lib/` directory as a build artifact.
 | Package | Version | Source | License |
 |---|---|---|---|
 | pydantic | 1.10.26 | `pydantic-1.10.26-py3-none-any.whl` from PyPI, unmodified | MIT (see `pydantic/LICENSE`) |
-| bytemaker | 0.11.0 | `bytemaker-0.11.0-py3-none-any.whl` from PyPI, unmodified | MIT (see `bytemaker/LICENSE`) |
+| bytemaker | 0.12.0 | `bytemaker-0.12.0-py3-none-any.whl` from PyPI, unmodified | MIT (see `bytemaker/LICENSE`) |
 
 Without bitarray installed (frozen installs), bytemaker uses its pure-Python
-`bitvector_native` BitVector; with bitarray (`pip install bytemaker[speedups]`) it
+`bitvector_speedup` BitVector; with bitarray (`pip install bytemaker[speedups]`) it
 uses the C-backed fast path automatically.
 
 To update: download the new `py3-none-any` wheel from PyPI, extract, and replace the
