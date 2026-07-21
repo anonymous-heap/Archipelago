@@ -1,6 +1,6 @@
 """Single import point for bytemaker.
 
-bytemaker >= 0.11 is pure Python (bitarray is only an optional ``[speedups]`` extra
+bytemaker >= 0.12 is pure Python (bitarray is only an optional ``[speedups]`` extra
 with a pure-Python ``BitVector`` fallback), so it can be vendored for frozen
 Archipelago installs, which cannot pip-install. An installed bytemaker wins over the
 copy vendored in ``worlds/cvaos/vendor``.
