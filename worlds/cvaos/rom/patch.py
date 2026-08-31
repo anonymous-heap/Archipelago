@@ -16,9 +16,9 @@ from ..constants import USA_ROM_MD5
 from ..items import FORBIDDEN_AREA_SWITCH, item_table
 from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
                inventory_menu, oops_all_whips, single_jump_divekick, skull_key_warp,
-               soul_drop_rates)
+               soul_drop_rates, soul_shuffle)
 from .entity import GBA_ROM_BASE
-from ..options import ForbiddenAreaButton
+from ..options import ForbiddenAreaButton, SoulShuffle
 
 if TYPE_CHECKING:
     from BaseClasses import Location
@@ -32,6 +32,13 @@ if TYPE_CHECKING:
 ARCHIPELAGO_IDENTIFIER_START = 0x660000   # 13 bytes
 ARCHIPELAGO_IDENTIFIER = "CVAOS_AP_V0.2"
 AUTH_NUMBER_START = 0x660010              # 16 bytes
+
+# SoulShuffle option value -> rom/soul_shuffle mode.
+_SOUL_SHUFFLE_MODES = {
+    SoulShuffle.option_off: soul_shuffle.MODE_OFF,
+    SoulShuffle.option_within_type: soul_shuffle.MODE_WITHIN_TYPE,
+    SoulShuffle.option_any_type: soul_shuffle.MODE_ANY_TYPE,
+}
 
 
 # Item encoding lookup: AP item *code* -> (type_num, subtype_num, item_offset). Keyed by the stable
@@ -129,8 +136,25 @@ class CVAOSPatchExtension(APPatchExtension):
         if config["forbidden_area_pickup"]:
             apply(forbidden_area_button.build_writes(bytes(working)))
 
+        # Reassign which enemy drops which soul (rom/soul_shuffle.py). Must precede
+        # soul_drop_rates: it verifies the whole vanilla soul table, including the three rate
+        # bytes soul_drop_rates then overwrites.
+        soul_plan = {int(target): source
+                     for target, source in config.get("soul_shuffle_plan", {}).items()}
+        if soul_plan:
+            apply(soul_shuffle.build_writes(bytes(working), soul_plan,
+                                            config["keep_soul_drop_rates"],
+                                            config["shuffle_starting_soul"]))
+
         # Adjust selected enemy soul-drop rates (rom/soul_drop_rates.py).
         apply(soul_drop_rates.build_writes(bytes(working)))
+
+        # Global soul-drop-rate multiplier. Last of the rate edits on purpose: it reads the
+        # rates as they now stand, so it composes with both the overrides above and a shuffle
+        # that moved rates around.
+        if config["multiply_soul_drop_rates"]:
+            apply(soul_drop_rates.build_multiplier_writes(
+                bytes(working), config["soul_drop_rate_multiplier"]))
 
         # Gameplay tweaks ported from Xanthus's AoS patches (see each module's docstring).
         if config["single_jump_divekick"]:
@@ -195,6 +219,14 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
         "single_jump_divekick": bool(world.options.single_jump_divekick),
         "classicvania_movement": bool(world.options.classicvania_movement),
         "oops_all_whips": bool(world.options.oops_all_whips),
+        # Which enemy now drops which enemy's vanilla soul. Decided here (seeded, ROM-free --
+        # soul_shuffle carries the vanilla table) and applied against the base ROM later.
+        "soul_shuffle_plan": soul_shuffle.plan_shuffle(
+            world.random, _SOUL_SHUFFLE_MODES[world.options.soul_shuffle.value]),
+        "keep_soul_drop_rates": bool(world.options.keep_soul_drop_rates),
+        "shuffle_starting_soul": bool(world.options.shuffle_starting_soul),
+        "multiply_soul_drop_rates": bool(world.options.multiply_soul_drop_rates),
+        "soul_drop_rate_multiplier": int(world.options.soul_drop_rate_multiplier.value),
     }
     patch.write_file("rom_config.json", json.dumps(rom_config).encode("utf-8"))
 
