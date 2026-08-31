@@ -15,14 +15,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import FrozenSet, Set, Tuple
 
-from ...data.routing_info import AbilityCombo
+from ...data import AbilityCombo
 from .entrances import MaskUtils, RoutingQueries
 from .entrances_to_items import (
     PickupNodeId,
     RoutingGraph,
     default_graph,
 )
-from ...data.pickup_info import pickup_info_collection
+from ...data import pickup_info_collection
 
 NodeId = str
 ReqMask = int

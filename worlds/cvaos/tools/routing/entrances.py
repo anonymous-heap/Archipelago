@@ -5,8 +5,13 @@ from dataclasses import dataclass
 import heapq
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
-from ...data.routing_info import AbilityCombo, RoutingInfo, TransdoorConnection
-from ...data import entrance_to_entrance_info_collection, transdoor_connection_collection
+from ...data import (
+    AbilityCombo,
+    RoutingInfo,
+    TransdoorConnection,
+    entrance_to_entrance_info_collection,
+    transdoor_connection_collection,
+)
 
 NodeId = str
 ReqMask = int

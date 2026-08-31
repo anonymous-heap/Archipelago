@@ -6,7 +6,7 @@ from ..parse_int import parse_hex
 
 __all__ = [
     "EntranceInfo",
-    "entrance_info_collection",
+    "rows",
     "doors_for_room",
 ]
 
@@ -164,7 +164,6 @@ rows: tuple[EntranceInfo, ...] = _load()
 by_door_number: dict[int, EntranceInfo] = {row.door_number: row for row in rows}
 by_door_identifier_unique: dict[str, EntranceInfo] = {row.door_identifier_unique: row for row in rows}
 by_door_address: dict[int, EntranceInfo] = {row.door_address: row for row in rows}
-entrance_info_collection = list(rows)
 
 
 def lookup(key: int | str) -> EntranceInfo:

@@ -11,7 +11,7 @@ from BaseClasses import ItemClassification
 from settings import get_settings
 from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTokenTypes
 
-from ..data.pickup_info import rows as pickup_infos
+from ..data import pickup_info_collection as pickup_infos
 from ..items import FORBIDDEN_AREA_SWITCH, item_table
 from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
                inventory_menu, oops_all_whips, single_jump_divekick, skull_key_warp,

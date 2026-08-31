@@ -4,8 +4,7 @@ from typing import Dict, List, NamedTuple, TYPE_CHECKING
 
 from BaseClasses import Item, ItemClassification
 
-from .data.pickup_info import rows as pickup_infos
-from .data.item_info import item_info_collection
+from .data import item_info_collection, pickup_info_collection as pickup_infos
 from .item_granting import DISAMBIG_MAX, ID_MAX, TransferCategory, pack
 from .options import ForbiddenAreaButton
 

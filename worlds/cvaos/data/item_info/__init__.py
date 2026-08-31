@@ -5,7 +5,7 @@ from .._csv_resources import open_csv, open_csv_if_exists
 
 __all__ = [
     "ItemInfo",
-    "item_info_collection",
+    "rows",
 ]
 
 
@@ -103,7 +103,6 @@ by_category_id: dict[tuple[str, int], ItemInfo] = {
     (row.item_category, row.id): row for row in rows
 }
 by_item_number: dict[int, ItemInfo] = {row.item_number: row for row in rows}
-item_info_collection = list(rows)
 
 def find(key: str | tuple[str, int] | int) -> ItemInfo:
     """Look up by name, (item_category, id), or item_number."""

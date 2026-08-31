@@ -6,7 +6,7 @@ from ..parse_int import parse_hex
 
 __all__ = [
     "PickupInfo",
-    "pickup_info_collection",
+    "rows",
 ]
 
 class PickupInfo(BaseModel):
@@ -214,7 +214,6 @@ by_simple_name: dict[str, list[PickupInfo]] = {}
 for row in rows:
     by_simple_name.setdefault(row.simple_name, []).append(row)
 
-pickup_info_collection = list(rows)
 
 def find(key: int | str) -> PickupInfo:
     if isinstance(key, int):
