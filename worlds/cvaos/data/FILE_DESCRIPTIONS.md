@@ -92,7 +92,10 @@ Within-room traversal requirements. Each row describes the abilities needed to m
 
 Parsed by `routing_info/__init__.py` into `RoutingInfo` objects. `regions.py` turns each row into one directed edge within room `RoomID`, from the door to `From` to the door to `To`: `"{RoomID}:{From}" → "{RoomID}:{To}"`.
 
-Note that `tools/routing/entrances.py` builds the same destination node but uses `"{From}:{RoomID}"` as the source. See `REFACTOR.md` §2.11.
+Note that `tools/routing/entrances.py` builds the same destination node but uses
+`"{From}:{RoomID}"` as the source, so the solver and generation do not agree on which node a
+within-room route departs from. Generation follows the CSVs; treat solver output as indicative
+until that is reconciled.
 
 **`symmetric_entrance_to_pickup_region_requirements.csv`**
 Pickup accessibility requirements. Each row describes the abilities needed to reach a pickup from a specific entrance, and applies symmetrically in both directions. Key columns:
