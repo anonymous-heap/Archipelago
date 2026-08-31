@@ -7,6 +7,7 @@ from ..parse_int import parse_hex
 __all__ = [
     "EntranceInfo",
     "rows",
+    "ambiguous_door_identifiers",
 ]
 
 class EntranceInfo(BaseModel):
@@ -126,6 +127,43 @@ class EntranceInfo(BaseModel):
         return lookup(key)
 
 
+def _disambiguation_suffixes(door_id: str, group: list[dict]) -> list[str]:
+    """
+    Suffix for each row sharing one ``door_identifier``, in the order given.
+
+    A room usually reaches a neighbour through one door, and that door gets no suffix because
+    naming it cannot be ambiguous. Where two doors share a room pair, they always sit one map
+    cell apart along a single axis, so both are named by that geometry: ``"(upper)"`` and
+    ``"(lower)"``, or ``"(left)"`` and ``"(right)"``.
+
+    Both halves are tagged rather than only the second, so that a routing rule naming the bare
+    room id is always wrong for such a pair and can be rejected at load. Deriving each name from
+    position also matters because ``entrance_info.csv`` is generated from ROM data. Were the
+    names assigned by row order, regenerating the file in a different order would silently move
+    every routing rule onto the other door.
+    """
+    if len(group) == 1:
+        return [""]
+    if len(group) > 2:
+        raise ValueError(
+            f"door_identifier {door_id!r} has {len(group)} doors; only one or two are supported, "
+            f"because the (lower)/(right) naming assumes a pair")
+
+    first, second = group
+    if first["y_pos_door"] != second["y_pos_door"]:
+        first_is_low = int(first["y_pos_door"]) < int(second["y_pos_door"])
+        low, high = " (upper)", " (lower)"
+    elif first["x_pos_door"] != second["x_pos_door"]:
+        first_is_low = int(first["x_pos_door"]) < int(second["x_pos_door"])
+        low, high = " (left)", " (right)"
+    else:
+        raise ValueError(
+            f"door_identifier {door_id!r} has two doors at the same position "
+            f"({first['x_pos_door']}, {first['y_pos_door']}); they cannot be told apart")
+
+    return [low, high] if first_is_low else [high, low]
+
+
 def _load() -> tuple[EntranceInfo, ...]:
     reader = open_csv(__name__, "entrance_info.csv")
     cleaned = [
@@ -134,32 +172,29 @@ def _load() -> tuple[EntranceInfo, ...]:
         if any((v or "").strip() for v in row.values())
     ]
 
-    # Track how many times we've seen each door_identifier
-    # Only the 2nd+ occurrence gets the suffix
-    id_seen_count: dict[str, int] = {}
-
-    # Add door_identifier_nonunique and door_identifier_unique fields
+    by_door_id: dict[str, list[dict]] = {}
     for row in cleaned:
-        door_id = row["door_identifier"]
-        row["door_identifier_nonunique"] = door_id
+        by_door_id.setdefault(row["door_identifier"], []).append(row)
 
-        # Track occurrence count for this door_id
-        id_seen_count[door_id] = id_seen_count.get(door_id, 0) + 1
+    for door_id, group in by_door_id.items():
+        for row, suffix in zip(group, _disambiguation_suffixes(door_id, group)):
+            row["door_identifier_nonunique"] = door_id
+            row["door_identifier_unique"] = f"{door_id}{suffix}"
 
-        if id_seen_count[door_id] > 1:
-            # 2nd+ occurrence: append last 5 hex chars of door_address for uniqueness
-            addr_suffix = row["door_address"][-5:]
-            row["door_identifier_unique"] = f"{door_id} ({addr_suffix})"
-        else:
-            # 1st occurrence: use the door_id as-is
-            row["door_identifier_unique"] = door_id
-
+    for row in cleaned:
         del row["door_identifier"]
 
     return tuple(parse_obj_as(list[EntranceInfo], cleaned))
 
 
 rows: tuple[EntranceInfo, ...] = _load()
+
+# Bare identifiers served by more than one door. A routing rule naming one of these has not
+# said which door it means, so the routing loaders reject it instead of guessing.
+ambiguous_door_identifiers: frozenset[str] = frozenset(
+    row.door_identifier_nonunique for row in rows
+    if row.door_identifier_unique != row.door_identifier_nonunique
+)
 by_door_number: dict[int, EntranceInfo] = {row.door_number: row for row in rows}
 by_door_identifier_unique: dict[str, EntranceInfo] = {row.door_identifier_unique: row for row in rows}
 by_door_address: dict[int, EntranceInfo] = {row.door_address: row for row in rows}

@@ -7,6 +7,7 @@ from typing import Iterable
 
 from ..._pydantic_compat import BaseModel
 from .._csv_resources import open_csv, open_csv_if_exists
+from ..entrance_info import ambiguous_door_identifiers
 
 __all__ = [
     "AbilityCombo",
@@ -25,6 +26,22 @@ __all__ = [
     "transdoor_connection_rows",
     "by_from_entrance_for_transdoor",
 ]
+
+
+def _reject_ambiguous(node: str, where: str) -> str:
+    """
+    Return ``node`` unchanged, or raise if it names a room pair served by two doors.
+
+    Two doors sometimes share a room pair, and each is named for where it sits, so
+    ``"500:501"`` on its own does not say which one is meant. Guessing here is what previously
+    bound every such rule to one door and left the other unreachable, so an untagged reference
+    fails at load instead.
+    """
+    if node in ambiguous_door_identifiers:
+        raise ValueError(
+            f"{where}: {node!r} names two different doors. Say which one, for example "
+            f"{node!r} with '(upper)', '(lower)', '(left)', or '(right)' appended.")
+    return node
 
 
 def _truthy(value: str | None) -> bool:
@@ -224,8 +241,10 @@ def _load_transdoor_connections() -> tuple[TransdoorConnection, ...]:
         if not any((v or "").strip() for v in row.values()):
             continue
         out.append(TransdoorConnection(
-            from_entrance=row["from_entrance"].strip(),
-            to_entrance=row["to_entrance"].strip(),
+            from_entrance=_reject_ambiguous(row["from_entrance"].strip(),
+                                            "default_transdoor_entrance_connections.csv"),
+            to_entrance=_reject_ambiguous(row["to_entrance"].strip(),
+                                          "default_transdoor_entrance_connections.csv"),
         ))
 
     # Apply overrides: rows with does_exist=FALSE are removed, rows with
@@ -273,7 +292,7 @@ def _entrance_identifiers_from_cell(room_id: str, cell: str | None) -> set[str]:
 
     identifiers: set[str] = set()
     for neighbor in (part.strip() for part in text.split(",") if part.strip()):
-        entrance = f"{room_id}:{neighbor}"
+        entrance = _reject_ambiguous(f"{room_id}:{neighbor}", "dest_room_identifier")
         if entrance in by_from_entrance_for_transdoor:
             identifiers.add(entrance)
     return identifiers
@@ -351,9 +370,14 @@ class RoutingInfo(BaseModel):
             *combo_headers,
         }
 
+        room_id = row["RoomID"]
+        where = f"entrance_to_entrance_requirements.csv row {row['entrance_connection_number']}"
+        _reject_ambiguous(f"{room_id}:{row['From']}", where)
+        _reject_ambiguous(f"{room_id}:{row['To']}", where)
+
         return cls(
             connection_number=int(row["entrance_connection_number"]),
-            room_id=row["RoomID"],
+            room_id=room_id,
             from_room=row["From"],
             to_room=row["To"],
             variant=int(row[""]) if row.get("") else None,
