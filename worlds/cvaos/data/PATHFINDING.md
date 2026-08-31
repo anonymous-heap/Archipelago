@@ -48,14 +48,14 @@ A parsed row from `routing_info/entrance_to_entrance_requirements.csv`. Answers:
 **EntranceToPickupRegionInfo**
 A parsed row from `routing_info/symmetric_entrance_to_pickup_region_requirements.csv`. Answers: *"from entrance `entrance_identifier`, what abilities do you need to reach `pickup_number`?"* Marked **symmetric**: the same requirement applies going to the pickup and returning from it, so the graph builder adds edges in both directions.
 
-The `entrance_identifier` is resolved via `_canonical_door_identifier()` (sorted, lower room first) when `Entr.` names specific rooms, or directly from `doors_for_room()` (unsorted, directional) when `Entr.` is `"Any"`.
+The `entrance_identifier` is resolved by `_entrance_identifiers_from_cell()`. When `dest_room_identifier` names specific rooms it builds `f"{room_id}:{neighbor}"` for each, keeping only those that exist as a transdoor `from_entrance`. When the cell is `"Any"` it expands through `_arrivals_by_room`, which holds the doors on the pickup's own side of every crossing into that room.
 
 ---
 
 ## Graph nodes
 
 **Entrance node** (`"ROOM_A:ROOM_B"`)
-A directed graph node representing a **position at the physical doorway between rooms A and B, standing on the B side**. Built by `EntranceId.make(room_a, room_b)`. Encodes both which doorway you are at and which side of it you are on — this matters because within-room routing rules (`RoutingInfo`) determine which other doors in the room you can reach from a given starting door, and that depends on which side of the room you entered from.
+A directed graph node for **the door in room A that leads to room B**, so you are standing in room A. Built by `EntranceId.make(room_a, room_b)`. Crossing that door moves you to `"B:A"`, the matching node on the far side. The node records which side of the doorway you are on as well as which doorway it is, because a `RoutingInfo` row says which *other* doors of a room you can reach from a given starting door, and that depends on where in the room you entered.
 
 **Pseudo start node** (`"__START__@ROOM"`)
 A synthetic node for "standing somewhere in this room" without being at any specific doorway — e.g. for a spawn position. Defined in `EntranceId` but reserved for cases where there is no meaningful entry door.
