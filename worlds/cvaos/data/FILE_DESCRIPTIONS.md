@@ -32,7 +32,7 @@ One row per directed physical door. Each physical connection between two rooms a
 | `dest_x_offset_door` / `dest_y_offset_door` | Spawn offset applied on arrival |
 
 **`__init__.py`**
-Loads `entrance_info.csv` into `EntranceInfo` Pydantic models at module init. Builds lookup dicts by `door_number`, `door_identifier`, and `door_address`. Also builds `by_room_identifier`: a dict from each `room_identifier` to the set of all `door_identifier` strings touching that room (indexed from both the `room_identifier` and `dest_room_identifier` sides of every row). Exports `doors_for_room(room_identifier)`.
+Loads `entrance_info.csv` into `EntranceInfo` Pydantic models at module init. Builds lookup dicts by `door_number`, `door_identifier_unique`, and `door_address`. Exports the `rows` tuple.
 
 ---
 
@@ -90,7 +90,12 @@ Within-room traversal requirements. Each row describes the abilities needed to m
 | `None`, `Glide`, … `Kick` | Boolean ability columns — `TRUE` means that ability alone is sufficient |
 | `Misc. combo 1` … `Misc. combo 5` | Parenthetical-token conjunctions, e.g. `"Malphas (DJump), Flying Armor (Glide)"` — each cell is an AND combination; cells are OR alternatives |
 
-Parsed by `routing_info/__init__.py` into `RoutingInfo` objects. Each row becomes one directed edge in the entrance graph: `"{From}:{RoomID}" → "{RoomID}:{To}"`.
+Parsed by `routing_info/__init__.py` into `RoutingInfo` objects. `regions.py` turns each row into one directed edge within room `RoomID`, from the door to `From` to the door to `To`: `"{RoomID}:{From}" → "{RoomID}:{To}"`.
+
+Note that `tools/routing/entrances.py` builds the same destination node but uses
+`"{From}:{RoomID}"` as the source, so the solver and generation do not agree on which node a
+within-room route departs from. Generation follows the CSVs; treat solver output as indicative
+until that is reconciled.
 
 **`symmetric_entrance_to_pickup_region_requirements.csv`**
 Pickup accessibility requirements. Each row describes the abilities needed to reach a pickup from a specific entrance, and applies symmetrically in both directions. Key columns:
@@ -105,26 +110,27 @@ Pickup accessibility requirements. Each row describes the abilities needed to re
 | `None`, `Glide`, … `Kick` | Boolean ability columns (same as above) |
 | `Misc. combo 1` … `Misc. combo 5` | Conjunction combo cells (same as above) |
 
-Parsed by `routing_info/__init__.py` into `EntranceToPickupRegionInfo` objects. `dest_room_identifier` values are resolved to entrance identifiers via `_canonical_door_identifier()` (sorted, lower room first) for specific room references, or via `doors_for_room()` (directional) for `Any`.
+Parsed by `routing_info/__init__.py` into `EntranceToPickupRegionInfo` objects. `dest_room_identifier` values are resolved to entrance identifiers by `_entrance_identifiers_from_cell()`, which builds `f"{room_id}:{neighbor}"` for a named room and expands `Any` through `_arrivals_by_room`. Both forms yield doors on the pickup's own side of the crossing; see [WHAT_BREAKS.md](WHAT_BREAKS.md).
 
-**`entrance_to_entrance_requirements copy.csv`**
-Working copy / backup. Not loaded by any code.
+**`symmetric_entrance_to_enemy_region_requirements.csv`**
+Enemy accessibility requirements, in the same shape as the pickup file above but keyed by `enemy_number` with `room_id`, `Enemy Name`, and `Specifier` columns. Used to put enemy-drop souls such as Flame Demon and Succubus into logic, since those never enter the item pool. A row whose `dest_room_identifier` resolves to nothing is skipped with a log line rather than raising, because this file is bulk data.
+
+**`default_transdoor_entrance_connections.csv`**
+One row per directed door crossing, as `from_entrance,to_entrance`: the two entrance nodes on either side of the same physical door.
+
+**`override_transdoor_entrance_connections.csv`**
+Adjustments layered over the file above. A row with `does_exist=FALSE` removes that crossing, and a row with `is_override=TRUE` adds one. This is where the chaotic-realm portals live, since they are not real doors in `entrance_info`.
 
 **`__init__.py`**
-Defines `AbilityCombo` (IntFlag enum of all ability bits), `RoutingInfo`, and `EntranceToPickupRegionInfo`. Loads both CSVs at module init. Parses ability columns and combo-text cells into minimized ReqMask tuples. Exports `entrance_to_entrance_info_collection`, `entrance_to_pickup_region_info_collection`, and `lookup_pickup_region_requirement()`.
+Defines `AbilityCombo` (IntFlag enum of all ability bits) along with `RoutingInfo`, `EntranceToPickupRegionInfo`, `EntranceToEnemyRegionInfo`, and `TransdoorConnection`. Loads all five CSVs at module init and parses ability columns and combo-text cells into minimized ReqMask tuples. Transdoors load first, because resolving the `dest_room_identifier` column of the pickup and enemy files needs them. Exports the `rows`, `pickup_region_rows`, `enemy_region_rows`, and `transdoor_connection_rows` tuples, the lookup indexes over them, and `lookup_pickup_region_requirement()`.
 
 ---
 
-## Routing calculation scripts
+## Route solvers
 
-**`routing_calculation_entrances.py`**
-Builds and queries the entrance-only routing graph. Notable types:
+The graph search that used to live here now sits in [`../tools/routing/`](../tools/routing/),
+because it is developer tooling rather than game data. Generation does not use it; `regions.py`
+turns these same CSV rows directly into Archipelago regions and access rules.
 
-- `EntranceId` — helpers for constructing and splitting `"ROOM_A:ROOM_B"` entrance node IDs
-- `MaskUtils` — bitwise helpers: `satisfied()`, `usable_options()`, `edge_traversable()`, `decode()`
-- `Edge` — directed graph edge with `req_masks` (tuple of alternative ReqMasks) and `connection_number`
-- `RoutingGraph` / `RoutingGraphBuilder` — adjacency-list graph and its constructor from a list of `RoutingInfo`
-- `RoutingQueries` — graph search: `reachable_entrance_nodes()` (BFS under a fixed have_mask), `reachable_with_options_bfs()` (path-finding BFS), `compute_min_requirements()` (Dijkstra-like, returns `MinReqResult` with subset-minimal ReqMasks for every node), `route_options()` (wraps min-requirements + path reconstruction into `RouteOption` tuples)
-
-**`routing_calculation_entrances_to_items.py`**
-Extends the entrance graph with pickup nodes. `RoutingGraphBuilder.from_requirements()` here copies the entrance graph from `routing_calculation_entrances.py` then adds bidirectional edges between entrance nodes and pickup nodes using `EntranceToPickupRegionInfo` data. Convenience functions: `reachable_pickup_numbers_from_entrance()`, `pickup_route_options()`, `default_graph()`.
+See [`../tools/routing/__init__.py`](../tools/routing/__init__.py) for what each module covers, and
+[PATHFINDING.md](PATHFINDING.md) for the types they return.

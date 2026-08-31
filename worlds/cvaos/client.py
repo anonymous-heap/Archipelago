@@ -3,7 +3,7 @@ BizHawk client for Castlevania: Aria of Sorrow.
 
 This client validates the patched ROM, authenticates, and connects. Each tick (``game_watcher``)
 it sends location checks for collected pickups, grants received items, relays DeathLink, and
-reports goal completion -- one private helper per concern (see worlds/cvaos/ROADMAP.md).
+reports goal completion, with one private helper per concern.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from .rom import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUMB
 if TYPE_CHECKING:
     from worlds._bizhawk.context import BizHawkClientContext
 
-# GBA header: 12-byte internal game title at 0xA0 (CLIENT_PLAN sec. 5a).
+# GBA header: 12-byte internal game title at 0xA0.
 ROM_NAME_START = 0xA0
 ROM_NAME = "CASTLEVANIA2"
 

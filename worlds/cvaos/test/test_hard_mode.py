@@ -3,7 +3,7 @@ Tests for Hard Mode enforcement: the client forces the game-mode difficulty nibb
 the HARD_PICKUP entities actually spawn. See ram.accessors.ensure_hard_mode and client.game_watcher.
 
 Run from the Archipelago root:
-    python -m pytest worlds/cvaos/test_hard_mode.py -v
+    python -m pytest worlds/cvaos/test/test_hard_mode.py -v
 """
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from .client import CVAOSClient
-from .ram import addresses as addr
-from .ram.accessors import AoSRAM
+from ..client import CVAOSClient
+from ..ram import addresses as addr
+from ..ram.accessors import AoSRAM
 
 INGAME = int(addr.GameState.INGAME)
 

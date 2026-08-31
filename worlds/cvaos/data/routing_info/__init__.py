@@ -11,18 +11,18 @@ from .._csv_resources import open_csv, open_csv_if_exists
 __all__ = [
     "AbilityCombo",
     "RoutingInfo",
-    "entrance_to_entrance_info_collection",
+    "rows",
     "EntranceToPickupRegionInfo",
-    "entrance_to_pickup_region_info_collection",
+    "pickup_region_rows",
     "lookup_pickup_region_requirement",
     "EntranceToEnemyRegionInfo",
-    "entrance_to_enemy_region_info_collection",
+    "enemy_region_rows",
     "by_enemy_name_for_enemy_regions",
     "by_enemy_number_for_enemy_regions",
     "enemy_meta_by_number",
     "resolve_enemy_number",
     "TransdoorConnection",
-    "transdoor_connection_collection",
+    "transdoor_connection_rows",
     "by_from_entrance_for_transdoor",
 ]
 
@@ -413,7 +413,6 @@ def _load() -> tuple[RoutingInfo, ...]:
 rows: tuple[RoutingInfo, ...] = _load()
 by_connection_number: dict[int, RoutingInfo] = {r.connection_number: r for r in rows}
 by_from_to: dict[tuple[str, str], RoutingInfo] = {(r.from_room, r.to_room): r for r in rows}
-entrance_to_entrance_info_collection = list(rows)
 
 def lookup(key: int | tuple[str, str]) -> RoutingInfo:
     if isinstance(key, int):
@@ -522,7 +521,6 @@ def _load_pickup_region_requirements() -> tuple[EntranceToPickupRegionInfo, ...]
 # _entrance_identifiers_from_cell (called during pickup region loading) relies on
 # by_from_entrance_for_transdoor and _arrivals_by_room.
 transdoor_connection_rows: tuple[TransdoorConnection, ...] = _load_transdoor_connections()
-transdoor_connection_collection: list[TransdoorConnection] = list(transdoor_connection_rows)
 by_from_entrance_for_transdoor: dict[str, TransdoorConnection] = {
     r.from_entrance: r for r in transdoor_connection_rows
 }
@@ -544,7 +542,6 @@ for row in pickup_region_rows:
     by_entrance_identifier_for_pickup_regions.setdefault(row.entrance_identifier, []).append(row)
     by_entrance_and_pickup[(row.entrance_identifier, row.pickup_number)] = row
 
-entrance_to_pickup_region_info_collection = list(pickup_region_rows)
 
 
 def lookup_pickup_region_requirement(entrance_identifier: str, pickup_number: int) -> EntranceToPickupRegionInfo:
@@ -664,7 +661,6 @@ def _load_enemy_region_requirements() -> tuple[EntranceToEnemyRegionInfo, ...]:
 
 
 enemy_region_rows: tuple[EntranceToEnemyRegionInfo, ...] = _load_enemy_region_requirements()
-entrance_to_enemy_region_info_collection = list(enemy_region_rows)
 
 # enemy_number -> its per-entrance routing rows
 by_enemy_number_for_enemy_regions: dict[int, list[EntranceToEnemyRegionInfo]] = {}

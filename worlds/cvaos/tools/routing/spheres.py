@@ -8,21 +8,21 @@ A "sphere" is one round of item collection:
 This models the dependency chain: collect pickups → gain abilities → reach more pickups.
 Run directly to print sphere generation results from Soma's starting entrance:
 
-    python -m worlds.cvaos.data.routing_calculation_spheres
+    python -m worlds.cvaos.tools.routing.spheres
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import FrozenSet, Set, Tuple
 
-from .routing_info import AbilityCombo
-from .routing_calculation_entrances import MaskUtils, RoutingQueries
-from .routing_calculation_entrances_to_items import (
+from ...data import AbilityCombo
+from .entrances import MaskUtils, RoutingQueries
+from .entrances_to_items import (
     PickupNodeId,
     RoutingGraph,
     default_graph,
 )
-from .pickup_info import pickup_info_collection
+from ...data import pickup_info_collection
 
 NodeId = str
 ReqMask = int

@@ -12,7 +12,7 @@ import os
 import struct
 import unittest
 
-from .rom import skull_key_warp as skw
+from ..rom import skull_key_warp as skw
 
 
 def _find_rom() -> str | None:

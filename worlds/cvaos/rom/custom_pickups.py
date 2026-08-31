@@ -46,7 +46,12 @@ How it fits together (all verified against the USA ROM):
 Gating lives with the caller: rom/patch.py emits these writes (and encodes a location's pickup as a
 custom item) when the relevant option/placement is active. This module just builds the bytes.
 
-Regenerate the hook blob after editing custom_pickups.s:
+MISSING SOURCE: custom_pickups.s is not in this repository, unlike deathlink_hook.s and
+skull_key_warp.s. CUSTOMHOOK_BLOB therefore cannot be regenerated, and the blob is
+position-DEPENDENT, so it also cannot be relinked to a different address. Treat it as frozen
+until the assembly is recovered or rewritten. Were the source available, the blob would be
+rebuilt with:
+
     arm-none-eabi-as -mcpu=arm7tdmi -mthumb custom_pickups.s -o /tmp/c.o
     arm-none-eabi-ld -Ttext=0x08660300 /tmp/c.o -o /tmp/c.elf
     arm-none-eabi-objcopy -O binary /tmp/c.elf /tmp/c.bin   # -> CUSTOMHOOK_BLOB

@@ -6,8 +6,7 @@ from ..parse_int import parse_hex
 
 __all__ = [
     "EntranceInfo",
-    "entrance_info_collection",
-    "doors_for_room",
+    "rows",
 ]
 
 class EntranceInfo(BaseModel):
@@ -164,7 +163,6 @@ rows: tuple[EntranceInfo, ...] = _load()
 by_door_number: dict[int, EntranceInfo] = {row.door_number: row for row in rows}
 by_door_identifier_unique: dict[str, EntranceInfo] = {row.door_identifier_unique: row for row in rows}
 by_door_address: dict[int, EntranceInfo] = {row.door_address: row for row in rows}
-entrance_info_collection = list(rows)
 
 
 def lookup(key: int | str) -> EntranceInfo:
@@ -174,14 +172,3 @@ def lookup(key: int | str) -> EntranceInfo:
         return by_door_address[int(key, 16)]
     return by_door_identifier_unique[key]
 
-
-# Build room -> set of door_identifier_unique lookup
-# Only includes doors where room_identifier is the source room
-by_room_identifier: dict[str, set[str]] = {}
-for _row in rows:
-    by_room_identifier.setdefault(_row.room_identifier, set()).add(_row.door_identifier_unique)
-
-
-def doors_for_room(room_identifier: str) -> set[str]:
-    """Return all door_identifier_unique values for doors in a room (source = room_identifier)."""
-    return set(by_room_identifier.get(room_identifier, set()))

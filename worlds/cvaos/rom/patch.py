@@ -11,7 +11,8 @@ from BaseClasses import ItemClassification
 from settings import get_settings
 from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTokenTypes
 
-from ..data.pickup_info import rows as pickup_infos
+from ..data import pickup_info_collection as pickup_infos
+from ..constants import USA_ROM_MD5
 from ..items import FORBIDDEN_AREA_SWITCH, item_table
 from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
                inventory_menu, oops_all_whips, single_jump_divekick, skull_key_warp,
@@ -23,9 +24,7 @@ if TYPE_CHECKING:
     from BaseClasses import Location
     from .. import CVAOSWorld
 
-CVAOS_USA_HASH = "e7470df4d241f73060d14437011b90ce"
-
-# Archipelago metadata written into clean ROM free space (CLIENT_PLAN sec. 4B/5c). These are
+# Archipelago metadata written into clean ROM free space. These are
 # *file offsets* — both APProcedurePatch tokens and the BizHawk ROM domain the client reads
 # are file-offset based. The region at file 0x660000+ (GBA 0x08660000) is well clear of the
 # last real data at 0x651163. ARCHIPELAGO_IDENTIFIER doubles as the client/patch compatibility
@@ -57,7 +56,8 @@ def get_item_encoding(item_code: int) -> tuple[int, int, int]:
 # This is intentional: the AP location check is driven by the collected-pickup save flag (the client reads
 # PICKUP_FLAGS), NOT by what the pickup grants, so the substitute never affects check-sending. The
 # real behaviour -- grant nothing locally and show a "sent X to Player Y" multiworld textbox -- needs
-# the Phase 6 Strategy B ASM hook (see ROADMAP). Keep type=4 so the entity still sets its save flag.
+# an ASM hook on the collect path, which is not written yet. Keep type=4 so the entity still
+# sets its save flag.
 _AP_PLACEHOLDER = (4, 2, 25)  # Skull Key
 
 # Synthetic items (no ground pickup) that appear in the local world as a custom behaviour-pickup.
@@ -152,7 +152,7 @@ class CVAOSPatchExtension(APPatchExtension):
 
 
 class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
-    hash = [CVAOS_USA_HASH]
+    hash = [USA_ROM_MD5]
     patch_file_ending: str = ".apcvaos"
     result_file_ending: str = ".gba"
     game = "Castlevania - Aria of Sorrow"

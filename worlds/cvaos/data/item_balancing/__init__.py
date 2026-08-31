@@ -39,6 +39,5 @@ def _load() -> list[DesirabilityInfo]:
 
 rows: tuple[DesirabilityInfo, ...] = tuple(_load())
 by_name: dict[str, DesirabilityInfo] = {row.name: row for row in rows}
-desirability_collection = list(rows)
 
-__all__ = ["DesirabilityInfo", "by_name", "desirability_collection"]
+__all__ = ["DesirabilityInfo", "by_name", "rows"]

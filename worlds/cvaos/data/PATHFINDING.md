@@ -48,20 +48,20 @@ A parsed row from `routing_info/entrance_to_entrance_requirements.csv`. Answers:
 **EntranceToPickupRegionInfo**
 A parsed row from `routing_info/symmetric_entrance_to_pickup_region_requirements.csv`. Answers: *"from entrance `entrance_identifier`, what abilities do you need to reach `pickup_number`?"* Marked **symmetric**: the same requirement applies going to the pickup and returning from it, so the graph builder adds edges in both directions.
 
-The `entrance_identifier` is resolved via `_canonical_door_identifier()` (sorted, lower room first) when `Entr.` names specific rooms, or directly from `doors_for_room()` (unsorted, directional) when `Entr.` is `"Any"`.
+The `entrance_identifier` is resolved by `_entrance_identifiers_from_cell()`. When `dest_room_identifier` names specific rooms it builds `f"{room_id}:{neighbor}"` for each, keeping only those that exist as a transdoor `from_entrance`. When the cell is `"Any"` it expands through `_arrivals_by_room`, which holds the doors on the pickup's own side of every crossing into that room.
 
 ---
 
 ## Graph nodes
 
 **Entrance node** (`"ROOM_A:ROOM_B"`)
-A directed graph node representing a **position at the physical doorway between rooms A and B, standing on the B side**. Built by `EntranceId.make(room_a, room_b)`. Encodes both which doorway you are at and which side of it you are on — this matters because within-room routing rules (`RoutingInfo`) determine which other doors in the room you can reach from a given starting door, and that depends on which side of the room you entered from.
+A directed graph node for **the door in room A that leads to room B**, so you are standing in room A. Built by `EntranceId.make(room_a, room_b)`. Crossing that door moves you to `"B:A"`, the matching node on the far side. The node records which side of the doorway you are on as well as which doorway it is, because a `RoutingInfo` row says which *other* doors of a room you can reach from a given starting door, and that depends on where in the room you entered.
 
 **Pseudo start node** (`"__START__@ROOM"`)
 A synthetic node for "standing somewhere in this room" without being at any specific doorway — e.g. for a spawn position. Defined in `EntranceId` but reserved for cases where there is no meaningful entry door.
 
 **Pickup node** (`"PICKUP:N"`)
-A graph node representing collectible item number N. Built by `PickupNodeId.make(pickup_number)`. Only present in the extended graph produced by `routing_calculation_entrances_to_items.py` — not in the entrance-only graph.
+A graph node representing collectible item number N. Built by `PickupNodeId.make(pickup_number)`. Only present in the extended graph produced by `../tools/routing/entrances_to_items.py`, not in the entrance-only graph.
 
 ---
 
@@ -74,10 +74,10 @@ A directed connection between two graph nodes. Carries:
 - `connection_number` — unique sequential int for lookup
 - `variant` — optional int distinguishing alternative routes
 
-**Entrance graph** (`routing_calculation_entrances.py`)
+**Entrance graph** (`../tools/routing/entrances.py`)
 Adjacency-list graph where every node is an entrance node. Built by `RoutingGraphBuilder.from_requirements()` from `entrance_to_entrance_info_collection`. Each `RoutingInfo` row becomes one directed edge: `"from_room:room_id" → "room_id:to_room"`.
 
-**Extended graph** (`routing_calculation_entrances_to_items.py`)
+**Extended graph** (`../tools/routing/entrances_to_items.py`)
 The entrance graph plus pickup nodes. Constructed by copying the entrance graph then layering in bidirectional edges between each entrance node and its reachable pickup nodes (from `EntranceToPickupRegionInfo`). Used for answering "can I reach item X, and what do I need?"
 
 ---

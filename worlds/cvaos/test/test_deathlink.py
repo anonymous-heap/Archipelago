@@ -8,14 +8,14 @@ the death sub-state on the same frame -- a state that persists for many frames, 
 
 These tests drive _relay_deathlink through the relevant transitions with a fake context and a fake
 RAM accessor, so they need no emulator. Run from the Archipelago root:
-    python -m pytest worlds/cvaos/test_deathlink.py -v
+    python -m pytest worlds/cvaos/test/test_deathlink.py -v
 """
 from __future__ import annotations
 
 import unittest
 
-from .client import CVAOSClient
-from .ram import addresses as addr
+from ..client import CVAOSClient
+from ..ram import addresses as addr
 
 INGAME = int(addr.GameState.INGAME)
 GAME_OVER = int(addr.GameState.GAME_OVER)

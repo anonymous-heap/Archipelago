@@ -6,7 +6,7 @@ from ..parse_int import parse_hex
 
 __all__ = [
     "RoomInfo",
-    "room_info_collection",
+    "rows",
 ]
 
 class RoomInfo(BaseModel):
@@ -98,7 +98,6 @@ rows: tuple[RoomInfo, ...] = tuple(_load_room_info(_ident_index))
 by_identifier: dict[str, RoomInfo] = {row.room_identifier: row for row in rows}
 by_address: dict[int, RoomInfo] = {row.room_address: row for row in rows}
 by_number: dict[int, RoomInfo] = {row.room_number: row for row in rows}
-room_info_collection = list(rows)
 
 
 def lookup(key: int | str) -> RoomInfo:

@@ -3,12 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
-from .routing_info import (
+from ...data import (
     EntranceToPickupRegionInfo,
     entrance_to_entrance_info_collection,
     entrance_to_pickup_region_info_collection,
 )
-from .routing_calculation_entrances import (
+from .entrances import (
     Edge,
     MaskUtils,
     RouteOption,
