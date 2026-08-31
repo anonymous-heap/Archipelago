@@ -6,14 +6,14 @@ The instruction-level correctness was verified at authoring time with capstone (
 phase_4_6_planning/deathlink_real_kill.md); here we check the placement/wiring invariants that
 must hold for the patch to be installed correctly.
 
-    python -m pytest worlds/cvaos/test_deathlink_hook.py -v
+    python -m pytest worlds/cvaos/test/test_deathlink_hook.py -v
 """
 from __future__ import annotations
 
 import unittest
 
-from .rom import deathlink_hook as dh
-from .rom.entity import GBA_ROM_BASE
+from ..rom import deathlink_hook as dh
+from ..rom.entity import GBA_ROM_BASE
 
 
 class DeathlinkHookBytesTest(unittest.TestCase):

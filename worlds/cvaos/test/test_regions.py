@@ -2,18 +2,18 @@
 Test script for validating cvaos regions and locations.
 
 Run from the Archipelago root directory:
-    python -m pytest worlds/cvaos/test_regions.py -v
+    python -m pytest worlds/cvaos/test/test_regions.py -v
 """
 from __future__ import annotations
 
-from .data import (
+from ..data import (
     entrance_info_collection,
     pickup_info_collection,
     entrance_to_entrance_info_collection,
     transdoor_connection_collection,
 )
-from .data.routing_calculation_entrances import RoutingGraphBuilder
-from .locations import location_name_to_id, location_id_to_name
+from ..data.routing_calculation_entrances import RoutingGraphBuilder
+from ..locations import location_name_to_id, location_id_to_name
 
 
 def test_location_tables_built():

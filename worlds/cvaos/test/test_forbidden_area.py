@@ -51,8 +51,8 @@ class TestForbiddenAreaPickup(_Base):
 # --- Direct create_itempool checks: the Key displaces exactly one filler (net-zero pool size) ---
 import types
 from BaseClasses import ItemClassification as _IC
-from .items import create_itempool as _create_itempool
-from .options import ForbiddenAreaButton as _FAB
+from ..items import create_itempool as _create_itempool
+from ..options import ForbiddenAreaButton as _FAB
 
 
 def _mock_world(fab_value):
@@ -78,7 +78,7 @@ def test_key_displaces_one_filler():
 # --- ROM: pickup mode replaces the A01 press-button with an inert candle (in place) ---
 def test_rom_button_becomes_inert_candle():
     import os
-    from .rom import forbidden_area_button as fab
+    from ..rom import forbidden_area_button as fab
     rom_path = os.environ.get("CVAOS_USA_ROM",
         "/mnt/c/Users/belmo/Downloads/Castlevania - Aria of Sorrow (USA)/Castlevania - Aria of Sorrow (USA).gba")
     if not os.path.exists(rom_path):

@@ -4,14 +4,14 @@ Tests for the technique-logic options: the resolution precedence chain
 rule, and technique gating through the routing access-rule factory.
 
 Run from the Archipelago root directory:
-    python -m pytest worlds/cvaos/test_options.py -v
+    python -m pytest worlds/cvaos/test/test_options.py -v
 """
 from __future__ import annotations
 
 from types import SimpleNamespace
 
-from .data import AbilityCombo
-from .options import (
+from ..data import AbilityCombo
+from ..options import (
     CVAOSOptions,
     KickableEnemyLogic,
     LogicDifficultyPreset,
@@ -23,7 +23,7 @@ from .options import (
     Tier,
     resolve_allowed_techniques,
 )
-from .regions import _create_access_rule_from_routing, _StaticRouting
+from ..regions import _create_access_rule_from_routing, _StaticRouting
 
 _OPTION_CLASSES: dict[str, type[TechniqueLogic]] = {
     "kickable_enemy_logic": KickableEnemyLogic,
@@ -175,7 +175,7 @@ def test_rule_falls_back_to_other_way_through():
 
 def _a_devil_number() -> int:
     """A real Devil enemy_number from the loaded routing data."""
-    from .data import by_enemy_name_for_enemy_regions
+    from ..data import by_enemy_name_for_enemy_regions
     return next(iter(by_enemy_name_for_enemy_regions["Devil"]))
 
 

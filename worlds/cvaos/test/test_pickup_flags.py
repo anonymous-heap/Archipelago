@@ -10,10 +10,10 @@ NOTE: imports ``.ram``, so this test belongs with the (currently unpushed) ``ram
 """
 from __future__ import annotations
 
-from .data.pickup_info import pickup_info_collection
-from .locations import flag_offset_to_location_id
-from .ram import AoSRAM
-from .ram.addresses import PICKUP_FLAGS_LEN
+from ..data.pickup_info import pickup_info_collection
+from ..locations import flag_offset_to_location_id
+from ..ram import AoSRAM
+from ..ram.addresses import PICKUP_FLAGS_LEN
 
 _REGION_BITS = PICKUP_FLAGS_LEN * 8
 
