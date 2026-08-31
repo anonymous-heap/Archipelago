@@ -61,7 +61,7 @@ A directed graph node representing a **position at the physical doorway between 
 A synthetic node for "standing somewhere in this room" without being at any specific doorway — e.g. for a spawn position. Defined in `EntranceId` but reserved for cases where there is no meaningful entry door.
 
 **Pickup node** (`"PICKUP:N"`)
-A graph node representing collectible item number N. Built by `PickupNodeId.make(pickup_number)`. Only present in the extended graph produced by `routing_calculation_entrances_to_items.py` — not in the entrance-only graph.
+A graph node representing collectible item number N. Built by `PickupNodeId.make(pickup_number)`. Only present in the extended graph produced by `../tools/routing/entrances_to_items.py`, not in the entrance-only graph.
 
 ---
 
@@ -74,10 +74,10 @@ A directed connection between two graph nodes. Carries:
 - `connection_number` — unique sequential int for lookup
 - `variant` — optional int distinguishing alternative routes
 
-**Entrance graph** (`routing_calculation_entrances.py`)
+**Entrance graph** (`../tools/routing/entrances.py`)
 Adjacency-list graph where every node is an entrance node. Built by `RoutingGraphBuilder.from_requirements()` from `entrance_to_entrance_info_collection`. Each `RoutingInfo` row becomes one directed edge: `"from_room:room_id" → "room_id:to_room"`.
 
-**Extended graph** (`routing_calculation_entrances_to_items.py`)
+**Extended graph** (`../tools/routing/entrances_to_items.py`)
 The entrance graph plus pickup nodes. Constructed by copying the entrance graph then layering in bidirectional edges between each entrance node and its reachable pickup nodes (from `EntranceToPickupRegionInfo`). Used for answering "can I reach item X, and what do I need?"
 
 ---

@@ -12,7 +12,7 @@ from ..data import (
     entrance_to_entrance_info_collection,
     transdoor_connection_collection,
 )
-from ..data.routing_calculation_entrances import RoutingGraphBuilder
+from ..tools.routing.entrances import RoutingGraphBuilder
 from ..locations import location_name_to_id, location_id_to_name
 
 

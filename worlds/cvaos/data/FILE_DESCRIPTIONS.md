@@ -115,16 +115,11 @@ Defines `AbilityCombo` (IntFlag enum of all ability bits), `RoutingInfo`, and `E
 
 ---
 
-## Routing calculation scripts
+## Route solvers
 
-**`routing_calculation_entrances.py`**
-Builds and queries the entrance-only routing graph. Notable types:
+The graph search that used to live here now sits in [`../tools/routing/`](../tools/routing/),
+because it is developer tooling rather than game data. Generation does not use it; `regions.py`
+turns these same CSV rows directly into Archipelago regions and access rules.
 
-- `EntranceId` — helpers for constructing and splitting `"ROOM_A:ROOM_B"` entrance node IDs
-- `MaskUtils` — bitwise helpers: `satisfied()`, `usable_options()`, `edge_traversable()`, `decode()`
-- `Edge` — directed graph edge with `req_masks` (tuple of alternative ReqMasks) and `connection_number`
-- `RoutingGraph` / `RoutingGraphBuilder` — adjacency-list graph and its constructor from a list of `RoutingInfo`
-- `RoutingQueries` — graph search: `reachable_entrance_nodes()` (BFS under a fixed have_mask), `reachable_with_options_bfs()` (path-finding BFS), `compute_min_requirements()` (Dijkstra-like, returns `MinReqResult` with subset-minimal ReqMasks for every node), `route_options()` (wraps min-requirements + path reconstruction into `RouteOption` tuples)
-
-**`routing_calculation_entrances_to_items.py`**
-Extends the entrance graph with pickup nodes. `RoutingGraphBuilder.from_requirements()` here copies the entrance graph from `routing_calculation_entrances.py` then adds bidirectional edges between entrance nodes and pickup nodes using `EntranceToPickupRegionInfo` data. Convenience functions: `reachable_pickup_numbers_from_entrance()`, `pickup_route_options()`, `default_graph()`.
+See [`../tools/routing/__init__.py`](../tools/routing/__init__.py) for what each module covers, and
+[PATHFINDING.md](PATHFINDING.md) for the types they return.
