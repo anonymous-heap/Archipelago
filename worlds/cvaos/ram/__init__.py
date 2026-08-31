@@ -8,7 +8,8 @@ Live-memory (EWRAM) access for the Aria of Sorrow BizHawk client.
 - ``PlayerVitals`` / ``EquippedGear`` — bytemaker structs for the contiguous
   regions ``AoSRAM.get_vitals`` / ``get_equipped_gear`` read.
 
-See ``worlds/cvaos/CLIENT_PLAN.md`` (secs. 3c, 5b, 5d) for where these come from.
+Every offset here was verified against the USA ROM. ``addresses`` records the full GBA
+address beside each one.
 """
 from . import addresses
 from .accessors import AoSRAM

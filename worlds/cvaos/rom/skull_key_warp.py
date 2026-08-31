@@ -3,8 +3,7 @@ Skull Key -> warp consumable ROM hook for Castlevania: Aria of Sorrow.
 
 Turns "use a Skull Key from the item menu" into a teleport to a fixed destination,
 by intercepting the consumable-effect dispatcher and reusing the game's own warp
-helpers. See ``worlds/cvaos/SKULL_KEY_WARP.md`` for the full design and the ROM
-addresses this relies on.
+helpers. Every ROM address it relies on is listed under Mechanism below.
 
 Mechanism (all verified against the USA ROM):
 

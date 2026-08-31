@@ -5,7 +5,12 @@ Makes the pause "Item Use" subscreen show the custom "key items" registered in `
 (``CustomPickup`` with an ``inventory_name``) -- shown like CASTLE MAP 1 (name + 2-line description +
 icon, non-usable) -- without touching the fixed 32-slot consumable inventory or save format.
 
-How (all verified vs the USA ROM; see inventory_menu.s for the trampoline write-up):
+How (all verified vs the USA ROM):
+
+MISSING SOURCE: inventory_menu.s is not in this repository, so MENU_BLOB cannot be
+reassembled and the offsets below cannot be re-derived with `nm`. The blob is
+position-DEPENDENT as well, so it cannot be relinked. Treat it as frozen until the
+assembly is recovered or rewritten.
 
 * Storage: a TRANSIENT shadow count-array in free high-EWRAM (0x02030000, above the gEwramData struct
   which ends at 0x02025554; never touched by game code after the boot zero-fill). It is NOT saved and

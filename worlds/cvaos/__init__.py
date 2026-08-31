@@ -6,7 +6,7 @@ from BaseClasses import MultiWorld, Tutorial
 from worlds.AutoWorld import WebWorld, World
 import settings
 
-from .constants import USA_ROM_HASH
+from .constants import USA_ROM_MD5
 from .items import CVAOSItem, item_name_to_id, create_item, create_itempool
 from .locations import location_name_to_id
 from .options import CVAOSOptions, Goal, cvaos_option_groups
@@ -19,7 +19,7 @@ class CVAOSSettings(settings.Group):
         """File name of the Castlevania AoS USA rom"""
         copy_to = "Castlevania - Aria of Sorrow (USA).gba"
         description = "Castlevania AoS (US) ROM File"
-        md5s = [hex(USA_ROM_HASH)[2:]]
+        md5s = [USA_ROM_MD5]
 
     rom_file: RomFile = RomFile(RomFile.copy_to)
 

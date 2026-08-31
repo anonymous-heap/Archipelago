@@ -2,9 +2,8 @@
 Offline invariants for the DeathLink "real kill" ROM hook patch bytes (no emulator needed).
 
 These guard the pre-assembled trampoline/veneer in rom/deathlink_hook.py against accidental edits.
-The instruction-level correctness was verified at authoring time with capstone (see
-phase_4_6_planning/deathlink_real_kill.md); here we check the placement/wiring invariants that
-must hold for the patch to be installed correctly.
+The instruction-level correctness was verified at authoring time with capstone; here we check
+the placement and wiring invariants that must hold for the patch to be installed correctly.
 
     python -m pytest worlds/cvaos/test/test_deathlink_hook.py -v
 """

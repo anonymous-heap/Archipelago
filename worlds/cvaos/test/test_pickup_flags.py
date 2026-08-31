@@ -3,7 +3,7 @@ Offline invariants for the collected-pickup flag bitfield (no emulator needed).
 
 These guard the data pipeline plus the LSB-first bit-numbering convention in ``AoSRAM._flag_id``
 against regressions. They do *not* confirm the hardware bit order (that is the one-time live
-save-scum collect noted in ROADMAP Phase 2) -- the order itself is documented in ``_flag_id``;
+save-scum collect, still to be done) -- the order itself is documented in ``_flag_id``;
 here we only assert internal consistency (range, bijection, and a single-bit round-trip).
 
 NOTE: imports ``.ram``, so this test belongs with the (currently unpushed) ``ram/`` package.
