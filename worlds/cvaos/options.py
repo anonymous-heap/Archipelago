@@ -14,8 +14,8 @@ resolves them with this priority:
 from dataclasses import dataclass
 from enum import IntEnum
 
-from Options import (Choice, DeathLink, DefaultOnToggle, ItemsAccessibility, OptionGroup,
-                     PerGameCommonOptions, Toggle)
+from Options import (Choice, DeathLink, DefaultOnToggle, ItemsAccessibility, NamedRange,
+                     OptionGroup, PerGameCommonOptions, Toggle)
 
 from .data import AbilityCombo
 
@@ -55,6 +55,96 @@ class HardMode(Toggle):
     """
     display_name = "Hard Mode"
     default = 0
+
+
+class SoulShuffle(Choice):
+    """
+    Shuffles which enemy drops which soul.
+
+    The 7 enemies whose soul is progression (Chronomage, Curly, Devil, Manticore, Kicker
+       Skeleton, Succubus, Flame Demon) always keep their own soul, so logic is unaffected and
+       this is purely a discovery/variety option. The other 103 are permuted, so every soul
+       still has exactly one enemy that drops it.
+
+    - off: enemies drop their vanilla souls.
+    - within_type: red souls swap with red, blue with blue, yellow with yellow (pools of 53,
+      18 and 32).
+    - any_type: one permutation across all 103 souls, ignoring type.
+    """
+    display_name = "Soul Shuffle"
+    option_off = 0
+    option_within_type = 1
+    option_any_type = 2
+    default = option_off
+
+
+class KeepSoulDropRates(DefaultOnToggle):
+    """
+    No effect when Soul Shuffle is off.
+
+    Whether a soul keeps its own drop rate when it moves to a new enemy, or inherits the rate
+       of the enemy now dropping it.
+
+    - on (keep soul drop rates): each soul stays exactly as rare as it is in vanilla and only
+      its source changes, so the shuffle doesn't alter how much grinding the game asks for.
+    - off (keep enemy drop rates): rarity becomes a property of the encounter -- a soul is as
+      common as whatever now drops it. Rare enemies become worth hunting for their own sake.
+
+    Either way, an enemy whose vanilla drop is guaranteed stays guaranteed (that is how the
+       game marks a kill you cannot farm, such as Headhunter, Death, Legion and Balore), so no
+       shuffle can strand a soul behind a one-time boss.
+    """
+    display_name = "Keep Soul Drop Rates"
+
+
+class ShuffleStartingSoul(DefaultOnToggle):
+    """
+    No effect when Soul Shuffle is off.
+
+    The intro hands Soma a free Winged Skeleton soul. That is hardcoded in the intro,
+       not an enemy drop, so Soul Shuffle does not touch it on its own. This
+       option makes the starting soul follow the shuffle.
+
+    Note that the cutscene will still _say_ "Winged Skeleton" in all cases for now.
+
+    - on: the soul becomes whatever soul now drops from the Winged Skeleton enemy.
+    - off: you always start with the vanilla Winged Skeleton soul.
+    """
+    display_name = "Shuffle Starting Soul"
+
+
+class MultiplySoulDropRates(Toggle):
+    """
+    Makes souls drop more often across the board, independently of Soul Shuffle.
+
+    Set the size of the increase with Soul Drop Rate Multiplier.
+    """
+    display_name = "Multiply Soul Drop Rates"
+    default = 0
+
+
+class SoulDropRateMultiplier(NamedRange):
+    """
+    No effect when Multiply Soul Drop Rates is off.
+
+    How much more often souls drop, in percent: 100 is vanilla, 120 means a soul appears 1.2x
+       as often, 400 means four times as often.
+
+    There is a hard limit to how common souls can be currently, so higher multipliers will
+       mostly affect rarer drops.
+    """
+    display_name = "Soul Drop Rate Multiplier"
+    range_start = 100
+    range_end = 1000
+    default = 120
+    special_range_names = {
+        "vanilla": 100,
+        "slight": 120,
+        "half_again": 150,
+        "double": 200,
+        "quadruple": 400,
+        "tenfold": 1000,
+    }
 
 
 class SkullKeyWarp(DefaultOnToggle):
@@ -305,6 +395,11 @@ class CVAOSOptions(PerGameCommonOptions):
     randomize_pickups: RandomizePickups
     goal: Goal
     hard_mode: HardMode
+    soul_shuffle: SoulShuffle
+    keep_soul_drop_rates: KeepSoulDropRates
+    shuffle_starting_soul: ShuffleStartingSoul
+    multiply_soul_drop_rates: MultiplySoulDropRates
+    soul_drop_rate_multiplier: SoulDropRateMultiplier
     skull_key_warp: SkullKeyWarp
     forbidden_area_button: ForbiddenAreaButton
     single_jump_divekick: SingleJumpDivekick
@@ -323,6 +418,15 @@ class CVAOSOptions(PerGameCommonOptions):
 
 
 cvaos_option_groups = [
+    OptionGroup("Soul Shuffle", [
+        SoulShuffle,
+        KeepSoulDropRates,
+        ShuffleStartingSoul,
+    ]),
+    OptionGroup("Soul Drop Rates", [
+        MultiplySoulDropRates,
+        SoulDropRateMultiplier,
+    ]),
     OptionGroup("Item Smoothing", [
         ItemSmoothing,
         ItemSmoothingOrder,
