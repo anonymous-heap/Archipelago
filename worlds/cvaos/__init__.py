@@ -4,6 +4,7 @@ from typing import ClassVar
 
 from BaseClasses import MultiWorld, Tutorial
 from worlds.AutoWorld import WebWorld, World
+from worlds.LauncherComponents import Component, Type, components, launch as launch_component
 import settings
 
 from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA_ROM_MD5
@@ -12,6 +13,37 @@ from .locations import location_name_to_id
 from .options import CVAOSOptions, Goal, cvaos_option_groups
 from .regions import create_regions, can_reach_room
 from .client import CVAOSClient  # noqa: F401  (imported for its registration side effect)
+
+
+def launch_collection_client(*args: str) -> None:
+    from .collection_client import launch
+    launch_component(launch, name="CVAoSCollectionClient", args=args)
+
+
+def launch_collection_installer(*args: str) -> None:
+    # Runs in the Launcher process (Messenger-style tool component): prompts for the
+    # patched .gba, resolves game.exe from settings, swaps the ROM into windata/.
+    from .advance_collection.install import run_from_launcher
+    run_from_launcher(*args)
+
+
+# The BizHawk client auto-registers via its patch_suffix; the Advance Collection client
+# has no patch file to open, so it needs an explicit Launcher button.
+components.append(Component(
+    "CVAoS Collection Client",
+    func=launch_collection_client,
+    component_type=Type.CLIENT,
+    description="Play a CVAoS seed inside the Steam Castlevania Advance Collection.",
+))
+
+components.append(Component(
+    "CVAoS Collection ROM Installer",
+    func=launch_collection_installer,
+    component_type=Type.TOOL,
+    description="Install a CVAoS seed into the Steam Castlevania Advance Collection: accepts "
+                "the .apcvaos patch (applied for you) or a patched .gba. Backs up the original "
+                "archive; restore any time.",
+))
 
 
 class CVAOSSettings(settings.Group):
