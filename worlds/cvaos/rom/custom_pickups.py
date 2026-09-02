@@ -53,7 +53,7 @@ until the assembly is recovered or rewritten. Were the source available, the blo
 rebuilt with:
 
     arm-none-eabi-as -mcpu=arm7tdmi -mthumb custom_pickups.s -o /tmp/c.o
-    arm-none-eabi-ld -Ttext=0x08660300 /tmp/c.o -o /tmp/c.elf
+    arm-none-eabi-ld -Ttext=0x08670300 /tmp/c.o -o /tmp/c.elf
     arm-none-eabi-objcopy -O binary /tmp/c.elf /tmp/c.bin   # -> CUSTOMHOOK_BLOB
 """
 from __future__ import annotations
@@ -70,10 +70,11 @@ from .icon import RomSprite, ImageFile, build_icon_tiles
 # replicates. 0x080441F8 is word-aligned so the ldr/bx/.word veneer's [pc,#0] reads the target word.
 HOOK_SITE_GBA = 0x080441F8
 
-# --- Free-ROM placement (GBA addresses; clear of identifier/auth/deathlink/skull-key at 0x660000..0x66026F) ---
-CUSTOMHOOK_BASE_GBA = 0x08660300        # the dispatcher blob
-CUSTOM_DESC_TABLE_GBA = 0x08660400      # descriptor table (baked into the blob's literal pool)
-CUSTOM_ICON_TABLE_GBA = 0x08661000      # extended consumable-icon table (repoint target)
+# --- Free-ROM placement (GBA addresses; clear of identifier/auth/deathlink/skull-key at 0x670000..0x67026F,
+# and of the Advance Collection ROM's M2 additions at 0x660000-0x6610BC / 0x700000-0x7000E3) ---
+CUSTOMHOOK_BASE_GBA = 0x08670300        # the dispatcher blob
+CUSTOM_DESC_TABLE_GBA = 0x08670400      # descriptor table (baked into the blob's literal pool)
+CUSTOM_ICON_TABLE_GBA = 0x08671000      # extended consumable-icon table (repoint target)
 
 # --- Vanilla consumable-icon table (the spawn-path lookup we extend) ---
 CONSUMABLE_TABLE_GBA = 0x08505B3C
@@ -107,15 +108,15 @@ BANK6_PALETTE = (0x2145, 0x0463, 0x138c, 0x456c, 0x5694, 0x6b7d, 0x01e6, 0x277f,
 ICON_SHEETS_GBA = (0x081C5E00, 0x081C7E04, 0x081C9E08)   # 64 icons/sheet
 ICON_HALF = 0x40
 
-# Dispatcher blob, assembled from custom_pickups.s at -Ttext=0x08660300 (THUMB, ARMv4T).
-# Position-DEPENDENT: its literal pool bakes CUSTOM_DESC_TABLE_GBA (0x08660400), gEwramData
+# Dispatcher blob, assembled from custom_pickups.s at -Ttext=0x08670300 (THUMB, ARMv4T).
+# Position-DEPENDENT: its literal pool bakes CUSTOM_DESC_TABLE_GBA (0x08670400), gEwramData
 # (0x02000000), PlaySong+1 (0x080d7911), and the vanilla resume/finish addresses, so keep
 # CUSTOMHOOK_BASE_GBA / CUSTOM_DESC_TABLE_GBA in sync if you relink.
 CUSTOMHOOK_BLOB = bytes.fromhex(
-    # literal pool bakes 0x08660400 (desc table), 0x02000000 (gEwram), 0x0800ef99 (sub_0800EF98|1,
+    # literal pool bakes 0x08670400 (desc table), 0x02000000 (gEwram), 0x0800ef99 (sub_0800EF98|1,
     # got-item textbox), 0x080d7911 (PlaySong|1), 0x08044203/0x08044509. (No shadow-inventory literal:
     # the collect hook no longer writes the menu shadow -- owned-state is derived from the flag.)
-    "f0b5474680b481b0041c3620205c022809d1658e164e30881649884203d0a84204d00c36f7e7201c134b18473089002802d0124b00f01bf87188b2881048401853099b00c0181f21114001238b40016819430160f088002802d00a4b00f007f85920215c082211432154074b1847184700046608ffff00000342040899ef00080000000211790d0809450408"
+    "f0b5474680b481b0041c3620205c022809d1658e164e30881649884203d0a84204d00c36f7e7201c134b18473089002802d0124b00f01bf87188b2881048401853099b00c0181f21114001238b40016819430160f088002802d00a4b00f007f85920215c082211432154074b1847184700046708ffff00000342040899ef00080000000211790d0809450408"
 )
 assert len(CUSTOMHOOK_BLOB) == 140, f"hook blob must be 140 bytes, got {len(CUSTOMHOOK_BLOB)}"
 assert CUSTOM_DESC_TABLE_GBA.to_bytes(4, "little") in CUSTOMHOOK_BLOB, "desc-table addr missing from blob"

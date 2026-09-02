@@ -51,7 +51,10 @@ STRINGPTR_GBA = 0x08506B38      # cp.STRINGPTR_COUNT u32, text-id -> string poin
 TEXT_ID_TABLE_ENTRIES = 257
 
 # --- Relocated tables / blob placement (GBA addresses; clear of the custom_pickups region) ---
-MENU_BLOB_GBA = 0x08660500          # inventory_menu.s trampolines
+# The blob lives in the 0x670000 block with the other hooks. The EXT/NEW tables stay at
+# 0x661400+/0x665000: the Advance Collection ROM's M2 graphic ends at 0x6610BC, so this range is
+# zero (free) in both the cart and AC bases and does not need to move.
+MENU_BLOB_GBA = 0x08670500          # inventory_menu.s trampolines
 EXT_NAME_TABLE_GBA = 0x08661400     # relocated NAME_TIDS (+ new items' name text-ids)
 EXT_DESC_TABLE_GBA = 0x08661700     # relocated DESC_TIDS (+ new items' desc text-ids)
 EXT_STRINGPTR_GBA = 0x08662000      # relocated string-pointer array (+ appended new strings)
@@ -68,8 +71,8 @@ MENU_RECOUNT_HOOK_GBA = MENU_BLOB_GBA + MENU_RECOUNT_HOOK_OFF
 B494_ENTRY_FILE = 0x0004B494
 B648_ENTRY_FILE = 0x0004B648
 
-# Assembled from inventory_menu.s at -Ttext=0x08660500 (THUMB). Position-DEPENDENT (literal pool bakes
-# 0x02013294 real / 0x02030000 shadow / 0x0202FFC8 base / 0x02000000 gEwram / 0x08660400 desc-table /
+# Assembled from inventory_menu.s at -Ttext=0x08670500 (THUMB). Position-DEPENDENT (literal pool bakes
+# 0x02013294 real / 0x02030000 shadow / 0x0202FFC8 base / 0x02000000 gEwram / 0x08670400 desc-table /
 # the B494/B648 resume addresses). Each trampoline mirrors the 32 real counts AND derives the custom
 # slots from each DESC row's saved behaviour flag, so the transient shadow is rebuilt before every read.
 MENU_BLOB = bytes.fromhex(
@@ -77,11 +80,12 @@ MENU_BLOB = bytes.fromhex(
     "0cd06288a388b21859098900521812681f211940ca4001231a402a540c34eae7f0bc02bc1e48f0b5"
     "57464e4645461d4b184702b4f0b4154a154b202011781970013201330138f9d1124c114d124e134f"
     "2088b84211d02289002a0cd06288a388b21859098900521812681f211940ca4001231a402a540c34"
-    "eae7f0bc02bc084870b58446002400230748004794320102000003020004660800000002ffff0000"
+    "eae7f0bc02bc084870b58446002400230748004794320102000003020004670800000002ffff0000"
     "c8ff02029db4040851b60408"
 )
 assert len(MENU_BLOB) == 212, f"menu blob must be 212 bytes, got {len(MENU_BLOB)}"
 assert cp.SHADOW_BASE_GBA.to_bytes(4, "little") in MENU_BLOB, "shadow base missing from menu blob"
+assert cp.CUSTOM_DESC_TABLE_GBA.to_bytes(4, "little") in MENU_BLOB, "desc-table addr missing from menu blob"
 # Both hooks begin `push {r1}` (b402); MenuListHook ends `bx r3` (4718). Guard that MENU_RECOUNT_HOOK_OFF
 # still lands on MenuRecountHook's entry (push {r1}) immediately after MenuListHook's bx -- i.e. catch a
 # stale offset after editing inventory_menu.s (the bug that froze the menu when MenuListHook grew).

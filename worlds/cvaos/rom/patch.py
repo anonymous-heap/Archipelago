@@ -27,12 +27,14 @@ if TYPE_CHECKING:
 
 # Archipelago metadata written into clean ROM free space. These are
 # *file offsets* — both APProcedurePatch tokens and the BizHawk ROM domain the client reads
-# are file-offset based. The region at file 0x660000+ (GBA 0x08660000) is well clear of the
-# last real data at 0x651163. ARCHIPELAGO_IDENTIFIER doubles as the client/patch compatibility
-# gate; bump it whenever the patch/client contract changes.
-ARCHIPELAGO_IDENTIFIER_START = 0x660000   # 13 bytes
-ARCHIPELAGO_IDENTIFIER = "CVAOS_AP_V0.2"
-AUTH_NUMBER_START = 0x660010              # 16 bytes
+# are file-offset based. The region at file 0x670000+ (GBA 0x08670000) is well clear of the
+# last real cart data at 0x651163 and of the Advance Collection ROM's M2 additions
+# (rom/address_space.py M2_NO_GO: 0x660000-0x6610BC and 0x700000-0x7000E3).
+# ARCHIPELAGO_IDENTIFIER doubles as the client/patch compatibility gate; bump it whenever the
+# patch/client contract changes.
+ARCHIPELAGO_IDENTIFIER_START = 0x670000   # 13 bytes
+ARCHIPELAGO_IDENTIFIER = "CVAOS_AP_V0.3"  # V0.3: hook/metadata block moved 0x660000 -> 0x670000
+AUTH_NUMBER_START = 0x670010              # 16 bytes
 
 # SoulShuffle option value -> rom/soul_shuffle mode.
 _SOUL_SHUFFLE_MODES = {

@@ -23,7 +23,7 @@ class DeathlinkHookBytesTest(unittest.TestCase):
 
     def test_offsets_match_design(self) -> None:
         self.assertEqual(self.hook_off, 0x1B9D0)    # _0801B9D0, the per-frame position/animation tail
-        self.assertEqual(self.tramp_off, 0x660040)  # free ROM, just past the AP metadata block
+        self.assertEqual(self.tramp_off, 0x670040)  # free ROM, just past the AP metadata block
 
     def test_two_writes_with_expected_lengths(self) -> None:
         self.assertEqual(set(self.writes), {self.hook_off, self.tramp_off})

@@ -1,4 +1,4 @@
-@ Skull Key Warp - injected routine, linked at 0x08660100 (GBA), file 0x660100.
+@ Skull Key Warp - injected routine, linked at 0x08670100 (GBA), file 0x670100.
 @ Reached from a trampoline that overwrites the first 8 bytes of sub_0804B36C.
 @ On entry r0 = playerStats, r1 = menuState (live); r3 was clobbered by the trampoline.
 .syntax unified
