@@ -44,13 +44,17 @@ from __future__ import annotations
 from random import Random
 from typing import Dict, List
 
-from .entity import GBA_ROM_BASE
+from .._bytemaker_compat import offset_of, sizeof
+from .address_space import gba_space
+from .enemy_table import ENEMY_TABLE, EnemyDNA, field_offset, row_offset
 
-ENEMY_TABLE_GBA = 0x080E9644      # enemy table
-ENEMY_STRIDE = 0x24               # bytes per enemy entry
-SOUL_RATE_OFF = 0x12              # soul-rarity byte within an entry
-SOUL_TYPE_OFF = 0x17              # soul type
-SOUL_INDEX_OFF = 0x18             # soul index, 1-based (0 = drops no soul)
+# Derived from the shared enemy-table declaration (rom/enemy_table.py); kept as names for
+# callers that compute offsets themselves.
+ENEMY_TABLE_GBA = ENEMY_TABLE.addr
+ENEMY_STRIDE = sizeof(EnemyDNA)
+SOUL_RATE_OFF = offset_of(EnemyDNA, "soul_rate")
+SOUL_TYPE_OFF = offset_of(EnemyDNA, "soul_type")
+SOUL_INDEX_OFF = offset_of(EnemyDNA, "soul_index")
 
 SOUL_TYPE_RED = 0
 SOUL_TYPE_BLUE = 1
@@ -249,7 +253,8 @@ STARTING_SOUL_ENEMY: int = next(
 
 
 def _entry(enemy_id: int) -> int:
-    return (ENEMY_TABLE_GBA - GBA_ROM_BASE) + enemy_id * ENEMY_STRIDE
+    """File offset of ``enemy_id``'s row, addressed through the table's layout."""
+    return row_offset(enemy_id)
 
 
 def shuffleable_enemies(mode: str) -> List[int]:
@@ -291,11 +296,12 @@ def plan_shuffle(random: Random, mode: str) -> Dict[int, int]:
 
 
 def _verify_vanilla(base_rom: bytes) -> None:
+    enemies = ENEMY_TABLE.bind(gba_space(base_rom))
     for eid, (soul_type, soul_index, rate) in VANILLA.items():
-        off = _entry(eid)
-        actual = (base_rom[off + SOUL_TYPE_OFF], base_rom[off + SOUL_INDEX_OFF],
-                  base_rom[off + SOUL_RATE_OFF])
+        row: EnemyDNA = enemies.item(eid).read()
+        actual = (row.soul_type, row.soul_index, row.soul_rate)
         if actual != (soul_type, soul_index, rate):
+            off = _entry(eid)
             raise ValueError(
                 f"enemy {eid} soul bytes at {off:#x} are (type, index, rate)={actual}, "
                 f"expected {(soul_type, soul_index, rate)} (ROM mismatch)")
@@ -368,14 +374,16 @@ def build_writes(base_rom: bytes, plan: Dict[int, int], keep_soul_drop_rates: bo
     _verify_vanilla(base_rom)
     _validate_plan(plan)
 
+    # Built as a plain offset map rather than through a Patch: a Patch coalesces the adjacent
+    # type/index bytes into one edit and omits a write whose value the ROM already holds, while
+    # this module's contract (and patch.py's merge) is one entry per field, emitted always.
     writes: Dict[int, bytes] = {}
     for target, source in plan.items():
         soul_type, soul_index, soul_rate = VANILLA[source]
-        off = _entry(target)
-        writes[off + SOUL_TYPE_OFF] = bytes([soul_type])
-        writes[off + SOUL_INDEX_OFF] = bytes([soul_index])
+        writes[field_offset(target, "soul_type")] = bytes([soul_type])
+        writes[field_offset(target, "soul_index")] = bytes([soul_index])
         if keep_soul_drop_rates and VANILLA[target][2] != 0:
-            writes[off + SOUL_RATE_OFF] = bytes([soul_rate])
+            writes[field_offset(target, "soul_rate")] = bytes([soul_rate])
 
     if shuffle_starting_soul and plan:
         _verify_starting_grant(base_rom)

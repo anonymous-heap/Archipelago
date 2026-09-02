@@ -17,7 +17,8 @@ from ..items import FORBIDDEN_AREA_SWITCH, item_table
 from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
                inventory_menu, oops_all_whips, single_jump_divekick, skull_key_warp,
                soul_drop_rates, soul_shuffle)
-from .entity import GBA_ROM_BASE
+from .entity import GBA_ROM_BASE, AoSPickupEntity
+from .._bytemaker_compat import offset_of
 from ..options import ForbiddenAreaButton, SoulShuffle
 
 if TYPE_CHECKING:
@@ -73,6 +74,13 @@ _AP_PLACEHOLDER = (4, 2, 25)  # Skull Key
 # locally or received from elsewhere. Keyed by item display name (codes are packed, not name-derived).
 _ITEM_CUSTOM_PICKUP = {FORBIDDEN_AREA_SWITCH: custom_pickups.STUDY_SEALSWITCH}
 
+# Where the two edited fields sit inside the 12-byte entity record, from the record's own
+# layout rather than counted by hand. ``type`` and ``subtype`` are adjacent, so one write
+# covers both.
+_TYPE_OFF = offset_of(AoSPickupEntity, "type")
+_ITEM_OFF = offset_of(AoSPickupEntity, "var_b")   # var_b carries the item_offset
+assert offset_of(AoSPickupEntity, "subtype") == _TYPE_OFF + 1
+
 # Location data lookup: Location number -> ROM bytes
 
 def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Dict[int, bytes]:
@@ -95,10 +103,8 @@ def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Di
         else:
             type_num, subtype_num, item_offset = _AP_PLACEHOLDER
 
-        # Write type + subtype at entity +0x05
-        writes[rom_offset + 0x05] = bytes([type_num, subtype_num])
-        # Write item_offset at entity +0x0A  (little-endian u16)
-        writes[rom_offset + 0x0A] = item_offset.to_bytes(2, "little")
+        writes[rom_offset + _TYPE_OFF] = bytes([type_num, subtype_num])
+        writes[rom_offset + _ITEM_OFF] = item_offset.to_bytes(2, "little")
 
     return writes
 
