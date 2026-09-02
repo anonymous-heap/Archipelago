@@ -44,12 +44,6 @@ __all__ = [
     "through",
     "unknown",
     "until",
-    # legacy aggregate API (dataclass-of-BitTypes); no cvaos module should grow
-    # new uses — convert to Struct instead
-    "SInt16",
-    "UInt16",
-    "from_bytes_aggregate",
-    "to_bytes_aggregate",
 ]
 
 try:
@@ -68,7 +62,5 @@ except ImportError:
     import bytemaker.spaces  # noqa: F401,F811  — re-probe; a failure here is a real error
 
 from bytemaker import Buffer, Struct, UInt8, array, field, offset_of, s16, sizeof, u4, u8, u16, u32
-from bytemaker.bittypes import SInt16, UInt16
-from bytemaker.conversions.aggregate_types import from_bytes_aggregate, to_bytes_aggregate
 from bytemaker.spaces import (Entry, Patch, PatchConflict, PatchVerifyError, Ptr, Space, count, through,
                               unknown, until)

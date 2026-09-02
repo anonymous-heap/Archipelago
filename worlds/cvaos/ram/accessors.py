@@ -1,21 +1,22 @@
 """
 Async helpers for reading/writing Aria of Sorrow live memory through BizHawk.
 
-``AoSRAM`` wraps a ``BizHawkContext`` (the ``ctx.bizhawk_ctx`` the client already
-holds) with typed get/set primitives plus a few semantic accessors over the
-addresses in ``addresses.py``. Each primitive is one BizHawk round-trip; the
-``game_watcher`` can still batch raw reads via the address constants when it wants
-a single request per tick.
+``AoSRAM`` wraps a ``BizHawkContext`` (the ``ctx.bizhawk_ctx`` the client already holds) with
+three transport primitives (``read`` / ``write`` / ``guarded_write``, one BizHawk round-trip each)
+and semantic accessors over the ``Entry`` declarations in ``addresses.py``. An entry supplies the
+``(offset, nbytes)`` a request needs and the codec that decodes or encodes the bytes, so an
+accessor names *what* it touches and never restates an address, a size, or a signedness.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 
 import worlds._bizhawk as bizhawk
 
 from . import addresses as addr
+from .._bytemaker_compat import Entry
 from .addresses import EWRAM
-from .structures import EQUIPPED_GEAR_SIZE, VITALS_SIZE, EquippedGear, PlayerVitals
+from .structures import EquippedGear, PlayerVitals, SoulPair
 
 if TYPE_CHECKING:
     from worlds._bizhawk import BizHawkContext
@@ -29,33 +30,12 @@ class AoSRAM:
     def __init__(self, bizhawk_ctx: "BizHawkContext") -> None:
         self.ctx = bizhawk_ctx
 
-    # --- typed primitives ---------------------------------------------------
+    # --- transport primitives (one BizHawk round-trip each) -----------------
     async def read(self, offset: int, size: int, domain: str = EWRAM) -> bytes:
         return (await bizhawk.read(self.ctx, [(offset, size, domain)]))[0]
 
-    async def read_u8(self, offset: int, domain: str = EWRAM) -> int:
-        return (await self.read(offset, 1, domain))[0]
-
-    async def read_u16(self, offset: int, domain: str = EWRAM) -> int:
-        return int.from_bytes(await self.read(offset, 2, domain), "little")
-
-    async def read_s16(self, offset: int, domain: str = EWRAM) -> int:
-        return int.from_bytes(await self.read(offset, 2, domain), "little", signed=True)
-
-    async def read_u32(self, offset: int, domain: str = EWRAM) -> int:
-        return int.from_bytes(await self.read(offset, 4, domain), "little")
-
     async def write(self, offset: int, data: Sequence[int], domain: str = EWRAM) -> None:
         await bizhawk.write(self.ctx, [(offset, list(data), domain)])
-
-    async def write_u8(self, offset: int, value: int, domain: str = EWRAM) -> None:
-        await self.write(offset, [value & 0xFF], domain)
-
-    async def write_u16(self, offset: int, value: int, domain: str = EWRAM) -> None:
-        await self.write(offset, list((value & 0xFFFF).to_bytes(2, "little")), domain)
-
-    async def write_u32(self, offset: int, value: int, domain: str = EWRAM) -> None:
-        await self.write(offset, list((value & 0xFFFFFFFF).to_bytes(4, "little")), domain)
 
     async def guarded_write(self, offset: int, data: Sequence[int], expected: Sequence[int],
                             domain: str = EWRAM) -> bool:
@@ -68,6 +48,39 @@ class AoSRAM:
         return await bizhawk.guarded_write(
             self.ctx, [(offset, list(data), domain)], [(offset, list(expected), domain)])
 
+    # --- entry-shaped helpers -------------------------------------------------
+    async def _fetch(self, entry: Entry, domain: str = EWRAM) -> Any:
+        """
+        Read and decode one entry: ``request()`` says where and how much, ``parse()`` what it means.
+        """
+        offset, size = entry.request()
+        return entry.parse(await self.read(offset, size, domain))
+
+    async def _store(self, entry: Entry, value: Any, domain: str = EWRAM) -> None:
+        """
+        Encode ``value`` in the entry's codec and write it at the entry's address.
+        """
+        offset, _ = entry.request()
+        await self.write(offset, entry.pack(value), domain)
+
+    async def _cas(self, entry: Entry, new: Any, expected: Any, domain: str = EWRAM) -> bool:
+        """
+        Guarded write with both sides stated as values: the entry packs the new bytes and the guard.
+        """
+        return await self._cas_bytes(entry, entry.pack(new), entry.pack(expected), domain)
+
+    async def _cas_bytes(self, entry: Entry, new: bytes, expected: bytes, domain: str = EWRAM) -> bool:
+        offset, _ = entry.request()
+        return await self.guarded_write(offset, new, expected, domain)
+
+    async def read_group(self, *entries: Entry, domain: str = EWRAM) -> list[Any]:
+        """
+        Several entries in ONE round-trip, each decoded by its own codec.
+        """
+        requests = [entry.request() for entry in entries]
+        raw = await bizhawk.read(self.ctx, [(offset, size, domain) for offset, size in requests])
+        return [entry.parse(data) for entry, data in zip(entries, raw)]
+
     # --- gameplay state -----------------------------------------------------
     async def get_run_state(self) -> tuple[int, int]:
         """
@@ -77,11 +90,8 @@ class AoSRAM:
         value ``MENU_STATE_DEATH``). The DeathLink relay needs both even when not
         in gameplay, so it reads them here and derives ``is_in_gameplay`` itself.
         """
-        state, menu = await bizhawk.read(self.ctx, [
-            (addr.GAME_STATE, 1, EWRAM),
-            (addr.MENU_STATE, 1, EWRAM),
-        ])
-        return state[0], menu[0]
+        state, menu = await self.read_group(addr.GAME_STATE, addr.MENU_STATE)
+        return state, menu
 
     async def is_in_gameplay(self) -> bool:
         """
@@ -99,10 +109,10 @@ class AoSRAM:
         new-game / mode-select, so re-applying it per tick holds without fighting the game;
         damage scaling, soul-drop rates, and the HARD_PICKUP spawn gate read it live.
         """
-        mode = await self.read_u8(addr.GAME_MODE)
+        mode: int = await self._fetch(addr.GAME_MODE)
         if (mode & addr.GAME_MODE_DIFFICULTY_MASK) == addr.GAME_MODE_HARD:
             return False
-        await self.write_u8(addr.GAME_MODE, (mode & ~addr.GAME_MODE_DIFFICULTY_MASK) | addr.GAME_MODE_HARD)
+        await self._store(addr.GAME_MODE, (mode & ~addr.GAME_MODE_DIFFICULTY_MASK & 0xFF) | addr.GAME_MODE_HARD)
         return True
 
     async def ensure_game_cleared(self) -> bool:
@@ -112,15 +122,15 @@ class AoSRAM:
         this only on game completion, so re-applying it per tick holds; the flags live in the low
         byte of the 0x02000060 word.
         """
-        flags = await self.read_u8(addr.GAME_CLEARED_FLAGS)
+        flags: int = await self._fetch(addr.GAME_CLEARED_FLAGS)
         if (flags & addr.GAME_CLEARED_VALUE) == addr.GAME_CLEARED_VALUE:
             return False
-        await self.write_u8(addr.GAME_CLEARED_FLAGS, flags | addr.GAME_CLEARED_VALUE)
+        await self._store(addr.GAME_CLEARED_FLAGS, flags | addr.GAME_CLEARED_VALUE)
         return True
 
     # --- location detection -------------------------------------------------
     async def read_pickup_flags(self) -> bytes:
-        return await self.read(addr.PICKUP_FLAGS, addr.PICKUP_FLAGS_LEN)
+        return await self._fetch(addr.PICKUP_FLAGS)
 
     @staticmethod
     def _flag_id(byte_index: int, bit: int) -> int:
@@ -150,31 +160,32 @@ class AoSRAM:
     # --- typed structs ------------------------------------------
     async def get_vitals(self) -> PlayerVitals:
         """
-        The full HP/MP block, typed (read ``.current_hp.value`` etc.).
+        The full HP/MP block, typed (``.current_hp`` etc. are plain ints).
         """
-        return PlayerVitals.from_bytes(await self.read(addr.CURRENT_HP, VITALS_SIZE))
+        return await self._fetch(addr.VITALS)
 
     async def get_equipped_gear(self) -> EquippedGear:
         """
         Currently-equipped weapon/souls/armor/accessory indices, typed.
         """
-        return EquippedGear.from_bytes(await self.read(addr.EQUIPPED_WEAPON, EQUIPPED_GEAR_SIZE))
+        return await self._fetch(addr.GEAR)
 
     async def get_current_hp(self) -> int:
         """
         Current HP as a SIGNED s16 -- the engine stores and tests it signed, and an
         overkill hit can leave it briefly negative before being clamped to 0, so a
-        ``> 0`` test (used to confirm a real respawn) must read it signed. See
-        `get_vitals` for the whole typed block.
+        ``> 0`` test (used to confirm a real respawn) must read it signed. The signedness
+        comes from the ``current_hp`` field's declaration. See `get_vitals` for the whole
+        typed block.
         """
-        return await self.read_s16(addr.CURRENT_HP)
+        return await self._fetch(addr.CURRENT_HP)
 
     async def get_max_hp(self) -> int:
         """
         Lean single-field read for the DeathLink poll. See `get_vitals` for the
         whole typed block.
         """
-        return await self.read_u16(addr.MAX_HP)
+        return await self._fetch(addr.MAX_HP)
 
     async def request_kill(self) -> None:
         """
@@ -183,11 +194,11 @@ class AoSRAM:
         frame and clears the flag. Deterministic and regen-proof, unlike ``kill_player``. Requires a
         ROM patched with the hook (DeathLink-enabled seeds, identifier >= CVAOS_AP_V0.2).
         """
-        await self.write_u8(addr.KILL_REQUEST, 1)
+        await self._store(addr.KILL_REQUEST, 1)
 
     async def get_kill_request(self) -> bool:
         """True while a DeathLink kill-request is still pending (the ROM hook hasn't consumed it yet)."""
-        return bool(await self.read_u8(addr.KILL_REQUEST))
+        return bool(await self._fetch(addr.KILL_REQUEST))
 
     async def kill_player(self) -> None:
         """
@@ -195,14 +206,14 @@ class AoSRAM:
         (HP regen can cancel it; skipped in some states). Kept as a fallback; ``request_kill`` is the
         current path for hook-patched ROMs.
         """
-        await self.write_u16(addr.CURRENT_HP, 0)
+        await self._store(addr.CURRENT_HP, 0)
 
     # --- goal flags ---------------------------------------------------------
     async def get_boss_flags(self) -> int:
-        return await self.read_u16(addr.BOSS_FLAGS)
+        return await self._fetch(addr.BOSS_FLAGS)
 
     async def get_global_flags(self) -> int:
-        return await self.read_u32(addr.GLOBAL_FLAGS)
+        return await self._fetch(addr.GLOBAL_FLAGS)
 
     async def has_defeated(self, boss_flag: int) -> bool:
         """
@@ -214,7 +225,7 @@ class AoSRAM:
         return bool(await self.get_global_flags() & addr.GLOBAL_FLAG_GOOD_ENDING)
 
     async def get_received_count(self) -> int:
-        return await self.read_u16(addr.AP_RECEIVED_COUNT)
+        return await self._fetch(addr.AP_RECEIVED_COUNT)
 
     async def set_received_count(self, count: int, expected: int) -> bool:
         """
@@ -224,12 +235,14 @@ class AoSRAM:
         belt-and-suspenders: returns ``False`` only if the word changed underneath us, in which case
         the caller re-reads and retries next tick instead of advancing.
         """
-        return await self.guarded_write(
-            addr.AP_RECEIVED_COUNT,
-            list((count & 0xFFFF).to_bytes(2, "little")),
-            list((expected & 0xFFFF).to_bytes(2, "little")))
+        return await self._cas(addr.AP_RECEIVED_COUNT, count & 0xFFFF, expected & 0xFFFF)
 
     # --- giving items -------------------------------------------------------
+    @staticmethod
+    def _check_index(category: str, array: addr.InventoryArray, index: int) -> None:
+        if not 0 <= index < array.length:
+            raise ValueError(f"{category} index {index} out of range (0..{array.length - 1})")
+
     async def give_item(self, category: str, index: int, *, cap: int = 9) -> bool:
         """
         Increments the owned-count for one item, race-safely.
@@ -245,41 +258,48 @@ class AoSRAM:
         lost a race -- retry next tick and do **not** advance the received counter.
         """
         array = addr.INVENTORY[category]
-        if not 0 <= index < array.length:
-            raise ValueError(f"{category} index {index} out of range (0..{array.length - 1})")
+        self._check_index(category, array, index)
 
         if array.nibble_packed:
-            byte_off = array.base + (index // 2)
-            current = await self.read_u8(byte_off)
-            high = index % 2 == 1
-            count = (current >> 4) & 0x0F if high else current & 0x0F
-            new = min(count + 1, cap)
-            new_byte = (current & 0x0F) | (new << 4) if high else (current & 0xF0) | new
-        else:
-            byte_off = array.base + index
-            current = await self.read_u8(byte_off)
-            new_byte = min(current + 1, cap)
+            # Two counts share the byte: read the pair, bump one nibble, and guard on the whole
+            # byte so the neighbour's count rides along untouched.
+            slot = array.entry.item(index // 2)
+            pair: SoulPair = await self._fetch(slot)
+            old_byte = slot.pack(pair)
+            which = "odd" if index % 2 else "even"
+            current: int = getattr(pair, which)
+            new = min(current + 1, cap)
+            if new == current:
+                self._report_at_cap(category, index, cap)
+                return True
+            setattr(pair, which, new)
+            return await self._cas_bytes(slot, slot.pack(pair), old_byte)
 
-        if new_byte == current:
-            # Already at the cap: AoS accepts the pickup but won't count it past 9, so a received copy
-            # has nowhere to go. Log it (a real drop, not a race) rather than swallow it silently, then
-            # report success so the received-counter still advances.
-            from CommonClient import logger
-            logger.warning("CVAoS: %s slot %d already at cap %d; received item dropped.",
-                           category, index, cap)
+        slot = array.entry.item(index)
+        current = await self._fetch(slot)
+        new = min(current + 1, cap)
+        if new == current:
+            self._report_at_cap(category, index, cap)
             return True
-        return await self.guarded_write(byte_off, [new_byte], [current])
+        return await self._cas(slot, new, current)
+
+    @staticmethod
+    def _report_at_cap(category: str, index: int, cap: int) -> None:
+        # Already at the cap: AoS accepts the pickup but won't count it past 9, so a received copy
+        # has nowhere to go. Log it (a real drop, not a race) rather than swallow it silently; the
+        # caller then reports success so the received-counter still advances.
+        from CommonClient import logger
+        logger.warning("CVAoS: %s slot %d already at cap %d; received item dropped.",
+                       category, index, cap)
 
     async def add_gold(self, amount: int) -> bool:
         """
         Adds ``amount`` to the player's gold (subtype-1 'money' pickups),
         race-safely. The caller resolves the money item to its gold value.
         """
-        current = await self.read(addr.CURRENT_GOLD, 4)
-        new_value = min(int.from_bytes(current, "little") + amount, 0xFFFFFFFF)
-        return await self.guarded_write(
-            addr.CURRENT_GOLD, list(new_value.to_bytes(4, "little")), list(current))
-    
+        current: int = await self._fetch(addr.CURRENT_GOLD)
+        return await self._cas(addr.CURRENT_GOLD, min(current + amount, 0xFFFFFFFF), current)
+
     async def cap_skull_keys(self, *, limit: int = 1, floor: int = 0) -> None:
         """
         Clamp the Skull Key count into ``[floor, limit]``, race-safely.
@@ -295,19 +315,22 @@ class AoSRAM:
         below 1 either -- keeping the warp item always available. The write is unguarded: the value
         is meaningless to AP, so a lost race just self-corrects next tick.
         """
-        offset = addr.INVENTORY["consumable"].base + addr.SKULL_KEY_CONSUMABLE_INDEX
-        current = await self.read_u8(offset)
+        slot = addr.INVENTORY["consumable"].entry.item(addr.SKULL_KEY_CONSUMABLE_INDEX)
+        current: int = await self._fetch(slot)
         target = min(max(current, floor), limit)
         if target != current:
-            await self.write_u8(offset, target)
+            await self._store(slot, target)
 
     async def set_flag_bit(self, offset: int, bit: int, value: int) -> bool:
         """
         Sets (``value`` truthy) or clears bit ``bit`` (0-7) of the EWRAM byte at ``offset``,
         race-safely. Returns ``True`` on success or no-op, ``False`` if the guarded write lost a
         race (retry next tick without advancing the received-counter).
+
+        ``offset`` is an EWRAM-domain offset computed by the caller (a save-flag byte), so this
+        one accessor works on the raw byte rather than on a declared entry.
         """
-        current = await self.read_u8(offset)
+        current = (await self.read(offset, 1))[0]
         mask = 1 << bit
         new = current | mask if value else current & ~mask & 0xFF
         if new == current:
