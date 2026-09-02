@@ -136,6 +136,7 @@ class CVAOSWorld(World):
 
     def fill_slot_data(self) -> dict:
         return {
+            "target_platform": self.options.target_platform.value,
             "randomize_pickups": self.options.randomize_pickups.value,
             "goal": self.options.goal.value,
             "hard_mode": self.options.hard_mode.value,

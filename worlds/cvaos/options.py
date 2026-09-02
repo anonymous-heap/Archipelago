@@ -28,6 +28,31 @@ class RandomizePickups(Toggle):
     default = 1
 
 
+class TargetPlatform(Choice):
+    """
+    Where you intend to play this seed. The generated patch is identical either way; this
+    only decides, at patch-apply time, where the base ROM comes from, and lets the client warn
+    if you connect the wrong one.
+
+    - gba: play the patched ROM in an emulator (BizHawk client). Applying the patch prompts for
+      the base ROM; you may point it at a GBA ROM *or* at the Advance Collection's game.exe
+      (the ROM is then extracted from the collection for you).
+    - advance_collection: play inside the Steam Castlevania Advance Collection. The base ROM is
+      taken from the installed collection automatically (see the collection_exe host setting);
+      run the "CVAoS Collection Client".
+    """
+    display_name = "Target Platform"
+    option_gba = 0
+    option_advance_collection = 1
+    default = option_gba
+
+
+# Slot-data / rom_config values for TargetPlatform (kept in sync with the option above so the
+# clients and the patch-apply base-ROM selector can compare without importing the Choice).
+TARGET_GBA = TargetPlatform.option_gba
+TARGET_ADVANCE_COLLECTION = TargetPlatform.option_advance_collection
+
+
 class Goal(Choice):
     """
     The win condition.
@@ -392,6 +417,7 @@ TECHNIQUES: tuple[Technique, ...] = (
 class CVAOSOptions(PerGameCommonOptions):
     """Options for the Castlevania: Aria of Sorrow randomizer."""
     accessibility: ItemsAccessibility
+    target_platform: TargetPlatform
     randomize_pickups: RandomizePickups
     goal: Goal
     hard_mode: HardMode
