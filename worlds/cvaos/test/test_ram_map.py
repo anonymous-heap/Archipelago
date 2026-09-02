@@ -5,18 +5,20 @@ The offsets below are the EWRAM-domain numbers the map used to carry as hand-kep
 written out here on purpose: the production code now derives them from the declarations, so a
 drift in a declaration fails here instead of as a mis-read byte on a live game.
 
-The behaviour tests drive ``AoSRAM`` over a fake BizHawk with dict-of-bytearray memory, so
-they need no emulator.
+The behaviour tests drive ``AoSRAM`` over a fake backend with dict-of-bytearray memory, so
+they need no emulator; the BizHawk backend itself is checked against a recording stand-in for
+the connector module.
 """
 from __future__ import annotations
 
 import asyncio
 import unittest
+from unittest.mock import patch
 
 from .. import ram as ram_pkg
-from ..ram import AoSRAM, SoulPair, addresses as addr
+from ..ram import AoSRAM, BizHawkBackend, SoulPair, addresses as addr
+from ..ram import backend as backend_module
 from ..ram.accessors import EWRAM
-import worlds.cvaos.ram.accessors as accessors_module
 
 # entry name -> (EWRAM-domain offset, byte size), as documented against the USA ROM
 DOCUMENTED = {
@@ -70,26 +72,28 @@ class EwramMapTest(unittest.TestCase):
         self.assertIs(ram_pkg.SoulPair, SoulPair)
 
 
-class FakeBizHawk:
-    """The three worlds._bizhawk calls AoSRAM makes, over dict-of-bytearray memory."""
+class FakeBackend:
+    """A ``RamBackend`` over dict-of-bytearray memory.
+
+    Reads are batched, writes are plain, and a guarded write checks its guard before applying
+    anything, which is the connector's frame-atomic semantics.
+    """
 
     def __init__(self, memory: dict) -> None:
         self.memory = memory
 
-    async def read(self, ctx, reqs):
-        return [bytes(self.memory[dom][off:off + size]) for off, size, dom in reqs]
+    async def read_many(self, requests):
+        return [bytes(self.memory[dom][off:off + size]) for off, size, dom in requests]
 
-    async def write(self, ctx, writes):
-        for off, data, dom in writes:
-            data = bytes(data)
-            self.memory[dom][off:off + len(data)] = data
+    async def write(self, offset, data, domain):
+        data = bytes(data)
+        self.memory[domain][offset:offset + len(data)] = data
 
-    async def guarded_write(self, ctx, writes, guards):
-        for off, expected, dom in guards:
-            expected = bytes(expected)
-            if bytes(self.memory[dom][off:off + len(expected)]) != expected:
-                return False
-        await self.write(ctx, writes)
+    async def guarded_write(self, offset, data, expected, domain):
+        expected = bytes(expected)
+        if bytes(self.memory[domain][offset:offset + len(expected)]) != expected:
+            return False
+        await self.write(offset, data, domain)
         return True
 
 
@@ -105,12 +109,7 @@ class AccessorBehaviourTest(unittest.TestCase):
         self.mem[0x13290:0x13294] = (1000).to_bytes(4, "little")
         self.mem[0x1331C + 2] = 0x25                             # red_soul[4]=5, [5]=2
         self.mem[0x1336E] = 0x93                                 # yellow_soul[0]=3, [1]=9 (cap)
-        self._saved = accessors_module.bizhawk
-        accessors_module.bizhawk = FakeBizHawk({EWRAM: self.mem})
-        self.ram = AoSRAM(None)
-
-    def tearDown(self) -> None:
-        accessors_module.bizhawk = self._saved
+        self.ram = AoSRAM(FakeBackend({EWRAM: self.mem}))
 
     def run_(self, coro):
         return asyncio.run(coro)
@@ -152,3 +151,40 @@ class AccessorBehaviourTest(unittest.TestCase):
     def test_index_out_of_range_is_refused_before_any_read(self):
         with self.assertRaises(ValueError):
             self.run_(self.ram.give_item("red_soul", 56))
+
+
+class BizHawkBackendTest(unittest.TestCase):
+    """The connector shim shapes each primitive into the call ``worlds._bizhawk`` expects."""
+
+    class Connector:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def read(self, ctx, reqs):
+            self.calls.append(("read", ctx, reqs))
+            return [b"\x01" * size for _off, size, _dom in reqs]
+
+        async def write(self, ctx, writes):
+            self.calls.append(("write", ctx, writes))
+
+        async def guarded_write(self, ctx, writes, guards):
+            self.calls.append(("guarded_write", ctx, writes, guards))
+            return True
+
+    def test_primitives_map_onto_the_connector_calls(self):
+        connector, ctx = self.Connector(), object()
+        with patch.object(backend_module, "bizhawk", connector):
+            backend = BizHawkBackend(ctx)
+            self.assertEqual(asyncio.run(backend.read_many([(0x10, 1, EWRAM), (0x64, 2, EWRAM)])),
+                             [b"\x01", b"\x01\x01"])
+            asyncio.run(backend.write(0x10, b"\x04", EWRAM))
+            self.assertTrue(asyncio.run(backend.guarded_write(0x10, b"\x05", b"\x04", EWRAM)))
+        self.assertEqual(connector.calls, [
+            ("read", ctx, [(0x10, 1, EWRAM), (0x64, 2, EWRAM)]),
+            ("write", ctx, [(0x10, [4], EWRAM)]),
+            ("guarded_write", ctx, [(0x10, [5], EWRAM)], [(0x10, [4], EWRAM)]),
+        ])
+
+    def test_backend_types_are_exported_from_the_package(self):
+        self.assertIs(ram_pkg.BizHawkBackend, BizHawkBackend)
+        self.assertIs(ram_pkg.RamBackend, backend_module.RamBackend)

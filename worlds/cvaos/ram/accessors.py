@@ -1,41 +1,37 @@
 """
-Async helpers for reading/writing Aria of Sorrow live memory through BizHawk.
+Async helpers for reading/writing Aria of Sorrow live memory.
 
-``AoSRAM`` wraps a ``BizHawkContext`` (the ``ctx.bizhawk_ctx`` the client already holds) with
-three transport primitives (``read`` / ``write`` / ``guarded_write``, one BizHawk round-trip each)
+``AoSRAM`` wraps a transport backend (``backend.RamBackend``; the BizHawk connector is one) with
+three transport primitives (``read`` / ``write`` / ``guarded_write``, one round-trip each)
 and semantic accessors over the ``Entry`` declarations in ``addresses.py``. An entry supplies the
 ``(offset, nbytes)`` a request needs and the codec that decodes or encodes the bytes, so an
 accessor names *what* it touches and never restates an address, a size, or a signedness.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Sequence
-
-import worlds._bizhawk as bizhawk
+from typing import Any, Sequence
 
 from . import addresses as addr
 from .._bytemaker_compat import Entry
 from .addresses import EWRAM
+from .backend import RamBackend
 from .structures import EquippedGear, PlayerVitals, SoulPair
-
-if TYPE_CHECKING:
-    from worlds._bizhawk import BizHawkContext
 
 
 class AoSRAM:
     """
-    Typed accessor over AoS live memory for one BizHawk connection.
+    Typed accessor over AoS live memory for one transport backend.
     """
 
-    def __init__(self, bizhawk_ctx: "BizHawkContext") -> None:
-        self.ctx = bizhawk_ctx
+    def __init__(self, backend: RamBackend) -> None:
+        self.backend = backend
 
-    # --- transport primitives (one BizHawk round-trip each) -----------------
+    # --- transport primitives (one backend round-trip each) -----------------
     async def read(self, offset: int, size: int, domain: str = EWRAM) -> bytes:
-        return (await bizhawk.read(self.ctx, [(offset, size, domain)]))[0]
+        return (await self.backend.read_many([(offset, size, domain)]))[0]
 
     async def write(self, offset: int, data: Sequence[int], domain: str = EWRAM) -> None:
-        await bizhawk.write(self.ctx, [(offset, list(data), domain)])
+        await self.backend.write(offset, data, domain)
 
     async def guarded_write(self, offset: int, data: Sequence[int], expected: Sequence[int],
                             domain: str = EWRAM) -> bool:
@@ -45,8 +41,7 @@ class AoSRAM:
         Returns False if the guard failed (the value changed underneath us);
         the caller should retry next tick rather than advancing any counter.
         """
-        return await bizhawk.guarded_write(
-            self.ctx, [(offset, list(data), domain)], [(offset, list(expected), domain)])
+        return await self.backend.guarded_write(offset, data, expected, domain)
 
     # --- entry-shaped helpers -------------------------------------------------
     async def _fetch(self, entry: Entry, domain: str = EWRAM) -> Any:
@@ -78,7 +73,7 @@ class AoSRAM:
         Several entries in ONE round-trip, each decoded by its own codec.
         """
         requests = [entry.request() for entry in entries]
-        raw = await bizhawk.read(self.ctx, [(offset, size, domain) for offset, size in requests])
+        raw = await self.backend.read_many([(offset, size, domain) for offset, size in requests])
         return [entry.parse(data) for entry, data in zip(entries, raw)]
 
     # --- gameplay state -----------------------------------------------------

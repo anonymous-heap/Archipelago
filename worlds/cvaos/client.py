@@ -17,7 +17,7 @@ from NetUtils import ClientStatus
 from . import item_granting
 from .locations import flag_offset_to_location_id
 from .options import Goal
-from .ram import AoSRAM, addresses as addr
+from .ram import AoSRAM, BizHawkBackend, addresses as addr
 from .rom import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUMBER_START
 
 if TYPE_CHECKING:
@@ -108,7 +108,7 @@ class CVAOSClient(BizHawkClient):
         if ctx.server is None or ctx.slot is None:
             return
         try:
-            ram = AoSRAM(ctx.bizhawk_ctx)
+            ram = AoSRAM(BizHawkBackend(ctx.bizhawk_ctx))
             game_state, menu_state = await ram.get_run_state()
             in_gameplay = (game_state == addr.GameState.INGAME
                            and menu_state == addr.MENU_STATE_NORMAL)
