@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import math
 import operator
+import os
 import struct
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+import sys
+import warnings
+from abc import ABC, ABCMeta, abstractmethod
 
-from bytemaker.bitvector import BitVector
+from bytemaker.bitvector import BitVector, FixedLengthBitVector
 from bytemaker.typing_redirect import (
     Any,
     Callable,
@@ -16,22 +19,103 @@ from bytemaker.typing_redirect import (
     Type,
     TypeVar,
 )
-from bytemaker.utils import classproperty
+from bytemaker.utils import classproperty, validate_endianness
 
 T = TypeVar("T")
 S = TypeVar("S")
 
 
-if TYPE_CHECKING:
-    BitSelf = TypeVar("BitSelf", bound="BitType")
-else:
-    try:
-        from typing_redirect import Self as BitSelf
-    except ImportError:
-        BitSelf = TypeVar("BitSelf", bound="BitType")
+class NarrowingWarning(UserWarning):
+    """A store's C-style narrowing actually changed the value.
+
+    The silent wrap/mask behavior is the deliberate default (it is what a C
+    assignment does); this warning is the opt-in analog of a C compiler's
+    ``-Wconversion``. Enable via :class:`NarrowingConfig` and escalate to an
+    error with the stdlib warnings filters if desired::
+
+        warnings.simplefilter("error", NarrowingWarning)
+    """
 
 
-class BitType(ABC, Generic[T]):
+class NarrowingConfig:
+    """Opt-in checked stores (the ``-Wconversion`` knob).
+
+    When ``warn`` is True, integer stores that change the assigned value
+    (Struct field descriptors and Int/UInt/SInt value setters) emit a
+    :class:`NarrowingWarning`. Default off (silent C semantics). Also
+    seedable via the ``BYTEMAKER_WARN_NARROWING`` environment variable.
+    """
+
+    warn: bool = bool(os.environ.get("BYTEMAKER_WARN_NARROWING"))
+
+
+def _warn_narrowing(original, stored, target):
+    # Attribute the warning to the first frame outside bytemaker, however
+    # deep the internal chain is (field descriptor, array coercion, box
+    # setter, __init__): a fixed stacklevel is right for exactly one of
+    # those chains and blames library internals for all the others.
+    level = 1
+    frame = sys._getframe()
+    while frame is not None:
+        # A non-string __name__ (possible under exec with custom globals)
+        # marks user code just as surely as a foreign module name does.
+        mod = frame.f_globals.get("__name__")
+        if not (isinstance(mod, str) and mod.partition(".")[0] == "bytemaker"):
+            break
+        frame = frame.f_back
+        level += 1
+    warnings.warn(
+        f"narrowing store to {target}: {original!r} became {stored!r}",
+        NarrowingWarning,
+        stacklevel=level,
+    )
+
+
+def _narrow_int(value: int, num_bits: int, signed: bool, target: str) -> int:
+    """Narrow ``value`` to ``num_bits`` the way C does.
+
+    Signed targets wrap and unsigned targets mask. When the narrowing
+    actually changed the value, this also emits the opt-in
+    :class:`NarrowingWarning`. Every integer value setter routes through
+    here, so the truncation and the diagnostic cannot drift apart.
+    """
+    if signed:
+        half = 1 << (num_bits - 1)
+        narrowed = ((value + half) % (half << 1)) - half
+    else:
+        narrowed = value & ((1 << num_bits) - 1)
+    if NarrowingConfig.warn and narrowed != value:
+        _warn_narrowing(value, narrowed, target)
+    return narrowed
+
+
+#: Stands in for ``Self`` on the methods below. A bound TypeVar, in both
+#: planes: the runtime once tried ``from typing_redirect import Self`` first,
+#: but that spelling is missing the ``bytemaker.`` prefix, so it always
+#: raised and always fell back to this identical TypeVar -- while promising a
+#: reader the two planes might differ.
+BitSelf = TypeVar("BitSelf", bound="BitType")
+
+
+class BitTypeMeta(ABCMeta):
+    """Metaclass of BitType: adds ``cls * N`` -> ``bytemaker.structs.Array``
+    codec sugar (``UInt16 * 257`` is a 257-element little/big-endian-agnostic
+    array codec; pick the byte order with ``Array.of(UInt16, 257, endian)``).
+    """
+
+    def __mul__(cls, count: int):
+        from bytemaker.structs import Array
+
+        return Array.of(cls, count)
+
+    def __rmul__(cls, count: int):
+        # Class-object attribute lookup finds the instance operator
+        # (e.g. Int.__mul__) first, so dispatch through the metaclass
+        # explicitly to get the `N * Cls` array sugar (== `Cls * N`).
+        return type(cls).__mul__(cls, count)
+
+
+class BitType(ABC, Generic[T], metaclass=BitTypeMeta):
     """
     A type representable by a sequence of bits.
 
@@ -98,8 +182,7 @@ class BitType(ABC, Generic[T]):
 
         if endianness == "source_else_big":
             endianness = "big"
-        endianness: Literal["big", "little"]
-        self._endianness = endianness
+        self._endianness = validate_endianness(endianness)
 
         if value is None and bits is None:
             raise ValueError("Either value or bits must be provided")
@@ -131,6 +214,21 @@ class BitType(ABC, Generic[T]):
         """
         return cls._num_bits
 
+    @classproperty
+    @classmethod
+    def num_bytes(cls) -> int:
+        """
+        The whole bytes this type's serialized form occupies.
+
+        Sub-byte widths round up, so this always matches
+        ``len(bytes(instance))``. The name is symmetric with
+        ``Plan.num_bytes``, ``Array.num_bytes``, and ``Struct.num_bytes``.
+
+        Returns:
+            int: The number of bytes in the BitType's serialized form.
+        """
+        return (cls._num_bits + 7) // 8
+
     @property
     @abstractmethod
     def value(self) -> T:
@@ -138,9 +236,9 @@ class BitType(ABC, Generic[T]):
         The (readonly) getter for the (Pythonic) value of the BitType.
 
         To set the value directly, use the `value` setter.
-        To directly adjust the value more complicatedly,
-            use operations available directly on BitType object
-            rather than on the value returned by this property.
+        To directly adjust the value more complicatedly, use operations
+        available directly on the BitType object rather than on the value
+        returned by this property.
 
         Returns:
             T: The (Pythonic) value of the BitType.
@@ -162,6 +260,11 @@ class BitType(ABC, Generic[T]):
         Getter/setter for the sequence of bits
         the BitType uses to represent its value.
 
+        The handout is **live and width-locked**: index and
+        length-preserving slice writes mutate this BitType in place;
+        length-changing mutation raises ValueError. Take ``BitVector(bits)``
+        for a resizable snapshot.
+
         Returns:
             BitVector: The sequence of bits the BitType uses to represent its value.
         """
@@ -169,15 +272,16 @@ class BitType(ABC, Generic[T]):
 
     @bits.setter
     def bits(self, bits: BitVector):
-        if len(bits) != self.num_bits:
-            raise ValueError(f"Expected {self.num_bits} bits, got {len(bits)}")
-
-        # if self._endianness != bits.endianness:
-        #     raise ValueError(
-        #         f"Endianness mismatch:"
-        #         f" expected {self._endianness}, got {bits.endianness}")
-
-        self._bits = bits
+        # Assignment snapshots into width-locked storage; the handout above
+        # is live. (A caller's vector never becomes a hidden alias of the
+        # box, and no aliased mutation can change the box's width.)
+        # Validate the *constructed* width, not len(source): for byte
+        # sources len() counts bytes, for "0x.." strings it counts
+        # characters, both unrelated to the bit width they construct.
+        new = FixedLengthBitVector(bits)
+        if len(new) != self.num_bits:
+            raise ValueError(f"Expected {self.num_bits} bits, got {len(new)}")
+        self._bits = new
 
     def __str__(self):
         """
@@ -198,22 +302,52 @@ class BitType(ABC, Generic[T]):
 
     def __repr__(self):
         """
-        Returns a string representation of the BitType.
-        That can be used to recreate the object.
+        Return a string that recreates this BitType when evaluated with the
+        class name in scope.
+
+        The repr carries the exact bits rather than the value. Bit patterns
+        that the value setter would normalize, such as float NaN payloads,
+        therefore survive the round trip. Subclasses with extra constructor
+        state append it as further keyword arguments, as `SInt` does with
+        `int_format=...`.
 
         Returns:
-            str: ClassName(value)(bits={self.value}, {endianness=self.endianness})
+            str: ClassName(bits='<01 string>', endianness=<'big' or 'little'>)
         """
         return (
-            f"{self.__class__.__name__}(bits={self.bits}, endianness={self.endianness})"
+            f"{self.__class__.__name__}"
+            f"(bits={self.bits.to01()!r}, endianness={self.endianness!r})"
         )
+
+    def __format__(self, format_spec):
+        """
+        No spec formats the box for display (same as ``str``: the sized,
+        self-describing form). Any spec formats the *value*, so numeric specs
+        work exactly as on the plain value: ``f"{UInt6(40):02x}" == '28'``.
+        """
+        if format_spec == "":
+            return str(self)
+        return format(self.value, format_spec)
+
+    def __Bits__(self) -> BitVector:
+        """
+        BitsCastable protocol hook: makes ``BitVector(bittype)`` (and every
+        BitsConstructible site) accept boxes.
+
+        Returns the internal bits **live and width-locked**, consistent
+        with the live ``.bits`` policy, and safe because ``BitVector(...)``
+        copy-constructs from the result. Construct a ``BitVector`` when you
+        need an independent, resizable snapshot.
+        """
+        return self._bits
 
     def __eq__(self, other):
         """
-        Compares the BitType to another object.
+        Compare this BitType to another object.
 
-        Two bittypes are equal if their values are equal. Note that this means that
-        they might have internal bit representations (-0 and +0 are still equal, though)
+        Two BitTypes are equal when their values are equal. Equal BitTypes
+        may still have differing internal bit representations: -0 and +0 are
+        stored as different bits but compare equal.
 
         Args:
             other (Any): The object to compare to.
@@ -227,10 +361,11 @@ class BitType(ABC, Generic[T]):
 
     def __ne__(self, other):
         """
-        Compares the BitType to another object.
+        Compare this BitType to another object for inequality.
 
-        Two bittypes are equal if their values are equal. Note that this means that
-        they might have internal bit representations (-0 and +0 are still equal, though)
+        Two BitTypes are equal when their values are equal. Equal BitTypes
+        may still have differing internal bit representations: -0 and +0 are
+        stored as different bits but compare equal.
 
         Args:
             other (Any): The object to compare to.
@@ -258,16 +393,6 @@ class BitType(ABC, Generic[T]):
         else:
             return temp_bytes[::-1]
 
-    # def __hash__(self):
-    #     """
-    #     Returns the hash of the BitType.
-
-    #     Because the only thing that matters is that the value for __eq__,
-    #     the hash is based on just the BitType value.
-    #     """
-    #     # return hash(frozenset([self.__class__, self.value]))
-    #     return hash(frozenset([self.value]))
-
     # Temporary methods
     # TODO remove
     def to_bits(self) -> BitVector:
@@ -279,6 +404,11 @@ class BitType(ABC, Generic[T]):
         Returns:
             BitVector: The sequence of bits of the BitType.
         """
+        warnings.warn(
+            "BitType.to_bits() is deprecated; use the .bits property",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.bits
 
     @classmethod
@@ -292,6 +422,12 @@ class BitType(ABC, Generic[T]):
         Args:
             bits (BitVector): The sequence of bits to create the BitType from.
         """
+        warnings.warn(
+            f"{cls.__name__}.from_bits() is deprecated;"
+            f" use the constructor: {cls.__name__}(bits=...)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return cls(bits=bits)
 
     def _binary_value_op(
@@ -333,6 +469,64 @@ class BitType(ABC, Generic[T]):
                 return attempt_operation(other.value)
             except TypeError:
                 return NotImplemented
+
+    def _promoted_value_op(self, other, operation):
+        """
+        Apply a binary operator under the C promotion model.
+
+        Both operands are unboxed to plain values, the operator runs at full
+        width, and the plain result is returned. Nothing is re-boxed and
+        nothing wraps at the operator, because C never wraps mid-expression:
+        the integer promotions convert the operands first.
+
+        Width re-attaches only at stores. The narrowing cast is spelled as
+        the constructor, so ``UInt8(a + b)`` means ``(uint8_t)(a + b)``.
+
+        Used by the numeric BitTypes, `Int` and `Float`.
+
+        Args:
+            other (Any): The other operand. A BitType is unboxed to its value.
+            operation (Callable): The binary operator to apply.
+
+        Returns:
+            Any: The plain (unboxed) result, or NotImplemented.
+        """
+        if isinstance(other, BitType):
+            other = other.value
+        try:
+            return operation(self.value, other)
+        except TypeError:
+            return NotImplemented
+
+    def _inplace_value_op(self, other, operation):
+        """
+        Apply a compound assignment operator the way C does.
+
+        The operator runs at full width on the unboxed values, then the
+        result is converted back to this box's type at the store. The value
+        setter is the narrowing cast, so ``u += 1`` keeps ``u``'s type and
+        wraps at ``u``'s own width.
+
+        The conversion goes through ``py_type``, which truncates a
+        non-integral result toward zero, matching C's float-to-int
+        conversion.
+
+        Args:
+            other (Any): The other operand. A BitType is unboxed to its value.
+            operation (Callable): The binary operator to apply.
+
+        Returns:
+            BitSelf: ``self``, after narrowing the result into this box, or
+                NotImplemented.
+        """
+        if isinstance(other, BitType):
+            other = other.value
+        try:
+            result = operation(self.value, other)
+        except TypeError:
+            return NotImplemented
+        self.value = self.py_type(result)
+        return self
 
     def _binary_bits_op(
         self: BitSelf, other: Any, operation: Callable[[BitSelf, Any], BitSelf]
@@ -419,12 +613,13 @@ class StructPackedBitType(BitType[T]):
     Instance Attributes
     -------------------
     skip_struct_packing : bool
-        If true, the struct packing/unpacking will be skipped and the value will be
-            be calculated using other methods on the MRO.
+        If true, struct packing and unpacking are skipped, and the value is
+        calculated using other methods on the MRO instead.
 
     packing_format : str
-        The struct-packing format for the subclass that `struct` uses. It is calculated
-            based on the endianness
+        The struct-packing format. It is always big-endian (">") because
+        endianness is applied later, at the bytes boundary, by
+        BitType.__bytes__().
     """
 
     packing_format_letter: Final[str]
@@ -472,16 +667,36 @@ class StructPackedBitType(BitType[T]):
                 # C-style narrowing: wrap an out-of-range integer to the low
                 # num_bits bits instead of letting struct.pack raise, matching
                 # (uintN_t)/(intN_t) truncation. Floats are packed unchanged.
-                n = self.num_bits
                 # struct's integer format letters are lowercase for signed
-                # types (b/h/i/q) and uppercase for unsigned (B/H/I/Q)
-                if self.packing_format_letter.islower():
-                    value = ((value + (1 << (n - 1))) % (1 << n)) - (1 << (n - 1))
-                else:
-                    value &= (1 << n) - 1
-            self._bits = BitVector(struct.pack(self.packing_format, value))
+                # types (b/h/i/q) and uppercase for unsigned (B/H/I/Q).
+                value = _narrow_int(
+                    value,
+                    self.num_bits,
+                    signed=self.packing_format_letter.islower(),
+                    target=type(self).__name__,
+                )
+            try:
+                packed = struct.pack(self.packing_format, value)
+            except OverflowError:
+                # IEEE-754/C conversion semantics for the float widths: a
+                # finite magnitude too large for this type saturates to
+                # signed infinity (matching the pure-Python Float codec)
+                # instead of raising. Report it under warn mode, like the
+                # integer-narrowing path does.
+                if self.py_type is not float:
+                    raise
+                saturated = math.copysign(float("inf"), value)
+                if NarrowingConfig.warn:
+                    _warn_narrowing(value, saturated, type(self).__name__)
+                packed = struct.pack(self.packing_format, saturated)
+            self._bits = FixedLengthBitVector(packed)
         else:
-            super().value = value
+            # ``super().value = value`` does not work: super() proxies do not
+            # support attribute assignment, so it raised AttributeError
+            # whenever skip_struct_packing was true (e.g. any SInt8/16/32/64
+            # with a non-two's-complement int_format). Invoke the next
+            # value setter in the MRO explicitly instead.
+            super(StructPackedBitType, type(self)).value.fset(self, value)
 
 
 def bytes_to_bittype(
@@ -501,6 +716,8 @@ def bytes_to_bittype(
     Returns:
         BitType: The BitType object created from the bytes object.
     """
-    if endianness == "little":
+    if validate_endianness(endianness) == "little":
         unitbytes = unitbytes[::-1]
-    return unittype(bits=BitVector(unitbytes))
+    # bytes go straight to the bits setter, which snapshots into locked
+    # storage; a BitVector(...) wrap here would just be a second copy.
+    return unittype(bits=unitbytes)

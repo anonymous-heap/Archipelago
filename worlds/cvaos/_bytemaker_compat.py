@@ -1,24 +1,74 @@
 """Single import point for bytemaker.
 
-bytemaker >= 0.12 is pure Python (bitarray is only an optional ``[speedups]`` extra
-with a pure-Python ``BitVector`` fallback), so it can be vendored for frozen
-Archipelago installs, which cannot pip-install. An installed bytemaker wins over the
-copy vendored in ``worlds/cvaos/vendor``.
+bytemaker is pure Python (bitarray is only an optional ``[speedups]`` extra with a
+pure-Python ``BitVector`` fallback), so it can be vendored for frozen Archipelago
+installs, which cannot pip-install. An installed bytemaker wins over the copy vendored
+in ``worlds/cvaos/vendor`` — unless it is too old for this world.
+
+This world needs the ``bytemaker.spaces`` surface (>= 0.13), so that import doubles as
+the version probe: no bytemaker at all falls back to the vendored copy the usual way
+(vendor dir appended to ``sys.path``), while an installed-but-stale bytemaker is
+*detected* rather than silently preferred — its modules are evicted and the vendored
+copy is loaded in their place (see ``_vendor.prefer_vendored``). A version-number check
+would be worse: a vendored copy carries no dist metadata, so the probe asks for the
+surface itself.
+
+Note for frozen installs: bytemaker >= 0.13 hard-imports ``typing_extensions`` below
+Python 3.13. Archipelago's root requirements pin it (and the vendored pydantic needs it
+too), so nothing extra is vendored here — but it is load-bearing.
 """
 
 __all__ = [
-    "SInt16",
+    # records and their layout
+    "Struct",
+    "array",
+    "field",
+    "offset_of",
+    "sizeof",
+    # field/codec types
+    "Buffer",
     "UInt8",
+    "s16",
+    "u4",
+    "u8",
+    "u16",
+    "u32",
+    # the address-space layer
+    "Entry",
+    "Patch",
+    "PatchConflict",
+    "PatchVerifyError",
+    "Ptr",
+    "Space",
+    "count",
+    "through",
+    "unknown",
+    "until",
+    # legacy aggregate API (dataclass-of-BitTypes); no cvaos module should grow
+    # new uses — convert to Struct instead
+    "SInt16",
     "UInt16",
     "from_bytes_aggregate",
     "to_bytes_aggregate",
 ]
 
 try:
-    from bytemaker.bittypes import SInt16, UInt8, UInt16
-    from bytemaker.conversions.aggregate_types import from_bytes_aggregate, to_bytes_aggregate
+    import bytemaker.spaces  # noqa: F401  — the probe: a surface only bytemaker >= 0.13 has
 except ImportError:
-    from ._vendor import ensure_vendor_on_sys_path
-    ensure_vendor_on_sys_path()
-    from bytemaker.bittypes import SInt16, UInt8, UInt16
-    from bytemaker.conversions.aggregate_types import from_bytes_aggregate, to_bytes_aggregate
+    import sys
+
+    from ._vendor import ensure_vendor_on_sys_path, prefer_vendored
+
+    if "bytemaker" in sys.modules:
+        # An installed bytemaker resolved, but it is too old for this world: replace it
+        # with the vendored copy before anything else can hold a reference to it.
+        prefer_vendored("bytemaker")
+    else:
+        ensure_vendor_on_sys_path()
+    import bytemaker.spaces  # noqa: F401,F811  — re-probe; a failure here is a real error
+
+from bytemaker import Buffer, Struct, UInt8, array, field, offset_of, s16, sizeof, u4, u8, u16, u32
+from bytemaker.bittypes import SInt16, UInt16
+from bytemaker.conversions.aggregate_types import from_bytes_aggregate, to_bytes_aggregate
+from bytemaker.spaces import (Entry, Patch, PatchConflict, PatchVerifyError, Ptr, Space, count, through,
+                              unknown, until)

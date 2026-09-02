@@ -61,16 +61,24 @@ class BitsCastable(Protocol):
        prioritized when BitVectorSubtype(object) is called
        over any other possible behavior.
 
-    __Bits__ returns a BitVector representation of the object
-        that should not be a shallow copy (unless you want)
-        the cast object to share memory with the original object).
+    __Bits__ returns a BitVector representation of the object.
+        Constructors copy-construct from the result, so casts made via
+        BitVector(...) are always independent; whether __Bits__ itself
+        returns a copy or a live view is the implementor's ownership choice.
+        (BitType returns its internal bits live and width-locked, per the
+        live-.bits policy; construct a BitVector for a snapshot.)
     """
 
     def __Bits__(
         self,
     ) -> BitVector:
         """
-        Returns a deep BitVector representation of the object.
+        Returns a BitVector representation of the object.
+
+        The result may be a copy or a live view of the object's bits. That
+        choice belongs to the implementor and is explained in the
+        BitsCastable class docstring. Constructors copy-construct from the
+        result either way.
 
         This method is prioritized when BitVectorSubtype(object) is called.
 
@@ -93,6 +101,11 @@ _BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567
 _BYTE_TO_BITS = [
     bytes((byte >> shift) & 1 for shift in range(7, -1, -1)) for byte in range(256)
 ]
+
+
+# Sentinel distinguishing "no default given" from an explicit default=None
+# in pop() (so pop(bad_index, default=None) can return None instead of raising).
+_MISSING = object()
 
 
 def _coerce_bit(value: LaxLiteral01) -> int:
@@ -169,6 +182,10 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
         If `buffer` is set, the BitVector's bits are read from the provided
             object. The buffer object must support the buffer protocol
             (https://docs.python.org/3/c-api/buffer.html).
+            (`buffer=` is *may-share*: this reference backend copies; the
+            bitarray backend genuinely shares memory.) Byte-like `source`
+            values (`bytes`, `bytearray`, `memoryview`) are always
+            **copied** (13 #16 ruling).
 
         Otherwise, `source` determines the BitVector's bits.
         * If `source` is  None, the BitVector is empty.
@@ -209,8 +226,9 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
             self: Self = super().__new__(cls)
             self._bits = bytearray(source._bits)
             return self
-        # BitsCastable constructor
-        elif isinstance(source, BitsCastable):
+        # BitsCastable constructor (getattr instead of the runtime-protocol
+        # isinstance, which is very slow pre-3.12; same membership test)
+        elif getattr(source, "__Bits__", None) is not None:
             curinstance = source.__Bits__()
             self: Self = super().__new__(cls)
             self._bits = bytearray(curinstance._bits)
@@ -233,8 +251,8 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
             self: Self = cls.fromsize(source)
             return self
 
-        if isinstance(source, (bytes, bytearray)):
-            self: Self = cls(buffer=source)
+        if isinstance(source, (bytes, bytearray, memoryview)):
+            self: Self = cls(buffer=source)  # this backend's buffer= copies
             return self
 
         if isinstance(source, Iterable):
@@ -249,33 +267,34 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
         self,
         source: Optional[Union[BitsConstructible, int]] = None,
         encoding: Optional[str] = None,
-        errors: Optional[str] = None,  # TODO
+        errors: Optional[str] = None,
         buffer: Buffer = None,  # type: ignore
     ) -> None:
         """
-        If `buffer` is not None, the BitVector's bits are read from the
-            provided buffer object. The buffer object must support the buffer
-            protocol (https://docs.python.org/3/c-api/buffer.html).
+        Set up the BitVector's bits from `buffer`, or else from `source`.
+
+        If `buffer` is not None, the bits are read from the provided buffer
+        object. That object must support the buffer protocol
+        (https://docs.python.org/3/c-api/buffer.html).
 
         Otherwise, `source` determines the BitVector's bits.
         * If `source` is None, the BitVector is empty.
-        * If `source` is a str, the bits are obtained by prefix-determined classmethod
+        * If `source` is a str, a prefix-determined classmethod builds the
+          bits:
            * "" invokes `from01`
            * "0b" invokes `frombin`
            * "0o" invokes `fromoct`
            * "0x" invokes `fromhex`
-        * If `source` is an int, the BitVector is created with that many bits set to 0.
+        * If `source` is an int, the BitVector is created with that many
+          bits, all set to 0.
 
         Args:
-            source (Optional[Union[BitsConstructible, int]]): The bits of the BitVector
-               If None, a BitVector with no bits is created.\
-               If a string, uses the prefix (none, 0b, 0o, or 0x) to call\
-                    (`from01`, `frombin`, `fromoct`, `fromhex`).\
-                If an int, a BitVector with that many bits (set to 0) is created.\
-            encoding (Optional[str]): The encoding to use
-            errors (Optional[str]): The error handling to use. TODO
-            buffer (Buffer): The buffer to use
-
+            source (Optional[Union[BitsConstructible, int]]): The bits of the
+                BitVector, interpreted as described above.
+            encoding (Optional[str]): The encoding to use.
+            errors (Optional[str]): The error handling to use (not
+                implemented).
+            buffer (Buffer): The buffer to take the bits from.
         """
         super().__init__()
 
@@ -403,8 +422,8 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
         """
         Create a BitVector from a string in a given base.
         The string may contain any of '_', '-', ' ', or ':'.
-        In the case of bases 2, 8, and 16,
-            the string may start with "0b", "0o", or "0x" respectively.
+        In the case of bases 2, 8, and 16, the string may start with
+        "0b", "0o", or "0x" respectively.
 
         Args:
             string (str): The string to convert
@@ -453,7 +472,8 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
         if isinstance(encoding, str):
             char_array_as_bytes: bytes = char_array.encode(encoding)
 
-            retval = cls(buffer=char_array_as_bytes)
+            # Source-form, not buffer=: uniform copy semantics (13 #16).
+            retval = cls(char_array_as_bytes)
 
             logger.debug("using standard encoding...")
             logger.debug(f"retval {retval}")
@@ -500,18 +520,18 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
     ) -> str:
         """
         Convert the BitVector to a string in a given base.
-        If `sep` is not None, the string is split into chunks of `bytes_per_sep` bytes
-           punctuated by `sep`.
+
+        If `sep` is not None, the string is split into chunks of
+        `bytes_per_sep` bytes, punctuated by `sep`.
 
         Args:
-            base (int): The base to convert to. Currently must be a power of 2 (< 64).
+            base (int): The base to convert to (a power of 2, at most 64).
             sep (Optional[str]): The separator to use
             bytes_per_sep (int): The number of bytes per separator
 
         Returns:
             str: The BitVector converted to a string in the given base
         """
-        # TODO support non-multiple-of-two bases
         if base not in {2, 4, 8, 16, 32, 64}:
             raise ValueError(f"Invalid base: {base}")
         retstring = self._to_base_str(base)
@@ -528,8 +548,8 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
     def hex(self, sep: Optional[str] = None, bytes_per_sep: int = 1) -> str:
         """
         Convert the BitVector to a hexadecimal string prefixed by 0x.
-        If `sep` is not None, the string is split into chunks of `bytes_per_sep` bytes
-           punctuated by `sep`.
+        If `sep` is not None, the string is split into chunks of
+        `bytes_per_sep` bytes, punctuated by `sep`.
 
         Args:
             sep (Optional[str]): The separator to use
@@ -545,8 +565,8 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
     def oct(self, sep: Optional[str] = None, bytes_per_sep: int = 1) -> str:
         """
         Convert the BitVector to an octal string prefixed by 0o.
-        If `sep` is not None, the string is split into chunks of `bytes_per_sep` bytes
-           punctuated by `sep`.
+        If `sep` is not None, the string is split into chunks of
+        `bytes_per_sep` bytes, punctuated by `sep`.
 
         Args:
             sep (Optional[str]): The separator to use
@@ -561,8 +581,8 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
     def bin(self, sep: Optional[str] = None, bytes_per_sep: int = 1) -> str:
         """
         Convert the BitVector to a binary string prefixed by 0b.
-        If `sep` is not None, the string is split into chunks of `bytes_per_sep` bytes
-           punctuated by `sep`.
+        If `sep` is not None, the string is split into chunks of
+        `bytes_per_sep` bytes, punctuated by `sep`.
 
         Args:
             sep (Optional[str]): The separator to use
@@ -576,8 +596,8 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
     def to01(self, sep: Optional[str] = None, bytes_per_sep: int = 1) -> str:
         """
         Convert the BitVector to an unprefixed binary string.
-        If `sep` is not None, the string is split into chunks of `bytes_per_sep` bytes
-           punctuated by `sep`.
+        If `sep` is not None, the string is split into chunks of
+        `bytes_per_sep` bytes, punctuated by `sep`.
         """
 
         to01_without_sep = self._bits.translate(_BITS_TO_01_TABLE).decode("ascii")
@@ -606,8 +626,11 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
         """
         cls = type(self)
         if isinstance(encoding, str):
-            assert len(self) % 8 == 0, "BitVector length must be a multiple of 8\
-                to use a standard encoding"
+            if len(self) % 8 != 0:
+                raise ValueError(
+                    f"BitVector length {len(self)} is not a multiple of 8;"
+                    " cannot decode with a standard encoding"
+                )
             return bytes(self).decode(encoding)
         else:
             encoding = {
@@ -626,8 +649,9 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
     # Magic Methods and Overloads
     def __eq__(self, other: object) -> bool:
         """
-        Returns whether this BitVector's bits are equal to another object's bits.
-        This will only really true if both objects are BitVectors.
+        Returns whether this BitVector's bits equal another object's bits.
+
+        The result is only ever True when both objects are BitVectors.
         """
         if isinstance(other, BitVector):
             return self._bits == other._bits
@@ -947,8 +971,18 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
                 self._bits[key] = bytes([bit]) * fill_length
             else:
                 value = self.cast_if_not_bitvector(value)
-                # bytearray handles resizing for unit-step slices and
-                # enforces matching lengths for extended slices
+                if key.step not in (None, 1):
+                    # Pre-check extended slices: bytearray would silently
+                    # DELETE the selected positions for an empty value
+                    # instead of raising like other sequences.
+                    span = len(range(*key.indices(len(self._bits))))
+                    if len(value._bits) != span:
+                        raise ValueError(
+                            f"attempt to assign sequence of size"
+                            f" {len(value._bits)} to extended slice"
+                            f" of size {span}"
+                        )
+                # bytearray handles resizing for unit-step slices
                 self._bits[key] = value._bits
         elif isinstance(key, Iterable):
             indices = list(key)
@@ -1123,19 +1157,22 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
         self._bits.insert(index, _coerce_bit(value))
 
     def pop(  # type: ignore[reportIncompatibleMethodOverride]
-        self, index: Optional[int] = None, default: Optional[T] = None
+        self, index: Optional[int] = None, default=_MISSING
     ) -> Union[int, T]:
         """Removes and returns the bit at the given index (zero-indexed).
-        All bits to the right of the index are shifted one left.
-        If the provided index is None, the rightmost bit is popped.
-        If a default is provided and the index is out of bounds,
-        the default is returned.
+
+        Every bit to the right of the index shifts one place left. If the
+        index is None, the rightmost bit is popped. Negative indices count
+        from the end, as with __getitem__.
+
+        If a default is provided and the index is out of bounds, the default
+        is returned. That includes an explicit ``default=None``.
 
         Args:
             index (Optional[int], optional): The position of the bit to pop.
                 Defaults to None.
-            default (Optional[T], optional): The default value to return if the
-                index is out of bounds. Defaults to None.
+            default (optional): The value to return if the index is out of
+                bounds. If omitted, an out-of-bounds index raises IndexError.
 
         Raises:
             IndexError: If the index is out of bounds and no default is provided.
@@ -1145,10 +1182,18 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
         """
         if index is None:
             index = len(self) - 1
-        if index >= len(self) or index < 0:
-            if default is not None:
+        raw_index = index
+        if index < 0:
+            index += len(self)
+        if not 0 <= index < len(self):
+            if default is not _MISSING:
                 return default
-            raise IndexError("pop from empty BitVector")
+            if len(self) == 0:
+                raise IndexError("pop from empty BitVector")
+            raise IndexError(
+                f"pop index {raw_index} out of range for"
+                f" BitVector of length {len(self)}"
+            )
         value = self._bits[index]
         del self._bits[index]
         return value
@@ -1224,9 +1269,10 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
         stop: Optional[int] = None,
     ) -> bool:
         """
-        Checks if the BitVector starts with the given substring.
-        If start and stop are provided, the check is performed only
-            on the bits between the start (inclusive) and stop exclusive) indices.
+        Checks whether the BitVector starts with the given substring.
+
+        If start and stop are provided, the check covers only the bits
+        between the start index (inclusive) and the stop index (exclusive).
 
         Args:
             substrings (Union[BitsConstructible, BitVector, Literal[0, 1],\
@@ -1264,9 +1310,10 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
         stop: Optional[int] = None,
     ) -> bool:
         """
-        Checks if the BitVector ends with the given substring.
-        If start and stop are provided, the check is performed only
-            on the bits between the start (inclusive) and stop exclusive) indices.
+        Checks whether the BitVector ends with the given substring.
+
+        If start and stop are provided, the check covers only the bits
+        between the start index (inclusive) and the stop index (exclusive).
 
         Args:
             substrings (Union[BitsConstructible, BitVector, Literal[0, 1],\
@@ -1309,7 +1356,7 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
             return [substrings]
         elif isinstance(substrings, int):
             return [BitVector([substrings])]
-        elif isinstance(substrings, (str, bytes, BitsCastable)):
+        elif isinstance(substrings, (str, bytes, bytearray, memoryview, BitsCastable)):
             return [BitVector(substrings)]
         elif isinstance(substrings, Iterable):
             list_of_substrings = list(substrings)
@@ -1444,7 +1491,7 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
     ) -> Self:
         """
         Generates a new BitVector with occurrences of the sequences of
-            old bits replaced by the new bits.
+        old bits replaced by the new bits.
         If count is provided, only the first `count` occurrences are replaced.
 
         Args:
@@ -1676,12 +1723,14 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
          If size is not provided, the number of bits required to \
          represent the integer is used.
         """
+        needed = twos_complement_bit_length(integer)
         if size is None:
-            size = twos_complement_bit_length(integer)
-        if integer.bit_length() > size:
+            size = needed
+        if needed > size:
             raise ValueError(
-                f"Cannot convert {integer} to Bits with size {size},"
-                f" because it requires {integer.bit_length()} bits to represent."
+                f"Cannot convert {integer} to a BitVector of size {size},"
+                f" because it requires {needed} bits (sign bit included)"
+                f" to represent."
             )
 
         bitlist = list()
@@ -1711,24 +1760,31 @@ class BitVector(MutableSequence[LaxLiteral01], BitsCastable):
         return int.from_bytes(copy.to_bytes(), byteorder=endianness, signed=signed)
 
     def to_bytes(self, reverse_endianness=False) -> bytes:
-        byte_arr = bytearray()
-        for i in range(0, len(self), 8):
-            byte = 0
-            byte_end_index = min(i + 8, len(self))
+        """
+        Converts the BitVector to bytes, right-aligned.
 
-            for bit in self[i:byte_end_index]:
-                byte = (byte << 1) | bit
-            byte_arr.append(byte)
+        The bits form a big-endian integer, zero-padded on the left to a
+        whole number of bytes. Contrast ``tobytes()`` and ``bytes()``, which
+        left-align instead: they zero-pad a trailing partial byte on the
+        right.
+        """
+        value = 0
+        for bit in self._bits:
+            value = (value << 1) | bit
+        byte_arr = bytearray(value.to_bytes((len(self._bits) + 7) // 8, "big"))
 
         if reverse_endianness:
-            byte_arr = reversed(byte_arr)
+            byte_arr.reverse()
         return bytes(byte_arr)
 
 
-BitsConstructible = Union[BitVector, bytes, str, Iterable[LaxLiteral01], BitsCastable]
+BitsConstructible = Union[
+    BitVector, bytes, bytearray, memoryview, str, Iterable[LaxLiteral01], BitsCastable
+]
 """
 The types that can be used to construct a BitVector.
-These include the BitVector class itself, bytes, str, iterables of 0s and 1s,
+These include the BitVector class itself, byte-like objects (bytes,
+bytearray, memoryview), str, iterables of 0s and 1s,
 and objects that can be cast to a BitVector.
 
 Please note that you can also use an int to construct a BitVector of that many

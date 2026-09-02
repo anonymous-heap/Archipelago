@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from bytemaker.bitvector import BitVector
 from bytemaker.typing_redirect import Any, Callable, Literal
-from bytemaker.utils import is_subclass_of_union
+from bytemaker.utils import is_subclass_of_union, validate_endianness
 
 
 class PyTypeMeta(type):
@@ -49,36 +49,6 @@ class ConversionInfo:
     to_bits: Callable[[Any], BitVector]
     from_bits: Callable[[BitVector], Any]
     num_bits: Callable[[Any], int]
-
-    @classmethod
-    def num_bytes(cls, typeinstance) -> int:
-        """
-        Function to get the number of bytes in the BitVector representation of\
-            the Python instance.
-        """
-        default = (cls.num_bits(typeinstance) + 7) // 8
-        return default if default > 0 else 1
-
-    @classmethod
-    def to_bytes(cls, pytype) -> bytes:
-        """
-        Function to convert a Python instance to the bytes representation
-            of that instance.
-
-        Args:
-            pytype (type): The Python instance to convert to bytes
-
-        Returns:
-            bytes: The bytes representation of the Python instance
-        """
-        return bytes(cls.to_bits(pytype))
-
-    @classmethod
-    def from_bytes(cls, bytes_obj) -> Any:
-        """
-        Function to convert a bytes object to a Python instance.
-        """
-        return cls.from_bits(BitVector(bytes_obj))
 
 
 class ConversionConfig:
@@ -193,7 +163,18 @@ class ConversionConfig:
                 cls._known_furthest_descendant_mappings[pytype]
             ]
         else:
-            raise TypeError(f"No conversion found for {pytype}")
+            raise _no_conversion_error(pytype)
+
+
+def _no_conversion_error(pytype) -> TypeError:
+    """Build a TypeError naming the unconvertible type and every registered
+    pytype."""
+    registered = ", ".join(
+        sorted(t.__name__ for t in ConversionConfig._implemented_conversions)
+    )
+    return TypeError(
+        f"No conversion registered for {pytype}." f" Registered pytypes: {registered}"
+    )
 
 
 # _string_conversion_info = ConversionInfo(
@@ -204,22 +185,55 @@ class ConversionConfig:
 # )
 # ConversionConfig.set_conversion_info(_string_conversion_info)
 
+
+def _char_to_bits(string: str) -> BitVector:
+    """
+    Convert a single one-byte character into its 8-bit BitVector.
+
+    The registered str conversion is a fixed-width char, so num_bits reports
+    8. The encoding is latin-1, the canonical byte-to-character bijection,
+    which lets all 256 byte values round-trip.
+
+    This encoder refuses any string whose latin-1 encoding is not exactly one
+    byte, rather than silently emitting a width that disagrees with num_bits.
+    Multi-byte and variable-width text belongs in the String bittypes
+    instead. Use ``String.of(encoding=...)`` for that.
+
+    Args:
+        string (str): The character to convert. Must be a single
+            U+0000-U+00FF character (exactly one latin-1 byte).
+
+    Returns:
+        BitVector: The 8-bit representation of the character
+
+    Raises:
+        ValueError: If the string does not encode to exactly one latin-1 byte.
+    """
+    try:
+        encoded = string.encode("latin-1")
+    except UnicodeEncodeError as exc:
+        raise ValueError(
+            f"The registered str conversion is a fixed-width latin-1 char"
+            f" (8 bits), but {string!r} is not representable in latin-1"
+            f" (use a String bittype for other encodings)."
+        ) from exc
+    if len(encoded) != 1:
+        raise ValueError(
+            f"The registered str conversion is a fixed-width char (8 bits),"
+            f" but {string!r} encodes to {len(encoded)} latin-1 bytes."
+            f" Serialize longer strings character-by-character or use a"
+            f" String bittype for other encodings."
+        )
+    return BitVector(encoded)
+
+
 _char_conversion_info = ConversionInfo(
     pytype=str,
-    to_bits=lambda string: BitVector(string.encode("utf-8")),
-    from_bits=lambda bits: bits.to_bytes().decode("utf-8"),
+    to_bits=_char_to_bits,
+    from_bits=lambda bits: bits.to_bytes().decode("latin-1"),
     num_bits=lambda _: 8,
 )
 ConversionConfig.set_conversion_info(_char_conversion_info)
-
-for bytesish in [bytes, bytearray, memoryview]:
-    conversion_info = ConversionInfo(
-        pytype=bytesish,
-        to_bits=lambda bys: BitVector(bys),
-        from_bits=lambda bits: bits.to_bytes(),
-        num_bits=lambda bys: len(bys) * 8,
-    )
-    # ConversionConfig.set_conversion_info(conversion_info)
 
 bool_conversion_info = ConversionInfo(
     pytype=bool,
@@ -257,7 +271,7 @@ float_conversion_info = ConversionInfo(
 ConversionConfig.set_conversion_info(float_conversion_info)
 
 
-def pytype_to_bits(py_prim: type) -> BitVector:
+def pytype_to_bits(py_prim) -> BitVector:
     """
     Function to convert Python instances into a default number of BitVector.
         Uses the conversions in ConversionConfig.
@@ -272,15 +286,13 @@ def pytype_to_bits(py_prim: type) -> BitVector:
 
     conversion = ConversionConfig.get_conversion_info(py_prim_type)
 
-    if conversion is None:
-        raise TypeError(f"No conversion found for {py_prim_type}")
+    if conversion is None:  # unreachable: get_conversion_info raises first
+        raise _no_conversion_error(py_prim_type)
 
     return conversion.to_bits(py_prim)
 
 
-def pytype_to_bytes(
-    py_prim: type, endianness: Literal["big", "little"] = "big"
-) -> bytes:
+def pytype_to_bytes(py_prim, endianness: Literal["big", "little"] = "big") -> bytes:
     """
     Function to convert Python instances into a default number of bytes.
         Uses the conversions in ConversionConfig.
@@ -294,29 +306,29 @@ def pytype_to_bytes(
         bytes: The bytes representation of the python instance
     """
     retval = pytype_to_bits(py_prim).to_bytes()
-    if endianness == "little":
+    if validate_endianness(endianness) == "little":
         retval = retval[::-1]
     return retval
 
 
 def bits_to_pytype(bits_obj: BitVector, pytype: type):
     """
-    Function to convert bits into instances of Python types.
+    Convert bits into an instance of a Python type.
 
     Args:
-        bytes_obj (bytes): The bits object to convert to a Python primitive
-        py_prim_type (type): The type of the Python primitive to convert to.
-            Must be a member of PyTypeWithDefaultBytes
+        bits_obj (BitVector): The bits to convert to a Python primitive.
+        pytype (type): The type of the Python primitive to convert to. It
+            must have a suitable conversion registered in ConversionConfig.
 
     Returns:
-        pytype: The instance of thee provided Python type represented by the
-            bits
+        pytype: The instance of the provided Python type that the bits
+            represent.
     """
 
     conversion = ConversionConfig.get_conversion_info(pytype)
 
-    if conversion is None:
-        raise TypeError(f"No conversion found for {pytype}")
+    if conversion is None:  # unreachable: get_conversion_info raises first
+        raise _no_conversion_error(pytype)
 
     return conversion.from_bits(bits_obj)
 
@@ -325,19 +337,18 @@ def bytes_to_pytype(
     bytes_obj: bytes, pytype: type, endianness: Literal["big", "little"] = "big"
 ):
     """
-    Function to convert bytes into instances of Python types.
+    Convert bytes into an instance of a Python type.
 
     Args:
-        bytes_obj (bytes): The bytes object to convert to a Python primitive
-        pytype (type): The type of the Python primitive to convert to.
-            Must be a member of PyTypeWithDefaultBytes
-        endianness: The byte order of the input bytes.
-            Defaults to "big".
+        bytes_obj (bytes): The bytes to convert to a Python primitive.
+        pytype (type): The type of the Python primitive to convert to. It
+            must have a suitable conversion registered in ConversionConfig.
+        endianness: The byte order of the input bytes. Defaults to "big".
 
     Returns:
-        pytype: The instance of the provided Python type represented by the
-            bytes
+        pytype: The instance of the provided Python type that the bytes
+            represent.
     """
-    if endianness == "little":
+    if validate_endianness(endianness) == "little":
         bytes_obj = bytes_obj[::-1]
     return bits_to_pytype(BitVector(bytes_obj), pytype)
