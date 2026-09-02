@@ -112,6 +112,7 @@ _EWRAM_STRUCT_OFFSET = 0x170
 ATTACH_RETRY_SECONDS = 5.0
 REVALIDATE_SECONDS = 2.0
 TICK_SECONDS = 0.125
+ERROR_BACKOFF_SECONDS = 5.0  # pause after an unexpected tick error before ticking again
 
 
 class CollectionError(Exception):
@@ -567,6 +568,11 @@ async def _watcher(ctx: CVAOSCollectionContext) -> None:
             await ctx.brain._tick(ctx, AoSRAM(ctx.backend))
         except CollectionError as exc:
             ctx._detach(str(exc))
+        except Exception:
+            # Anything else raised by a tick must not end the watcher: the AP socket would stay
+            # up and the client would look connected while doing nothing. Log it and back off.
+            logger.exception("CVAoS collection watcher: unexpected error; retrying shortly")
+            await asyncio.sleep(ERROR_BACKOFF_SECONDS)
 
 
 def launch(*launch_args: str) -> None:

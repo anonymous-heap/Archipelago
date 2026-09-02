@@ -197,5 +197,40 @@ class EwramSignatureTest(unittest.TestCase):
         self.assertFalse(ewram_signature_ok(bytes(_make_ewram_ingame())[:0x100], 0))
 
 
+class WatcherResilienceTest(unittest.TestCase):
+    """A tick that raises something other than CollectionError must not end the watcher."""
+
+    def test_watcher_survives_an_unexpected_tick_error(self) -> None:
+        from types import SimpleNamespace
+        from unittest import mock
+
+        from .. import collection_client
+
+        ticks: list[int] = []
+        exit_event = asyncio.Event()
+
+        async def flaky_tick(ctx, ram):
+            ticks.append(1)
+            if len(ticks) == 1:
+                raise ValueError("boom")
+            exit_event.set()
+
+        ctx = SimpleNamespace(
+            exit_event=exit_event,
+            backend=CollectionBackend(FakeProc(), rom_base=0, ewram_base=0),
+            server=SimpleNamespace(socket=SimpleNamespace(closed=True)),
+            slot=1, auth="x", password_requested=False,
+            brain=SimpleNamespace(_tick=flaky_tick),
+            revalidate_anchor=lambda: None,
+            _detach=mock.Mock(),
+        )
+        with mock.patch.object(collection_client, "TICK_SECONDS", 0), \
+                mock.patch.object(collection_client, "ERROR_BACKOFF_SECONDS", 0), \
+                self.assertLogs("Client", level="ERROR"):
+            asyncio.run(asyncio.wait_for(collection_client._watcher(ctx), timeout=5))
+        self.assertEqual(len(ticks), 2, "the watcher must tick again after the error")
+        ctx._detach.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
