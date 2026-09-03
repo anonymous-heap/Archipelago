@@ -67,6 +67,7 @@ MENU_STATE_MAP_SCREEN = 0x04        # the Select map (observed live). Saving doe
                                     # prompt and the save write happen while the client may still grant items.
 MENU_STATE_PAUSE = 0x06
 MENU_STATE_WARP_MAP = 0x07          # warp-room map screen (observed live in the collection)
+MENU_STATE_ITEM_WARP = 0x08         # warp in progress after using the Skull Key from the pause menu (observed live)
 MENU_STATE_SHOP = 0x09
 
 
