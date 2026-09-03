@@ -112,6 +112,31 @@ class EwramDiscoveryTest(unittest.TestCase):
             proc.write(self.REGION + off, bytes(_make_ewram_ingame()[:0x14000]))
         return proc
 
+    def _linked_proc(self, back_link_ok: bool = True):
+        from ..collection_client import _Region
+        rom_block, ewram_block, rom_size = 0x30000000, self.REGION, 0x801000
+        # The image starts right after the block's 0x20-byte header, as on the real process.
+        rom = RomImage(rom_block + 0x20, rom_block, rom_block + rom_size)
+        ewram_size = EWRAM_SIZE + 0x1000
+        proc = _ScanProc([_Region(ewram_block, ewram_size, 0x04, 0x1000, 0x20000),
+                          _Region(rom_block, rom_size, 0x04, 0x1000, 0x20000)])
+        proc.write(rom_block, (0x31000000).to_bytes(4, "little") + ewram_block.to_bytes(4, "little")
+                   + bytes(8) + rom_size.to_bytes(4, "little"))
+        back = rom_block if back_link_ok else 0x0BAD0000
+        proc.write(ewram_block, back.to_bytes(4, "little") + (0x0F000000).to_bytes(4, "little")
+                   + bytes(8) + ewram_size.to_bytes(4, "little"))
+        return proc, rom
+
+    def test_allocation_links_settle_ewram_without_gameplay(self) -> None:
+        # No content signature anywhere (the player is in a menu); the links alone suffice.
+        proc, rom = self._linked_proc()
+        self.assertEqual(find_ewram_base(proc, rom), self.REGION + _EWRAM_STRUCT_OFFSET)
+
+    def test_broken_back_link_falls_back_to_the_signature(self) -> None:
+        proc, rom = self._linked_proc(back_link_ok=False)
+        with self.assertRaisesRegex(CollectionError, "not in normal gameplay"):
+            find_ewram_base(proc, rom)
+
     def test_lone_struct_aligned_match_is_taken(self) -> None:
         proc = self._proc([_EWRAM_STRUCT_OFFSET])
         self.assertEqual(find_ewram_base(proc, self.ROM), self.REGION + _EWRAM_STRUCT_OFFSET)

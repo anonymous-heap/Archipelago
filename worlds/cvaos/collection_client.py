@@ -18,7 +18,12 @@ tuned against the live process:
   version-matched (a bare header = unpatched -> point at cac_archive.py; a different
   version suffix = stale install). The ROM sits in its own committed private-RW region.
 * EWRAM: M2 heap-allocates the emulated GBA memory (no static pointer to it exists in
-  game.exe), so we identify the live 256 KiB EWRAM by a strong in-game content signature:
+  game.exe). The emulator's allocator prefixes every block with a header whose ``next`` and
+  ``prev`` words link the blocks, and the GBA-memory object is allocated right before the
+  ROM buffer, so the ROM block's ``prev`` names the GBA-memory block and EWRAM sits 0x170
+  into it. The link is checked in both directions and both block sizes must equal their
+  committed regions; this works from any screen, menus included. Failing that layout, we
+  identify the live 256 KiB EWRAM by a strong in-game content signature:
   GAME_STATE==INGAME and MENU_STATE==NORMAL, self-consistent vitals (1<=HP<=MaxHP<=2000,
   MP<=MaxMP), a sane area id and gold, and every consumable count 0..9 -- all holding at
   the exact EWRAM offsets simultaneously. Live testing showed this resolves to exactly one
@@ -111,6 +116,13 @@ _SIG_SPAN = _CONSUM_END
 # (observed on the only shipped build). Checking region_base+0x170 first makes discovery
 # near-instant; a full 0x10-stride scan is the correctness fallback if that ever misses.
 _EWRAM_STRUCT_OFFSET = 0x170
+
+# The emulator's allocator header, 0x20 bytes before every block's payload: next, prev, two
+# zero words, the block size (equal to the committed region's size), a second size, a cookie,
+# and flags. The ROM image starts right after its header; the GBA-memory object's EWRAM
+# member is _EWRAM_STRUCT_OFFSET into its block (header included).
+_ALLOC_HEADER = 0x20
+_ALLOC_NEXT, _ALLOC_PREV, _ALLOC_SIZE = 0x00, 0x04, 0x10
 
 ATTACH_RETRY_SECONDS = 5.0
 REVALIDATE_SECONDS = 2.0
@@ -343,10 +355,46 @@ def _ewram_scan_regions(proc: GameProcess, rom: RomImage):
         yield region
 
 
+def _u32(data: bytes, offset: int) -> int:
+    return int.from_bytes(data[offset:offset + 4], "little")
+
+
+def ewram_via_allocation_links(proc: GameProcess, rom: RomImage) -> int | None:
+    """EWRAM base read off the emulator's allocation list, or None if the layout differs.
+
+    The ROM block's ``prev`` must name a private-RW region that starts exactly there, links
+    back to the ROM block, and whose recorded size equals the region's size; only then is
+    EWRAM taken ``_EWRAM_STRUCT_OFFSET`` into it. Independent of what the game is showing.
+    """
+    block = rom.base - _ALLOC_HEADER
+    if block != rom.region_start:
+        return None
+    try:
+        header = proc.read(block, _ALLOC_HEADER)
+        prev = _u32(header, _ALLOC_PREV)
+        if prev == 0 or _u32(header, _ALLOC_SIZE) != rom.region_end - rom.region_start:
+            return None
+        region = next((r for r in proc.regions() if r.base == prev), None)
+        if (region is None or not region.writable_private
+                or region.size < _EWRAM_STRUCT_OFFSET + EWRAM_SIZE):
+            return None
+        candidate = proc.read(prev, _ALLOC_HEADER)
+        if _u32(candidate, _ALLOC_NEXT) != block or _u32(candidate, _ALLOC_SIZE) != region.size:
+            return None
+    except CollectionError:
+        return None
+    return prev + _EWRAM_STRUCT_OFFSET
+
+
 def find_ewram_base(proc: GameProcess, rom: RomImage) -> int:
-    """Locate live AoS EWRAM. Fast path checks each candidate region at the emulator's
-    struct offset (0x170); full 0x10-stride scan is the fallback. Excludes the ROM region.
-    Disambiguates multiple hits (rewind snapshots) by frame mutation."""
+    """Locate live AoS EWRAM. The allocation links settle it from any screen; otherwise the
+    content signature is tried at the emulator's struct offset (0x170) in each candidate
+    region, then by a full 0x10-stride scan. Excludes the ROM region. Multiple signature hits
+    (rewind snapshots, look-alike buffers) are settled by alignment and frame mutation."""
+    linked = ewram_via_allocation_links(proc, rom)
+    if linked is not None:
+        return linked
+
     regions = list(_ewram_scan_regions(proc, rom))
 
     candidates: list[int] = []
