@@ -17,7 +17,8 @@ import unittest
 from ..collection_client import (
     EWRAM_SIZE, ROM_SIZE, ROM_TITLE, CollectionBackend, CollectionError,
     _EWRAM_STRUCT_OFFSET, _ROM_GAMECODE, _ROM_GAMECODE_OFFSET, _ROM_LOGO_OFFSET,
-    _ROM_LOGO_PREFIX, ewram_offset, ewram_signature_ok, validated_rom_base_in,
+    _ROM_LOGO_PREFIX, RomImage, ewram_offset, ewram_signature_ok, find_ewram_base,
+    validated_rom_base_in,
 )
 from ..ram import addresses as addr
 from ..ram.addresses import EWRAM, GameState
@@ -74,6 +75,63 @@ class FakeProc:
     def write(self, address: int, data) -> None:
         for i, b in enumerate(bytes(data)):
             self.mem[address + i] = b
+
+
+class _ScanProc(FakeProc):
+    """FakeProc with region enumeration and, for chosen bases, low memory that changes on
+    every read (a running game's frame counters)."""
+
+    def __init__(self, regions, moving=()) -> None:
+        super().__init__()
+        self._regions = list(regions)
+        self.moving = set(moving)
+        self.reads = 0
+
+    def regions(self):
+        return list(self._regions)
+
+    def read(self, address: int, size: int) -> bytes:
+        data = bytearray(super().read(address, size))
+        if address in self.moving:
+            self.reads += 1
+            data[0] = self.reads & 0xFF
+        return bytes(data)
+
+
+class EwramDiscoveryTest(unittest.TestCase):
+    """find_ewram_base must not anchor on a frozen buffer that merely passes the signature."""
+
+    REGION = 0x10000000
+    ROM = RomImage(0x30000000, 0x30000000, 0x30800000)
+
+    def _proc(self, offsets, moving=()):
+        from ..collection_client import _Region
+        region = _Region(self.REGION, EWRAM_SIZE * 2, protect=0x04, state=0x1000, mem_type=0x20000)
+        proc = _ScanProc([region], moving={self.REGION + off for off in moving})
+        for off in offsets:
+            proc.write(self.REGION + off, bytes(_make_ewram_ingame()[:0x14000]))
+        return proc
+
+    def test_lone_struct_aligned_match_is_taken(self) -> None:
+        proc = self._proc([_EWRAM_STRUCT_OFFSET])
+        self.assertEqual(find_ewram_base(proc, self.ROM), self.REGION + _EWRAM_STRUCT_OFFSET)
+
+    def test_frozen_unaligned_look_alike_is_rejected(self) -> None:
+        proc = self._proc([0x40080])
+        with self.assertRaisesRegex(CollectionError, "frozen look-alike"):
+            find_ewram_base(proc, self.ROM)
+
+    def test_unaligned_but_moving_buffer_is_accepted(self) -> None:
+        proc = self._proc([0x40080], moving=[0x40080])
+        self.assertEqual(find_ewram_base(proc, self.ROM), self.REGION + 0x40080)
+
+    def test_aligned_beats_a_frozen_look_alike(self) -> None:
+        proc = self._proc([_EWRAM_STRUCT_OFFSET, 0x40080])
+        self.assertEqual(find_ewram_base(proc, self.ROM), self.REGION + _EWRAM_STRUCT_OFFSET)
+
+    def test_no_match_at_all_asks_for_gameplay(self) -> None:
+        with self.assertRaisesRegex(CollectionError, "not in normal gameplay"):
+            find_ewram_base(self._proc([]), self.ROM)
 
 
 class AddressTranslationTest(unittest.TestCase):

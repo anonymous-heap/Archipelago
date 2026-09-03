@@ -29,6 +29,9 @@ tuned against the live process:
   is in a room -- which is also the only time the client acts, so it simply waits otherwise.
   If more than one block matches (the collection's rewind buffer can hold flat snapshots),
   the live one is the block whose low memory mutates between two reads; snapshots are frozen.
+  The content signature alone is not proof: on the live process, frozen look-alike buffers
+  (HP 3/3, every count 3) pass it while the player sits in a menu, so a match is accepted
+  only if it is struct-aligned or its low memory moves.
 
 Failure handling: every pymem/OS error is wrapped in ``CollectionError``; the watcher
 drops to "detached", keeps the AP connection up, and re-attaches/re-anchors on a 5 s
@@ -370,15 +373,32 @@ def find_ewram_base(proc: GameProcess, rom: RomImage) -> int:
         raise CollectionError(
             "Aria of Sorrow is loaded but not in normal gameplay yet -- enter a room (not a "
             "menu, map, or pause screen) so the client can locate game memory. Still trying.")
-    if len(candidates) == 1:
-        return candidates[0]
-    return _pick_live_ewram(proc, candidates)
+    live = _live_candidates(proc, candidates)
+    if not live:
+        raise CollectionError(
+            "Aria of Sorrow's memory signature matched only frozen look-alike buffers, not the "
+            "running game -- enter a room and keep playing. Still trying.")
+    return live[0]
 
 
-def _pick_live_ewram(proc: GameProcess, candidates: list[int]) -> int:
-    """Disambiguate live EWRAM from rewind-snapshot copies: the live buffer's low memory
-    mutates every frame during play; snapshots are frozen. If nothing is moving (game
-    paused/minimized) prefer the struct-aligned candidate, then the lowest address."""
+def _is_struct_aligned(candidate: int) -> bool:
+    # The emulator's struct puts EWRAM at region_base+0x170, and region bases are
+    # page-aligned, so the live base's low 12 bits are 0x170.
+    return (candidate & 0xFFF) == _EWRAM_STRUCT_OFFSET
+
+
+def _live_candidates(proc: GameProcess, candidates: list[int]) -> list[int]:
+    """The candidates that can be the running game's EWRAM, most likely first.
+
+    A lone struct-aligned match is taken as-is. Otherwise each candidate's low memory is read
+    twice a few frames apart: the live buffer mutates every frame during play, while rewind
+    snapshots and look-alike buffers are frozen. Order: aligned and moving, then moving, then
+    aligned but frozen (a paused game). Frozen unaligned matches are dropped; on the real
+    process such blocks pass the content signature and would anchor the client on garbage.
+    """
+    aligned = [c for c in candidates if _is_struct_aligned(c)]
+    if len(candidates) == 1 and aligned:
+        return aligned
     first: dict[int, bytes | None] = {}
     for c in candidates:
         try:
@@ -386,16 +406,16 @@ def _pick_live_ewram(proc: GameProcess, candidates: list[int]) -> int:
         except CollectionError:
             first[c] = None
     time.sleep(0.15)  # a few frames of live play
+    moving: list[int] = []
     for c in candidates:
         try:
             if first[c] is not None and proc.read(c, 0x2000) != first[c]:
-                return c  # low memory changed => this is the running buffer
+                moving.append(c)
         except CollectionError:
             continue
-    # Nothing moved (paused): the emulator's struct puts EWRAM at region_base+0x170, and
-    # region bases are page-aligned, so the live base's low 12 bits are 0x170.
-    aligned = [c for c in candidates if (c & 0xFFF) == _EWRAM_STRUCT_OFFSET]
-    return aligned[0] if aligned else min(candidates)
+    return ([c for c in aligned if c in moving]
+            + [c for c in moving if c not in aligned]
+            + [c for c in aligned if c not in moving])
 
 
 # ---------------------------------------------------------------------------
