@@ -54,18 +54,19 @@ def scaled_rate(rate: int, percent: int) -> int:
     against 14's 2.07x and so is the better answer. Both candidates are therefore compared in
     multiplier space, ties going to the more common drop.
 
-    A rate of 0 is already a guaranteed drop -- that is how the game marks a kill you cannot
-    farm -- so it is returned untouched rather than made "more than guaranteed".
-
-    Note the ceiling this implies: the best a rate can become is 0, worth ``(rate + 4) / 4``,
-    so an already-common soul cannot be sped up much however large ``percent`` is.
+    A rate of 0 is left untouched. The death routine skips the soul roll entirely for it (that
+    is how the one-time bosses, whose own scripts award their souls, stay out of the generic
+    drop), so scaling it would switch a drop on rather than make one more common. For the same
+    reason a nonzero rate never scales below 1: 0 would turn the drop off. So the best a rate
+    can become is 1, worth ``(rate + 4) / 5``, and an already-common soul cannot be sped up much
+    however large ``percent`` is.
     """
     if rate == 0 or percent == 100:
         return rate
 
     wanted = percent / 100
     ideal = (rate + RATE_CHANCE_BIAS) / wanted - RATE_CHANCE_BIAS
-    candidates = {max(0, min(0xFF, math.floor(ideal))), max(0, min(0xFF, math.ceil(ideal)))}
+    candidates = {max(1, min(0xFF, math.floor(ideal))), max(1, min(0xFF, math.ceil(ideal)))}
 
     def error(candidate: int) -> tuple[float, int]:
         realised = (rate + RATE_CHANCE_BIAS) / (candidate + RATE_CHANCE_BIAS)
