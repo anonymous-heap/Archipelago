@@ -11,7 +11,8 @@ flight passives (Flying Armor / Giant Bat) retain normal air control.
 
 Two pieces, kept at the addresses the original patch uses (position-dependent THUMB blobs whose
 literal pools bake absolute 0x087Dxxxx addresses; also clear of this world's own free-space
-allocations, which all sit at 0x660000..0x666xxx):
+allocations at 0x661400..0x666xxx and 0x670000..0x671xxx, and of the Advance Collection ROM's
+M2 additions at 0x660000-0x6610BC / 0x700000-0x7000E3):
 
 1. The Xanthus update-hook framework. The USA ROM keeps a per-frame function pointer (vanilla
    0x0804306D, the HP-display update) at GBA 0x08043104. The patch repoints it to a dispatcher in

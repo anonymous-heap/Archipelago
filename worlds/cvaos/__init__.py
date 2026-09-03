@@ -4,9 +4,10 @@ from typing import ClassVar
 
 from BaseClasses import MultiWorld, Tutorial
 from worlds.AutoWorld import WebWorld, World
+from worlds.LauncherComponents import Component, Type, components, launch as launch_component
 import settings
 
-from .constants import USA_ROM_MD5
+from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA_ROM_MD5
 from .items import CVAOSItem, item_name_to_id, create_item, create_itempool
 from .locations import location_name_to_id
 from .options import CVAOSOptions, Goal, cvaos_option_groups
@@ -14,14 +15,65 @@ from .regions import create_regions, can_reach_room
 from .client import CVAOSClient  # noqa: F401  (imported for its registration side effect)
 
 
+def launch_collection_client(*args: str) -> None:
+    from .collection_client import launch
+    launch_component(launch, name="CVAoSCollectionClient", args=args)
+
+
+def launch_collection_installer(*args: str) -> None:
+    # Runs in the Launcher process (Messenger-style tool component): prompts for the
+    # patched .gba, resolves game.exe from settings, swaps the ROM into windata/.
+    from .advance_collection.install import run_from_launcher
+    run_from_launcher(*args)
+
+
+# The BizHawk client auto-registers via its patch_suffix; the Advance Collection client
+# has no patch file to open, so it needs an explicit Launcher button.
+components.append(Component(
+    "CVAoS Collection Client",
+    func=launch_collection_client,
+    component_type=Type.CLIENT,
+    description="Play a CVAoS seed inside the Steam Castlevania Advance Collection.",
+))
+
+components.append(Component(
+    "CVAoS Collection ROM Installer",
+    func=launch_collection_installer,
+    component_type=Type.TOOL,
+    description="Install a CVAoS seed into the Steam Castlevania Advance Collection: accepts "
+                "the .apcvaos patch (applied for you) or a patched .gba. Backs up the original "
+                "archive; restore any time.",
+))
+
+
 class CVAOSSettings(settings.Group):
     class RomFile(settings.UserFilePath):
-        """File name of the Castlevania AoS USA rom"""
-        copy_to = "Castlevania - Aria of Sorrow (USA).gba"
-        description = "Castlevania AoS (US) ROM File"
-        md5s = [USA_ROM_MD5]
+        """The base ROM for a **gba**-target seed. Prompted for when applying the patch; you may
+        select a Castlevania AoS (US) GBA ROM *or* the Advance Collection's game.exe -- if you
+        pick the exe, the base ROM is extracted from the collection for you. (advance_collection
+        seeds ignore this and source the ROM from collection_exe automatically.)"""
+        description = "Castlevania AoS (US) ROM, or Advance Collection game.exe"
+        # Accept a GBA ROM (cart or collection-extracted) or the collection exe. No copy_to:
+        # if the user hands us the exe, it must stay next to its windata/ so we can extract.
+        md5s = [USA_ROM_MD5, AC_USA_ROM_MD5, AC_GAME_EXE_MD5]
 
-    rom_file: RomFile = RomFile(RomFile.copy_to)
+        def browse(self, **kwargs):  # type: ignore[override]
+            # Let the picker show both the ROM and the exe (default would filter to *.gba only).
+            kwargs.setdefault("filetypes", [("AoS ROM or Collection game.exe", [".gba", ".exe"])])
+            return super().browse(**kwargs)
+
+    class CollectionExePath(settings.FilePath):
+        """game.exe inside the Steam Castlevania Advance Collection install. Used to install a
+        patched ROM into the collection, and to source the base ROM for advance_collection-target
+        seeds. Optional: defaults to the standard Steam path and never force-prompts, so gba-only
+        users can ignore it. Md5-checked when browsed for."""
+        description = "Castlevania Advance Collection game.exe"
+        is_exe = True
+        required = False
+        md5s = [AC_GAME_EXE_MD5]
+
+    rom_file: RomFile = RomFile("Castlevania - Aria of Sorrow (USA).gba")
+    collection_exe: CollectionExePath = CollectionExePath(AC_DEFAULT_EXE_PATH)
 
 
 class CVAOSWebWorld(WebWorld):
@@ -136,6 +188,7 @@ class CVAOSWorld(World):
 
     def fill_slot_data(self) -> dict:
         return {
+            "target_platform": self.options.target_platform.value,
             "randomize_pickups": self.options.randomize_pickups.value,
             "goal": self.options.goal.value,
             "hard_mode": self.options.hard_mode.value,

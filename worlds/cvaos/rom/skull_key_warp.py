@@ -26,7 +26,7 @@ The full in-game handoff (menu teardown visuals, landing) still wants an emulato
 playtest. The blob is machine-assembled from ``skull_key_warp.s``; to regenerate::
 
     arm-none-eabi-as -mcpu=arm7tdmi -mthumb skull_key_warp.s -o /tmp/w.o
-    arm-none-eabi-ld -Ttext=0x08660100 /tmp/w.o -o /tmp/w.elf
+    arm-none-eabi-ld -Ttext=0x08670100 /tmp/w.o -o /tmp/w.elf
     arm-none-eabi-objcopy -O binary /tmp/w.elf /tmp/w.bin   # -> WARPHOOK_BLOB
 
 Gating lives with the caller: ``rom/patch.py`` emits these writes when the "Skull Key Warp" option
@@ -47,16 +47,18 @@ HOOK_SITE_FILE_OFFSET = 0x04B36C
 HOOK_RESUME_GBA = 0x0804B374          # baked into the blob's literal pool
 
 # --- Injected routine placement (ROM free space, past the AP metadata block) ---
-WARPHOOK_BASE_GBA = 0x08660100
-WARPHOOK_BASE_FILE_OFFSET = WARPHOOK_BASE_GBA - 0x08000000   # 0x660100
+WARPHOOK_BASE_GBA = 0x08670100
+WARPHOOK_BASE_FILE_OFFSET = WARPHOOK_BASE_GBA - 0x08000000   # 0x670100
 
-# Machine-assembled from skull_key_warp.s, linked at 0x08660100. Position-DEPENDENT:
+# Machine-assembled from skull_key_warp.s, linked at 0x08670100. Position-DEPENDENT:
 # its literal pool bakes in absolute addresses (DestRecord, sub_08011F44+1, sub_08011AD0+1,
-# 0x0804B375, &unk_60), so WARPHOOK_BASE_GBA must stay 0x08660100 unless reassembled.
+# 0x0804B375, &unk_60), so WARPHOOK_BASE_GBA must stay 0x08670100 unless reassembled. (Relocated
+# 0x0866xxxx -> 0x0867xxxx for Advance Collection compatibility by shifting the one internal literal,
+# &DestRecord -- byte-equivalent to relinking at the new -Ttext.)
 WARPHOOK_BLOB = bytes.fromhex(
     "cb7d192b05d0f0b5474680b4041c104b184730b50f4c00f014f80f4c2068a188"
     "e2882389658920b40c4c00f00af801b00b480c4c00f005f80b4c192020700120"
-    "30bd20479cef5008100100020000000075b30408457b040844016608451f0108"
+    "30bd20479cef5008100100020000000075b30408457b040844016708451f0108"
     "60000002d11a0108430e0002"
 )
 assert len(WARPHOOK_BLOB) == 108
@@ -96,7 +98,7 @@ def pack_destination(room_ptr: int, x: int, y: int, x_offset: int, y_offset: int
 # (File offset = 0x506B38 + 373*4 = 0x50710C. Earlier comments framed this as "table 0x08506C64,
 #  entry 298 = idx25 + 273" -- that base/index pair is mislabeled but resolves to the same byte.)
 DESC_TABLE_ENTRY_FILE_OFFSET = 0x50710C            # sUnk_08506B38[373] (Skull Key desc text-id), file offset
-DESC_STRING_GBA = 0x08660200                       # new string in free space (clear of the blob)
+DESC_STRING_GBA = 0x08670200                       # new string in free space (clear of the blob)
 DESC_STRING_FILE_OFFSET = DESC_STRING_GBA - 0x08000000
 SKULL_KEY_DESCRIPTION_LINES: Tuple[str, ...] = (
     "Teleports to start. Opened",

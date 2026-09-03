@@ -49,19 +49,25 @@ GAME_CLEARED_FLAGS = ewram.entry(0x02000060, u8, name="game_cleared_flags")
 GAME_CLEARED_VALUE = 0x03          # bits 0+1 set == game beaten once
 
 
+# Game modes, named after the decomp's GAME_MODE_* enum (constants/main.h); 0x03 is unnamed there too.
 class GameState(IntEnum):
     KONAMI_LOGO = 0x00
     TITLE = 0x01
-    GAME_START = 0x02
+    MAIN_MENU = 0x02
     INGAME = 0x04
     GAME_OVER = 0x05
     CREDITS = 0x06
+    INTRO_CUTSCENE = 0x07
 
 
 MENU_STATE_NORMAL = 0x01            # in-room, not transitioning/paused/shopping
 MENU_STATE_DEATH = 0x02             # death/game-over fade sub-state (drives DeathLink detection)
 MENU_STATE_ROOM_TRANSITION = 0x03
+MENU_STATE_MAP_SCREEN = 0x04        # the Select map (observed live). Saving does not leave NORMAL: the save
+                                    # prompt and the save write happen while the client may still grant items.
 MENU_STATE_PAUSE = 0x06
+MENU_STATE_WARP_MAP = 0x07          # warp-room map screen (observed live in the collection)
+MENU_STATE_ITEM_WARP = 0x08         # warp in progress after using the Skull Key from the pause menu (observed live)
 MENU_STATE_SHOP = 0x09
 
 

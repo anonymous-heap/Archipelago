@@ -22,7 +22,7 @@ class AddressSpaceTest(unittest.TestCase):
     def test_cart_geometry(self):
         self.assertEqual(ROM_SIZE, 8 * 1024 * 1024)
         space = gba_space()
-        self.assertEqual(space.offset(GBA_ROM_BASE + 0x660040), 0x660040)
+        self.assertEqual(space.offset(GBA_ROM_BASE + 0x670040), 0x670040)
 
     def test_bound_space_reads_the_image(self):
         image = bytearray(0x1000)
@@ -90,12 +90,12 @@ class SoulDropOverridesTest(unittest.TestCase):
 class DeathlinkPlacementTest(unittest.TestCase):
     def test_entries_pin_the_documented_addresses(self):
         self.assertEqual(dh.HOOK_SITE.addr, 0x0801B9D0)
-        self.assertEqual(dh.DEATHLINK_TRAMPOLINE.addr, 0x08660040)
+        self.assertEqual(dh.DEATHLINK_TRAMPOLINE.addr, 0x08670040)
         self.assertEqual((dh.HOOK_SITE_GBA, dh.TRAMPOLINE_GBA), (dh.HOOK_SITE.addr, dh.DEATHLINK_TRAMPOLINE.addr))
 
     def test_trampoline_fits_its_reservation_with_headroom(self):
-        # 0x660040 + 0xC0 = 0x660100, where the Skull Key WarpHook begins
-        self.assertEqual(dh.DEATHLINK_TRAMPOLINE.addr + 0xC0, 0x08660100)
+        # 0x670040 + 0xC0 = 0x670100, where the Skull Key WarpHook begins
+        self.assertEqual(dh.DEATHLINK_TRAMPOLINE.addr + 0xC0, 0x08670100)
         self.assertLessEqual(len(dh._TRAMPOLINE), 0xC0)
 
     def test_an_oversized_blob_refuses_to_build(self):

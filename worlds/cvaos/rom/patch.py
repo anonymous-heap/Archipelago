@@ -12,14 +12,14 @@ from settings import get_settings
 from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTokenTypes
 
 from ..data import pickup_info_collection as pickup_infos
-from ..constants import USA_ROM_MD5
+from ..constants import AC_USA_ROM_MD5, USA_ROM_MD5
 from ..items import FORBIDDEN_AREA_SWITCH, item_table
 from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
                inventory_menu, oops_all_whips, single_jump_divekick, skull_key_warp,
                soul_drop_rates, soul_shuffle)
 from .entity import GBA_ROM_BASE, AoSPickupEntity
 from .._bytemaker_compat import offset_of
-from ..options import ForbiddenAreaButton, SoulShuffle
+from ..options import ForbiddenAreaButton, SoulShuffle, TARGET_ADVANCE_COLLECTION, TARGET_GBA
 
 if TYPE_CHECKING:
     from BaseClasses import Location
@@ -27,12 +27,14 @@ if TYPE_CHECKING:
 
 # Archipelago metadata written into clean ROM free space. These are
 # *file offsets* — both APProcedurePatch tokens and the BizHawk ROM domain the client reads
-# are file-offset based. The region at file 0x660000+ (GBA 0x08660000) is well clear of the
-# last real data at 0x651163. ARCHIPELAGO_IDENTIFIER doubles as the client/patch compatibility
-# gate; bump it whenever the patch/client contract changes.
-ARCHIPELAGO_IDENTIFIER_START = 0x660000   # 13 bytes
-ARCHIPELAGO_IDENTIFIER = "CVAOS_AP_V0.2"
-AUTH_NUMBER_START = 0x660010              # 16 bytes
+# are file-offset based. The region at file 0x670000+ (GBA 0x08670000) is well clear of the
+# last real cart data at 0x651163 and of the Advance Collection ROM's M2 additions
+# (rom/address_space.py M2_NO_GO: 0x660000-0x6610BC and 0x700000-0x7000E3).
+# ARCHIPELAGO_IDENTIFIER doubles as the client/patch compatibility gate; bump it whenever the
+# patch/client contract changes.
+ARCHIPELAGO_IDENTIFIER_START = 0x670000   # 13 bytes
+ARCHIPELAGO_IDENTIFIER = "CVAOS_AP_V0.3"  # V0.3: hook/metadata block moved 0x660000 -> 0x670000
+AUTH_NUMBER_START = 0x670010              # 16 bytes
 
 # SoulShuffle option value -> rom/soul_shuffle mode.
 _SOUL_SHUFFLE_MODES = {
@@ -111,10 +113,41 @@ def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Di
 
 # Patch classes
 
-def get_base_rom_bytes() -> bytes:
-    file_name = get_settings().cvaos_options.rom_file
-    with open(file_name, "rb") as fh:
-        return fh.read()
+def _read_base_rom_source(path: str) -> bytes:
+    """Read a base ROM from *path*, which may be a GBA ROM or the collection's game.exe.
+
+    A game.exe is detected by extension or PE (``MZ``) magic; in that case the stock AoS ROM is
+    extracted from the ``windata/`` archive next to it (so the exe must be the real install file,
+    not a copy). Anything else is returned as-is.
+    """
+    if path.lower().endswith(".exe"):
+        from ..advance_collection.install import extract_base_rom_bytes
+        return extract_base_rom_bytes(path)
+    with open(path, "rb") as fh:
+        head = fh.read(2)
+        if head == b"MZ":  # a PE handed to us despite its name -> treat as the collection exe
+            from ..advance_collection.install import extract_base_rom_bytes
+            return extract_base_rom_bytes(path)
+        return head + fh.read()
+
+
+def get_base_rom_bytes(target: int = TARGET_GBA) -> bytes:
+    """The base ROM to patch against, chosen by the seed's declared target platform.
+
+    - ``advance_collection``: source the ROM from the installed collection automatically — the
+      stock AoS ROM is pulled out of ``windata/`` next to ``collection_exe`` (default Steam path),
+      so a collection player configures nothing. Only if the collection can't be found there does
+      it fall back to the prompted ``rom_file``.
+    - ``gba``: use ``rom_file``; accessing it opens a file browser when unset. The pick may be a
+      GBA ROM *or* the collection's game.exe (``_read_base_rom_source`` extracts from the exe).
+    """
+    opts = get_settings().cvaos_options
+    if target == TARGET_ADVANCE_COLLECTION:
+        exe = str(opts.collection_exe)
+        if exe and os.path.exists(exe):
+            from ..advance_collection.install import extract_base_rom_bytes
+            return extract_base_rom_bytes(exe)
+    return _read_base_rom_source(str(opts.rom_file))
 
 
 class CVAOSPatchExtension(APPatchExtension):
@@ -182,7 +215,9 @@ class CVAOSPatchExtension(APPatchExtension):
 
 
 class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
-    hash = [USA_ROM_MD5]
+    # Two accepted bases on purpose: the cart dump and the collection's own copy of the ROM,
+    # which M2 altered (constants.py). The patch bytes are identical against either.
+    hash = [USA_ROM_MD5, AC_USA_ROM_MD5]
     patch_file_ending: str = ".apcvaos"
     result_file_ending: str = ".gba"
     game = "Castlevania - Aria of Sorrow"
@@ -195,6 +230,18 @@ class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
     @classmethod
     def get_source_data(cls) -> bytes:
         return get_base_rom_bytes()
+
+    def get_source_data_with_cache(self) -> bytes:  # type: ignore[override]
+        # Per-seed override of the base-class classmethod: the base ROM source depends on the
+        # target platform the YAML declared, which patch_rom embedded in rom_config.json. Read it
+        # here (files are loaded by patch() before this runs) so an advance_collection seed sources
+        # the collection ROM and a gba seed prompts for a ROM/exe. No caching: single apply.
+        try:
+            target = int(json.loads(self.get_file("rom_config.json")).get("target_platform",
+                                                                          TARGET_GBA))
+        except (KeyError, ValueError, json.JSONDecodeError):
+            target = TARGET_GBA
+        return get_base_rom_bytes(target)
 
 
 def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[int, bytes]) -> None:
@@ -218,7 +265,10 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
 
     # Everything that must READ the base ROM (guards, relocated tables, icon extraction) is
     # deferred to apply_rom_features via this config. Keys must match what it looks up.
+    # target_platform additionally drives base-ROM source selection at apply time
+    # (get_source_data_with_cache); apply_rom_features ignores it.
     rom_config = {
+        "target_platform": world.options.target_platform.value,
         "skull_key_warp": bool(world.options.skull_key_warp),
         "forbidden_area_pickup":
             world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup,
