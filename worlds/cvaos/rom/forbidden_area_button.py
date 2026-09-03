@@ -21,11 +21,9 @@ from __future__ import annotations
 
 from typing import Dict
 
-from .entity import GBA_ROM_BASE
+from .entity import ENTITY_SIZE, GBA_ROM_BASE, AoSPickupEntity
 
 A01_BUTTON_ENTITY_GBA = 0x08521B8C        # object-0x35 var_b=48 press-button (A01 object list head)
-ENTITY_SIZE = 12
-_TYPE_OFF, _SUBTYPE_OFF, _VARA_OFF, _VARB_OFF = 0x05, 0x06, 0x08, 0x0A
 _OBJECT_TYPE, _BUTTON_SUBTYPE, _BUTTON_VARB = 0x02, 0x35, 48
 _CANDLE_SUBTYPE = 0x07                     # inert decorative object (drops nothing at var_a=var_b=0)
 
@@ -35,12 +33,11 @@ def build_writes(base_rom: bytes) -> Dict[int, bytes]:
     Raises if the button is not where expected, so a ROM mismatch fails loudly rather than silently
     editing the wrong entity."""
     off = A01_BUTTON_ENTITY_GBA - GBA_ROM_BASE
-    e = bytearray(base_rom[off:off + ENTITY_SIZE])
-    if not (e[_TYPE_OFF] == _OBJECT_TYPE and e[_SUBTYPE_OFF] == _BUTTON_SUBTYPE
-            and int.from_bytes(e[_VARB_OFF:_VARB_OFF + 2], "little") == _BUTTON_VARB):
+    e = AoSPickupEntity.parse(base_rom[off:off + ENTITY_SIZE])
+    if not (e.type == _OBJECT_TYPE and e.subtype == _BUTTON_SUBTYPE and e.var_b == _BUTTON_VARB):
         raise ValueError(f"A01 forbidden-area button not at {A01_BUTTON_ENTITY_GBA:#x} (ROM mismatch)")
     # Keep x/y/id; make it a do-nothing candle. (type stays 2=object.)
-    e[_SUBTYPE_OFF] = _CANDLE_SUBTYPE
-    e[_VARA_OFF:_VARA_OFF + 2] = b"\x00\x00"
-    e[_VARB_OFF:_VARB_OFF + 2] = b"\x00\x00"
-    return {off: bytes(e)}
+    e.subtype = _CANDLE_SUBTYPE
+    e.var_a = 0
+    e.var_b = 0
+    return {off: e.pack()}

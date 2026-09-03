@@ -15,12 +15,16 @@ from __future__ import annotations
 import math
 from typing import Dict
 
-from .entity import GBA_ROM_BASE
+from .._bytemaker_compat import Patch, PatchVerifyError, offset_of, sizeof
+from .address_space import gba_space
+from .enemy_table import ENEMY_COUNT, ENEMY_TABLE, EnemyDNA, field_offset
+from .entity import GBA_ROM_BASE as GBA_ROM_BASE  # re-exported for callers that convert offsets
 
-ENEMY_TABLE_GBA = 0x080E9644      # enemy table
-ENEMY_STRIDE = 0x24               # bytes per enemy entry
-SOUL_RATE_OFF = 0x12              # soul-rarity byte within an entry
-ENEMY_COUNT = 113                 # entries in the table (Bat..Chaos)
+# Derived from the shared declaration (rom/enemy_table.py), kept as names for callers that
+# compute offsets themselves.
+ENEMY_TABLE_GBA = ENEMY_TABLE.addr
+ENEMY_STRIDE = sizeof(EnemyDNA)
+SOUL_RATE_OFF = offset_of(EnemyDNA, "soul_rate")
 
 # The rate byte only enters the chance as ``rate*8 + 32``, i.e. ``8 * (rate + 4)``, so the
 # ratio between two rates is exactly ``(old + 4) / (new + 4)`` -- LCK and the numerator
@@ -35,9 +39,9 @@ SOUL_RATE_OVERRIDES: Dict[int, tuple[str, int, int]] = {
     43: ("Curly",     50, 9),   # 50 -> 9  : ~4.15x (10 would be ~3.86x)
 }
 
-
 def _rate_offset(enemy_id: int) -> int:
-    return (ENEMY_TABLE_GBA - GBA_ROM_BASE) + enemy_id * ENEMY_STRIDE + SOUL_RATE_OFF
+    """File offset of ``enemy_id``'s soul-rate byte, addressed through the table's layout."""
+    return field_offset(enemy_id, "soul_rate")
 
 
 def scaled_rate(rate: int, percent: int) -> int:
@@ -87,32 +91,35 @@ def build_multiplier_writes(base_rom: bytes, percent: int) -> Dict[int, bytes]:
     if percent == 100:
         return {}
 
-    writes: Dict[int, bytes] = {}
+    enemies = ENEMY_TABLE.bind(gba_space(base_rom))
+    patch = Patch(name=f"soul drop rates x{percent / 100:g}")
     for enemy_id in range(ENEMY_COUNT):
-        off = _rate_offset(enemy_id)
-        old = base_rom[off]
+        rate = enemies.item(enemy_id).field("soul_rate")
+        old: int = rate.read()
         new = scaled_rate(old, percent)
         if new != old:
-            writes[off] = bytes([new])
-    return writes
+            rate.write(new, expect=old, patch=patch)
+    return {edit.offset: edit.new for edit in patch.edits}
 
 
 def build_writes(base_rom: bytes) -> Dict[int, bytes]:
     """
     Writes the adjusted soul-drop rates into the ROM.
 
-    Args: 
+    Args:
         base_rom: the original ROM bytes, used to verify the current +0x12 byte matches the expected value.
 
     Returns the written dict.
     """
-    writes: Dict[int, bytes] = {}
+    enemies = ENEMY_TABLE.bind(gba_space(base_rom))
+    patch = Patch(name="soul drop rates")
     for enemy_id, (name, expected_old, new_rate) in SOUL_RATE_OVERRIDES.items():
-        off = _rate_offset(enemy_id)
-        if base_rom[off] != expected_old:
+        try:
+            enemies.item(enemy_id).field("soul_rate").write(new_rate, expect=expected_old, patch=patch)
+        except PatchVerifyError as exc:
+            off = _rate_offset(enemy_id)
             raise ValueError(
                 f"{name} soul-rate byte at {off:#x} is {base_rom[off]}, expected {expected_old} "
                 f"(ROM mismatch)"
-            )
-        writes[off] = bytes([new_rate])
-    return writes
+            ) from exc
+    return {edit.offset: edit.new for edit in patch.edits}

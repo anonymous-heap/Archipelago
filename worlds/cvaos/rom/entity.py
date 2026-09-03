@@ -1,20 +1,18 @@
 """
-AoS ROM entity structure using bytemaker for type-safe serialization.
+AoS ROM entity record, declared once as a bytemaker ``Struct``.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from .._bytemaker_compat import SInt16, UInt8, UInt16, from_bytes_aggregate, to_bytes_aggregate
+from .._bytemaker_compat import Struct, s16, sizeof, u8, u16
 
 GBA_ROM_BASE = 0x08000000
-ENTITY_SIZE = 12
 
 
-@dataclass
-class AoSPickupEntity:
+class AoSPickupEntity(Struct, endian="little"):
     """
-    12-byte AoS Pickup entity as stored in ROM.
+    12-byte AoS room entity as stored in ROM (the pickup record; room object lists use the
+    same layout with ``type``/``subtype`` meaning object kind and ``var_a``/``var_b`` object
+    parameters).
 
     Offset  Size  Field
     0x00    2     x           Position
@@ -26,20 +24,19 @@ class AoSPickupEntity:
     0x07    1     unknown     Always 0x00
     0x08    2     var_a       flag_offset — per-location save flag. Unchanged when shuffling items.
     0x0A    2     var_b       item_offset — index of item within its subtype category
+
+    Fields read as plain ``int``; stores narrow to the field width. ``pack()`` / ``parse()``
+    are the byte conversions; ``offset_of(AoSPickupEntity, name)`` answers where a field sits.
     """
 
-    x: SInt16
-    y: SInt16
-    entity_id: UInt8
-    type: UInt8
-    subtype: UInt8
-    unknown: UInt8
-    var_a: UInt16
-    var_b: UInt16
+    x: s16
+    y: s16
+    entity_id: u8
+    type: u8
+    subtype: u8
+    unknown: u8
+    var_a: u16
+    var_b: u16
 
-    def to_bytes(self) -> bytes:
-        return to_bytes_aggregate(self, endianness="little")
 
-    @classmethod
-    def from_bytes(cls, data: bytes) -> AoSPickupEntity:
-        return from_bytes_aggregate(data, cls, endianness="little")
+ENTITY_SIZE = sizeof(AoSPickupEntity)

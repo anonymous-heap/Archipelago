@@ -20,11 +20,11 @@ INGAME = int(addr.GameState.INGAME)
 
 class EnsureHardModeTest(unittest.IsolatedAsyncioTestCase):
     async def _run(self, current_byte: int):
-        ram = AoSRAM.__new__(AoSRAM)  # no real BizHawk ctx needed; read_u8/write_u8 are mocked
-        ram.read_u8 = AsyncMock(return_value=current_byte)
-        ram.write_u8 = AsyncMock()
+        ram = AoSRAM.__new__(AoSRAM)  # no real BizHawk ctx needed; the entry fetch/store are mocked
+        ram._fetch = AsyncMock(return_value=current_byte)
+        ram._store = AsyncMock()
         changed = await ram.ensure_hard_mode()
-        return changed, ram.write_u8
+        return changed, ram._store
 
     async def test_soma_normal_becomes_soma_hard(self):
         changed, write = await self._run(0x01)  # Soma, normal
@@ -50,10 +50,10 @@ class EnsureHardModeTest(unittest.IsolatedAsyncioTestCase):
 class EnsureGameClearedTest(unittest.IsolatedAsyncioTestCase):
     async def _run(self, current_byte: int):
         ram = AoSRAM.__new__(AoSRAM)
-        ram.read_u8 = AsyncMock(return_value=current_byte)
-        ram.write_u8 = AsyncMock()
+        ram._fetch = AsyncMock(return_value=current_byte)
+        ram._store = AsyncMock()
         changed = await ram.ensure_game_cleared()
-        return changed, ram.write_u8
+        return changed, ram._store
 
     async def test_not_cleared_becomes_cleared(self):
         changed, write = await self._run(0x00)

@@ -1,31 +1,59 @@
+"""Sized integer BitTypes: `Int` and its `SInt`/`UInt` families.
+
+Arithmetic follows the C promotion model. Binary operators compute on plain
+values at full width and return a plain `int`, and that includes the bitwise
+family and `~`.
+
+Narrowing back to a width happens only at stores, meaning the `value` setter
+and compound assignment. It also happens at the constructor, which is the
+narrowing cast. See the `Int` docstring for the full contract.
+"""
+
 from __future__ import annotations
 
 import operator
-from math import ceil, log2
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, overload
 
-from bytemaker.bittypes.bittype import BitType, StructPackedBitType
+from bytemaker.bittypes.bittype import (
+    BitType,
+    StructPackedBitType,
+    _narrow_int,
+)
 from bytemaker.bitvector import BitsConstructible, BitVector
 from bytemaker.typing_redirect import Final, Literal, Optional, TypeVar
-from bytemaker.utils import is_instance_of_union
+from bytemaker.utils import is_instance_of_union, twos_complement_bit_length
 
 if TYPE_CHECKING:
-    IntSelf = TypeVar("IntSelf", bound="Int")
-else:
-    try:
-        from typing_redirect import Self as IntSelf
-    except ImportError:
-        IntSelf = TypeVar("IntSelf", bound="Int")
+    from bytemaker.bittypes.float import Float
+
+#: See the note on ``BitSelf`` in bittypes/bittype.py: a bound TypeVar in
+#: both planes, the always-failing typing_redirect import removed.
+IntSelf = TypeVar("IntSelf", bound="Int")
 
 
 class Int(BitType[int]):
     """
     A `BitType` that represents an integer.
 
-    Is further subclassed into `SInt` and `UInt` for signed and unsigned integers,
+    It is further subclassed into `SInt` and `UInt` for signed and unsigned
+    integers respectively.
+
+    Arithmetic follows the C promotion model. Binary operators compute on
+    plain values at full width and return a plain `int`, and that includes
+    the bitwise family and `~`. So `UInt8(200) + UInt8(100) == 300`, never a
+    wrapped box.
+
+    Width re-attaches only at stores. The constructor is the narrowing cast,
+    so `UInt8(a + b)` wraps just like `(uint8_t)(a + b)` does in C. Compound
+    assignment such as `u += 1` narrows the result back into the box's own
+    width.
+
+    Out-of-range stores wrap silently by default, as in C. Set
+    `NarrowingConfig.warn = True` to make each such store also emit a
+    `NarrowingWarning`.
 
     Class Attributes:
-    ---------------
+    -----------------
     num_bits : int
        The number of bits in the BitType.
     base_bit_type : Type[BitType]
@@ -49,7 +77,14 @@ class Int(BitType[int]):
     is_signed: Final[bool]
     """Whether the integer type is signed."""
 
-    def __int__(self):
+    def __int__(self) -> int:
+        return self.value
+
+    def __index__(self) -> int:
+        # Named, explicit lossless-integer protocol: makes boxes usable
+        # anywhere a plain int is (hex(), list indexing, range(), and the
+        # Struct field descriptors' operator.index() store path) without
+        # touching operator semantics.
         return self.value
 
     def to_pyint(
@@ -60,18 +95,24 @@ class Int(BitType[int]):
         ] = "twos_complement",
     ):
         """
-        Convert a bitstring to an integer.
+        Convert the bits of `self` to an integer.
 
         Parameters:
-        - bitstring (str): The bitstring to convert.
-        - signed (Optional[bool], optional) Whether the bitstring represents
-            a signed integer (vs unsigned). Default is `cls.is_signed` or `True`.
-        - bin_format (Optional[str], optional): The format for signed integers.
-            Can be "twos_complement", "signed_magnitude", or "ones_complement".
-            Default is "twos_complement".
+
+        - self (BitType | BitsConstructible): The object whose bits to
+          convert. It may be a `BitType`, a `BitVector`, or anything a
+          `BitVector` can be constructed from, such as a "01" string.
+          That makes this callable unbound, as `Int.to_pyint("1010")`.
+        - signed (Optional[bool], optional): Whether the bits represent a
+          signed integer rather than an unsigned one. Defaults to
+          `self.is_signed` on `Int` subclasses, and to `True` elsewhere.
+        - bin_format (Optional[str], optional): The format for signed
+          integers. It can be "twos_complement", "signed_magnitude", or
+          "ones_complement". Default is "twos_complement".
 
         Returns:
-        - int: The integer representation of the bitstring.
+
+        - int: The integer representation of the bits.
         """
 
         if signed is None:
@@ -109,15 +150,18 @@ class Int(BitType[int]):
 
         elif bin_format == "signed_magnitude" or bin_format == "sign_magnitude":
             # Handle sign-magnitude for signed integers
+            # (a 1-bit string has an empty magnitude field: +0 / -0)
+            magnitude = int(bitstring[1:], 2) if bit_length > 1 else 0
             if bitstring[0] == "1":  # Negative number
-                int_value = -int(bitstring[1:], 2)
+                int_value = -magnitude
             else:  # Positive number
-                int_value = int(bitstring[1:], 2)
+                int_value = magnitude
 
         elif bin_format == "ones_complement":
             # Handle one's complement for signed integers
             if bitstring[0] == "1":  # Negative number
-                int_value = -((2 ** (bit_length - 1)) - int(bitstring[1:], 2) - 1)
+                magnitude = int(bitstring[1:], 2) if bit_length > 1 else 0
+                int_value = -((2 ** (bit_length - 1)) - magnitude - 1)
             else:  # Positive number
                 int_value = int(bitstring, 2)
         else:
@@ -148,37 +192,34 @@ class Int(BitType[int]):
         """
         n = value
 
+        # Exact integer arithmetic throughout: float log2 under-sizes powers
+        # of two >= 2**49 (2**k + 1 is indistinguishable from 2**k in float).
         if not signed:
             if n == 0:
                 return 1
-            return ceil(log2(n + 1))
+            return n.bit_length()
         else:
             if bin_format is None:
                 bin_format = "twos_complement"
 
             if bin_format == "twos_complement":
-                if n == 0:
-                    return 1  # Technically can represent 0 with 0 bits in
-                    # two's complement, but this is not useful
-
-                is_greq_than_zero = n >= 0
-                abs_val = abs(n)
-                is_power_of_two = (abs_val & (abs_val - 1)) == 0
-
-                if is_greq_than_zero or not is_power_of_two:
-                    return ceil(log2(abs_val + 1)) + 1  # Account for extra
-                    # at negative extreme
-                else:
-                    return int(log2(abs_val)) + 1
+                return twos_complement_bit_length(n)
             elif bin_format == "signed_magnitude" or bin_format == "sign_magnitude":
                 if n == 0:
                     return 1
-                return ceil(log2(abs(n) + 1)) + 1
+                # magnitude bits plus a sign bit
+                return abs(n).bit_length() + 1
             elif bin_format == "ones_complement":
                 if n == 0:
-                    return 1  # Technically can represent 0 with 0 bits in
-                    # one's complement, but this is not useful
-                return ceil(log2(abs(n) + 1)) + 1
+                    return 1
+                # magnitude bits plus a sign bit
+                return abs(n).bit_length() + 1
+            else:
+                raise ValueError(
+                    f"Unsupported format: {bin_format!r}. Expected one of"
+                    f" 'twos_complement', 'signed_magnitude', or"
+                    f" 'ones_complement'."
+                )
 
     def to_bitstring(
         self: Int | int,
@@ -192,21 +233,27 @@ class Int(BitType[int]):
         Convert an integer to a bitstring.
 
         Parameters:
-        - integer (int): The integer to convert.
-        - signed (bool, optional): Whether the integer should be treated as signed.
-            Default is True.
+
+        - self (Int | int): The integer to convert. Call it on an instance
+          as ``x.to_bitstring()``, or directly as
+          ``Int.to_bitstring(5, ...)``.
+        - signed (bool, optional): Whether the integer should be treated as
+          signed. Default is True.
         - bit_length (int, optional): The length of the bitstring.
-        - rep_format (Optional[str], optional): The format for signed integers.
-            Can be "twos_complement", "signed_magnitude", or "ones_complement".
-            Default is "twos_complement".
+        - rep_format (Optional[str], optional): The format for signed
+          integers. It can be "twos_complement", "signed_magnitude", or
+          "ones_complement". Default is "twos_complement".
 
         Returns:
+
         - str: The bitstring representation of the integer.
         """
 
         def unsigned_int_to_bitstring(n: int, bit_length: int):
             if n < 0 or n >= 2**bit_length:
                 raise ValueError("Value out of range for the specified bit_length")
+            if bit_length == 0:
+                return ""
             return bin(n)[2:].zfill(bit_length)
 
         def int_to_twos_complement(n: int, bit_length: int):
@@ -287,105 +334,249 @@ class Int(BitType[int]):
             else:
                 raise ValueError(f"Unsupported format: {rep_format}")
 
-    # Integer value magic methods
-    def __add__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, operator.add)
+    # Promoted operators (C integer promotion). Binary ops compute on plain
+    # values at full width and return plain int - no wrap-at-operator, which
+    # is a behavior C does not have (C never wraps mid-expression; narrowing
+    # happens only at stores/casts). The cast spelling is the constructor:
+    # UInt8(a + b) wraps exactly like (uint8_t)(a + b). The bitwise family
+    # promotes too - in C even ~uint8_t is an int. Compound assignment
+    # narrows back into self's width, like C's a += b.
 
-    def __radd__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, lambda x, y: operator.add(y, x))
+    # Annotations follow the promotion semantics: int-plane operands
+    # (int/bool/Int) produce int; a float operand produces float (the
+    # overload pairs); division is always float; ** may go float on a
+    # negative exponent, so it is Any (as in typeshed's int.__pow__);
+    # the bitwise family only accepts the int plane.
 
-    def __sub__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, operator.sub)
+    @overload
+    def __add__(self, other: int | Int) -> int: ...
 
-    def __rsub__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, lambda x, y: operator.sub(y, x))
+    @overload
+    def __add__(self, other: float | Float) -> float: ...
 
-    def __mul__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, operator.mul)
+    def __add__(self, other):
+        return self._promoted_value_op(other, operator.add)
 
-    def __rmul__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, lambda x, y: operator.mul(y, x))
+    @overload
+    def __radd__(self, other: int | Int) -> int: ...
 
-    def __truediv__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, operator.truediv)
+    @overload
+    def __radd__(self, other: float | Float) -> float: ...
 
-    def __rtruediv__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, lambda x, y: operator.truediv(y, x))
+    def __radd__(self, other):
+        return self._promoted_value_op(other, lambda x, y: y + x)
 
-    def __floordiv__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, operator.floordiv)
+    @overload
+    def __sub__(self, other: int | Int) -> int: ...
 
-    def __rfloordiv__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, lambda x, y: operator.floordiv(y, x))
+    @overload
+    def __sub__(self, other: float | Float) -> float: ...
 
-    def __mod__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, operator.mod)
+    def __sub__(self, other):
+        return self._promoted_value_op(other, operator.sub)
 
-    def __rmod__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, lambda x, y: operator.mod(y, x))
+    @overload
+    def __rsub__(self, other: int | Int) -> int: ...
 
-    def __pow__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, operator.pow)
+    @overload
+    def __rsub__(self, other: float | Float) -> float: ...
 
-    def __rpow__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_value_op(other, lambda x, y: operator.pow(y, x))
+    def __rsub__(self, other):
+        return self._promoted_value_op(other, lambda x, y: y - x)
 
-    # Integer bits magic methods
-    def __lshift__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_bits_op(other, operator.lshift)
+    @overload
+    def __mul__(self, other: int | Int) -> int: ...
 
-    def __rlshift__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_bits_op(other, lambda x, y: operator.lshift(y, x))
+    @overload
+    def __mul__(self, other: float | Float) -> float: ...
 
-    def __rshift__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_bits_op(other, operator.rshift)
+    def __mul__(self, other):
+        return self._promoted_value_op(other, operator.mul)
 
-    def __and__(self: IntSelf, other: Any) -> IntSelf:
-        return self._binary_bits_op(other, operator.and_)
+    @overload
+    def __rmul__(self, other: int | Int) -> int: ...
 
-    # def __add__(self: IntSelf, other: Any) -> IntSelf:
-    #     return self._binary_value_op(other, operator.add)
+    @overload
+    def __rmul__(self, other: float | Float) -> float: ...
 
-    # def __mul__(self: IntSelf, other: Any) -> IntSelf:
-    #     return self._binary_value_op(other, operator.mul)
+    def __rmul__(self, other):
+        return self._promoted_value_op(other, lambda x, y: y * x)
 
-    # def __sub__(self: IntSelf, other: Any) -> IntSelf:
-    #     return self._binary_value_op(other, operator.sub)
+    def __truediv__(self, other: int | float | Int | Float) -> float:
+        return self._promoted_value_op(other, operator.truediv)
 
-    # def __truediv__(self: IntSelf, other: Any) -> IntSelf:
-    #     return self._binary_value_op(other, operator.truediv)
+    def __rtruediv__(self, other: int | float | Int | Float) -> float:
+        return self._promoted_value_op(other, lambda x, y: y / x)
 
-    # def __floordiv__(self: IntSelf, other: Any) -> IntSelf:
-    #     return self._binary_value_op(other, operator.floordiv)
+    @overload
+    def __floordiv__(self, other: int | Int) -> int: ...
 
-    # def __mod__(self: IntSelf, other: Any) -> IntSelf:
-    #     return self._binary_value_op(other, operator.mod)
+    @overload
+    def __floordiv__(self, other: float | Float) -> float: ...
 
-    # def __pow__(self: IntSelf, other: Any) -> IntSelf:
-    #     return self._binary_value_op(other, operator.pow)
+    def __floordiv__(self, other):
+        return self._promoted_value_op(other, operator.floordiv)
 
-    # def __lshift__(self: IntSelf, other: Any) -> IntSelf:
-    #     return self._binary_bits_op(other, operator.lshift)
+    @overload
+    def __rfloordiv__(self, other: int | Int) -> int: ...
 
-    # def __rshift__(self: IntSelf, other: Any) -> IntSelf:
-    #     return self._binary_bits_op(other, operator.rshift)
+    @overload
+    def __rfloordiv__(self, other: float | Float) -> float: ...
 
-    # def __and__(self: IntSelf, other: Any) -> IntSelf:
-    #     return self._binary_bits_op(other, operator.and_)
+    def __rfloordiv__(self, other):
+        return self._promoted_value_op(other, lambda x, y: y // x)
 
-    # def __or__(self: IntSelf, other: Any) -> IntSelf:
-    #     return self._binary_bits_op(other, operator.or_)
+    @overload
+    def __mod__(self, other: int | Int) -> int: ...
 
-    # def __xor__(self: IntSelf, other: Any) -> IntSelf:
-    #     return self._binary_bits_op(other, operator.xor)
+    @overload
+    def __mod__(self, other: float | Float) -> float: ...
+
+    def __mod__(self, other):
+        return self._promoted_value_op(other, operator.mod)
+
+    @overload
+    def __rmod__(self, other: int | Int) -> int: ...
+
+    @overload
+    def __rmod__(self, other: float | Float) -> float: ...
+
+    def __rmod__(self, other):
+        return self._promoted_value_op(other, lambda x, y: y % x)
+
+    def __pow__(self, other: int | float | Int | Float) -> Any:
+        return self._promoted_value_op(other, operator.pow)
+
+    def __rpow__(self, other: int | float | Int | Float) -> Any:
+        return self._promoted_value_op(other, lambda x, y: y**x)
+
+    def __and__(self, other: int | Int) -> int:  # type: ignore[override]
+        return self._promoted_value_op(other, operator.and_)
+
+    def __rand__(self, other: int | Int) -> int:  # type: ignore[override]
+        return self._promoted_value_op(other, lambda x, y: y & x)
+
+    def __or__(self, other: int | Int) -> int:  # type: ignore[override]
+        return self._promoted_value_op(other, operator.or_)
+
+    def __ror__(self, other: int | Int) -> int:  # type: ignore[override]
+        return self._promoted_value_op(other, lambda x, y: y | x)
+
+    def __xor__(self, other: int | Int) -> int:  # type: ignore[override]
+        return self._promoted_value_op(other, operator.xor)
+
+    def __rxor__(self, other: int | Int) -> int:  # type: ignore[override]
+        return self._promoted_value_op(other, lambda x, y: y ^ x)
+
+    def __lshift__(self, other: int | Int) -> int:  # type: ignore[override]
+        return self._promoted_value_op(other, operator.lshift)
+
+    def __rlshift__(self, other: int | Int) -> int:
+        return self._promoted_value_op(other, lambda x, y: y << x)
+
+    def __rshift__(self, other: int | Int) -> int:  # type: ignore[override]
+        return self._promoted_value_op(other, operator.rshift)
+
+    def __rrshift__(self, other: int | Int) -> int:
+        return self._promoted_value_op(other, lambda x, y: y >> x)
+
+    def __invert__(self) -> int:  # type: ignore[override]
+        # The classic C gotcha, faithfully: ~ promotes, so the result is
+        # plain -(value + 1). The width-preserving spelling is ~self.bits.
+        return ~self.value
+
+    # Unary arithmetic promotes like the binary ops (in C, -uint8_t
+    # computes in int): the result is the plain promoted value, and the
+    # narrowing cast spelling is the constructor, e.g. UInt8(-u).
+    # Mirrors Float.__neg__/__pos__/__abs__.
+
+    def __neg__(self) -> int:
+        return -self.value
+
+    def __pos__(self) -> int:
+        return +self.value
+
+    def __abs__(self) -> int:
+        return abs(self.value)
+
+    # Ordering comparisons (value-based, like __eq__; new in the promotion
+    # model - they previously did not exist at all).
+
+    def __lt__(self, other: int | float | Int | Float) -> bool:
+        return self._promoted_value_op(other, operator.lt)
+
+    def __le__(self, other: int | float | Int | Float) -> bool:
+        return self._promoted_value_op(other, operator.le)
+
+    def __gt__(self, other: int | float | Int | Float) -> bool:
+        return self._promoted_value_op(other, operator.gt)
+
+    def __ge__(self, other: int | float | Int | Float) -> bool:
+        return self._promoted_value_op(other, operator.ge)
+
+    # Compound assignment: read-promote, compute full-width, narrowing store.
+    # Type-preserving (returns self after the narrowing store). mypy reports
+    # __i*__/__*__ as incompatible on the arithmetic ops because C compound
+    # assignment deliberately diverges from the binary op: ``u += 1`` keeps
+    # u's box type (narrowing store) while ``u + 1`` promotes to plain int.
+    # The divergence is the intended D5 semantics, so ignore[misc] where it
+    # is flagged.
+
+    def __iadd__(  # type: ignore[misc]
+        self: IntSelf, other: int | float | Int | Float
+    ) -> IntSelf:
+        return self._inplace_value_op(other, operator.add)
+
+    def __isub__(  # type: ignore[misc]
+        self: IntSelf, other: int | float | Int | Float
+    ) -> IntSelf:
+        return self._inplace_value_op(other, operator.sub)
+
+    def __imul__(  # type: ignore[misc]
+        self: IntSelf, other: int | float | Int | Float
+    ) -> IntSelf:
+        return self._inplace_value_op(other, operator.mul)
+
+    def __itruediv__(self: IntSelf, other: int | float | Int | Float) -> IntSelf:
+        return self._inplace_value_op(other, operator.truediv)
+
+    def __ifloordiv__(  # type: ignore[misc]
+        self: IntSelf, other: int | float | Int | Float
+    ) -> IntSelf:
+        return self._inplace_value_op(other, operator.floordiv)
+
+    def __imod__(  # type: ignore[misc]
+        self: IntSelf, other: int | float | Int | Float
+    ) -> IntSelf:
+        return self._inplace_value_op(other, operator.mod)
+
+    def __ipow__(self: IntSelf, other: int | float | Int | Float) -> IntSelf:
+        return self._inplace_value_op(other, operator.pow)
+
+    def __iand__(self: IntSelf, other: int | Int) -> IntSelf:
+        return self._inplace_value_op(other, operator.and_)
+
+    def __ior__(self: IntSelf, other: int | Int) -> IntSelf:
+        return self._inplace_value_op(other, operator.or_)
+
+    def __ixor__(self: IntSelf, other: int | Int) -> IntSelf:
+        return self._inplace_value_op(other, operator.xor)
+
+    def __ilshift__(self: IntSelf, other: int | Int) -> IntSelf:
+        return self._inplace_value_op(other, operator.lshift)
+
+    def __irshift__(self: IntSelf, other: int | Int) -> IntSelf:
+        return self._inplace_value_op(other, operator.rshift)
 
 
 class SignedConfig:
     """
-    A class to change the default representation and conversion
-        for all non-user-implemented or non-user-specified signed integers
-            simultaneously.
-        If this is unadjusted, the default signed integer format is two's complement.
+    A class to change the default representation and conversion for all
+    non-user-implemented or non-user-specified signed integers
+    simultaneously.
+
+    If this is unadjusted, the default signed integer format is two's
+    complement.
     """
 
     signed_int_format: Literal[
@@ -397,27 +588,28 @@ class SInt(Int):
     """
     A BitType that represents a signed integer.
 
-    Use the `specialize` method to create a subclass with the desired number of bits
-        or use one of the pre-defined subclasses.
+    Use the `specialize` method to create a subclass with the number of bits
+    you need, or use one of the pre-defined subclasses.
 
-    To change the signed integer format, use the `Config` class
-        (or set the `int_format` parameter in the constructor).
-        The default signed integer format is two's complement.
+    The default signed integer format is two's complement. Change it for a
+    single instance through the constructor's `int_format` parameter, or for
+    every otherwise-unspecified signed integer through the `SignedConfig`
+    class.
 
     Class Attributes:
         base_bit_type : Type[BitType]
-            The base class (this is `SInt` for `SInt` children).
+            The base class, which is `SInt` for `SInt` children.
         num_bits : int
             The number of bits in the integer.
         is_signed : bool
-            Whether the integer is signed (this is True for SInts).
+            Whether the integer is signed. It is True for SInts.
 
     Instance Attributes:
         int_format : Optional[str]
-            The format for this signed integer.
-            Can be "twos_complement", "signed_magnitude", or "ones_complement".
-            If this is left as `None`, the format will be taken from the `Config` class.
-            Default is "twos_complement.
+            The format for this signed integer. It can be
+            "twos_complement", "signed_magnitude", or "ones_complement".
+            Leaving it as `None` takes the format from the `SignedConfig`
+            class, which itself defaults to "twos_complement".
         value : int
             The `int` value of the `SInt`.
         bits : BitVector
@@ -438,16 +630,23 @@ class SInt(Int):
     ):
         if int_format is None:
             int_format = SignedConfig.signed_int_format
+        elif int_format == "sign_magnitude":  # alias accepted downstream
+            int_format = "signed_magnitude"
+        if int_format not in (
+            "twos_complement",
+            "signed_magnitude",
+            "ones_complement",
+        ):
+            raise ValueError(
+                f"int_format must be one of 'twos_complement',"
+                f" 'signed_magnitude', or 'ones_complement';"
+                f" got {int_format!r}"
+            )
 
         self.int_format: Literal[
             "twos_complement", "signed_magnitude", "ones_complement"
         ] = int_format
         super().__init__(source=source, value=value, bits=bits, endianness=endianness)
-
-    # @classproperty
-    # @classmethod
-    # def int_format(cls) -> str:
-    #     return Config.signed_int_format
 
     @property
     def value(self):
@@ -461,11 +660,29 @@ class SInt(Int):
             # (mod 2**n), matching (intN_t) truncation in C. The other
             # (non-two's-complement) formats have no C analogue and still
             # reject out-of-range values.
-            value = ((value + (1 << (n - 1))) % (1 << n)) - (1 << (n - 1))
+            value = _narrow_int(value, n, signed=True, target=type(self).__name__)
         str_bits = Int.to_bitstring(
             value, signed=True, bit_length=n, rep_format=self.int_format
         )
         self.bits = BitVector(str_bits)
+
+    def __repr__(self):
+        """
+        Return a string that recreates this SInt when evaluated with the
+        class name in scope.
+
+        The repr appends `int_format` to the base `BitType` format. The same
+        bits decode to different values under different signed formats, so a
+        faithful reconstruction needs the format this instance was built
+        with.
+
+        Returns:
+            str: ClassName(bits='<01 string>', endianness=..., int_format=...)
+        """
+        return (
+            f"{self.__class__.__name__}(bits={self.bits.to01()!r},"
+            f" endianness={self.endianness!r}, int_format={self.int_format!r})"
+        )
 
     @classmethod
     def specialize(
@@ -477,12 +694,12 @@ class SInt(Int):
         """
         Produce a subclass of SInt with the specified number of bits.
 
-        If a packing format letter is provided, the subclass will also be a
-            StructPackedBitType
-            and use struct's packing/unpacking functions with the provided letter.
+        If a packing format letter is provided, the subclass will also be
+        a StructPackedBitType and use struct's packing/unpacking functions
+        with the provided letter.
 
-        If name_ is provided, the subclass will have that name internally after class
-            creation. Otherwise, the subclass will be named _SInt.
+        If ``name_`` is provided, the subclass will have that name
+        internally after class creation. Otherwise, the subclass will be named _SInt.
 
         Args:
             num_bits_ (int): The number of bits in integers of this type.
@@ -546,13 +763,24 @@ class SInt7(SInt):
     _num_bits = 7
 
 
-class SInt8(StructPackedBitType, SInt):
-    _num_bits = 8
-    packing_format_letter = "b"
+class _StructPackedSInt(StructPackedBitType[int], SInt):
+    """Shared base of the struct-packable signed widths (SInt8/16/32/64).
+
+    struct's b/h/i/q letters are two's-complement only. Packing therefore
+    applies exactly when this instance's own ``int_format`` is two's
+    complement, which is the same per-instance gate that ``SInt.specialize``
+    generates. Any other format falls back to the bit-string path on the
+    MRO.
+    """
 
     @property
     def skip_struct_packing(self):
-        return SignedConfig.signed_int_format != "twos_complement"
+        return self.int_format != "twos_complement"
+
+
+class SInt8(_StructPackedSInt):
+    _num_bits = 8
+    packing_format_letter = "b"
 
 
 class SInt9(SInt):
@@ -583,31 +811,19 @@ class SInt15(SInt):
     _num_bits = 15
 
 
-class SInt16(StructPackedBitType, SInt):
+class SInt16(_StructPackedSInt):
     _num_bits = 16
     packing_format_letter = "h"
 
-    @property
-    def skip_struct_packing(self):
-        return SignedConfig.signed_int_format != "twos_complement"
 
-
-class SInt32(StructPackedBitType, SInt):
+class SInt32(_StructPackedSInt):
     _num_bits = 32
     packing_format_letter = "i"
 
-    @property
-    def skip_struct_packing(self):
-        return SignedConfig.signed_int_format != "twos_complement"
 
-
-class SInt64(StructPackedBitType, SInt):
+class SInt64(_StructPackedSInt):
     _num_bits = 64
     packing_format_letter = "q"
-
-    @property
-    def skip_struct_packing(self):
-        return SignedConfig.signed_int_format != "twos_complement"
 
 
 class SInt128(SInt):
@@ -646,8 +862,10 @@ class UInt(Int):
         # C-style narrowing conversion: keep the low num_bits bits
         # (value modulo 2**num_bits), so out-of-range values wrap instead
         # of raising, matching (uintN_t) truncation in C.
-        value &= (1 << self.num_bits) - 1
-        str_bits = Int.to_bitstring(value, signed=False, bit_length=self.num_bits)
+        masked = _narrow_int(
+            value, self.num_bits, signed=False, target=type(self).__name__
+        )
+        str_bits = Int.to_bitstring(masked, signed=False, bit_length=self.num_bits)
         self.bits = BitVector(str_bits)
 
     @classmethod
@@ -660,12 +878,12 @@ class UInt(Int):
         """
         Produce a subclass of UInt with the specified number of bits.
 
-        If a packing format letter is provided, the subclass will also be a
-            StructPackedBitType
-            and use struct's packing/unpacking functions with the provided letter.
+        If a packing format letter is provided, the subclass will also be
+        a StructPackedBitType and use struct's packing/unpacking functions
+        with the provided letter.
 
-        If name_ is provided, the subclass will have that name internally after class
-            creation. Otherwise, the subclass will be named _UInt.
+        If ``name_`` is provided, the subclass will have that name
+        internally after class creation. Otherwise, the subclass will be named _UInt.
 
         Args:
             num_bits_ (int): The number of bits in integers of this type.
@@ -725,7 +943,7 @@ class UInt7(UInt):
     _num_bits = 7
 
 
-class UInt8(StructPackedBitType, UInt):
+class UInt8(StructPackedBitType[int], UInt):
     _num_bits = 8
     packing_format_letter = "B"
 
@@ -758,17 +976,17 @@ class UInt15(UInt):
     _num_bits = 15
 
 
-class UInt16(StructPackedBitType, UInt):
+class UInt16(StructPackedBitType[int], UInt):
     _num_bits = 16
     packing_format_letter = "H"
 
 
-class UInt32(StructPackedBitType, UInt):
+class UInt32(StructPackedBitType[int], UInt):
     _num_bits = 32
     packing_format_letter = "I"
 
 
-class UInt64(StructPackedBitType, UInt):
+class UInt64(StructPackedBitType[int], UInt):
     _num_bits = 64
     packing_format_letter = "Q"
 

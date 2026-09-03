@@ -60,7 +60,13 @@ class BitsCastable(Protocol):
     def __Bits__(self) -> BitVector: ...
 
 BitsConstructible = Union[
-    "BitVector", bytes, str, Iterable[_LaxLiteral01], BitsCastable
+    "BitVector",
+    bytes,
+    bytearray,
+    memoryview,
+    str,
+    Iterable[_LaxLiteral01],
+    BitsCastable,
 ]
 
 class BitVector(MutableSequence[Literal[0, 1]], BitsCastable):
@@ -201,9 +207,7 @@ class BitVector(MutableSequence[Literal[0, 1]], BitsCastable):
     def extend(self, values: BitsConstructible) -> None: ...
     def insert(self, index: int, value: int) -> None: ...
     @overload
-    def pop(
-        self, index: Optional[int] = None, default: None = None
-    ) -> Literal[0, 1]: ...
+    def pop(self, index: Optional[int] = None) -> Literal[0, 1]: ...
     @overload
     def pop(
         self, index: Optional[int] = None, default: _T = ...
@@ -222,10 +226,26 @@ class BitVector(MutableSequence[Literal[0, 1]], BitsCastable):
         end: Optional[int] = None,
     ) -> int: ...
     def endswith(
-        self, substrings: bytes, start: int = 0, stop: Optional[int] = None
+        self,
+        substrings: Union[
+            BitsConstructible,
+            "BitVector",
+            Literal[0, 1],
+            Iterable[Union[BitsConstructible, "BitVector"]],
+        ],
+        start: int = 0,
+        stop: Optional[int] = None,
     ) -> bool: ...
     def startswith(
-        self, substrings: bytes, start: int = 0, stop: Optional[int] = None
+        self,
+        substrings: Union[
+            BitsConstructible,
+            "BitVector",
+            Literal[0, 1],
+            Iterable[Union[BitsConstructible, "BitVector"]],
+        ],
+        start: int = 0,
+        stop: Optional[int] = None,
     ) -> bool: ...
     def find(
         self,

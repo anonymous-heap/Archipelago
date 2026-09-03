@@ -1,2 +1,6 @@
 pydantic>=2.6.0
+# The world needs the bytemaker.spaces surface (>= 0.13). 0.13 is not on PyPI yet, so
+# the working copy is vendored (worlds/cvaos/vendor/bytemaker, 0.13.0.dev0) and
+# _bytemaker_compat.py supersedes any older installed copy. Keep this at the last PyPI
+# release so an environment install still resolves; bump to >=0.13 once it ships.
 bytemaker>=0.12.0

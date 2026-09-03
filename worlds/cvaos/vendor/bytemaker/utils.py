@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import dataclasses
-from math import ceil, log2
 
 from bytemaker.typing_redirect import (
+    Annotated,
     Any,
     Dict,
     Hashable,
     ItemsView,
     Iterable,
     Iterator,
+    Literal,
     Mapping,
     Optional,
     Sequence,
@@ -18,6 +19,26 @@ from bytemaker.typing_redirect import (
     get_args,
     get_origin,
 )
+
+
+def unwrap_alias(obj):
+    """Unwrap a ``u16``/``s5`` field alias to the codec inside it, so that
+    ``Annotated[int, UInt16]`` becomes ``UInt16``.
+
+    Anything else passes through untouched.
+
+    The aliases exist so record declarations read like C, and people then
+    reach for the same name anywhere a codec is wanted. That is a natural
+    move, but it used to fail three layers down with a compile error about
+    ``Annotated``. Any codec-accepting boundary should run its argument
+    through here first, so that both spellings of a scalar mean the scalar.
+    """
+    if get_origin(obj) is Annotated:
+        for meta in get_args(obj)[1:]:
+            if isinstance(getattr(meta, "num_bits", None), int):
+                return meta
+    return obj
+
 
 #  General Python functionality
 
@@ -94,6 +115,37 @@ class Trie:
         return root
 
 
+def validate_endianness(
+    endianness: Any, name: str = "endianness", exc: type = ValueError
+) -> Literal["big", "little"]:
+    """
+    Validates a byte-order argument at an API intake point.
+
+    Every bytemaker parameter that selects a byte order accepts exactly
+    "big" or "little". Historically any other string fell through into
+    whichever branch a call site's equality test happened to pick (a typo
+    like "bigg" serialized little-endian through BitType.__bytes__ but
+    big-endian through pytype_to_bytes), so the check lives here and runs
+    at intake, not at use.
+
+    Args:
+        endianness: The value to validate.
+        name (str): The parameter name to blame in the error message.
+            Defaults to "endianness".
+        exc (type): The exception class to raise. Defaults to ValueError;
+            schema-compile intake points pass PlanCompileError.
+
+    Returns:
+        Literal["big", "little"]: ``endianness``, unchanged.
+
+    Raises:
+        exc: If ``endianness`` is not exactly "big" or "little".
+    """
+    if endianness not in ("big", "little"):
+        raise exc(f"{name} must be 'big' or 'little'; got {endianness!r}")
+    return endianness
+
+
 def is_instance_of_union(obj, union_type: type):
     """
     Determines if an object is an instance of a union type
@@ -123,16 +175,27 @@ def is_instance_of_union(obj, union_type: type):
 
         type_args = get_args(union_type)
 
+        # If the type is a Literal type
+        #   check if the object equals one of the literal values
+        if type_origin is Literal:
+            return obj in type_args
+
         # If the type is a union type or its instances are iterable
         #   check if the object is an instance of any
         #       of the constituent types
-        #   or if the object is an iterable and its first element
-        #       is an instance of the first type argument
+        #   or if the object is an iterable and all of its elements
+        #       are instances of the single type argument
         if type_origin is Union:
             return any(is_instance_of_union(obj, type_arg) for type_arg in type_args)
         elif isinstance(obj, type_origin):
             if len(type_args) == 1 and isinstance(obj, Iterable):
-                return bool(obj) or is_instance_of_union(next(iter(obj)), type_args[0])
+                # One-shot iterators cannot be inspected without consuming
+                #   them; accept and let the consumer validate the elements
+                if isinstance(obj, Iterator):
+                    return True
+                return all(
+                    is_instance_of_union(element, type_args[0]) for element in obj
+                )
 
             # If the type is a multi-arg, non-union, non-generic type
             else:
@@ -247,6 +310,9 @@ class _ByteConvertibleMeta(type):
             bytes(__instance)
             return True
         except Exception:
+            # Deliberately broad: this is an isinstance() probe. A foreign
+            # __bytes__ raising anything means "not byte-convertible";
+            # propagating would make isinstance() itself throw.
             return False
 
     def __subclasscheck__(self, __subclass: Any) -> bool:
@@ -300,25 +366,34 @@ def twos_complement_bit_length(n: int):
         return 1  # Technically can represent 0 with 0 bits in
         # two's complement, but this is not useful
 
-    is_greq_than_zero = n >= 0
-    abs_val = abs(n)
-    is_power_of_two = (abs_val & (abs_val - 1)) == 0
-
-    if is_greq_than_zero or not is_power_of_two:
-        return ceil(log2(abs_val + 1)) + 1  # Account for extra
-        # at negative extreme
-    else:
-        return int(log2(abs_val)) + 1
+    # Exact integer arithmetic (float log2 loses precision for n >= 2**49:
+    # 2**k + 1 is indistinguishable from 2**k, so a positive power of two
+    # would be under-sized by one bit and lose its sign bit).
+    if n > 0:
+        # magnitude bits plus a leading 0 sign bit
+        return n.bit_length() + 1
+    # negative: ~n == -n - 1; its magnitude width plus the sign bit
+    return (~n).bit_length() + 1
 
 
 def twos_complement(number, n_bits=32):
     """
     Convert an integer to its two's complement representation.
 
-    :param number: The integer to convert.
-    :param bits: The bit width for the two's complement representation.
-    :return: A string representing the two's complement of the number.
+    Args:
+        number (int): The integer to convert. Must fit in ``n_bits`` bits:
+            ``-(2**(n_bits-1)) <= number < 2**(n_bits-1)``.
+        n_bits (int, optional): The bit width for the two's complement
+            representation. Defaults to 32.
+
+    Returns:
+        str: A string of exactly ``n_bits`` binary digits.
+
+    Raises:
+        ValueError: If ``number`` does not fit in ``n_bits`` bits.
     """
+    if not -(1 << (n_bits - 1)) <= number < (1 << (n_bits - 1)):
+        raise ValueError(f"{number} does not fit in {n_bits} bits in two's complement")
     if number < 0:
         number = (1 << n_bits) + number
     format_string = "{:0" + str(n_bits) + "b}"
