@@ -63,7 +63,7 @@ class GameState(IntEnum):
 MENU_STATE_NORMAL = 0x01            # in-room, not transitioning/paused/shopping
 MENU_STATE_DEATH = 0x02             # death/game-over fade sub-state (drives DeathLink detection)
 MENU_STATE_ROOM_TRANSITION = 0x03
-MENU_STATE_SAVE = 0x04              # save-room prompt (observed live in the collection; saving refills HP)
+MENU_STATE_OVERLAY = 0x04           # full-screen overlays: the save prompt and the Select map (observed live)
 MENU_STATE_PAUSE = 0x06
 MENU_STATE_WARP_MAP = 0x07          # warp-room map screen (observed live in the collection)
 MENU_STATE_SHOP = 0x09
