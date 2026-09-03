@@ -648,12 +648,16 @@ def psb_write(root, version: int = 3) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-def load_index(psb_m_path: str):
-    """Decrypt/parse ``alldata.psb.m``; returns the root object (a dict)."""
+def load_index(psb_m_path: str, index_key_name: str | None = None):
+    """Decrypt/parse ``alldata.psb.m``; returns the root object (a dict).
+
+    *index_key_name* names the file for key derivation when it is not stored
+    under the name the game knows it by (a backup copy, say); the default is
+    the file's own basename."""
     with open(psb_m_path, "rb") as f:
         data = f.read()
     if data[:4] == MDF_MAGIC:
-        data = mdf_decrypt(os.path.basename(psb_m_path), data)
+        data = mdf_decrypt(index_key_name or os.path.basename(psb_m_path), data)
     root = psb_read(data)
     if not isinstance(root, dict) or "file_info" not in root:
         raise PsbError("PSB does not look like an archive index")
@@ -677,10 +681,11 @@ def _resolve_member(file_info: dict, member_name: str) -> str:
 
 
 def extract_member(psb_m_path: str, bin_path: str, member_name: str,
-                   raw: bool = False) -> bytes:
+                   raw: bool = False, index_key_name: str | None = None) -> bytes:
     """Extract one member; returns decoded plain bytes (or the stored blob if
-    *raw* is true or the member is not MDF-wrapped)."""
-    fi = load_index(psb_m_path)["file_info"]
+    *raw* is true or the member is not MDF-wrapped).  *index_key_name* is
+    passed to :func:`load_index`."""
+    fi = load_index(psb_m_path, index_key_name)["file_info"]
     name = _resolve_member(fi, member_name)
     off, size = fi[name]
     with open(bin_path, "rb") as f:

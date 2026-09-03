@@ -260,6 +260,22 @@ class ExtractBaseRomTest(unittest.TestCase):
         with self.assertRaisesRegex(InstallError, "not an Aria of Sorrow"):
             extract_base_rom_bytes(self._collection(bytes(rom)))
 
+    def test_prefers_the_pristine_backups_once_a_seed_is_installed(self) -> None:
+        stock = _make_stock_base_rom()
+        exe = self._collection(stock)
+        rom_path = os.path.join(os.path.dirname(exe), "patched.gba")
+        with open(rom_path, "wb") as f:
+            f.write(_make_patched_rom())
+        with mock.patch.object(install, "collection_running", return_value=False):
+            install_rom(rom_path, exe, log=_quiet)
+        # The live archive now holds the seed; the base ROM must still be the stock one.
+        self.assertEqual(extract_base_rom_bytes(exe), stock)
+
+    def test_refuses_an_installed_seed_with_no_backup_to_fall_back_on(self) -> None:
+        exe = self._collection(_make_patched_rom())  # patched member, no .apbackup pair
+        with self.assertRaisesRegex(InstallError, "already Archipelago-patched"):
+            extract_base_rom_bytes(exe)
+
 
 class BaseRomSourceTest(unittest.TestCase):
     """get_base_rom_bytes(target): AC sources the collection; GBA uses rom_file (ROM or exe)."""

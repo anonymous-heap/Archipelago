@@ -21,7 +21,8 @@ Safety model, in order:
   process attach; Windows file locks are the backstop);
 * pristine ``*.apbackup`` copies of both windata files are made ONCE, ever —
   installing later seeds never overwrites them, so ``restore_backup`` always
-  returns to stock;
+  returns to stock, and once they exist the base ROM is extracted from them
+  rather than from the live archive (which then holds the installed seed);
 * the rebuilt pair is staged in a scratch subdirectory using the real
   filenames (the MDF key is derived from the lowercased basename), verified by
   re-extracting the member, and only then moved over the live files with
@@ -58,6 +59,8 @@ AOS_MEMBER = "system/roms/03_Akatsuki_US.patch_210623m.bin"
 ROM_SIZE = 0x800000
 BACKUP_SUFFIX = ".apbackup"
 WINDATA_FILES = ("alldata.bin", "alldata.psb.m")
+INDEX_KEY_NAME = "alldata.psb.m"  # the index's key derives from this name, whatever the file is called
+_AP_MARKER_PREFIX = b"CVAOS_AP_"   # shared by every patch version's identifier
 
 # Mirrors collection_client.ROM_TITLE/ROM_TITLE_OFFSET (not imported: that module pulls
 # in CommonClient, which the installer doesn't need).
@@ -101,17 +104,30 @@ def windata_dir_from_exe(exe_path: str) -> str:
     return windata
 
 
+def _stock_archive_pair(windata: str) -> tuple[str, str]:
+    """The ``(alldata.psb.m, alldata.bin)`` pair that still holds the stock ROM.
+
+    Before any install that is the live pair. Afterwards the live pair holds the installed
+    seed, and the installer's pristine ``*.apbackup`` copies are the stock source.
+    """
+    live = (os.path.join(windata, "alldata.psb.m"), os.path.join(windata, "alldata.bin"))
+    backups = (live[0] + BACKUP_SUFFIX, live[1] + BACKUP_SUFFIX)
+    return backups if all(os.path.isfile(p) for p in backups) else live
+
+
 def extract_base_rom_bytes(exe_path: str) -> bytes:
     """Pull the collection's stock AoS ROM out of ``windata/`` next to *exe_path*.
 
     This is the base ROM AP patches against for collection play — it carries M2's
     audio bridge, unlike a cart dump. Lets the world source its base ROM from the
     installed collection instead of asking the user to run ``cac_archive extract`` by hand.
+    Once a seed has been installed the live archive holds that seed, so the pristine
+    backups are read instead; a patched ROM with no backups to fall back on is refused.
     """
     windata = windata_dir_from_exe(exe_path)
+    psb_m, bin_path = _stock_archive_pair(windata)
     try:
-        rom = cac_archive.extract_member(os.path.join(windata, "alldata.psb.m"),
-                                         os.path.join(windata, "alldata.bin"), AOS_MEMBER)
+        rom = cac_archive.extract_member(psb_m, bin_path, AOS_MEMBER, index_key_name=INDEX_KEY_NAME)
     except (OSError, ValueError, KeyError) as exc:
         raise InstallError(f"Could not extract the AoS ROM from {windata!r}: {exc}") from exc
     if len(rom) != ROM_SIZE:
@@ -120,6 +136,12 @@ def extract_base_rom_bytes(exe_path: str) -> bytes:
             "The collection's archive may have changed — please report this.")
     if rom[_ROM_TITLE_OFFSET:_ROM_TITLE_OFFSET + len(_ROM_TITLE)] != _ROM_TITLE:
         raise InstallError(f"The member extracted from {windata!r} is not an Aria of Sorrow ROM.")
+    marker = rom[ARCHIPELAGO_IDENTIFIER_START:ARCHIPELAGO_IDENTIFIER_START + len(_AP_MARKER_PREFIX)]
+    if marker == _AP_MARKER_PREFIX:
+        raise InstallError(
+            f"The AoS ROM in {windata!r} is already Archipelago-patched and no pristine backup "
+            f"({WINDATA_FILES[1]}{BACKUP_SUFFIX}) sits next to it. Use Steam's \"Verify integrity "
+            "of game files\" to restore the stock archive, then try again.")
     return bytes(rom)
 
 
@@ -145,7 +167,7 @@ def validate_patched_rom(rom_bytes: bytes) -> None:
     ident = rom_bytes[ARCHIPELAGO_IDENTIFIER_START:
                       ARCHIPELAGO_IDENTIFIER_START + len(ARCHIPELAGO_IDENTIFIER)]
     if ident != ARCHIPELAGO_IDENTIFIER.encode("ascii"):
-        if ident.startswith(b"CVAOS_AP_"):
+        if ident.startswith(_AP_MARKER_PREFIX):
             raise InstallError(
                 f"ROM was patched by a different world version ({ident.decode('ascii', 'replace')}, "
                 f"this world writes {ARCHIPELAGO_IDENTIFIER}). Re-patch with the matching version.")
@@ -286,8 +308,9 @@ def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
         if cac_archive.extract_member(out_psb, out_bin, AOS_MEMBER) != rom_bytes:
             raise InstallError("Verification failed: the rebuilt archive does not round-trip "
                                "the ROM. Nothing was changed — please report this bug.")
-        # The AoS member is stored raw at exactly 8 MiB, so the rebuilt layout matches the
-        # old index; still, replace payload first so a torn pair keeps a valid index.
+        # The AoS member is MDF-compressed, so its stored size (and every later member's
+        # offset) changes with the ROM's content: the two files only agree as a pair. Payload
+        # first, so the disagreement window is the single os.replace of the index.
         os.replace(out_bin, live_bin)
         os.replace(out_psb, live_psb)
     except InstallError:
