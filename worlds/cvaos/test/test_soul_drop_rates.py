@@ -62,8 +62,9 @@ class TestScaledRate(unittest.TestCase):
         byte value n -- so the contract is "land on the nearest one", not "hit the request
         exactly". This checks the choice against an exhaustive search of every byte.
 
-        It also captures the ceiling implicitly: for a rate of 1 the best value is n=0, worth
-        only 1.25x, so any larger request resolves to that.
+        It also captures the ceiling implicitly: byte 0 is excluded from the search because the
+        death routine skips the roll for it, so for a rate of 1 nothing is more common than the
+        rate itself and every request resolves to 1.
         """
         for percent in (120, 150, 200, 400, 1000):
             for rate in SAMPLE_RATES:
@@ -71,7 +72,7 @@ class TestScaledRate(unittest.TestCase):
                     continue
                 wanted = percent / 100
                 chosen = sdr.scaled_rate(rate, percent)
-                best = min(range(0x100),
+                best = min(range(1, 0x100),
                            key=lambda n: (abs(_chance(n) / _chance(rate) - wanted), n))
                 with self.subTest(percent=percent, rate=rate):
                     self.assertAlmostEqual(
@@ -80,20 +81,20 @@ class TestScaledRate(unittest.TestCase):
                         places=9)
 
     def test_ceiling_is_reached_when_the_request_exceeds_it(self):
-        """Floors at 0 once the request passes what the rate can express."""
+        """Floors at 1 once the request passes what the rate can express (0 would be no drop)."""
         for percent in (120, 200, 400, 1000):
             for rate in SAMPLE_RATES:
                 if rate == 0:
                     continue
-                ceiling = (rate + sdr.RATE_CHANCE_BIAS) / sdr.RATE_CHANCE_BIAS
+                ceiling = (rate + sdr.RATE_CHANCE_BIAS) / (1 + sdr.RATE_CHANCE_BIAS)
                 with self.subTest(percent=percent, rate=rate):
                     if percent / 100 > ceiling:
-                        self.assertEqual(sdr.scaled_rate(rate, percent), 0)
+                        self.assertEqual(sdr.scaled_rate(rate, percent), 1)
 
     def test_default_multiplier_keeps_the_rare_tail_farmable_not_guaranteed(self):
-        """At 1.2x the souls that matter still need farming; only rate 1 rounds to guaranteed."""
+        """At 1.2x the souls that matter still need farming, and no soul is ever switched off."""
         for rate in SAMPLE_RATES:
-            if rate <= 1:
+            if rate == 0:
                 continue
             with self.subTest(rate=rate):
                 self.assertGreater(sdr.scaled_rate(rate, 120), 0)
@@ -197,6 +198,15 @@ class TestOptionWiring(unittest.TestCase):
         from worlds.cvaos.options import SoulDropRateMultiplier as opt
 
         self.assertGreaterEqual(opt.range_start, 100)
+
+class RateFloorTest(unittest.TestCase):
+    def test_a_nonzero_rate_never_scales_to_zero(self):
+        # 0 is not "very common": the death routine skips the roll for it entirely
+        # (rom/soul_guarantee_hook.py), so the multiplier must never produce it.
+        for rate in (1, 2, 5, 32, 0xFF):
+            for percent in (150, 200, 400, 1000):
+                with self.subTest(rate=rate, percent=percent):
+                    self.assertGreaterEqual(sdr.scaled_rate(rate, percent), 1)
 
 
 if __name__ == "__main__":

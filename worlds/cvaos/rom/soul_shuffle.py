@@ -6,7 +6,7 @@ indexed by enemy id (Bat..Chaos) -- the same table :mod:`.soul_drop_rates` adjus
 of each entry describe the soul that enemy drops:
 
     +0x12  drop rate   -- chance ~= numerator / (rate*8 + 32 - LCK/16), so a LOWER byte is a
-                         MORE common drop and 0 is effectively a guaranteed one
+                         MORE common drop; 0 makes the death routine skip the roll (no drop)
     +0x17  soul type   -- 0 red/bullet, 1 blue/guardian, 2 yellow/enchant, 3 ability
     +0x18  soul index  -- 1-based within the type; 0 means the enemy drops no soul at all
 
@@ -31,10 +31,10 @@ Controlled by the ``keep_soul_drop_rates`` option:
 
 * ``False`` -- the rate byte stays with the ENEMY, so a soul is as rare as whatever now drops it.
 * ``True`` -- the rate byte moves WITH THE SOUL, so each soul keeps its vanilla rarity and only
-  its source changes. One exception: an enemy whose vanilla rate is 0 keeps it. Vanilla uses
-  rate 0 to guarantee a drop from a kill you cannot farm (Headhunter, Death, Legion, Balore);
-  without this carve-out a one-time boss could inherit a rare soul's rate and put that soul
-  permanently out of reach once it is dead.
+  its source changes. One exception: an enemy whose vanilla rate is 0 keeps it. Rate 0 tells
+  the death routine to skip the soul roll; vanilla puts it on the one-time bosses (Headhunter,
+  Death, Legion, Balore), whose souls their own scripts award, so a real rate there would add a
+  second, generic drop on top of the scripted one.
 
 Generation is ROM-free, so the vanilla table below is committed data. :func:`build_writes`
 verifies it against the base ROM before writing anything.
@@ -365,7 +365,7 @@ def build_writes(base_rom: bytes, plan: Dict[int, int], keep_soul_drop_rates: bo
         base_rom: the original ROM bytes, verified against :data:`VANILLA` first.
         plan: ``{target_enemy_id: source_enemy_id}`` from :func:`plan_shuffle`.
         keep_soul_drop_rates: move each soul's vanilla rate along with it, except onto an
-            enemy whose vanilla rate is 0 (a guaranteed, unfarmable drop), which keeps 0.
+            enemy whose vanilla rate is 0 (the death routine skips the roll for those), which keeps 0.
         shuffle_starting_soul: also retarget the intro's free Winged Skeleton soul at
             whatever now drops from the enemy it belonged to.
 

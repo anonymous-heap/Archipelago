@@ -115,9 +115,8 @@ class KeepSoulDropRates(DefaultOnToggle):
     - off (keep enemy drop rates): rarity becomes a property of the encounter -- a soul is as
       common as whatever now drops it. Rare enemies become worth hunting for their own sake.
 
-    Either way, an enemy whose vanilla drop is guaranteed stays guaranteed (that is how the
-       game marks a kill you cannot farm, such as Headhunter, Death, Legion and Balore), so no
-       shuffle can strand a soul behind a one-time boss.
+    Either way, a one-time boss (Headhunter, Death, Legion, Balore) keeps the game's "no roll"
+       drop rate that its own script relies on, so a shuffle never adds a random drop to a boss.
     """
     display_name = "Keep Soul Drop Rates"
 
@@ -170,6 +169,17 @@ class SoulDropRateMultiplier(NamedRange):
         "quadruple": 400,
         "tenfold": 1000,
     }
+
+
+class AncientBookSoulDrops(DefaultOnToggle):
+    """
+    Once an Ancient Book is in your inventory, the enemy that drops the soul it describes always
+    drops it: Book 1 the Flame Demon soul, Book 2 the Giant Bat soul, Book 3 the Succubus soul.
+
+    Follows Soul Shuffle (whichever enemy drops that soul now). Done by the ROM itself, so it
+    works in any emulator and needs no client.
+    """
+    display_name = "Ancient Book Soul Drops"
 
 
 class SkullKeyWarp(DefaultOnToggle):
@@ -426,6 +436,7 @@ class CVAOSOptions(PerGameCommonOptions):
     shuffle_starting_soul: ShuffleStartingSoul
     multiply_soul_drop_rates: MultiplySoulDropRates
     soul_drop_rate_multiplier: SoulDropRateMultiplier
+    ancient_book_soul_drops: AncientBookSoulDrops
     skull_key_warp: SkullKeyWarp
     forbidden_area_button: ForbiddenAreaButton
     single_jump_divekick: SingleJumpDivekick
@@ -452,6 +463,7 @@ cvaos_option_groups = [
     OptionGroup("Soul Drop Rates", [
         MultiplySoulDropRates,
         SoulDropRateMultiplier,
+        AncientBookSoulDrops,
     ]),
     OptionGroup("Item Smoothing", [
         ItemSmoothing,

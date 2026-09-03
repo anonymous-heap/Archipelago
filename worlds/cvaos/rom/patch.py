@@ -16,7 +16,7 @@ from ..constants import AC_USA_ROM_MD5, USA_ROM_MD5
 from ..items import FORBIDDEN_AREA_SWITCH, item_table
 from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
                inventory_menu, oops_all_whips, single_jump_divekick, skull_key_warp,
-               soul_drop_rates, soul_shuffle)
+               soul_drop_rates, soul_guarantee_hook, soul_shuffle)
 from .entity import GBA_ROM_BASE, AoSPickupEntity
 from .._bytemaker_compat import offset_of
 from ..options import ForbiddenAreaButton, SoulShuffle, TARGET_ADVANCE_COLLECTION, TARGET_GBA
@@ -170,6 +170,11 @@ class CVAOSPatchExtension(APPatchExtension):
         if config["skull_key_warp"]:
             apply(skull_key_warp.build_writes())
 
+        # Ancient Book soul drops: the enemy-death roll hook (rom/soul_guarantee_hook.py). It checks
+        # the instructions it replaces against the base ROM, which is why it is applied here.
+        if config.get("ancient_book_soul_drops"):
+            apply(soul_guarantee_hook.build_writes(bytes(working)))
+
         # Forbidden Area gate-unlock pickup toggle (replaces the A01 press-button
         # with a candle and a shuffled Study Sealswitch).
         if config["forbidden_area_pickup"]:
@@ -270,6 +275,7 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
     rom_config = {
         "target_platform": world.options.target_platform.value,
         "skull_key_warp": bool(world.options.skull_key_warp),
+        "ancient_book_soul_drops": bool(world.options.ancient_book_soul_drops),
         "forbidden_area_pickup":
             world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup,
         "single_jump_divekick": bool(world.options.single_jump_divekick),
