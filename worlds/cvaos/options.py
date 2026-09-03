@@ -171,6 +171,17 @@ class SoulDropRateMultiplier(NamedRange):
     }
 
 
+class AncientBookSoulDrops(DefaultOnToggle):
+    """
+    Once an Ancient Book is in your inventory, the enemy that drops the soul it describes always
+    drops it: Book 1 the Flame Demon soul, Book 2 the Giant Bat soul, Book 3 the Succubus soul.
+
+    Follows Soul Shuffle (whichever enemy drops that soul now). Done by the ROM itself, so it
+    works in any emulator and needs no client.
+    """
+    display_name = "Ancient Book Soul Drops"
+
+
 class SkullKeyWarp(DefaultOnToggle):
     """
     Turns the Skull Key into a warp item: using it from the Consumables menu teleports Soma to the
@@ -425,6 +436,7 @@ class CVAOSOptions(PerGameCommonOptions):
     shuffle_starting_soul: ShuffleStartingSoul
     multiply_soul_drop_rates: MultiplySoulDropRates
     soul_drop_rate_multiplier: SoulDropRateMultiplier
+    ancient_book_soul_drops: AncientBookSoulDrops
     skull_key_warp: SkullKeyWarp
     forbidden_area_button: ForbiddenAreaButton
     single_jump_divekick: SingleJumpDivekick
@@ -451,6 +463,7 @@ cvaos_option_groups = [
     OptionGroup("Soul Drop Rates", [
         MultiplySoulDropRates,
         SoulDropRateMultiplier,
+        AncientBookSoulDrops,
     ]),
     OptionGroup("Item Smoothing", [
         ItemSmoothing,

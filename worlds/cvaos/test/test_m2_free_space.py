@@ -18,6 +18,7 @@ from ..rom import deathlink_hook as dh
 from ..rom import inventory_menu as im
 from ..rom import patch
 from ..rom import skull_key_warp as skw
+from ..rom import soul_guarantee_hook as sgh
 from ..rom.address_space import M2_AUDIO_BRIDGE, M2_GRAPHIC, gba_space, m2_region_hit
 from ..rom.entity import GBA_ROM_BASE
 
@@ -47,9 +48,13 @@ class M2FreeSpaceTest(unittest.TestCase):
         self._assert_clear(patch.AUTH_NUMBER_START, 16, "auth number")
 
     def test_rom_free_write_sets_are_clear(self):
+        site = sgh.HOOK_SITE.addr - GBA_ROM_BASE
+        rom = bytearray(0x800000)
+        rom[site:site + len(sgh.STOLEN)] = sgh.STOLEN
         write_sets = {
             "deathlink_hook": dh.build_writes(),
             "skull_key_warp": skw.build_writes(),
+            "soul_guarantee_hook": sgh.build_writes(bytes(rom)),
         }
         for name, writes in write_sets.items():
             for offset, data in writes.items():
