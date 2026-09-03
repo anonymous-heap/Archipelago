@@ -127,7 +127,13 @@ async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction) -> bool:
         return await ram.add_gold(action.id_or_value)
     if category in (TransferCategory.PICKUP, TransferCategory.OTHER_ITEM):
         info = _by_item_number[action.id_or_value]
-        return await ram.give_item(info.item_category, info.id)
+        granted = await ram.give_item(info.item_category, info.id)
+        if granted:
+            # Cosmetic, and only after the item is really in the inventory. announce_* never
+            # raises and never blocks, so it cannot turn a delivered item into a retry.
+            from . import announce
+            await announce.announce_item_number(ram, action.id_or_value)
+        return granted
     if category == TransferCategory.FLAG_ONLY:
         # The whole grant was the set_flag bit (already applied in grant()); nothing else to do.
         return True
