@@ -14,16 +14,9 @@ literal pools bake absolute 0x087Dxxxx addresses; also clear of this world's own
 allocations at 0x661400..0x666xxx and 0x670000..0x671xxx, and of the Advance Collection ROM's
 M2 additions at 0x660000-0x6610BC / 0x700000-0x7000E3):
 
-1. The Xanthus update-hook framework. The USA ROM keeps a per-frame function pointer (vanilla
-   0x0804306D, the HP-display update) at GBA 0x08043104. The patch repoints it to a dispatcher in
-   free ROM at 0x087D0000 which first calls the original HP-display update, then walks a 12-slot
-   function-pointer list at 0x087D0040 and calls every non-zero entry. Per-slot hook bodies live at
-   0x087D0100 + 0x200*(slot-1).
-
-   IMPORTANT: the dispatcher is SHARED infrastructure. If another Xanthus-style update hook is ever
-   ported, it must reuse this dispatcher (emit the same three framework writes -- they are
-   idempotent) and register its function in a free slot of the 0x087D0040 list; never install a
-   second dispatcher over the 0x08043104 pointer.
+1. The Xanthus update-hook framework, which now lives in rom/xanthus_framework.py because
+   every per-frame hook has to share the one 0x08043104 pointer. That module installs the
+   dispatcher and registers a slot; this feature owns slot 1.
 
 2. The no-air-control hook itself, registered in slot 1 (list entry -> 0x087D0101) with its body at
    0x087D0100. Per frame it snapshots the player's X velocity (player entity at EWRAM 0x020004E4,
@@ -36,27 +29,13 @@ from __future__ import annotations
 
 from typing import Dict
 
-# Vanilla per-frame pointer (0x0804306D) low 3 bytes at the hook site; the high 0x08 byte is reused.
-_HOOK_SITE_OFFSET = 0x043104
-_HOOK_SITE_OLD = bytes.fromhex("6d3004")
-_HOOK_SITE_NEW = bytes.fromhex("01007d")   # completes the word to 0x087D0001 (dispatcher | thumb)
+from . import xanthus_framework
 
-# Dispatcher at GBA 0x087D0000: calls vanilla 0x0804306D, then every non-zero entry of the
-# 12-slot list at 0x087D0040. 52 bytes incl. literal pool (0x0804306D, 0x087D0040) + bx veneers.
-_DISPATCHER_OFFSET = 0x7D0000
-_DISPATCHER = bytes.fromhex(
-    "07b400b5084900f013f808480021302906d04258002a01d000f00bf80431f6e7"
-    "01bc864607bc70476d30040840007d0808471047"
-)
-
-# Hook list slot 1 -> the no-air-control function (0x087D0100 | thumb).
-_HOOK_LIST_OFFSET = 0x7D0040
-_HOOK_LIST_ENTRY = bytes.fromhex("01017d08")
+HOOK_SLOT = 1
 
 # The no-air-control function body at GBA 0x087D0100: 332 bytes of THUMB + an 11-word literal pool
 # (scratch 0x0203E000, player entity 0x020004E4, passives 0x02013260, masks 0x100/0x200, status
 # 0x020131B8, 0x400, buttons 0x02000014, jump config 0x0201339A, velocity clamps +/-0x20000).
-_HOOK_BODY_OFFSET = 0x7D0100
 _HOOK_BODY = bytes.fromhex(
     "ffb400b55148524c417800290bd101214170a36c4360227c0f231a400270a17a"
     "052211408170a27c40231a409a4202d1a36c436058e0227c0f231a40a37a072b"
@@ -72,37 +51,12 @@ _HOOK_BODY = bytes.fromhex(
     "b831010200040000140000029a330102000002000000feff"
 )
 
-_FREE_REGIONS: tuple[tuple[int, bytes], ...] = (
-    (_DISPATCHER_OFFSET, _DISPATCHER),
-    (_HOOK_LIST_OFFSET, _HOOK_LIST_ENTRY),
-    (_HOOK_BODY_OFFSET, _HOOK_BODY),
-)
-
-# Sanity: catch an accidental edit of the blobs before they ever reach a ROM.
-assert len(_DISPATCHER) == 52, f"dispatcher must be 52 bytes, got {len(_DISPATCHER)}"
 assert len(_HOOK_BODY) == 376, f"hook body must be 376 bytes, got {len(_HOOK_BODY)}"
 assert (0x0203E000).to_bytes(4, "little") in _HOOK_BODY, "scratch EWRAM addr missing from hook body"
 assert (0x020004E4).to_bytes(4, "little") in _HOOK_BODY, "player-entity addr missing from hook body"
 
 
 def build_writes(base_rom: bytes) -> Dict[int, bytes]:
-    """``{rom_file_offset: bytes}`` installing the update-hook dispatcher and the no-air-control
-    hook. ``base_rom`` is the clean ROM: the hook-site pointer must still be vanilla and the free
-    regions must be empty (all zero), so a collision with any future allocation fails loudly."""
-    site = base_rom[_HOOK_SITE_OFFSET:_HOOK_SITE_OFFSET + len(_HOOK_SITE_OLD)]
-    if site != _HOOK_SITE_OLD:
-        raise ValueError(
-            f"classicvania_movement: hook-site bytes at {_HOOK_SITE_OFFSET:#x} are {site.hex()}, "
-            f"expected {_HOOK_SITE_OLD.hex()} (ROM mismatch)"
-        )
-    for offset, blob in _FREE_REGIONS:
-        region = base_rom[offset:offset + len(blob)]
-        if any(region):
-            raise ValueError(
-                f"classicvania_movement: free-space region at {offset:#x} (+{len(blob):#x}) is not "
-                f"empty in the base ROM"
-            )
-    writes: Dict[int, bytes] = {_HOOK_SITE_OFFSET: _HOOK_SITE_NEW}
-    for offset, blob in _FREE_REGIONS:
-        writes[offset] = blob
-    return writes
+    """``{rom_file_offset: bytes}`` installing the no-air-control hook in slot 1 of the shared
+    update-hook framework (rom/xanthus_framework.py, which validates the ROM state)."""
+    return xanthus_framework.writes(base_rom, HOOK_SLOT, _HOOK_BODY)
