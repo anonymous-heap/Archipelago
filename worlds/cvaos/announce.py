@@ -19,7 +19,9 @@ Which banner:
   ``data/item_info/item_info.csv`` (every one matched, and the off-by-one alternative matched
   none). The text-id is read from the ROM at runtime rather than baked in here.
 * Souls use the game's own soul banner instead, which is what vanilla shows when you absorb one.
-  Its ``soulIndex`` is the same within-category id ``give_item`` takes.
+  Its ``soulIndex`` is the same within-category id ``give_item`` takes, and its ``isNew`` is
+  derived from the owned count after the grant, so a first soul gets vanilla's full
+  stop-the-action acquisition box and a duplicate announces as a duplicate.
 * Money is not announced: vanilla routes gold through a different banner, and the gold counter
   updating on screen already shows it.
 """
@@ -73,11 +75,11 @@ async def _slot_is_free(ram: "AoSRAM") -> bool:
     return pending[0] == 0
 
 
-def block_for(info: "ItemInfo", text_id: Optional[int]) -> Optional[bytes]:
+def block_for(info: "ItemInfo", text_id: Optional[int], is_new: bool = True) -> Optional[bytes]:
     """The mailbox block announcing ``info``, or None when it should not be announced."""
     soul_type = SOUL_TYPE_BY_CATEGORY.get(info.item_category)
     if soul_type is not None:
-        return _box.soul_mailbox_write(soul_index=info.id, soul_type=soul_type)
+        return _box.soul_mailbox_write(soul_index=info.id, soul_type=soul_type, is_new=is_new)
     if text_id is None:
         return None
     return _box.mailbox_write(text_id)
@@ -97,9 +99,14 @@ async def announce_item_number(ram: "AoSRAM", item_number: int) -> bool:
         if not await _slot_is_free(ram):
             return False       # the hook has not consumed the last one; skip rather than queue
         text_id = None
-        if info.item_category not in SOUL_TYPE_BY_CATEGORY:
+        is_new = True
+        if info.item_category in SOUL_TYPE_BY_CATEGORY:
+            # vanilla derives isNew from the total BEFORE the add; the grant has already
+            # happened, so a count of exactly 1 means this was the first one.
+            is_new = await ram.owned_count(info.item_category, info.id) == 1
+        else:
             text_id = await _name_text_id(ram, item_number)
-        block = block_for(info, text_id)
+        block = block_for(info, text_id, is_new)
         if block is None:
             return False
         await ram.write(MAILBOX_OFFSET, list(block))

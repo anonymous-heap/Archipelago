@@ -54,12 +54,22 @@ class AnnounceTest(unittest.TestCase):
     def test_soul_posts_the_soul_banner_request(self):
         info = by_item_number[200]                       # a blue_soul
         self.assertEqual(info.item_category, "blue_soul")
+        # the grant has already happened by the time we announce: count 1 == first one
+        self.run_(self.ram.give_item(info.item_category, info.id))
         self.assertTrue(self.run_(announce.announce_item_number(self.ram, 200)))
         self.assertEqual(
             self.mailbox(),
-            box.soul_mailbox_write(soul_index=info.id, soul_type=1),
+            box.soul_mailbox_write(soul_index=info.id, soul_type=1, is_new=True),
         )
         self.assertEqual(self.mailbox()[box.MB_KIND], box.KIND_SOUL)
+
+    def test_a_duplicate_soul_announces_as_a_duplicate(self):
+        info = by_item_number[200]
+        for _ in range(2):                               # owned count reaches 2
+            self.run_(self.ram.give_item(info.item_category, info.id))
+        self.assertEqual(self.run_(self.ram.owned_count(info.item_category, info.id)), 2)
+        self.assertTrue(self.run_(announce.announce_item_number(self.ram, 200)))
+        self.assertEqual(self.mailbox()[box.MB_ARG2], 0, "isNew must be 0 for a duplicate")
 
     def test_every_soul_category_maps_to_a_soul_type(self):
         cats = {i.item_category for i in by_item_number.values() if i.item_category.endswith("_soul")}
