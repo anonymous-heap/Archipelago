@@ -63,6 +63,14 @@ class AnnounceTest(unittest.TestCase):
         )
         self.assertEqual(self.mailbox()[box.MB_KIND], box.KIND_SOUL)
 
+    def test_new_soul_pause_off_announces_a_first_soul_as_a_duplicate(self):
+        info = by_item_number[200]
+        self.run_(self.ram.give_item(info.item_category, info.id))      # owned count is now 1
+        self.assertTrue(self.run_(announce.announce_item_number(self.ram, 200,
+                                                                new_soul_pause=False)))
+        self.assertEqual(self.mailbox()[box.MB_ARG2], 0,
+                         "with the pause off a first soul must post isNew=0")
+
     def test_a_duplicate_soul_announces_as_a_duplicate(self):
         info = by_item_number[200]
         for _ in range(2):                               # owned count reaches 2

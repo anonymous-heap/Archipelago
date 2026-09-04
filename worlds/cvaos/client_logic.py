@@ -144,7 +144,8 @@ class CVAOSClientLogic:
                 # Unreachable today (every item is a pickup); log instead of silently dropping a
                 # received item if a non-pickup item is ever added to the pool.
                 logger.warning("CVAoS: received item code %s has no grant mapping; skipping.", code)
-            elif not await item_granting.grant(ram, action):
+            elif not await item_granting.grant(
+                    ram, action, new_soul_pause=bool(ctx.slot_data.get("new_soul_pause", True))):
                 break  # lost a guarded write on the grant; retry next tick without advancing
             # Advance the saved counter, guarded on its prior value so we never blind-stomp it.
             if not await ram.set_received_count(received + 1, expected=received):

@@ -21,7 +21,9 @@ Which banner:
 * Souls use the game's own soul banner instead, which is what vanilla shows when you absorb one.
   Its ``soulIndex`` is the same within-category id ``give_item`` takes, and its ``isNew`` is
   derived from the owned count after the grant, so a first soul gets vanilla's full
-  stop-the-action acquisition box and a duplicate announces as a duplicate.
+  stop-the-action acquisition box and a duplicate announces as a duplicate. The New Soul Pause
+  option turns that off: every received soul is then posted as a duplicate, so the banner is
+  the short self-expiring one and the action is never stopped.
 * Money is not announced: vanilla routes gold through a different banner, and the gold counter
   updating on screen already shows it.
 """
@@ -85,9 +87,11 @@ def block_for(info: "ItemInfo", text_id: Optional[int], is_new: bool = True) -> 
     return _box.mailbox_write(text_id)
 
 
-async def announce_item_number(ram: "AoSRAM", item_number: int) -> bool:
+async def announce_item_number(ram: "AoSRAM", item_number: int, *,
+                               new_soul_pause: bool = True) -> bool:
     """Post the banner request for the item with global-id ``item_number``.
 
+    ``new_soul_pause`` False announces every soul as a duplicate (short banner, no pause).
     Returns True when a request was posted. False means "not announced" for any reason -- the
     previous request is still pending, the item has no banner, or a read/write failed -- and is
     never an error the caller needs to handle.
@@ -99,11 +103,13 @@ async def announce_item_number(ram: "AoSRAM", item_number: int) -> bool:
         if not await _slot_is_free(ram):
             return False       # the hook has not consumed the last one; skip rather than queue
         text_id = None
-        is_new = True
+        is_new = False
         if info.item_category in SOUL_TYPE_BY_CATEGORY:
             # vanilla derives isNew from the total BEFORE the add; the grant has already
-            # happened, so a count of exactly 1 means this was the first one.
-            is_new = await ram.owned_count(info.item_category, info.id) == 1
+            # happened, so a count of exactly 1 means this was the first one. With the pause
+            # turned off there is no need to look: every soul is posted as a duplicate.
+            if new_soul_pause:
+                is_new = await ram.owned_count(info.item_category, info.id) == 1
         else:
             text_id = await _name_text_id(ram, item_number)
         block = block_for(info, text_id, is_new)

@@ -105,9 +105,13 @@ def resolve(code: int) -> "ReceiveAction | None":
     )
 
 
-async def grant(ram: "AoSRAM", action: ReceiveAction) -> bool:
+async def grant(ram: "AoSRAM", action: ReceiveAction, *, new_soul_pause: bool = True) -> bool:
     """Apply a resolved action through the RAM accessors. Returns ``False`` only if a guarded
     write lost a race, so the caller retries next tick without advancing the received-counter.
+
+    ``new_soul_pause`` is the New Soul Pause option: whether a soul the player did not already
+    own is announced with the game's stop-the-action first-soul box, or with the short banner a
+    duplicate gets. It only shapes the announcement, never the grant.
     """
     # ORDER MATTERS: run the idempotent op (set_flag_bit -- a no-op when the bit is already at the
     # target value) FIRST, and the non-idempotent transfer (give_item/add_gold, a real increment)
@@ -118,10 +122,10 @@ async def grant(ram: "AoSRAM", action: ReceiveAction) -> bool:
     if action.set_flag:
         if not await ram.set_flag_bit(action.flag_offset, action.flag_bit, action.flag_value):
             return False
-    return await _grant_transfer(ram, action)
+    return await _grant_transfer(ram, action, new_soul_pause)
 
 
-async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction) -> bool:
+async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction, new_soul_pause: bool) -> bool:
     category = action.category
     if category == TransferCategory.MONEY:
         return await ram.add_gold(action.id_or_value)
@@ -132,7 +136,8 @@ async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction) -> bool:
             # Cosmetic, and only after the item is really in the inventory. announce_* never
             # raises and never blocks, so it cannot turn a delivered item into a retry.
             from . import announce
-            await announce.announce_item_number(ram, action.id_or_value)
+            await announce.announce_item_number(ram, action.id_or_value,
+                                                new_soul_pause=new_soul_pause)
         return granted
     if category == TransferCategory.FLAG_ONLY:
         # The whole grant was the set_flag bit (already applied in grant()); nothing else to do.

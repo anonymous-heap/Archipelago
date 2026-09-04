@@ -193,6 +193,7 @@ class CVAOSWorld(World):
             "goal": self.options.goal.value,
             "hard_mode": self.options.hard_mode.value,
             "skull_key_warp": self.options.skull_key_warp.value,
+            "new_soul_pause": self.options.new_soul_pause.value,
             "death_link": self.options.death_link.value,
         }
 
