@@ -6,13 +6,13 @@ Every cvaos AP item code is a packed integer. ``pack`` builds one at generation 
 ``grant`` performs it through the RAM accessors. This module owns the wire encoding and is the
 single place that knows how an incoming item becomes a game-state change.
 
-Bit layout (MSB->LSB, 53 bits — AP requires ``0 < id < 2**53`` for JS clients):
+Bit layout (MSB->LSB, 53 bits, because AP requires ``0 < id < 2**53`` for JS clients):
 
     [52:49] category   (4)  TransferCategory; 0 reserved so every code is > 0
     [48]    set_flag   (1)  also set an EWRAM flag bit?
     [47:40] unused     (8)  reserved for growth
     [39:28] id/value  (12)  item -> item_info.item_number; money -> gold value
-    [27:22] disambig   (6)  copy index — distinguishes multiple pickups of the same item so
+    [27:22] disambig   (6)  copy index: distinguishes multiple pickups of the same item so
                             their codes stay unique; ignored when granting
     [21:4]  flag off  (18)  EWRAM byte offset (when set_flag)
     [3:1]   flag bit   (3)  bit index 0-7 (when set_flag)
@@ -52,8 +52,8 @@ _FLAG_OFFSET_SHIFT, _FLAG_OFFSET_MASK = 4, 0x3FFFF  # 18 bits (256 KB EWRAM)
 _FLAG_BIT_SHIFT, _FLAG_BIT_MASK = 1, 0x7    # 3 bits
 _FLAG_VALUE_MASK = 0x1
 
-ID_MAX = _ID_MASK            # 4095  — largest packable item_number / gold value
-DISAMBIG_MAX = _DISAMBIG_MASK  # 63   — most copies of one item that can share an (id) space
+ID_MAX = _ID_MASK            # 4095: largest packable item_number / gold value
+DISAMBIG_MAX = _DISAMBIG_MASK  # 63: most copies of one item that can share an (id) space
 
 
 def pack(category: TransferCategory, id_or_value: int, *, disambiguation: int = 0,
@@ -89,7 +89,7 @@ class ReceiveAction(NamedTuple):
 
 def resolve(code: int) -> "ReceiveAction | None":
     """Unpack a received AP code. Returns ``None`` for an undefined category (the caller should
-    log + skip). The disambiguation field is intentionally dropped — it never affects the grant.
+    log + skip). The disambiguation field is intentionally dropped: it never affects the grant.
     """
     try:
         category = TransferCategory((code >> _CATEGORY_SHIFT) & _CATEGORY_MASK)

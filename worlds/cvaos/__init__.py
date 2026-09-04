@@ -129,7 +129,7 @@ class CVAOSWorld(World):
         create_regions(self)
         player = self.player
         if self.options.goal == Goal.option_graham:
-            # Bad ending: defeat Graham — reach his room (904).
+            # Bad ending: defeat Graham (reach his room, 904).
             self.multiworld.completion_condition[player] = \
                 lambda state: can_reach_room(state, self, "904")
         else:
