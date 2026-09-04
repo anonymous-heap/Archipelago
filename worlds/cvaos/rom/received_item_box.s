@@ -22,12 +22,29 @@
 @
 @ Souls use a different renderer entirely -- not the kind-1/2/3 request machinery:
 @     SoulInventory_AddAmountToSoulTotal(soulType, soulIndex, 1)
-@     sub_0800E708(soulIndex, soulType, isNew)   @ the soul banner
+@     sub_08032DBC(1)                            @ bumps totalNbrSoulsCollected (a statistic)
+@     sub_08045C34(soulType)                     @ NEW souls only: the acquisition effect
+@     sub_0800E708(soulIndex, soulType, isNew)   @ starts the soul banner
+@     sub_08049E64(soulType, soulIndex)          @ queues the soul for the banner to show
 @     PlaySong(0xBC)                             @ SE_188, the soul-acquired sound
-@ NOTE the argument order is REVERSED relative to the SoulInventory_* functions, which take
-@ soulType first; r5/r6 in the vanilla branch pin it. isNew is 1 for a soul you did not already
-@ own (vanilla computes it from SoulInventory_GetSoulTotal). This hook announces only: it does
-@ NOT add the soul to the inventory, so whatever grants the soul stays the caller's business.
+@
+@ sub_08045C34 is what makes a NEW soul stop the action. It creates an effect entity whose
+@ update function (sub_08045654) raises gEwramData->unk_A074_0 on its first frame, and
+@ sub_08000B64 ("update all entities") skips every entity update while that bit is set. That is
+@ the pause the player dismisses with A. Without it, sub_0800E708's isNew path still draws the
+@ blocking box and sets unk_422 = 2, but sub_0800EFD4 decrements that to 0 within two frames and
+@ tears the box down, so the box flashes and nothing pauses. This hook therefore makes the call
+@ for a new soul and skips it for a duplicate, exactly as vanilla does. It is deliberately the
+@ only call here with world-visible side effects: everything else only writes display state.
+@ Both banner calls are needed. sub_08049E64 stores soulIndex+1 into a 4-entry queue per soul
+@ type (gEwramData+0x133DC/0x133E0/0x133E4, skipping one already listed); without it the banner
+@ appears for a single frame and vanishes, which is what a playtest showed.
+@
+@ MIND THE ARGUMENT ORDER, which differs three ways: sub_0800E708 takes (index, type),
+@ sub_08049E64 takes (type, index), and the SoulInventory_* functions take soulType first. r5/r6
+@ in the vanilla branch pin which is which. isNew is 1 for a soul you did not already own
+@ (vanilla computes it from SoulInventory_GetSoulTotal). This hook announces only: it does NOT
+@ add the soul to the inventory, so whatever grants the soul stays the caller's business.
 @
 @ (For completeness, request kind 2 -- sub_0800EA98 -> sub_0800DE4C -- is the enemy/boss NAME
 @ banner, reading the enemy-name text-id table at 0x080EA628. It is not involved here.)
@@ -88,6 +105,8 @@
     .equ BUSY_MASK,     0x03000200  @ the bits sub_0800EF98 itself refuses to queue over
     .equ GOTITEM,       0x0800EF98  @ sub_0800EF98(text_id): queues the "Got <name>" textbox
     .equ SOULBANNER,    0x0800E708  @ sub_0800E708(soulIndex, soulType, isNew)
+    .equ SOULQUEUE,     0x08049E64  @ sub_08049E64(soulType, soulIndex): queue it for display
+    .equ SOULEFFECT,    0x08045C34  @ sub_08045C34(soulType): new-soul effect; freezes entities
     .equ PLAYSONG,      0x080D7910  @ PlaySong(song)
 
 ReceivedItemBox:
@@ -124,12 +143,27 @@ ReceivedItemBox:
     b    .Lsfx
 
 .Lsoul:
-    @ kind 1 -- soul: sub_0800E708(soulIndex, soulType, isNew). soulIndex 0 is valid, so there is
-    @ no zero check here.
+    @ kind 1 -- soul. A new soul gets vanilla's acquisition effect first: it freezes the entity
+    @ update loop, which is what holds the box up until the player presses A.
+    ldrb r0, [r4, #MB_ARG2]         @ isNew
+    cmp  r0, #0
+    beq  .Lsoul_banner
+    ldrb r0, [r4, #MB_ARG1]         @ soulType
+    ldr  r3, =(SOULEFFECT + 1)
+    bl   .Lcall_r3
+
+.Lsoul_banner:
+    @ sub_0800E708(soulIndex, soulType, isNew). soulIndex 0 is valid, so no zero check here.
     ldrh r0, [r4, #MB_ARG0]         @ soulIndex
     ldrb r1, [r4, #MB_ARG1]         @ soulType
     ldrb r2, [r4, #MB_ARG2]         @ isNew
     ldr  r3, =(SOULBANNER + 1)
+    bl   .Lcall_r3
+
+    @ Queue it so the banner has something to display. Note the reversed argument order.
+    ldrb r0, [r4, #MB_ARG1]         @ soulType
+    ldrh r1, [r4, #MB_ARG0]         @ soulIndex
+    ldr  r3, =(SOULQUEUE + 1)
     bl   .Lcall_r3
 
 .Lsfx:

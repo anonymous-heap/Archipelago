@@ -19,10 +19,14 @@ directly would have its box silently dropped whenever a transition or another bo
   0xB6 soul, 0xB7 item-to-inventory. :data:`SFX_ITEM` is the plain item sound.
 * Item name text-ids are the u16 table at 0x08506734 indexed by item global-id, which is the
   same table the vanilla collect path (``sub_080441F8``) reads. :func:`name_text_id` wraps it.
-* Souls use a different renderer, not the textbox: ``sub_0800E708(soulIndex, soulType, isNew)``
-  (GBA 0x0800E708) with ``PlaySong(0xBC)``. The argument order is reversed relative to the
-  ``SoulInventory_*`` functions; :func:`soul_mailbox_write` takes the SoulInventory order and
-  the hook swaps them.
+* Souls use a different renderer, not the textbox. The hook makes the three calls vanilla
+  makes, in vanilla's order: ``sub_08045C34(soulType)`` for a new soul only (its effect entity
+  freezes the entity update loop, which is the pause the player dismisses with A),
+  ``sub_0800E708(soulIndex, soulType, isNew)`` to start the banner, and
+  ``sub_08049E64(soulType, soulIndex)`` to queue the soul the banner displays. Then
+  ``PlaySong(0xBC)``. Mind the argument order: it is reversed between those last two, and
+  reversed again relative to the ``SoulInventory_*`` functions. :func:`soul_mailbox_write` takes
+  the SoulInventory order and the hook sorts it out.
 
 Source: received_item_box.s, beside this file. Position-DEPENDENT (its literal pool bakes
 absolute addresses), so keep the link address in step with :data:`HOOK_BODY_GBA`. Rebuild with:
@@ -47,14 +51,15 @@ GBA_ROM_BASE = 0x08000000
 HOOK_SLOT = 2
 HOOK_BODY_GBA = xanthus_framework.slot_body_gba(HOOK_SLOT)
 
-# Assembled from received_item_box.s at -Ttext=0x087D0300 (THUMB, ARMv4T). 80 bytes of code
-# plus a 6-word literal pool: the mailbox, the textbox state word, the busy mask, and
-# sub_0800EF98|1 / sub_0800E708|1 / PlaySong|1.
+# Assembled from received_item_box.s at -Ttext=0x087D0300 (THUMB, ARMv4T). 104 bytes of code
+# plus an 8-word literal pool: the mailbox, the textbox state word, the busy mask, and
+# sub_0800EF98|1 / sub_08045C34|1 / sub_0800E708|1 / sub_08049E64|1 / PlaySong|1.
 _HOOK_BODY = bytes.fromhex(
-    "ffb400b5124ce07900281cd0114800681149084217d12079002806d120880028"
-    "09d00e4b00f013f805e020886179a2790b4b00f00cf86088002802d0094b00f0"
-    "06f80020e07102bc8e46ffbc7047184700f003022c0400020002000399ef0008"
-    "09e7000811790d08"
+    "ffb400b5184ce079002828d0174800681749084223d12079002806d120880028"
+    "15d0144b00f01ff811e0a079002803d06079114b00f017f820886179a2790f4b"
+    "00f011f8607921880d4b00f00cf86088002802d00b4b00f006f80020e07102bc"
+    "8e46ffbc7047184700f003022c0400020002000399ef0008355c040809e70008"
+    "659e040811790d08"
 )
 
 # --- Mailbox: free high EWRAM, transient (NOT SRAM-saved) ---
@@ -83,12 +88,14 @@ SFX_SOUL = 0xBC                # the soul branch
 #: u16 table of item NAME text-ids, indexed by item global-id (257 entries).
 ITEM_NAME_TEXT_IDS_GBA = 0x08506734
 
-assert len(_HOOK_BODY) == 104, f"hook body must be 104 bytes, got {len(_HOOK_BODY)}"
+assert len(_HOOK_BODY) == 136, f"hook body must be 136 bytes, got {len(_HOOK_BODY)}"
 assert len(_HOOK_BODY) <= 0x200, "hook body overruns its 0x200-byte slot"
 assert MAILBOX_GBA.to_bytes(4, "little") in _HOOK_BODY, "mailbox addr missing from hook body"
 assert (0x0800EF98 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_0800EF98 missing from hook body"
 assert (0x0200042C).to_bytes(4, "little") in _HOOK_BODY, "busy-guard addr missing from hook body"
 assert (0x0800E708 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_0800E708 missing from hook body"
+assert (0x08049E64 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_08049E64 missing from hook body"
+assert (0x08045C34 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_08045C34 missing from hook body"
 assert (0x080D7910 + 1).to_bytes(4, "little") in _HOOK_BODY, "PlaySong missing from hook body"
 
 

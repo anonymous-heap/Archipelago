@@ -32,7 +32,7 @@ def apply(work: bytearray, writes) -> None:
 
 class TestBlob(unittest.TestCase):
     def test_blob_shape(self):
-        self.assertEqual(len(rib._HOOK_BODY), 104)
+        self.assertEqual(len(rib._HOOK_BODY), 136)
         self.assertLessEqual(len(rib._HOOK_BODY), 0x200, "body overruns its slot")
 
     def test_literal_pool_bakes_every_target(self):
@@ -42,6 +42,8 @@ class TestBlob(unittest.TestCase):
             ("busy mask", 0x03000200),
             ("sub_0800EF98|1", 0x0800EF98 | 1),
             ("sub_0800E708|1", 0x0800E708 | 1),
+            ("sub_08049E64|1", 0x08049E64 | 1),
+            ("sub_08045C34|1", 0x08045C34 | 1),
             ("PlaySong|1", 0x080D7910 | 1),
         ):
             with self.subTest(literal=name):
