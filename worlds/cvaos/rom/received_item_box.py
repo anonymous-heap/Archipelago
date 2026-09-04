@@ -28,15 +28,10 @@ directly would have its box silently dropped whenever a transition or another bo
   reversed again relative to the ``SoulInventory_*`` functions. :func:`soul_mailbox_write` takes
   the SoulInventory order and the hook sorts it out.
 
-Source: received_item_box.s, beside this file. Position-DEPENDENT (its literal pool bakes
-absolute addresses), so keep the link address in step with :data:`HOOK_BODY_GBA`. Rebuild with:
-
-    arm-none-eabi-as -mcpu=arm7tdmi -mthumb received_item_box.s -o /tmp/r.o
-    arm-none-eabi-ld -Ttext=0x087D0300 /tmp/r.o -o /tmp/r.elf
-    arm-none-eabi-objcopy -O binary /tmp/r.elf /tmp/r.bin   # -> HOOK_BODY
-
-The blob below did not come from those steps (no arm-none-eabi assembler was available); see the
-build note in the .s before assuming a rebuild that differs byte-for-byte is a bug.
+Source: received_item_box.s, beside this file, which rom/thumb_assembler.py assembles; the blob
+below is exactly what it produces, and test_thumb_assembler.py holds the two together. The pool
+holds no address of its own, so the bytes are the same at any word-aligned link address (see the
+relocation note in the .s).
 
 The per-frame hook is registered in the shared update-hook framework
 (rom/xanthus_framework.py), which owns the 0x08043104 pointer and the dispatcher. This feature

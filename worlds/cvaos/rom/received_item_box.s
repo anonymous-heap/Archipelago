@@ -81,18 +81,17 @@
 @ The dispatcher's loop keeps its list pointer and offset live in r0/r1 across the call, so a hook
 @ body must preserve r0-r7 and lr exactly as the slot-1 body does; that is the push/pop pair below.
 @
-@ Position-DEPENDENT: the literal pool bakes absolute addresses. Keep the link address in step with
-@ the slot-2 body address above. To (re)assemble:
-@   arm-none-eabi-as -mcpu=arm7tdmi -mthumb received_item_box.s -o /tmp/r.o
-@   arm-none-eabi-ld -Ttext=0x087D0300 /tmp/r.o -o /tmp/r.elf
-@   arm-none-eabi-objcopy -O binary /tmp/r.elf /tmp/r.bin   # -> HOOK_BODY
+@ Relocatable to any WORD-ALIGNED address: the literal pool holds absolute addresses of things
+@ elsewhere in the ROM, never this hook's own, so the bytes come out the same wherever it is
+@ linked. (They do change at a 2-mod-4 base, because `ldr rN,[pc,#imm]` rounds the pc down to a
+@ word boundary.) Unlike the trampolines here, which bake their own resume label.
 @
-@ Those are the steps to use when the toolchain is at hand, but they are NOT how the shipped blob
-@ was built: no arm-none-eabi assembler was available, so it was assembled with keystone with the
-@ literal pool laid out by hand (104 bytes of code, then the 8 pool words in the order the tests
-@ pin), and checked by disassembling the result with capstone. If you rebuild with the real
-@ assembler, expect a byte-different pool layout and update the blob and its tests together
-@ rather than assuming a mismatch is a bug.
+@ To (re)assemble, from the Archipelago root (needs `pip install keystone-engine`):
+@   cd worlds/cvaos/rom
+@   python thumb_assembler.py received_item_box.s 0x087D0300   @ = HOOK_BODY_GBA
+@ test_thumb_assembler.py asserts the blob in received_item_box.py is exactly what this file
+@ assembles to, so the source and the shipped bytes cannot drift apart. arm-none-eabi-as would
+@ also work but lays the literal pool out its own way, so expect different bytes from it.
 .syntax unified
 .thumb
 .text

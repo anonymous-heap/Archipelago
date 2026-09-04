@@ -36,8 +36,9 @@ class TestBlob(unittest.TestCase):
         self.assertLessEqual(len(rib._HOOK_BODY), 0x200, "body overruns its slot")
 
     def test_the_literal_pool_is_exactly_the_eight_expected_words(self):
-        # Asserting the whole tail, not just "each address appears somewhere", is what catches a
-        # truncated blob or a stray pool word from a bad hand-assembly.
+        # test_thumb_assembler checks the blob against its .s source, but that needs keystone
+        # and skips without it. This pins the pool with no dependency, so a truncated blob or a
+        # stray pool word still fails somewhere.
         pool = [
             rib.MAILBOX_GBA,
             0x0200042C,           # the textbox state word
