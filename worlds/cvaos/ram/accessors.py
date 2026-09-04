@@ -238,6 +238,20 @@ class AoSRAM:
         if not 0 <= index < array.length:
             raise ValueError(f"{category} index {index} out of range (0..{array.length - 1})")
 
+    async def owned_count(self, category: str, index: int) -> int:
+        """How many of one item the player owns, from the same arrays :meth:`give_item` writes.
+
+        ``category``/``index`` are an item_info category and its within-category id. Soul arrays
+        pack two counts per byte, which this unpacks.
+        """
+        array = addr.INVENTORY[category]
+        self._check_index(category, array, index)
+        if array.nibble_packed:
+            slot = array.entry.item(index // 2)
+            pair: SoulPair = await self._fetch(slot)
+            return getattr(pair, "odd" if index % 2 else "even")
+        return await self._fetch(array.entry.item(index))
+
     async def give_item(self, category: str, index: int, *, cap: int = 9) -> bool:
         """
         Increments the owned-count for one item, race-safely.
