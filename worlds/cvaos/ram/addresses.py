@@ -108,6 +108,11 @@ MAX_HP = VITALS.field("max_hp")                    # 0x0201327E u16
 MAX_MP = VITALS.field("max_mp")                    # 0x02013280 u16
 CURRENT_GOLD = ewram.entry(0x02013290, u32, name="current_gold")
 
+# totalNbrSoulsCollected: the running count the file-select and status screens show. The game
+# counts souls ABSORBED, not distinct souls owned, and clamps at SOULS_COLLECTED_CAP.
+SOULS_COLLECTED = ewram.entry(0x02013264, u16, name="souls_collected")
+SOULS_COLLECTED_CAP = 999
+
 # pad_1328A: verified-dead, saved, zeroed-on-new-game.
 AP_RECEIVED_COUNT = ewram.entry(0x0201328A, u16, name="ap_received_count")
 

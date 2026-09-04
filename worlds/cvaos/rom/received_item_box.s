@@ -22,7 +22,9 @@
 @
 @ Souls use a different renderer entirely -- not the kind-1/2/3 request machinery:
 @     SoulInventory_AddAmountToSoulTotal(soulType, soulIndex, 1)
-@     sub_08032DBC(1)                            @ bumps totalNbrSoulsCollected (a statistic)
+@     sub_08032DBC(1)                            @ bumps totalNbrSoulsCollected (a statistic;
+@                                                @ the client does this in give_item, since it
+@                                                @ belongs to granting a soul, not announcing it)
 @     sub_08045C34(soulType)                     @ NEW souls only: the acquisition effect
 @     sub_0800E708(soulIndex, soulType, isNew)   @ starts the soul banner
 @     sub_08049E64(soulType, soulIndex)          @ queues the soul for the banner to show
