@@ -52,10 +52,9 @@
 @     +10 u16 (reserved)
 @
 @ Position-DEPENDENT: the literal pool bakes absolute addresses, so keep the link address in sync
-@ with CUSTOMHOOK_BASE_GBA / CUSTOM_DESC_TABLE_GBA in custom_pickups.py. To (re)assemble:
-@   arm-none-eabi-as -mcpu=arm7tdmi -mthumb custom_pickups.s -o /tmp/c.o
-@   arm-none-eabi-ld -Ttext=0x08670300 /tmp/c.o -o /tmp/c.elf
-@   arm-none-eabi-objcopy -O binary /tmp/c.elf /tmp/c.bin   # -> CUSTOMHOOK_BLOB
+@ with CUSTOMHOOK_BASE_GBA / CUSTOM_DESC_TABLE_GBA in custom_pickups.py. To (re)assemble, from
+@ this directory (needs `pip install keystone-engine`):
+@   python thumb_assembler.py custom_pickups.s 0x08670300   @ -> CUSTOMHOOK_BLOB
 .syntax unified
 .thumb
 .text
