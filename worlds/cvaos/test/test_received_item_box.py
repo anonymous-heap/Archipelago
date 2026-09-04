@@ -35,6 +35,23 @@ class TestBlob(unittest.TestCase):
         self.assertEqual(len(rib._HOOK_BODY), 136)
         self.assertLessEqual(len(rib._HOOK_BODY), 0x200, "body overruns its slot")
 
+    def test_the_literal_pool_is_exactly_the_eight_expected_words(self):
+        # Asserting the whole tail, not just "each address appears somewhere", is what catches a
+        # truncated blob or a stray pool word from a bad hand-assembly.
+        pool = [
+            rib.MAILBOX_GBA,
+            0x0200042C,           # the textbox state word
+            0x03000200,           # the busy mask
+            0x0800EF98 | 1,       # sub_0800EF98, the "Got <name>" textbox
+            0x08045C34 | 1,       # sub_08045C34, the new-soul effect
+            0x0800E708 | 1,       # sub_0800E708, the soul banner
+            0x08049E64 | 1,       # sub_08049E64, the soul display queue
+            0x080D7910 | 1,       # PlaySong
+        ]
+        expected = b"".join(struct.pack("<I", w) for w in pool)
+        self.assertEqual(rib._HOOK_BODY[-len(expected):], expected)
+        self.assertEqual(len(rib._HOOK_BODY) - len(expected), 104, "code size changed")
+
     def test_literal_pool_bakes_every_target(self):
         for name, addr in (
             ("mailbox", rib.MAILBOX_GBA),

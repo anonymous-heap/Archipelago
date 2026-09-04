@@ -35,6 +35,9 @@ absolute addresses), so keep the link address in step with :data:`HOOK_BODY_GBA`
     arm-none-eabi-ld -Ttext=0x087D0300 /tmp/r.o -o /tmp/r.elf
     arm-none-eabi-objcopy -O binary /tmp/r.elf /tmp/r.bin   # -> HOOK_BODY
 
+The blob below did not come from those steps (no arm-none-eabi assembler was available); see the
+build note in the .s before assuming a rebuild that differs byte-for-byte is a bug.
+
 The per-frame hook is registered in the shared update-hook framework
 (rom/xanthus_framework.py), which owns the 0x08043104 pointer and the dispatcher. This feature
 owns slot 2 and is independent of every other slot's owner, in either apply order.

@@ -86,6 +86,13 @@
 @   arm-none-eabi-as -mcpu=arm7tdmi -mthumb received_item_box.s -o /tmp/r.o
 @   arm-none-eabi-ld -Ttext=0x087D0300 /tmp/r.o -o /tmp/r.elf
 @   arm-none-eabi-objcopy -O binary /tmp/r.elf /tmp/r.bin   # -> HOOK_BODY
+@
+@ Those are the steps to use when the toolchain is at hand, but they are NOT how the shipped blob
+@ was built: no arm-none-eabi assembler was available, so it was assembled with keystone with the
+@ literal pool laid out by hand (104 bytes of code, then the 8 pool words in the order the tests
+@ pin), and checked by disassembling the result with capstone. If you rebuild with the real
+@ assembler, expect a byte-different pool layout and update the blob and its tests together
+@ rather than assuming a mismatch is a bug.
 .syntax unified
 .thumb
 .text
