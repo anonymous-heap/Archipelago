@@ -140,7 +140,11 @@ async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction, new_soul_pause: 
                                                 new_soul_pause=new_soul_pause)
         return granted
     if category == TransferCategory.FLAG_ONLY:
-        # The whole grant was the set_flag bit (already applied in grant()); nothing else to do.
+        # The whole grant was the set_flag bit (already applied in grant()). If a custom pickup
+        # sets that same flag on collection (the Study Sealswitch), announce it under the pickup's
+        # name, as the floor copy does; the id field carries nothing to name it by.
+        from . import announce
+        await announce.announce_flag(ram, action.flag_offset, action.flag_bit)
         return True
     # EVENT / TO_BE_IMPLEMENTED: reserved, not yet grantable. Skip loudly (never silently).
     from CommonClient import logger

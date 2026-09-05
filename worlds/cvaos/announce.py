@@ -18,6 +18,11 @@ Which banner:
   ROM's own strings through the string-pointer array and matching them against
   ``data/item_info/item_info.csv`` (every one matched, and the off-by-one alternative matched
   none). The text-id is read from the ROM at runtime rather than baked in here.
+* A flag-only item (the Study Sealswitch) has no inventory row, so it is not in that table. Its
+  remote receipt just sets the flag its floor copy would, and that floor copy is a custom pickup
+  with its own name string in the extended text tables, so the flag is mapped back to the pickup
+  through the registry and announced under the pickup's name and sound, as collecting it locally
+  is.
 * Souls use the game's own soul banner instead, which is what vanilla shows when you absorb one.
   Its ``soulIndex`` is the same within-category id ``give_item`` takes, and its ``isNew`` is
   derived from the owned count after the grant, so a first soul gets vanilla's full
@@ -32,6 +37,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from .data.item_info import by_item_number as _by_item_number
+from .rom import custom_pickups as _custom
 from .rom import received_item_box as _box
 
 if TYPE_CHECKING:
@@ -120,4 +126,27 @@ async def announce_item_number(ram: "AoSRAM", item_number: int, *,
     except Exception:          # noqa: BLE001 - cosmetic; a grant must never fail over a banner
         from CommonClient import logger
         logger.debug("CVAoS: could not announce item %s", item_number, exc_info=True)
+        return False
+
+
+async def announce_flag(ram: "AoSRAM", flag_offset: int, flag_bit: int) -> bool:
+    """Post the "Got <name>" request for a flag-only grant, when a custom pickup sets that flag.
+
+    ``flag_offset``/``flag_bit`` are the EWRAM byte and bit the grant set. Returns True when a
+    request was posted; False for any reason it was not (no pickup claims that flag, the previous
+    request is still pending, or a read/write failed), never an error the caller must handle.
+    """
+    try:
+        found = _custom.announcement_for_flag(flag_offset, flag_bit)
+        if found is None:
+            return False
+        text_id, sfx = found
+        if text_id == 0 or not await _slot_is_free(ram):
+            return False
+        await ram.write(MAILBOX_OFFSET, list(_box.mailbox_write(text_id, sfx or _box.SFX_ITEM)))
+        return True
+    except Exception:          # noqa: BLE001 - cosmetic; a grant must never fail over a banner
+        from CommonClient import logger
+        logger.debug("CVAoS: could not announce flag %#x bit %d", flag_offset, flag_bit,
+                     exc_info=True)
         return False

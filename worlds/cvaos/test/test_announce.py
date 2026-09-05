@@ -127,6 +127,49 @@ class AnnounceTest(unittest.TestCase):
         self.assertFalse(self.run_(announce.announce_item_number(self.ram, 1)))
 
 
+class FlagOnlyAnnounceTest(unittest.TestCase):
+    """A flag-only item is announced under the custom pickup that sets the same flag."""
+
+    def setUp(self) -> None:
+        self.ewram = bytearray(0x40000)
+        self.ram = AoSRAM(FakeBackend({EWRAM: self.ewram, ROM: bytearray(0x800000)}))
+
+    def run_(self, coro):
+        return asyncio.run(coro)
+
+    def mailbox(self) -> bytes:
+        return bytes(self.ewram[MB:MB + box.MAILBOX_SIZE])
+
+    def test_the_sealswitch_flag_maps_to_the_pickup_and_the_packed_item_agrees(self):
+        from worlds.cvaos.item_granting import resolve
+        from worlds.cvaos.items import FORBIDDEN_AREA_SWITCH, item_table
+        from worlds.cvaos.rom import custom_pickups as cp
+        from worlds.cvaos.rom.custom_pickup_content import STUDY_SEALSWITCH
+        action = resolve(item_table[FORBIDDEN_AREA_SWITCH].code)
+        self.assertEqual(cp.flag_location(STUDY_SEALSWITCH), (action.flag_offset, action.flag_bit))
+        self.assertEqual(cp.announcement_for_flag(action.flag_offset, action.flag_bit),
+                         (cp._name_text_id_for(STUDY_SEALSWITCH), STUDY_SEALSWITCH.sfx))
+        self.assertEqual(cp._name_text_id_for(STUDY_SEALSWITCH), cp.STRINGPTR_COUNT,
+                         "the first extended text-id: the pickup's own name string")
+
+    def test_flag_posts_the_pickups_textbox_and_sound(self):
+        from worlds.cvaos.rom import custom_pickups as cp
+        from worlds.cvaos.rom.custom_pickup_content import STUDY_SEALSWITCH
+        self.assertTrue(self.run_(announce.announce_flag(self.ram, *cp.flag_location(STUDY_SEALSWITCH))))
+        self.assertEqual(self.mailbox(), box.mailbox_write(cp.STRINGPTR_COUNT, STUDY_SEALSWITCH.sfx))
+        self.assertEqual(self.mailbox()[box.MB_KIND], box.KIND_ITEM)
+
+    def test_a_flag_no_pickup_claims_is_not_announced(self):
+        self.assertFalse(self.run_(announce.announce_flag(self.ram, 0x34A, 5)))
+        self.assertEqual(self.mailbox(), bytes(box.MAILBOX_SIZE))
+
+    def test_skips_while_the_previous_request_is_pending(self):
+        from worlds.cvaos.rom import custom_pickups as cp
+        from worlds.cvaos.rom.custom_pickup_content import STUDY_SEALSWITCH
+        self.ewram[MB + box.MB_PENDING] = 1
+        self.assertFalse(self.run_(announce.announce_flag(self.ram, *cp.flag_location(STUDY_SEALSWITCH))))
+
+
 class GrantIntegrationTest(unittest.TestCase):
     """The announcement rides on a successful grant and never changes its outcome."""
 
@@ -161,6 +204,17 @@ class GrantIntegrationTest(unittest.TestCase):
         self.run_(item_granting.grant(self.ram, action))
         self.assertEqual(bytes(self.ewram[MB:MB + box.MAILBOX_SIZE]), bytes(box.MAILBOX_SIZE),
                          "a grant that lost its guarded write must not announce")
+
+    def test_a_flag_only_grant_sets_the_flag_and_announces_the_pickup(self):
+        from worlds.cvaos import item_granting
+        from worlds.cvaos.items import FORBIDDEN_AREA_SWITCH, item_table
+        from worlds.cvaos.rom import custom_pickups as cp
+        from worlds.cvaos.rom.custom_pickup_content import STUDY_SEALSWITCH
+        action = item_granting.resolve(item_table[FORBIDDEN_AREA_SWITCH].code)
+        self.assertTrue(self.run_(item_granting.grant(self.ram, action)))
+        self.assertEqual((self.ewram[action.flag_offset] >> action.flag_bit) & 1, 1)
+        self.assertEqual(bytes(self.ewram[MB:MB + box.MAILBOX_SIZE]),
+                         box.mailbox_write(cp.STRINGPTR_COUNT, STUDY_SEALSWITCH.sfx))
 
 
 if __name__ == "__main__":

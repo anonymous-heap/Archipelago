@@ -243,6 +243,23 @@ def _name_text_id_for(pickup: CustomPickup) -> int:
     return name_text_id(inv.index(pickup)) if pickup in inv else 0
 
 
+def flag_location(pickup: CustomPickup) -> Tuple[int, int]:
+    """``(EWRAM byte offset, bit)`` of the flag ``pickup`` sets on collection. ``flag_number`` is a
+    bit index into the ``flag_field`` array, so #48 in the MISC field (0x344) is byte 0x34A, bit 0."""
+    return pickup.flag_field + pickup.flag_number // 8, pickup.flag_number % 8
+
+
+def announcement_for_flag(flag_offset: int, flag_bit: int) -> Optional[Tuple[int, int]]:
+    """``(name text-id, sfx)`` of the inventory pickup whose collect flag is that bit, or None.
+
+    Lets a flag-only AP item, one whose remote receipt just sets the flag its floor copy would,
+    be announced under the same name and sound the floor copy uses."""
+    for pickup in _registry():
+        if pickup.inventory_name is not None and flag_location(pickup) == (flag_offset, flag_bit):
+            return _name_text_id_for(pickup), pickup.sfx
+    return None
+
+
 def _icon_tile_file_offsets(icon_id: int) -> tuple[int, int]:
     """File offsets for an icon's top and bottom 0x40-byte halves within its sheet (sub_0801232C)."""
     sheet = (icon_id - 1) >> 6
