@@ -72,7 +72,7 @@
 @ next when pending clears, which also paces the banners so they do not stomp each other.
 @
 @ ---- Install ----
-@ Registered in the shared Xanthus update-hook framework (see rom/classicvania_movement.py):
+@ Registered in the shared per-frame update-hook framework:
 @   * dispatcher at 0x087D0000 calls vanilla 0x0804306D, then every non-zero entry of the 12-slot
 @     pointer list at 0x087D0040;
 @   * slot 1 (list +0x00) is Classicvania Movement's no-air-control hook, body 0x087D0100;
@@ -118,7 +118,7 @@
     .equ PLAYSONG,      0x080D7910  @ PlaySong(song)
 
 ReceivedItemBox:
-    @ Xanthus slot ABI: preserve r0-r7 (the dispatcher's loop still needs r0/r1) and lr.
+    @ Slot ABI: preserve r0-r7 (the dispatcher's loop still needs r0/r1) and lr.
     push {r0-r7}
     push {lr}
 
