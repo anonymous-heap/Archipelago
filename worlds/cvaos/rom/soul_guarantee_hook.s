@@ -1,10 +1,9 @@
 @ Guaranteed soul drops for Castlevania: Aria of Sorrow (USA): the Ancient Book soul-drop hook.
 @ soul_guarantee_hook.py embeds the assembled bytes; this file is the source of truth for them.
-@ Assembled at DEV time (not at AP generation time). To regenerate after editing:
-@   arm-none-eabi-as -mthumb -march=armv4t soul_guarantee_hook.s -o /tmp/g.o
-@   arm-none-eabi-ld -Ttext=0x08670600 -e guarantee_tramp /tmp/g.o -o /tmp/g.elf
-@   arm-none-eabi-objcopy -O binary /tmp/g.elf /tmp/g.bin   # update _TRAMPOLINE in soul_guarantee_hook.py
-@ (or run local_docs/tools/assemble_hook.py, which uses keystone and checks the result with capstone)
+@ Assembled at DEV time (not at AP generation time). To regenerate after editing, from this
+@ directory (needs `pip install keystone-engine`; add --listing for a capstone disassembly):
+@   python thumb_assembler.py soul_guarantee_hook.s 0x08670600   @ -> _TRAMPOLINE
+@ test_thumb_assembler.py holds that blob and this file together, so neither can drift.
 @
 @ WHERE WE HOOK:
 @   The enemy-death routine decides a soul drop at _080684C8..0x080684F0: it rolls

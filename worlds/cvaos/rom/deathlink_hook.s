@@ -3,9 +3,8 @@
 @
 @ SOURCE of truth for the trampoline bytes embedded in deathlink_hook.py. Assembled at DEV time
 @ (not at AP generation time). To regenerate after editing:
-@   arm-none-eabi-as -mthumb -march=armv4t deathlink_hook.s -o /tmp/t.o
-@   arm-none-eabi-ld -Ttext=0x08670040 -e deathlink_tramp /tmp/t.o -o /tmp/t.elf
-@   arm-none-eabi-objcopy -O binary /tmp/t.elf /tmp/t.bin   # update _TRAMPOLINE in deathlink_hook.py
+@   python thumb_assembler.py deathlink_hook.s 0x08670040   @ -> _TRAMPOLINE (from this directory;
+@                                                            @ needs pip install keystone-engine)
 @
 @ WHERE WE HOOK (and why not the obvious spot):
 @   AoS has no per-frame "if HP<=0 die" check. Death is driven by the damage routine: the player

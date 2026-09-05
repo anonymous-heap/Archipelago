@@ -48,7 +48,7 @@ class CVAOSClientLogic:
         # carry anything stale over.
         self.death_causes = []
         self.local_checked_locations = set()
-        # DeathLink: whether we currently consider Soma dead — guards re-sending our own death and
+        # DeathLink: whether we currently consider Soma dead: guards re-sending our own death and
         # re-applying an incoming one until HP recovers.
         self.currently_dead = False
         # AP's timestamp on the death we last sent, so the bounce handler can recognize our own echo.
@@ -91,8 +91,13 @@ class CVAOSClientLogic:
                 await ram.ensure_hard_mode()
         # Reading checks / injecting items is only safe in normal in-room gameplay (not paused,
         # transitioning, in a menu, dying, or game-over), so we never read garbage or write at
-        # an unsafe time.
-        if in_gameplay:
+        # an unsafe time. Normal gameplay is not quite enough on its own: the pickup flags, the
+        # inventory and the received-counter all live in the save-data block, and that block reads
+        # as zeros while a file is still loading, with GAME_STATE and MENU_STATE already reporting
+        # normal play (seen live). A grant made then lands in memory the load is about to
+        # overwrite; if the load wins the counter write, the item is handed out again next tick.
+        # Max HP sits in the same block and is never 0 for a loaded file, so it tells the two apart.
+        if in_gameplay and await ram.get_max_hp() > 0:
             await self._send_location_checks(ctx, ram)
             await self._receive_items(ctx, ram)
             await self._report_goal(ctx, ram)
@@ -139,7 +144,8 @@ class CVAOSClientLogic:
                 # Unreachable today (every item is a pickup); log instead of silently dropping a
                 # received item if a non-pickup item is ever added to the pool.
                 logger.warning("CVAoS: received item code %s has no grant mapping; skipping.", code)
-            elif not await item_granting.grant(ram, action):
+            elif not await item_granting.grant(
+                    ram, action, new_soul_pause=bool(ctx.slot_data.get("new_soul_pause", True))):
                 break  # lost a guarded write on the grant; retry next tick without advancing
             # Advance the saved counter, guarded on its prior value so we never blind-stomp it.
             if not await ram.set_received_count(received + 1, expected=received):

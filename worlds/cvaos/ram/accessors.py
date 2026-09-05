@@ -238,6 +238,20 @@ class AoSRAM:
         if not 0 <= index < array.length:
             raise ValueError(f"{category} index {index} out of range (0..{array.length - 1})")
 
+    async def owned_count(self, category: str, index: int) -> int:
+        """How many of one item the player owns, from the same arrays :meth:`give_item` writes.
+
+        ``category``/``index`` are an item_info category and its within-category id. Soul arrays
+        pack two counts per byte, which this unpacks.
+        """
+        array = addr.INVENTORY[category]
+        self._check_index(category, array, index)
+        if array.nibble_packed:
+            slot = array.entry.item(index // 2)
+            pair: SoulPair = await self._fetch(slot)
+            return getattr(pair, "odd" if index % 2 else "even")
+        return await self._fetch(array.entry.item(index))
+
     async def give_item(self, category: str, index: int, *, cap: int = 9) -> bool:
         """
         Increments the owned-count for one item, race-safely.
@@ -251,6 +265,9 @@ class AoSRAM:
         exceed the cap is dropped and logged (still returns ``True`` so the counter
         advances). Returns ``True`` on success/at-cap, or ``False`` if the guarded write
         lost a race -- retry next tick and do **not** advance the received counter.
+
+        A soul also adds one to the game's souls-collected statistic, which is what the vanilla
+        collect path does after its own add.
         """
         array = addr.INVENTORY[category]
         self._check_index(category, array, index)
@@ -266,9 +283,14 @@ class AoSRAM:
             new = min(current + 1, cap)
             if new == current:
                 self._report_at_cap(category, index, cap)
-                return True
-            setattr(pair, which, new)
-            return await self._cas_bytes(slot, slot.pack(pair), old_byte)
+            else:
+                setattr(pair, which, new)
+                if not await self._cas_bytes(slot, slot.pack(pair), old_byte):
+                    return False
+            # Only souls reach here, and vanilla's collect path bumps the souls-collected
+            # statistic after its add, so a granted soul counts the same way.
+            await self._count_soul_collected()
+            return True
 
         slot = array.entry.item(index)
         current = await self._fetch(slot)
@@ -277,6 +299,21 @@ class AoSRAM:
             self._report_at_cap(category, index, cap)
             return True
         return await self._cas(slot, new, current)
+
+    async def _count_soul_collected(self) -> None:
+        """Add one to the game's souls-collected statistic, the way a real pickup does.
+
+        The vanilla collect path calls ``sub_08032DBC(1)`` after adding the soul, so a soul the
+        client grants has to count here or the file screen undercounts. It counts souls absorbed
+        rather than distinct souls owned, which is why an at-cap grant still counts.
+
+        Best-effort on purpose: the soul is already in the inventory by now, so losing this race
+        must not fail the grant (the retry would hand out the soul twice).
+        """
+        current: int = await self._fetch(addr.SOULS_COLLECTED)
+        new = min(current + 1, addr.SOULS_COLLECTED_CAP)
+        if new != current:
+            await self._cas(addr.SOULS_COLLECTED, new, current)
 
     @staticmethod
     def _report_at_cap(category: str, index: int, cap: int) -> None:

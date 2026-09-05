@@ -46,11 +46,10 @@ How it fits together (all verified against the USA ROM):
 Gating lives with the caller: rom/patch.py emits these writes (and encodes a location's pickup as a
 custom item) when the relevant option/placement is active. This module just builds the bytes.
 
-MISSING SOURCE: custom_pickups.s is not in this repository, unlike deathlink_hook.s and
-skull_key_warp.s. CUSTOMHOOK_BLOB therefore cannot be regenerated, and the blob is
-position-DEPENDENT, so it also cannot be relinked to a different address. Treat it as frozen
-until the assembly is recovered or rewritten. Were the source available, the blob would be
-rebuilt with:
+The blob is assembled from custom_pickups.s, beside this file. It is
+position-DEPENDENT: the literal pool bakes absolute addresses, so relinking to a different
+address means re-assembling and keeping the .s's DESC_TABLE in step with
+CUSTOM_DESC_TABLE_GBA below. Rebuild with:
 
     arm-none-eabi-as -mcpu=arm7tdmi -mthumb custom_pickups.s -o /tmp/c.o
     arm-none-eabi-ld -Ttext=0x08670300 /tmp/c.o -o /tmp/c.elf
@@ -242,6 +241,23 @@ def _name_text_id_for(pickup: CustomPickup) -> int:
     """The name text-id for a pickup (0 = behaviour-only, no inventory row / textbox)."""
     inv = inventory_pickups()
     return name_text_id(inv.index(pickup)) if pickup in inv else 0
+
+
+def flag_location(pickup: CustomPickup) -> Tuple[int, int]:
+    """``(EWRAM byte offset, bit)`` of the flag ``pickup`` sets on collection. ``flag_number`` is a
+    bit index into the ``flag_field`` array, so #48 in the MISC field (0x344) is byte 0x34A, bit 0."""
+    return pickup.flag_field + pickup.flag_number // 8, pickup.flag_number % 8
+
+
+def announcement_for_flag(flag_offset: int, flag_bit: int) -> Optional[Tuple[int, int]]:
+    """``(name text-id, sfx)`` of the inventory pickup whose collect flag is that bit, or None.
+
+    Lets a flag-only AP item, one whose remote receipt just sets the flag its floor copy would,
+    be announced under the same name and sound the floor copy uses."""
+    for pickup in _registry():
+        if pickup.inventory_name is not None and flag_location(pickup) == (flag_offset, flag_bit):
+            return _name_text_id_for(pickup), pickup.sfx
+    return None
 
 
 def _icon_tile_file_offsets(icon_id: int) -> tuple[int, int]:

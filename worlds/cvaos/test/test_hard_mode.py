@@ -86,6 +86,7 @@ class GameWatcherRamForcingTest(unittest.IsolatedAsyncioTestCase):
 
         fake_ram = AsyncMock()
         fake_ram.get_run_state = AsyncMock(return_value=(game_state, menu_state))
+        fake_ram.get_max_hp = AsyncMock(return_value=250)      # a loaded save file
 
         ctx = SimpleNamespace(server=object(), slot=1, bizhawk_ctx=object(),
                               slot_data={"hard_mode": hard_mode, "death_link": 0})

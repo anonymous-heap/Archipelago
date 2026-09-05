@@ -6,13 +6,13 @@ Every cvaos AP item code is a packed integer. ``pack`` builds one at generation 
 ``grant`` performs it through the RAM accessors. This module owns the wire encoding and is the
 single place that knows how an incoming item becomes a game-state change.
 
-Bit layout (MSB->LSB, 53 bits — AP requires ``0 < id < 2**53`` for JS clients):
+Bit layout (MSB->LSB, 53 bits, because AP requires ``0 < id < 2**53`` for JS clients):
 
     [52:49] category   (4)  TransferCategory; 0 reserved so every code is > 0
     [48]    set_flag   (1)  also set an EWRAM flag bit?
     [47:40] unused     (8)  reserved for growth
     [39:28] id/value  (12)  item -> item_info.item_number; money -> gold value
-    [27:22] disambig   (6)  copy index — distinguishes multiple pickups of the same item so
+    [27:22] disambig   (6)  copy index: distinguishes multiple pickups of the same item so
                             their codes stay unique; ignored when granting
     [21:4]  flag off  (18)  EWRAM byte offset (when set_flag)
     [3:1]   flag bit   (3)  bit index 0-7 (when set_flag)
@@ -52,8 +52,8 @@ _FLAG_OFFSET_SHIFT, _FLAG_OFFSET_MASK = 4, 0x3FFFF  # 18 bits (256 KB EWRAM)
 _FLAG_BIT_SHIFT, _FLAG_BIT_MASK = 1, 0x7    # 3 bits
 _FLAG_VALUE_MASK = 0x1
 
-ID_MAX = _ID_MASK            # 4095  — largest packable item_number / gold value
-DISAMBIG_MAX = _DISAMBIG_MASK  # 63   — most copies of one item that can share an (id) space
+ID_MAX = _ID_MASK            # 4095: largest packable item_number / gold value
+DISAMBIG_MAX = _DISAMBIG_MASK  # 63: most copies of one item that can share an (id) space
 
 
 def pack(category: TransferCategory, id_or_value: int, *, disambiguation: int = 0,
@@ -89,7 +89,7 @@ class ReceiveAction(NamedTuple):
 
 def resolve(code: int) -> "ReceiveAction | None":
     """Unpack a received AP code. Returns ``None`` for an undefined category (the caller should
-    log + skip). The disambiguation field is intentionally dropped — it never affects the grant.
+    log + skip). The disambiguation field is intentionally dropped: it never affects the grant.
     """
     try:
         category = TransferCategory((code >> _CATEGORY_SHIFT) & _CATEGORY_MASK)
@@ -105,9 +105,13 @@ def resolve(code: int) -> "ReceiveAction | None":
     )
 
 
-async def grant(ram: "AoSRAM", action: ReceiveAction) -> bool:
+async def grant(ram: "AoSRAM", action: ReceiveAction, *, new_soul_pause: bool = True) -> bool:
     """Apply a resolved action through the RAM accessors. Returns ``False`` only if a guarded
     write lost a race, so the caller retries next tick without advancing the received-counter.
+
+    ``new_soul_pause`` is the New Soul Pause option: whether a soul the player did not already
+    own is announced with the game's stop-the-action first-soul box, or with the short banner a
+    duplicate gets. It only shapes the announcement, never the grant.
     """
     # ORDER MATTERS: run the idempotent op (set_flag_bit -- a no-op when the bit is already at the
     # target value) FIRST, and the non-idempotent transfer (give_item/add_gold, a real increment)
@@ -118,18 +122,29 @@ async def grant(ram: "AoSRAM", action: ReceiveAction) -> bool:
     if action.set_flag:
         if not await ram.set_flag_bit(action.flag_offset, action.flag_bit, action.flag_value):
             return False
-    return await _grant_transfer(ram, action)
+    return await _grant_transfer(ram, action, new_soul_pause)
 
 
-async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction) -> bool:
+async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction, new_soul_pause: bool) -> bool:
     category = action.category
     if category == TransferCategory.MONEY:
         return await ram.add_gold(action.id_or_value)
     if category in (TransferCategory.PICKUP, TransferCategory.OTHER_ITEM):
         info = _by_item_number[action.id_or_value]
-        return await ram.give_item(info.item_category, info.id)
+        granted = await ram.give_item(info.item_category, info.id)
+        if granted:
+            # Cosmetic, and only after the item is really in the inventory. announce_* never
+            # raises and never blocks, so it cannot turn a delivered item into a retry.
+            from . import announce
+            await announce.announce_item_number(ram, action.id_or_value,
+                                                new_soul_pause=new_soul_pause)
+        return granted
     if category == TransferCategory.FLAG_ONLY:
-        # The whole grant was the set_flag bit (already applied in grant()); nothing else to do.
+        # The whole grant was the set_flag bit (already applied in grant()). If a custom pickup
+        # sets that same flag on collection (the Study Sealswitch), announce it under the pickup's
+        # name, as the floor copy does; the id field carries nothing to name it by.
+        from . import announce
+        await announce.announce_flag(ram, action.flag_offset, action.flag_bit)
         return True
     # EVENT / TO_BE_IMPLEMENTED: reserved, not yet grantable. Skip loudly (never silently).
     from CommonClient import logger

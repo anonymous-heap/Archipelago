@@ -15,8 +15,8 @@ from ..data import pickup_info_collection as pickup_infos
 from ..constants import AC_USA_ROM_MD5, USA_ROM_MD5
 from ..items import FORBIDDEN_AREA_SWITCH, item_table
 from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
-               inventory_menu, oops_all_whips, single_jump_divekick, skull_key_warp,
-               soul_drop_rates, soul_guarantee_hook, soul_shuffle)
+               inventory_menu, oops_all_whips, received_item_box, single_jump_divekick,
+               skull_key_warp, soul_drop_rates, soul_guarantee_hook, soul_shuffle)
 from .entity import GBA_ROM_BASE, AoSPickupEntity
 from .._bytemaker_compat import offset_of
 from ..options import ForbiddenAreaButton, SoulShuffle, TARGET_ADVANCE_COLLECTION, TARGET_GBA
@@ -207,6 +207,13 @@ class CVAOSPatchExtension(APPatchExtension):
             apply(classicvania_movement.build_writes(bytes(working)))
         if config["oops_all_whips"]:
             apply(oops_all_whips.build_writes(bytes(working)))
+
+        # Received-item announcement (rom/received_item_box.py): the vanilla "Got <name>" textbox
+        # and pickup SFX for an item or soul another world sent. Unconditional -- announcing what
+        # you receive is not a gameplay option, and the writes are inert until the client posts a
+        # request to the mailbox. Order-independent: it registers a slot in the shared
+        # update-hook framework (rom/xanthus_framework.py), which is idempotent.
+        apply(received_item_box.build_writes(bytes(working)))
 
         # Custom-pickup framework (rom/custom_pickups.py): collect hook, extended consumable-icon
         # table, and the apply icons.

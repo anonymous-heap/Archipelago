@@ -25,8 +25,9 @@ forces the roll to 0, which is below every numerator. Then the stolen instructio
 returns to the drop or no-drop path exactly as before. Matching on the soul rather than the enemy
 means Soul Shuffle needs nothing extra: whichever enemy carries the soul now is the one affected.
 
-The trampoline bytes are assembled from ``soul_guarantee_hook.s`` at DEV time (keystone, checked
-with capstone; see ``local_docs/tools/assemble_hook.py``), so AP generation needs no toolchain.
+The trampoline bytes are assembled from ``soul_guarantee_hook.s`` at DEV time by
+``rom/thumb_assembler.py``, so AP generation needs no toolchain. test_thumb_assembler.py asserts
+the bytes below are what that source assembles to, so the two cannot drift apart.
 Placement is declared as two ``Entry`` objects: the hook site bounded to its 10 stolen bytes and
 the trampoline to its free-ROM reservation. ``build_writes`` checks the stolen bytes against the
 base ROM before writing anything, so a ROM with a different code layout is refused.

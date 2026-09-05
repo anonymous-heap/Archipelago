@@ -190,6 +190,15 @@ class SkullKeyWarp(DefaultOnToggle):
     display_name = "Skull Key Warp"
 
 
+class NewSoulPause(DefaultOnToggle):
+    """
+    When a soul you do not already own arrives from another world, show the game's first-soul box
+       and stop the action until you press A, exactly as absorbing it yourself would. Off: every
+       received soul gets the short banner a duplicate gets, and play is never interrupted.
+    """
+    display_name = "New Soul Pause"
+
+
 class ForbiddenAreaButton(Choice):
     """
     How the Forbidden Area (gate at the bottom of the Study) is unlocked.
@@ -438,6 +447,7 @@ class CVAOSOptions(PerGameCommonOptions):
     soul_drop_rate_multiplier: SoulDropRateMultiplier
     ancient_book_soul_drops: AncientBookSoulDrops
     skull_key_warp: SkullKeyWarp
+    new_soul_pause: NewSoulPause
     forbidden_area_button: ForbiddenAreaButton
     single_jump_divekick: SingleJumpDivekick
     classicvania_movement: ClassicvaniaMovement
@@ -482,6 +492,7 @@ cvaos_option_groups = [
         SingleJumpDivekick,
         ClassicvaniaMovement,
         OopsAllWhips,
+        NewSoulPause,
     ]),
 ]
 

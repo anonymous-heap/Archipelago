@@ -114,6 +114,9 @@ class AccessorBehaviourTest(unittest.TestCase):
     def run_(self, coro):
         return asyncio.run(coro)
 
+    def souls_collected(self) -> int:
+        return int.from_bytes(self.mem[0x13264:0x13266], "little")
+
     def test_run_state_is_one_batched_read(self):
         self.assertEqual(self.run_(self.ram.get_run_state()), (4, 1))
         self.assertTrue(self.run_(self.ram.is_in_gameplay()))
@@ -128,6 +131,50 @@ class AccessorBehaviourTest(unittest.TestCase):
         self.assertEqual(self.mem[0x1331C + 2], 0x26)
         self.assertTrue(self.run_(self.ram.give_item("red_soul", 5)))
         self.assertEqual(self.mem[0x1331C + 2], 0x36)
+
+    def test_a_granted_soul_counts_toward_the_souls_collected_statistic(self):
+        # Vanilla's collect path calls sub_08032DBC(1) after adding the soul; without this the
+        # file screen would undercount every soul AP delivers.
+        self.assertEqual(self.souls_collected(), 0)
+        self.run_(self.ram.give_item("red_soul", 4))
+        self.assertEqual(self.souls_collected(), 1)
+        self.run_(self.ram.give_item("blue_soul", 3))
+        self.assertEqual(self.souls_collected(), 2)
+
+    def test_a_soul_at_the_cap_still_counts_the_way_vanilla_counts_it(self):
+        # yellow_soul[1] is at 9. The game counts souls absorbed, not distinct souls owned, and
+        # bumps the statistic even when the owned-count cannot go higher.
+        with self.assertLogs("Client", level="WARNING"):
+            self.assertTrue(self.run_(self.ram.give_item("yellow_soul", 1)))
+        self.assertEqual(self.souls_collected(), 1)
+
+    def test_a_granted_non_soul_leaves_the_soul_statistic_alone(self):
+        self.run_(self.ram.give_item("consumable", 3))
+        self.run_(self.ram.give_item("weapon", 3))
+        self.assertEqual(self.souls_collected(), 0)
+
+    def test_the_souls_collected_statistic_clamps_where_the_game_clamps(self):
+        self.mem[0x13264:0x13266] = (999).to_bytes(2, "little")
+        self.run_(self.ram.give_item("red_soul", 4))
+        self.assertEqual(self.souls_collected(), 999)
+
+    def test_owned_count_unpacks_the_nibble_that_matches_give(self):
+        # 0x25 in red_soul's third byte holds index 4 in the LOW nibble and index 5 in the high
+        # one, the same halves give_item bumps. announce derives a soul's isNew from this count,
+        # so a swapped mapping would announce every new soul as a duplicate.
+        self.assertEqual(self.run_(self.ram.owned_count("red_soul", 4)), 5)
+        self.assertEqual(self.run_(self.ram.owned_count("red_soul", 5)), 2)
+        self.assertEqual(self.run_(self.ram.owned_count("red_soul", 0)), 0)
+        self.run_(self.ram.give_item("red_soul", 5))
+        self.assertEqual(self.run_(self.ram.owned_count("red_soul", 5)), 3)
+
+    def test_owned_count_reads_a_plain_byte_array_whole(self):
+        self.mem[0x13294 + 7] = 4
+        self.assertEqual(self.run_(self.ram.owned_count("consumable", 7)), 4)
+
+    def test_owned_count_refuses_an_index_out_of_range(self):
+        with self.assertRaises(ValueError):
+            self.run_(self.ram.owned_count("red_soul", 56))
 
     def test_at_cap_give_is_reported_as_delivered_and_writes_nothing(self):
         with self.assertLogs("Client", level="WARNING"):
