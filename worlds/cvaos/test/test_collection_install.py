@@ -381,5 +381,57 @@ class BaseRomSourceTest(unittest.TestCase):
         self.assertEqual(self.patch.get_base_rom_bytes(), b"default-target cart")
 
 
+class ExePromptTest(unittest.TestCase):
+    """The installer asks for game.exe when nothing is at the configured path, once."""
+
+    class FakePath(str):
+        chosen: "str | None" = None
+
+        def browse(self):
+            return None if self.chosen is None else ExePromptTest.FakePath(self.chosen)
+
+        def resolve(self) -> str:
+            return str(self)
+
+    def setUp(self) -> None:
+        from .. import CVAOSWorld
+        self.root = tempfile.mkdtemp(prefix="cvaos_exe_prompt_")
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.options = types.SimpleNamespace()
+        self.saved = mock.Mock()
+        # CVAOSWorld.settings is a read-only metaclass property that caches the group here.
+        for patcher in (mock.patch.object(CVAOSWorld, "_AutoWorldRegister__settings", self.options),
+                        mock.patch("settings.get_settings",
+                                   return_value=types.SimpleNamespace(save=self.saved))):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def exe(self) -> str:
+        path = os.path.join(self.root, "game.exe")
+        with open(path, "wb") as f:
+            f.write(b"MZ")
+        return path
+
+    def test_an_existing_configured_path_is_used_without_asking(self) -> None:
+        self.options.collection_exe = self.FakePath(self.exe())
+        with mock.patch.object(self.FakePath, "browse") as browse:
+            self.assertEqual(install._exe_path_from_settings(), self.options.collection_exe)
+        browse.assert_not_called()
+
+    def test_a_missing_path_is_asked_for_and_saved(self) -> None:
+        chosen = self.exe()
+        self.options.collection_exe = self.FakePath(os.path.join(self.root, "missing", "game.exe"))
+        self.FakePath.chosen = chosen
+        self.addCleanup(setattr, self.FakePath, "chosen", None)
+        self.assertEqual(install._exe_path_from_settings(), chosen)
+        self.assertEqual(self.options.collection_exe, chosen)
+        self.saved.assert_called_once()
+
+    def test_cancelling_the_dialog_returns_none_and_saves_nothing(self) -> None:
+        self.options.collection_exe = self.FakePath(os.path.join(self.root, "missing", "game.exe"))
+        self.assertIsNone(install._exe_path_from_settings())
+        self.saved.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

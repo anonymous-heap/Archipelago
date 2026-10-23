@@ -65,8 +65,8 @@ class CVAOSSettings(settings.Group):
     class CollectionExePath(settings.FilePath):
         """game.exe inside the Steam Castlevania Advance Collection install. Used to install a
         patched ROM into the collection, and to source the base ROM for advance_collection-target
-        seeds. Optional: defaults to the standard Steam path and never force-prompts, so gba-only
-        users can ignore it. Md5-checked when browsed for."""
+        seeds. Optional: defaults to the standard Steam path, so gba-only users can ignore it. The
+        ROM installer asks for it when nothing is at that path, and checks the chosen file's md5."""
         description = "Castlevania Advance Collection game.exe"
         is_exe = True
         required = False

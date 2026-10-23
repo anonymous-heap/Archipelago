@@ -372,10 +372,27 @@ def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
 # Launcher component entry point
 # ---------------------------------------------------------------------------
 
-def _exe_path_from_settings() -> str:
-    # Triggers AP's browse dialog on first use; md5-validated (CVAOSSettings.CollectionExePath).
+def _exe_path_from_settings() -> str | None:
+    """The collection's game.exe from host.yaml, asking for it when it is not there.
+
+    ``collection_exe`` is optional, so AP never asks for it by itself, and a Steam library outside
+    the default location would otherwise end in a "no windata" error. The chosen file must match
+    the collection's game.exe hash (a mismatch raises ``ValueError``), and the answer is saved to
+    host.yaml. Returns None when the player cancels the dialog.
+    """
+    from settings import get_settings
+
     from .. import CVAOSWorld
-    return str(CVAOSWorld.settings.collection_exe)
+    options = CVAOSWorld.settings
+    current = options.collection_exe
+    if os.path.isfile(current):
+        return str(current)
+    chosen = current.browse()
+    if chosen is None:
+        return None
+    options.collection_exe = chosen
+    get_settings().save()
+    return chosen.resolve()
 
 
 def run_from_launcher(*args: str) -> None:
@@ -396,6 +413,8 @@ def run_from_launcher(*args: str) -> None:
             messagebox("Wrong file", "Selected file did not match the Castlevania Advance "
                        "Collection's game.exe. Please try again.", True)
             return
+        if exe_path is None:
+            return  # the player cancelled the game.exe dialog
         if "--restore" in args:
             summary = restore_backup(exe_path, log)
         else:
