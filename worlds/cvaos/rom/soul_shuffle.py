@@ -31,10 +31,18 @@ Controlled by the ``keep_soul_drop_rates`` option:
 
 * ``False`` -- the rate byte stays with the ENEMY, so a soul is as rare as whatever now drops it.
 * ``True`` -- the rate byte moves WITH THE SOUL, so each soul keeps its vanilla rarity and only
-  its source changes. One exception: an enemy whose vanilla rate is 0 keeps it. Rate 0 tells
-  the death routine to skip the soul roll; vanilla puts it on the one-time bosses (Headhunter,
-  Death, Legion, Balore), whose souls their own scripts award, so a real rate there would add a
-  second, generic drop on top of the scripted one.
+  its source changes.
+
+Rate 0 tells the death routine to skip the soul roll. Vanilla gives it to four one-time bosses
+(Headhunter, Death, Legion, Balore), whose own scripts award the soul in their table row when
+they die. When the option is ``True``, that causes two exceptions:
+
+* A boss keeps its rate of 0. Headhunter, Legion and Balore also run the generic death routine,
+  so a real rate there would add a second, random drop on top of the scripted one. The boss's
+  script awards whichever soul the shuffle moved into the boss's row.
+* A boss's soul has a vanilla rate of 0, which means "no roll" rather than a rarity. When the
+  soul moves to an ordinary enemy, that enemy keeps its own rate, because moving the 0 would
+  stop the soul from ever dropping.
 
 Generation is ROM-free, so the vanilla table below is committed data. :func:`build_writes`
 verifies it against the base ROM before writing anything.
@@ -364,8 +372,10 @@ def build_writes(base_rom: bytes, plan: Dict[int, int], keep_soul_drop_rates: bo
     Args:
         base_rom: the original ROM bytes, verified against :data:`VANILLA` first.
         plan: ``{target_enemy_id: source_enemy_id}`` from :func:`plan_shuffle`.
-        keep_soul_drop_rates: move each soul's vanilla rate along with it, except onto an
-            enemy whose vanilla rate is 0 (the death routine skips the roll for those), which keeps 0.
+        keep_soul_drop_rates: move each soul's vanilla rate along with it, unless the source or
+            the target has a vanilla rate of 0 (a scripted boss). In that case the target keeps
+            its own rate: a boss keeps its 0, and an ordinary enemy that receives a boss's soul
+            keeps its nonzero rate.
         shuffle_starting_soul: also retarget the intro's free Winged Skeleton soul at
             whatever now drops from the enemy it belonged to.
 
@@ -382,7 +392,7 @@ def build_writes(base_rom: bytes, plan: Dict[int, int], keep_soul_drop_rates: bo
         soul_type, soul_index, soul_rate = VANILLA[source]
         writes[field_offset(target, "soul_type")] = bytes([soul_type])
         writes[field_offset(target, "soul_index")] = bytes([soul_index])
-        if keep_soul_drop_rates and VANILLA[target][2] != 0:
+        if keep_soul_drop_rates and VANILLA[target][2] != 0 and soul_rate != 0:
             writes[field_offset(target, "soul_rate")] = bytes([soul_rate])
 
     if shuffle_starting_soul and plan:

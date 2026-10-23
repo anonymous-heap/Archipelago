@@ -117,8 +117,10 @@ class KeepSoulDropRates(DefaultOnToggle):
     - off (keep enemy drop rates): rarity becomes a property of the encounter -- a soul is as
       common as whatever now drops it. Rare enemies become worth hunting for their own sake.
 
-    Either way, a one-time boss (Headhunter, Death, Legion, Balore) keeps the game's "no roll"
-       drop rate that its own script relies on, so a shuffle never adds a random drop to a boss.
+    Either way, the one-time bosses Headhunter, Death, Legion and Balore still award exactly one
+       soul when they die: whichever soul the shuffle gave them. In vanilla, those four souls come
+       only from that scripted award, never from a random drop, so they have no rarity to keep.
+       When one moves to an ordinary enemy, it drops at that enemy's usual rate.
     """
     display_name = "Keep Soul Drop Rates"
 

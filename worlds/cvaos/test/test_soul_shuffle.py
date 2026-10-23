@@ -2,8 +2,8 @@
 
 These do not run the ROM. They check the committed vanilla table's shape, that a planned shuffle
 is always a soul-preserving permutation that leaves progression souls alone, and that the emitted
-writes say what the plan says -- including the guaranteed-drop carve-out that stops a one-time
-boss from stranding a soul. Confirming the table's field meanings in-game still needs an emulator
+writes say what the plan says -- including the rate carve-outs that keep a scripted boss's soul
+obtainable wherever it lands. Confirming the table's field meanings in-game still needs an emulator
 playtest -- see rom/soul_shuffle.py.
 """
 from __future__ import annotations
@@ -33,6 +33,35 @@ def _fake_rom() -> bytes:
 
 
 ROM = _fake_rom()
+
+# The four scripted bosses: their death scripts award the soul in their row. Three of them also run
+# the generic drop routine, and rate 0 keeps it from rolling for that soul a second time.
+SCRIPTED_BOSSES = frozenset(e for e, (_t, index, rate) in ss.VANILLA.items() if index and rate == 0)
+
+
+def _apply(rom: bytes, writes: dict) -> bytearray:
+    patched = bytearray(rom)
+    for off, data in writes.items():
+        patched[off:off + len(data)] = data
+    return patched
+
+
+def _assert_every_soul_obtainable(test: unittest.TestCase, patched: bytes) -> None:
+    """Every vanilla soul has exactly one row, and that row can award it: a scripted boss row
+    keeps rate 0, and any other row holding a soul has a nonzero rate."""
+    souls = []
+    for enemy_id in ss.VANILLA:
+        row = ss._entry(enemy_id)
+        soul = (patched[row + ss.SOUL_TYPE_OFF], patched[row + ss.SOUL_INDEX_OFF])
+        rate = patched[row + ss.SOUL_RATE_OFF]
+        if enemy_id in SCRIPTED_BOSSES:
+            test.assertNotEqual(soul[1], 0, f"boss {enemy_id} lost its soul")
+            test.assertEqual(rate, 0, f"boss {enemy_id} gained a random roll")
+        elif soul[1]:
+            test.assertNotEqual(rate, 0, f"enemy {enemy_id} can never drop {soul}")
+        if soul[1]:
+            souls.append(soul)
+    test.assertCountEqual(souls, [(t, i) for t, i, _r in ss.VANILLA.values() if i])
 ALL_MODES = (ss.MODE_WITHIN_TYPE, ss.MODE_ANY_TYPE)
 
 
@@ -134,14 +163,52 @@ class TestBuildWrites(unittest.TestCase):
     def test_soul_rates_mode_moves_the_rate(self):
         plan = ss.plan_shuffle(Random(11), ss.MODE_WITHIN_TYPE)
         writes = ss.build_writes(ROM, plan, keep_soul_drop_rates=True)
-        moved = 0
+        moved = boss_sources = 0
         for target, source in plan.items():
             key = ss._entry(target) + ss.SOUL_RATE_OFF
             if ss.VANILLA[target][2] == 0:
                 continue
+            if ss.VANILLA[source][2] == 0:
+                self.assertNotIn(key, writes, "a boss's 0 must not move to an ordinary enemy")
+                boss_sources += 1
+                continue
             self.assertEqual(writes[key], bytes([ss.VANILLA[source][2]]))
             moved += 1
         self.assertGreater(moved, 0)
+        self.assertGreater(boss_sources, 0)
+
+    def test_a_boss_soul_on_an_ordinary_enemy_takes_that_enemys_rate(self):
+        """An ordinary enemy that receives a boss's soul keeps its own rate, because moving the
+        boss's 0 would stop the soul from dropping."""
+        legion, bat = 108, 0
+        self.assertEqual(ss.VANILLA[legion][2], 0, "premise: Legion's soul is a scripted award")
+        patched = _apply(ROM, ss.build_writes(ROM, {bat: legion, legion: bat}, keep_soul_drop_rates=True))
+        self.assertEqual(patched[ss._entry(bat) + ss.SOUL_RATE_OFF], ss.VANILLA[bat][2])
+        self.assertEqual(patched[ss._entry(bat) + ss.SOUL_INDEX_OFF], ss.VANILLA[legion][1])
+        self.assertEqual(patched[ss._entry(legion) + ss.SOUL_RATE_OFF], 0)
+        self.assertEqual(patched[ss._entry(legion) + ss.SOUL_INDEX_OFF], ss.VANILLA[bat][1])
+
+    def test_every_soul_can_still_be_obtained(self):
+        for mode in ALL_MODES:
+            for keep in (True, False):
+                for seed in range(10):
+                    plan = ss.plan_shuffle(Random(seed), mode)
+                    patched = _apply(ROM, ss.build_writes(ROM, plan, keep))
+                    with self.subTest(mode=mode, keep=keep, seed=seed):
+                        _assert_every_soul_obtainable(self, patched)
+
+    def test_rate_edits_after_the_shuffle_keep_every_soul_obtainable(self):
+        """The patch runs the shuffle, then the per-enemy rate overrides, then the multiplier; none
+        of the later steps may put a 0 back on an ordinary enemy."""
+        from worlds.cvaos.rom import soul_drop_rates as sdr
+        for mode in ALL_MODES:
+            for seed in range(5):
+                plan = ss.plan_shuffle(Random(seed), mode)
+                patched = _apply(ROM, ss.build_writes(ROM, plan, True))
+                patched = _apply(patched, sdr.build_writes(bytes(patched)))
+                patched = _apply(patched, sdr.build_multiplier_writes(bytes(patched), 1000))
+                with self.subTest(mode=mode, seed=seed):
+                    _assert_every_soul_obtainable(self, patched)
 
     def test_guaranteed_drops_stay_guaranteed(self):
         """A vanilla rate of 0 marks an unfarmable kill; it must never inherit a rarer rate."""
