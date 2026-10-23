@@ -15,17 +15,19 @@ from dataclasses import dataclass
 from enum import IntEnum
 
 from Options import (Choice, DeathLink, DefaultOnToggle, ItemsAccessibility, NamedRange,
-                     OptionGroup, PerGameCommonOptions, Toggle)
+                     OptionGroup, PerGameCommonOptions, Toggle, Visibility)
 
 from .data import AbilityCombo
 
 
 class RandomizePickups(Toggle):
     """
-    Adds the one-time on-the-ground pickups to the randomization pool.
+    Not implemented yet: the one-time on-the-ground pickups are always shuffled, and turning this off
+       changes nothing. Hidden from the options page and templates until it does something.
     """
     display_name = "Randomize Pickups"
     default = 1
+    visibility = Visibility.none
 
 
 class TargetPlatform(Choice):
