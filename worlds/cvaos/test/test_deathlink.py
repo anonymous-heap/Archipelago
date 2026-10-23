@@ -21,6 +21,7 @@ INGAME = int(addr.GameState.INGAME)
 GAME_OVER = int(addr.GameState.GAME_OVER)
 NORMAL = addr.MENU_STATE_NORMAL
 DEATH = addr.MENU_STATE_DEATH
+PAUSE = addr.MENU_STATE_PAUSE
 
 
 class FakeCtx:
@@ -150,9 +151,34 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
     async def test_incoming_death_not_applied_outside_gameplay(self) -> None:
         await self.relay(INGAME, NORMAL)
         self.client.death_causes.append("Someone else died")
-        await self.relay(INGAME, DEATH, hp=0)       # mid-fade: unsafe to poke HP
+        await self.relay(INGAME, PAUSE)             # paused: unsafe to request the kill
         self.assertEqual(self.ram.kill_calls, 0)
         self.assertEqual(self.client.death_causes, ["Someone else died"], "cause stays queued")
+
+    def bounce(self, cause: str) -> None:
+        self.client.queue_deathlink_from_bounce(
+            self.ctx, "Bounced", {"tags": ["DeathLink"], "data": {"time": 1.0, "cause": cause}})
+
+    async def test_a_death_received_while_dead_is_dropped(self) -> None:
+        await self.relay(INGAME, NORMAL)
+        await self.relay(INGAME, DEATH, hp=0)       # Soma dies on his own
+        self.bounce("Someone else died")
+        self.assertEqual(self.client.death_causes, [])
+
+    async def test_several_deaths_while_paused_kill_once(self) -> None:
+        await self.relay(INGAME, NORMAL)
+        for n in range(3):
+            self.bounce(f"death {n}")
+        await self.relay(INGAME, PAUSE)
+        await self.relay(INGAME, NORMAL, hp=100)
+        self.assertEqual(self.ram.kill_calls, 1)
+        self.assertEqual(self.client.death_causes, [])
+
+    async def test_dying_on_his_own_spends_a_pending_death(self) -> None:
+        await self.relay(INGAME, NORMAL)
+        self.bounce("Someone else died")
+        await self.relay(INGAME, DEATH, hp=0)
+        self.assertEqual(self.client.death_causes, [])
 
     async def test_received_death_is_not_rebroadcast(self) -> None:
         # Applying an incoming death must not later echo back out as our own broadcast.

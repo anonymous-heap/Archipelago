@@ -66,8 +66,12 @@ class CVAOSClientLogic:
             data = args.get("data", {})
             if data.get("time") == self.time_of_sent_death:
                 return  # our own death, bounced back to us
+            if self.currently_dead:
+                return  # Soma is already dead or dying, so this death changes nothing
+            # Keep one pending death: several that arrive while Soma cannot be killed yet (paused,
+            # in a menu) kill him once, not once each after every respawn.
             source = data.get("source", "Another world")
-            self.death_causes.append(data.get("cause") or f"{source} killed you without a word!")
+            self.death_causes = [data.get("cause") or f"{source} killed you without a word!"]
 
     async def _tick(self, ctx: "CommonContext", ram: AoSRAM) -> None:
         # Per-tick orchestrator: read the run state once, relay DeathLink every tick, and run the
@@ -186,7 +190,9 @@ class CVAOSClientLogic:
 
         if "DeathLink" in ctx.tags and dead and not self.currently_dead:
             # Died on our own. Mark dead BEFORE awaiting so a same-tick re-entry can't double-send.
+            # A death still pending from another world is spent by this one.
             self.currently_dead = True
+            self.death_causes.clear()
             await ctx.send_death(f"{ctx.player_names[ctx.slot]} was slain. Dracula has won!")
             # Record AP's timestamp so the bounce handler can filter our own echo (overwritten later).
             self.time_of_sent_death = ctx.last_death_link
