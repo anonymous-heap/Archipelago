@@ -533,6 +533,9 @@ class CVAOSCollectionContext(CommonContext):
         self._last_attach_attempt = 0.0
         self._last_revalidate = 0.0
         self._attach_error_shown: str | None = None
+        # The auth of the seed the current connection plays, to notice a different seed installed
+        # while the game was closed.
+        self._connected_auth: str | None = None
 
     # -- AP plumbing --------------------------------------------------------
     async def server_auth(self, password_requested: bool = False) -> None:
@@ -551,6 +554,7 @@ class CVAOSCollectionContext(CommonContext):
 
     def on_package(self, cmd: str, args: dict) -> None:
         if cmd == "Connected":
+            self._connected_auth = self.auth
             self.slot_data = args.get("slot_data", {}) or {}
             target = self.slot_data.get("target_platform")
             if target is not None and int(target) != TARGET_ADVANCE_COLLECTION:
@@ -588,6 +592,8 @@ class CVAOSCollectionContext(CommonContext):
             try:
                 rom = find_rom_image(proc)
                 ewram_base = find_ewram_base(proc, rom)
+                installed = base64.b64encode(
+                    proc.read(rom.base + AUTH_NUMBER_START, 16)).decode("ascii")
             except CollectionError:
                 proc.close()
                 raise
@@ -603,6 +609,13 @@ class CVAOSCollectionContext(CommonContext):
         self._last_revalidate = now
         logger.info("Attached to the Advance Collection (ROM at %#x, EWRAM at %#x).",
                     rom.base, ewram_base)
+        if self.slot is not None and self._connected_auth not in (None, installed):
+            # The installed seed changed while the game was closed, so this connection plays
+            # someone else's slot. Reconnecting authenticates with the new seed's auth.
+            logger.info("The collection now holds a different seed from the connected slot's; "
+                        "reconnecting as the new seed's slot.")
+            self._connected_auth = None
+            Utils.async_start(self.disconnect(allow_autoreconnect=True))
 
     def revalidate_anchor(self) -> None:
         """Cheap periodic check that the anchored ROM is still ours -- switching games in

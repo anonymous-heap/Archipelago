@@ -12,6 +12,7 @@ live process's sparse memory so we never touch pymem.
 from __future__ import annotations
 
 import asyncio
+import base64
 import unittest
 
 from ..collection_client import (
@@ -313,6 +314,42 @@ class WatcherResilienceTest(unittest.TestCase):
             asyncio.run(asyncio.wait_for(collection_client._watcher(ctx), timeout=5))
         self.assertEqual(len(ticks), 2, "the watcher must tick again after the error")
         ctx._detach.assert_not_called()
+
+
+class ReattachTest(unittest.IsolatedAsyncioTestCase):
+    """Re-attaching to a differently seeded collection must not keep playing the old slot."""
+
+    OLD_AUTH, NEW_AUTH = bytes(range(16)), bytes(range(16, 32))
+
+    async def attach_with(self, installed_auth: bytes):
+        from unittest import mock
+
+        from .. import collection_client
+        from ..rom import AUTH_NUMBER_START
+        ctx = collection_client.CVAOSCollectionContext(None, None)
+        ctx.slot = 1
+        ctx.auth = base64.b64encode(self.OLD_AUTH).decode("ascii")
+        ctx.on_package("Connected", {"slot_data": {}})
+        proc = FakeProc()
+        proc.close = lambda: None
+        rom = RomImage(0x30000020, 0x30000000, 0x30800000)
+        proc.write(rom.base + AUTH_NUMBER_START, installed_auth)
+        with mock.patch.object(collection_client.GameProcess, "attach", return_value=proc), \
+                mock.patch.object(collection_client, "find_rom_image", return_value=rom), \
+                mock.patch.object(collection_client, "find_ewram_base", return_value=0x10000170), \
+                mock.patch.object(ctx, "disconnect", new=mock.AsyncMock()) as disconnect:
+            ctx.try_attach()
+            await asyncio.sleep(0)
+        return ctx, disconnect
+
+    async def test_a_different_seed_reconnects_as_its_own_slot(self) -> None:
+        ctx, disconnect = await self.attach_with(self.NEW_AUTH)
+        disconnect.assert_awaited_once_with(allow_autoreconnect=True)
+        self.assertIsNotNone(ctx.backend)
+
+    async def test_the_same_seed_keeps_the_connection(self) -> None:
+        _ctx, disconnect = await self.attach_with(self.OLD_AUTH)
+        disconnect.assert_not_awaited()
 
 
 if __name__ == "__main__":
