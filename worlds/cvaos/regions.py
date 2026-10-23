@@ -19,7 +19,7 @@ from .data import (
     transdoor_connection_collection,
 )
 from .locations import CVAOSLocation, location_name_to_id
-from .options import ForbiddenAreaButton, resolve_allowed_techniques
+from .options import ForbiddenAreaButton, hard_mode_pickups_included, resolve_allowed_techniques
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -118,10 +118,10 @@ def create_regions(world: CVAOSWorld) -> None:
         return region
 
     # Create pickup regions (one per pickup in the game). Hard-Mode-only pickups (HARD_PICKUP
-    # entities) only spawn in the game's Hard Mode, so include them only when that option is set;
-    # the item pool is gated the same way in items.create_itempool. Routing connections to a
+    # entities) are created only when hard_mode_pickups_included returns True, and
+    # items.create_itempool applies the same test to the item pool. Routing connections to a
     # skipped pickup resolve to None and are dropped below.
-    include_hard = bool(world.options.hard_mode)
+    include_hard = hard_mode_pickups_included(world.options)
     for pickup_info in pickup_info_collection:
         if pickup_info.is_hard_mode_only and not include_hard:
             continue

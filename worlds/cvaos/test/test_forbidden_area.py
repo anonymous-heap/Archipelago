@@ -82,6 +82,7 @@ def _mock_world(fab_value):
         player=1,
         options=types.SimpleNamespace(
             hard_mode=0,
+            hard_mode_pickups=types.SimpleNamespace(value=0),
             forbidden_area_button=types.SimpleNamespace(value=fab_value),
         ),
     )

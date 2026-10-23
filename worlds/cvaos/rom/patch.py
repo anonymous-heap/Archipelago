@@ -20,9 +20,10 @@ from ..items import FORBIDDEN_AREA_SWITCH, item_table
 from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
                inventory_menu, oops_all_whips, received_item_box, single_jump_divekick,
                skull_key_warp, soul_drop_rates, soul_guarantee_hook, soul_shuffle)
-from .entity import GBA_ROM_BASE, AoSPickupEntity
+from .entity import GBA_ROM_BASE, HARD_PICKUP, PICKUP, AoSPickupEntity
 from .._bytemaker_compat import offset_of
-from ..options import ForbiddenAreaButton, SoulShuffle, TARGET_ADVANCE_COLLECTION, TARGET_GBA
+from ..options import (ForbiddenAreaButton, HardModePickups, SoulShuffle, TARGET_ADVANCE_COLLECTION,
+                       TARGET_GBA)
 
 if TYPE_CHECKING:
     from BaseClasses import Location
@@ -89,8 +90,15 @@ assert offset_of(AoSPickupEntity, "subtype") == _TYPE_OFF + 1
 # Location data lookup: Location number -> ROM bytes
 
 def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Dict[int, bytes]:
-    """Build a dict of {rom_file_offset: bytes_to_write} for every location."""
+    """Build a dict of {rom_file_offset: bytes_to_write} for every location.
+
+    Each location takes its entity type from the local item placed there, so a location holding
+    one of the five Hard Mode items is written as a HARD_PICKUP and spawns only in Hard Mode. When
+    Hard Mode Pickups is ``always``, HARD_PICKUP is written as PICKUP instead, so those locations
+    also spawn in normal mode.
+    """
     writes: Dict[int, bytes] = {}
+    every_difficulty = world.options.hard_mode_pickups.value == HardModePickups.option_always
 
     for loc in active_locations:
         rom_offset = loc.address - GBA_ROM_BASE
@@ -107,6 +115,8 @@ def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Di
             type_num, subtype_num, item_offset = get_item_encoding(loc.item.code)
         else:
             type_num, subtype_num, item_offset = _AP_PLACEHOLDER
+        if every_difficulty and type_num == HARD_PICKUP:
+            type_num = PICKUP
 
         writes[rom_offset + _TYPE_OFF] = bytes([type_num, subtype_num])
         writes[rom_offset + _ITEM_OFF] = item_offset.to_bytes(2, "little")

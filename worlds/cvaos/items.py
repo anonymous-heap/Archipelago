@@ -6,7 +6,7 @@ from BaseClasses import Item, ItemClassification
 
 from .data import item_info_collection, pickup_info_collection as pickup_infos
 from .item_granting import DISAMBIG_MAX, ID_MAX, TransferCategory, pack
-from .options import ForbiddenAreaButton
+from .options import ForbiddenAreaButton, hard_mode_pickups_included
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -115,7 +115,8 @@ _SYNTHETIC_ITEM_NAMES: frozenset[str] = frozenset({FORBIDDEN_AREA_SWITCH})
 item_name_to_id: Dict[str, int] = {name: data.code for name, data in item_table.items()}
 
 # Items that exist only in the game's Hard Mode (the HARD_PICKUP entities). Excluded from the
-# pool unless the Hard Mode option is on; mirrors the location gating in regions.create_regions.
+# pool unless options.hard_mode_pickups_included returns True, the same test that gates their
+# locations in regions.create_regions.
 _HARD_PICKUP_ITEM_NAMES: frozenset[str] = frozenset(
     p.display_name for p in pickup_infos if p.is_hard_mode_only)
 
@@ -141,9 +142,9 @@ def create_item(world: "CVAOSWorld", name: str) -> CVAOSItem:
 
 
 def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
-    # One item per pickup. Hard-Mode-only pickups are included only when the Hard Mode option is
-    # set, so the pool stays balanced with the locations created in regions.create_regions.
-    include_hard = bool(world.options.hard_mode)
+    # One item per pickup. Hard-Mode-only pickups are included only when hard_mode_pickups_included
+    # returns True, the test regions.create_regions also uses, so item and location counts match.
+    include_hard = hard_mode_pickups_included(world.options)
     pool = [create_item(world, name) for name in item_table
             if name not in _SYNTHETIC_ITEM_NAMES
             and (include_hard or name not in _HARD_PICKUP_ITEM_NAMES)]

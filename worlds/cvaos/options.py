@@ -72,9 +72,8 @@ class HardMode(Toggle):
     """
     Turns on Hard Mode (the client forces the relevant nibble).
 
-    Shuffles the game's Hard Mode pickups (Kaiser Knuckle, Death's Sickle, Death's Robe,
-       Silver Gun, Tear of Blood). The game only spawns those five in Hard Mode, so when this is
-       off they are excluded from the location pool and item pool entirely.
+    Also shuffles the game's five Hard Mode pickups while Hard Mode Pickups is at its default.
+       That option can instead shuffle them without Hard Mode, or leave them out of a Hard Mode seed.
 
     Makes enemies take less damage.
 
@@ -82,6 +81,23 @@ class HardMode(Toggle):
     """
     display_name = "Hard Mode"
     default = 0
+
+
+class HardModePickups(Choice):
+    """
+    Whether the five pickups that the game spawns only in Hard Mode are shuffled: Kaiser Knuckle,
+       Death's Sickle, Death's Robe, Silver Gun, and Tear of Blood.
+
+    - with_hard_mode: they are shuffled when Hard Mode is on and left out when it is off.
+    - always: they are shuffled whether or not Hard Mode is on. The patch makes them spawn in
+      normal mode too.
+    - never: they are not shuffled. In Hard Mode they still appear and hold their vanilla items.
+    """
+    display_name = "Hard Mode Pickups"
+    option_with_hard_mode = 0
+    option_always = 1
+    option_never = 2
+    default = option_with_hard_mode
 
 
 class SoulShuffle(Choice):
@@ -461,6 +477,7 @@ class CVAOSOptions(PerGameCommonOptions):
     randomize_pickups: RandomizePickups
     goal: Goal
     hard_mode: HardMode
+    hard_mode_pickups: HardModePickups
     soul_shuffle: SoulShuffle
     keep_soul_drop_rates: KeepSoulDropRates
     shuffle_starting_soul: ShuffleStartingSoul
@@ -493,6 +510,7 @@ class CVAOSOptions(PerGameCommonOptions):
 LOGIC_OPTION_NAMES: tuple[str, ...] = (
     "goal",
     "hard_mode",
+    "hard_mode_pickups",
     "forbidden_area_button",
     "oops_all_whips",
     "logic_difficulty_preset",
@@ -532,6 +550,17 @@ cvaos_option_groups = [
         NewSoulPause,
     ]),
 ]
+
+
+def hard_mode_pickups_included(options: CVAOSOptions) -> bool:
+    """Whether the five Hard Mode pickups are locations and their items are in the pool."""
+    match options.hard_mode_pickups.value:
+        case HardModePickups.option_always:
+            return True
+        case HardModePickups.option_never:
+            return False
+        case _:  # with_hard_mode
+            return bool(options.hard_mode)
 
 
 def resolve_allowed_techniques(options: CVAOSOptions) -> AbilityCombo:

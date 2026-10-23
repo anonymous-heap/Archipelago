@@ -42,3 +42,11 @@ class AoSPickupEntity(Struct, endian="little"):
 
 
 ENTITY_SIZE = sizeof(AoSPickupEntity)
+
+# The two ``type`` values that mark a pickup. The room-entity dispatcher (sub_0800F1FC) spawns a
+# HARD_PICKUP only when the difficulty nibble is set. Apart from that check, both types run the
+# same spawn and collect code for subtypes 1 to 4 (money, consumables, weapons, armor), with the
+# same save flag (var_a) and item (var_b). The HARD_PICKUP path has no branch for souls, so a
+# soul must never be written as one.
+PICKUP = 4
+HARD_PICKUP = 5
