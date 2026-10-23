@@ -331,6 +331,20 @@ class ItemSmoothingOrder(Choice):
     default = option_map_distance
 
 
+class ProgressiveMovement(Toggle):
+    """
+    Replaces the Flying Armor, Malphas and Giant Bat souls with three Progressive Movement items.
+       The first one you get, found or received, gives Flying Armor, the second Malphas (double
+       jump), and the third Giant Bat.
+
+    A Progressive Movement item in your own world looks like a Skull Key, the pickup that stands
+       in for other players' items. Picking it up gives no soul by itself, so its soul arrives
+       only once the client is connected.
+    """
+    display_name = "Progressive Movement"
+    default = 0
+
+
 class EarlyMobilitySouls(Choice):
     """
     No effect when Item Smoothing is off.
@@ -347,6 +361,10 @@ class EarlyMobilitySouls(Choice):
     With bias_early or guarantee_early, Giant Bat is never the soul pulled early, and it usually
        lands in the later part of the run. Its flight reaches nearly everything the other two souls
        do, so an early Giant Bat would open most of the castle at once.
+
+    With Progressive Movement on, two of the three Progressive Movement items are placed the way
+       Malphas would be, and the third the way Giant Bat would be. When Malphas is the soul pulled
+       early, both of those items are aimed early, so you get Flying Armor and double jump early.
     """
     display_name = "Early Mobility Souls"
     option_off = 0
@@ -483,6 +501,7 @@ class CVAOSOptions(PerGameCommonOptions):
     goal: Goal
     hard_mode: HardMode
     hard_mode_pickups: HardModePickups
+    progressive_movement: ProgressiveMovement
     soul_shuffle: SoulShuffle
     keep_soul_drop_rates: KeepSoulDropRates
     shuffle_starting_soul: ShuffleStartingSoul
@@ -516,6 +535,7 @@ LOGIC_OPTION_NAMES: tuple[str, ...] = (
     "goal",
     "hard_mode",
     "hard_mode_pickups",
+    "progressive_movement",
     "forbidden_area_button",
     "oops_all_whips",
     "logic_difficulty_preset",

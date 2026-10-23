@@ -16,7 +16,7 @@ from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTok
 
 from ..data import pickup_info_collection as pickup_infos
 from ..constants import AC_USA_ROM_MD5, USA_ROM_MD5
-from ..items import FORBIDDEN_AREA_SWITCH, item_table
+from ..items import FORBIDDEN_AREA_SWITCH, PROGRESSIVE_MOVEMENT, item_table
 from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
                inventory_menu, oops_all_whips, received_item_box, single_jump_divekick,
                skull_key_warp, soul_drop_rates, soul_guarantee_hook, soul_shuffle)
@@ -111,9 +111,12 @@ def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Di
             custom = _ITEM_CUSTOM_PICKUP.get(loc.item.name)
         if custom is not None:
             type_num, subtype_num, item_offset = custom_pickups.get_encoding(custom)
-        elif loc.item.player == world.player:
+        elif loc.item.player == world.player and loc.item.name != PROGRESSIVE_MOVEMENT:
             type_num, subtype_num, item_offset = get_item_encoding(loc.item.code)
         else:
+            # Another world's item uses the placeholder. A Progressive Movement copy does too, since
+            # it has no pickup of its own, and once its location is checked the client grants the
+            # next stage soul.
             type_num, subtype_num, item_offset = _AP_PLACEHOLDER
         if every_difficulty and type_num == HARD_PICKUP:
             type_num = PICKUP

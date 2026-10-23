@@ -108,7 +108,16 @@ item_table[FORBIDDEN_AREA_SWITCH] = ItemData(
     ItemClassification.progression,
     pack(TransferCategory.FLAG_ONLY, 0, set_flag=True, flag_offset=0x34A, flag_bit=0, flag_value=1),
 )
-_SYNTHETIC_ITEM_NAMES: frozenset[str] = frozenset({FORBIDDEN_AREA_SWITCH})
+
+# With the Progressive Movement option, three copies of this item replace the Flying Armor,
+# Malphas and Giant Bat souls in the pool. The n-th copy a player obtains gives the n-th soul of
+# PROGRESSIVE_MOVEMENT_STAGES. Logic (CVAOSWorld.collect) and the client (client_logic) both
+# count copies, so the souls always arrive in stage order, whichever location a copy comes from.
+PROGRESSIVE_MOVEMENT = "Progressive Movement"
+PROGRESSIVE_MOVEMENT_STAGES: tuple[str, ...] = ("Flying Armor", "Malphas", "Giant Bat")
+item_table[PROGRESSIVE_MOVEMENT] = ItemData(
+    ItemClassification.progression, pack(TransferCategory.PROGRESSIVE, 0))
+_SYNTHETIC_ITEM_NAMES: frozenset[str] = frozenset({FORBIDDEN_AREA_SWITCH, PROGRESSIVE_MOVEMENT})
 
 # Convenience map for the World class. Kept complete (every pickup, Hard-Mode ones included) so
 # item ids stay stable for the data package; per-seed inclusion is decided in create_itempool.
@@ -155,4 +164,7 @@ def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
         displaced = next(i for i, existing in enumerate(pool)
                          if existing.name == _SEALSWITCH_DISPLACES)
         pool[displaced] = create_item(world, FORBIDDEN_AREA_SWITCH)
+    if world.options.progressive_movement.value:
+        pool = [create_item(world, PROGRESSIVE_MOVEMENT) if item.name in PROGRESSIVE_MOVEMENT_STAGES
+                else item for item in pool]
     return pool

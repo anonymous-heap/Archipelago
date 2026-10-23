@@ -3,13 +3,14 @@ import logging
 import os
 from typing import ClassVar, Sequence
 
-from BaseClasses import Item, MultiWorld, Tutorial
+from BaseClasses import CollectionState, Item, MultiWorld, Tutorial
 from worlds.AutoWorld import WebWorld, World
 from worlds.LauncherComponents import Component, Type, components, launch as launch_component
 import settings
 
 from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA_ROM_MD5
-from .items import FILLER_ITEM_NAMES, CVAOSItem, item_name_to_id, create_item, create_itempool
+from .items import (FILLER_ITEM_NAMES, PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, CVAOSItem,
+                    item_name_to_id, create_item, create_itempool)
 from .locations import location_name_to_id
 from .options import LOGIC_OPTION_NAMES, CVAOSOptions, Goal, cvaos_option_groups
 from .regions import create_regions, can_reach_room
@@ -138,9 +139,6 @@ class CVAOSWorld(World):
     # connect_names (modify_multidata) so the client can connect by reading it from the ROM.
     auth: bytearray
 
-    # Set in create_items: the items that item smoothing places in pre_fill, kept out of the
-    # multiworld pool (item_smoothing.take_smoothing_items).
-    _smoothing_items: Sequence[Item] = ()
     # Universal Tracker rebuilds this world from the seed's slot_data, without the player's YAML. It
     # passes slot_data through interpret_slot_data and stores the result in
     # multiworld.re_gen_passthrough. It then runs the generation steps up to generate_basic, and
@@ -162,6 +160,9 @@ class CVAOSWorld(World):
                 "This Aria of Sorrow seed was generated before its slot data recorded every logic "
                 "option, so the tracker assumes the default for: %s.", ", ".join(missing))
         return slot_data
+    # Set in create_items: the items that item smoothing places in pre_fill, kept out of the
+    # multiworld pool (item_smoothing.take_smoothing_items).
+    _smoothing_items: Sequence[Item] = ()
 
     def generate_early(self) -> None:
         self._restore_logic_options_for_tracker()
@@ -212,9 +213,27 @@ class CVAOSWorld(World):
     def create_item(self, name: str) -> CVAOSItem:
         return create_item(self, name)
 
+    def collect(self, state: CollectionState, item: Item) -> bool:
+        # Collecting a Progressive Movement copy also adds the next stage soul to the state. The
+        # access rules ask for Flying Armor, Malphas or Giant Bat by name, so they work unchanged.
+        changed = super().collect(state, item)
+        if changed and item.name == PROGRESSIVE_MOVEMENT:
+            stage = state.count(PROGRESSIVE_MOVEMENT, self.player)
+            if stage <= len(PROGRESSIVE_MOVEMENT_STAGES):
+                state.add_item(PROGRESSIVE_MOVEMENT_STAGES[stage - 1], self.player)
+        return changed
+
+    def remove(self, state: CollectionState, item: Item) -> bool:
+        stage = state.count(PROGRESSIVE_MOVEMENT, self.player)
+        changed = super().remove(state, item)
+        if (changed and item.name == PROGRESSIVE_MOVEMENT
+                and 0 < stage <= len(PROGRESSIVE_MOVEMENT_STAGES)):
+            state.remove_item(PROGRESSIVE_MOVEMENT_STAGES[stage - 1], self.player)
+        return changed
+
     def pre_fill(self) -> None:
         # Logic-aware placement before the main fill, gated on item_smoothing ("off" keeps vanilla):
-        #  - bias the gating mobility souls (double jump early; Hippogryph/Giant Bat late),
+        #  - bias the gating mobility souls (Malphas or Hippogryph early; Giant Bat late),
         #  - spread the Ancient Books across early/mid/late (rough pass; refined post-fill, and
         #    logic-safe even once the books are required to reach Graham for the good ending), and
         #  - put anything those passes could not place into the pool for the main fill.
@@ -266,11 +285,22 @@ class CVAOSWorld(World):
             "skull_key_warp": self.options.skull_key_warp.value,
             "new_soul_pause": self.options.new_soul_pause.value,
             "death_link": self.options.death_link.value,
+            **self.options.as_dict(*LOGIC_OPTION_NAMES),
+            # Locations holding this world's own Progressive Movement copies, and how many copies
+            # the starting inventory holds. The client adds the checked locations and the starting
+            # copies to the copies received from other worlds, and grants stage souls up to that
+            # total, the same count logic uses.
+            "progressive_movement_starting": sum(
+                1 for item in self.multiworld.precollected_items[self.player]
+                if item.name == PROGRESSIVE_MOVEMENT),
+            "progressive_movement_locations": sorted(
+                loc.address for loc in self.multiworld.get_locations(self.player)
+                if loc.address is not None and loc.item is not None
+                and loc.item.player == self.player and loc.item.name == PROGRESSIVE_MOVEMENT),
             # The client receives the starting inventory and counts it in the saved received
             # counter.
             # Seeds without this key were generated for a client that did neither.
             "starting_inventory_from_server": True,
-            **self.options.as_dict(*LOGIC_OPTION_NAMES),
         }
 
     def modify_multidata(self, multidata: dict) -> None:

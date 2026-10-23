@@ -62,6 +62,7 @@ class TickSaveBlockGateTest(unittest.IsolatedAsyncioTestCase):
 
         self.client._send_location_checks = recorder("checks")
         self.client._receive_items = recorder("items")
+        self.client._grant_progressive_movement = recorder("progressive")
         self.client._report_goal = recorder("goal")
 
     async def tick(self, game_state: int, menu_state: int, max_hp: int) -> FakeRam:
@@ -71,7 +72,7 @@ class TickSaveBlockGateTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_loaded_file_in_normal_play_runs_everything(self) -> None:
         await self.tick(INGAME, NORMAL, max_hp=250)
-        self.assertEqual(self.ran, ["checks", "items", "goal"])
+        self.assertEqual(self.ran, ["checks", "items", "progressive", "goal"])
 
     async def test_normal_play_with_an_unloaded_save_block_runs_nothing(self) -> None:
         # The live-observed trap: in-gameplay bytes, zeroed save block.

@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING
 from NetUtils import ClientStatus
 
 from . import item_granting
+from .data import item_info_collection
+from .items import PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, item_table
 from .locations import flag_offset_to_location_id
 from .options import Goal
 from .ram import AoSRAM, addresses as addr
@@ -28,7 +30,10 @@ from .ram import AoSRAM, addresses as addr
 if TYPE_CHECKING:
     from CommonClient import CommonContext
 
+PROGRESSIVE_MOVEMENT_CODE = item_table[PROGRESSIVE_MOVEMENT].code
 STARTING_LOCATION = -2  # the location id the server gives starting-inventory items
+_STAGE_INFOS = tuple(next(info for info in item_info_collection if info.name == name)
+                     for name in PROGRESSIVE_MOVEMENT_STAGES)
 
 # Max items to grant per tick, so a large backlog on connect can't stall the watcher
 # (each grant is a few emulator round-trips). Leftovers are picked up on the following ticks.
@@ -114,6 +119,7 @@ class CVAOSClientLogic:
         if in_gameplay and await ram.get_max_hp() > 0:
             await self._send_location_checks(ctx, ram)
             await self._receive_items(ctx, ram)
+            await self._grant_progressive_movement(ctx, ram)
             await self._report_goal(ctx, ram)
 
     async def _send_location_checks(self, ctx: "CommonContext", ram: AoSRAM) -> None:
@@ -170,6 +176,36 @@ class CVAOSClientLogic:
                 break  # lost a guarded write, so the counter was not advanced; retry next tick
             received += 1
             granted_this_tick += 1
+
+    async def _grant_progressive_movement(self, ctx: "CommonContext", ram: AoSRAM) -> None:
+        # Grant one stage soul per Progressive Movement copy obtained so far. The count adds the
+        # copies in the starting inventory, the copies received from other worlds, and the copies
+        # found at this world's own checked locations. Souls already owned are skipped, so repeating
+        # this every tick is safe, and it also restores the souls an older save lacks after a
+        # reload. Only one soul is granted per tick, and only once the announcement slot is free,
+        # so that every granted soul gets its own banner.
+        from . import announce
+        if not ctx.slot_data.get("progressive_movement"):
+            return
+        starting = ctx.slot_data.get("progressive_movement_starting", 0)
+        # Starting items arrive with location -2 when the client asks for them; slot_data already
+        # counts those, so they are left out here.
+        received = sum(1 for item in ctx.items_received
+                       if item.item == PROGRESSIVE_MOVEMENT_CODE
+                       and item.location != STARTING_LOCATION)
+        checked = ctx.checked_locations | self.local_checked_locations
+        found = sum(1 for location in ctx.slot_data.get("progressive_movement_locations", ())
+                    if location in checked)
+        for info in _STAGE_INFOS[:starting + received + found]:
+            if await ram.owned_count(info.item_category, info.id) > 0:
+                continue
+            if not await announce.is_ready(ram):
+                return
+            if await ram.give_item(info.item_category, info.id):
+                await announce.announce_item_number(
+                    ram, info.item_number,
+                    new_soul_pause=bool(ctx.slot_data.get("new_soul_pause", True)))
+            return
 
     @staticmethod
     def _grantable_items(ctx: "CommonContext") -> list:

@@ -42,6 +42,7 @@ class TransferCategory(IntEnum):
     EVENT = 4              # reserved
     TO_BE_IMPLEMENTED = 5  # reserved
     FLAG_ONLY = 6          # set_flag is the entire grant (no item/gold transfer)
+    PROGRESSIVE = 7        # id unused; the client grants stage souls by counting copies
 
 
 # --- bit layout (shifts + masks) ---
@@ -146,6 +147,11 @@ async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction, new_soul_pause: 
             await announce.announce_item_number(ram, action.id_or_value,
                                                 new_soul_pause=new_soul_pause)
         return granted
+    if category == TransferCategory.PROGRESSIVE:
+        # A progressive copy grants nothing here, so only the together_with writes remain. The
+        # client counts every copy found or received and grants the stage souls for that count
+        # (client_logic). Counting also restores those souls after an older save is reloaded.
+        return await ram.guarded_write_many(together_with)
     if category == TransferCategory.FLAG_ONLY:
         # The whole grant was the set_flag bit (already applied in grant()), so only the
         # together_with writes remain, and they go before the announcement. If a custom pickup

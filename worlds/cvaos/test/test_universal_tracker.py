@@ -39,6 +39,7 @@ ROUND_TRIPS = (
     ("hard_mode", {"hard_mode": True}),
     ("hard_mode_pickups", {"hard_mode_pickups": "always"}),
     ("hard_mode_pickups", {"hard_mode": True, "hard_mode_pickups": "never"}),
+    ("progressive_movement", {"progressive_movement": True}),
     ("forbidden_area_button", {"forbidden_area_button": "off"}),
     ("oops_all_whips", {"oops_all_whips": True}),
     ("logic_difficulty_preset", {"logic_difficulty_preset": "standard"}),

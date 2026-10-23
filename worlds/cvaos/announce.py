@@ -91,6 +91,15 @@ async def _slot_is_free(ram: "AoSRAM") -> bool:
     return pending[0] == 0
 
 
+async def is_ready(ram: "AoSRAM") -> bool:
+    """True when a new announcement would be posted now rather than skipped.
+
+    A caller that can choose when to grant (the Progressive Movement step) checks this first, so
+    the item it grants is announced. Read errors propagate like any other RAM read.
+    """
+    return await _slot_is_free(ram)
+
+
 def block_for(info: "ItemInfo", text_id: Optional[int], is_new: bool = True) -> Optional[bytes]:
     """The mailbox block announcing ``info``, or None when it should not be announced."""
     soul_type = SOUL_TYPE_BY_CATEGORY.get(info.item_category)

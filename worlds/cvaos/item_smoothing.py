@@ -25,13 +25,13 @@ import math
 import re
 from collections import deque
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, TYPE_CHECKING
+from typing import Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 from BaseClasses import CollectionState, Item, Location, LocationProgressType, MultiWorld
 
 from .data import item_balancing as desirability_data
 from .data import item_info
-from .items import logic_only_progression_names
+from .items import PROGRESSIVE_MOVEMENT, logic_only_progression_names
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -62,6 +62,8 @@ ANCIENT_BOOK_NAMES = ("Ancient Book 1", "Ancient Book 2", "Ancient Book 3")
 # Soft placement bias for the three gating mobility souls -- a *separate* axis from desirability
 # (which rates all three highly). The lateness targets here are 0 = earliest reachable, 1 = latest.
 BIASED_SOULS = ("Malphas", "Hippogryph", "Giant Bat")
+# The biased souls that Progressive Movement copies stand in for.
+PROGRESSIVE_STAND_INS = ("Malphas", "Giant Bat")
 
 # Black Panther (dash) is biased early on its own toggle (black_panther_bias), independent of the three
 # above. The window/chance are fixed (not exposed): cranking the chance saturates -- the early-placement
@@ -95,6 +97,7 @@ SOUL_NU = 3.0                # moderate tail weight for the late soul targets
 MOVEMENT_SOULS = frozenset({
     "Flying Armor", "Giant Bat", "Black Panther", "Undine", "Skula",
     "Grave Keeper", "Skeleton Blaze", "Malphas", "Hippogryph", "Galamoth",
+    PROGRESSIVE_MOVEMENT,  # each copy adds the next of Flying Armor, Malphas, Giant Bat
 })
 
 ORIGIN_REGION = "Menu"
@@ -336,9 +339,10 @@ def take_smoothing_items(world: "CVAOSWorld", itempool: List[Item]) -> List[Item
     still collects them.
 
     Nothing is taken when ``item_smoothing`` is off. Otherwise the Ancient Books are taken, and so
-    are the three gating souls unless ``early_mobility_souls`` is off. Black Panther is taken when
-    ``black_panther_bias`` is on and this run's ``BLACK_PANTHER_EARLY_CHANCE`` roll, made here,
-    succeeds. An item that the core needs in the pool for an item link, a plando or
+    are the three gating souls unless ``early_mobility_souls`` is off. With Progressive Movement on,
+    all three copies are taken too, because two of them stand in for Malphas and Giant Bat. Black
+    Panther is taken when ``black_panther_bias`` is on and this run's ``BLACK_PANTHER_EARLY_CHANCE``
+    roll, made here, succeeds. An item that the core needs in the pool for an item link, a plando or
     ``non_local_items`` is left there (see ``_names_used_elsewhere``).
     """
     options = world.options
@@ -346,7 +350,7 @@ def take_smoothing_items(world: "CVAOSWorld", itempool: List[Item]) -> List[Item
         return []
     names = set(ANCIENT_BOOK_NAMES)
     if options.early_mobility_souls.current_key != "off":
-        names |= set(BIASED_SOULS)
+        names |= {*BIASED_SOULS, PROGRESSIVE_MOVEMENT}
     if options.black_panther_bias.value and world.random.random() < BLACK_PANTHER_EARLY_CHANCE:
         names.add(BLACK_PANTHER)
     names -= _names_used_elsewhere(world)
@@ -546,6 +550,10 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
        where unreachable; if nothing fits, the item goes into the multiworld pool for the normal
        fill to place, so the bias can never make a seed unbeatable.
 
+    With Progressive Movement on, the copies take Malphas's and Giant Bat's places: two draw
+       Malphas's target and one draws Giant Bat's. ``refine_soul_positions`` leaves them where this
+       pass put them.
+
     Gating: the three souls follow ``early_mobility_souls`` (``off`` skips them; ``guarantee_early``
        forces one early every run; ``bias_early`` does so ~``EARLY_GUARANTEE`` of runs). Black Panther is
        independent, gated by the ``black_panther_bias`` toggle: when on, ~``BLACK_PANTHER_EARLY_CHANCE`` of
@@ -565,16 +573,24 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
         if item.name not in found and (item.name in BIASED_SOULS or item.name == BLACK_PANTHER):
             found[item.name] = item
 
-    targets: Dict[Item, float] = {}
+    # A list of (item, target) pairs rather than a dict: items compare equal by name and player,
+    # so the three Progressive Movement copies would collapse into one dict key.
+    targets: List[Tuple[Item, float]] = []
 
     # The three mobility souls, gated by early_mobility_souls ("off" skips them entirely). Designate
     # the run's early-mobility soul (or none), then give each a lateness target: the designated one
     # aims very early, the rest at their late centers.
     mode = world.options.early_mobility_souls.current_key
     present = [found[name] for name in BIASED_SOULS if name in found]
-    if mode != "off" and present:
+    # With Progressive Movement on, copies replace Malphas and Giant Bat in the pool. The second
+    # and third copies obtained become those souls, so the copies take their place when choosing
+    # the early soul and setting targets.
+    copies = [item for item in world.get_pre_fill_items() if item.name == PROGRESSIVE_MOVEMENT]
+    if mode != "off" and (present or copies):
         guarantee = 1.0 if mode == "guarantee_early" else EARLY_GUARANTEE
-        designated = _designate_early_soul(rng, [item.name for item in present], guarantee)
+        names = [name for name in BIASED_SOULS
+                 if name in found or (copies and name in PROGRESSIVE_STAND_INS)]
+        designated = _designate_early_soul(rng, names, guarantee)
 
         def soul_target(name: str) -> float:
             if name == designated:
@@ -583,7 +599,12 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
             return min(1.0, max(0.0, center + spread * _student_t(SOUL_NU, rng)))
 
         for item in present:
-            targets[item] = soul_target(item.name)
+            targets.append((item, soul_target(item.name)))
+        # Two copies draw targets as Malphas would and the third as Giant Bat would. When Malphas
+        # is the early soul, both Malphas-like copies target the early band, so the second copy
+        # obtained (double jump) lands early.
+        for item, stand_in in zip(copies, ("Malphas", "Malphas", "Giant Bat")):
+            targets.append((item, soul_target(stand_in)))
 
     # Black Panther is present only when black_panther_bias is on and this run's
     # BLACK_PANTHER_EARLY_CHANCE roll succeeded, both checked in take_smoothing_items. Its target
@@ -591,7 +612,7 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
     # the souls above).
     panther = found.get(BLACK_PANTHER)
     if panther is not None:
-        targets[panther] = rng.uniform(0.0, BLACK_PANTHER_EARLY_WINDOW)
+        targets.append((panther, rng.uniform(0.0, BLACK_PANTHER_EARLY_WINDOW)))
 
     if not targets:
         return
@@ -600,14 +621,18 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
     lateness = _lateness_ranking(multiworld, player, depth)
     # Stored for the post-fill refine pass, which moves each item to this target by *real* run
     # position (sphere ordering); these values double as the rough pre-fill lateness used just below.
-    world._soul_targets = {item.name: target for item, target in targets.items()}
+    # _soul_targets is keyed by item name and the copies share one, so the refine pass skips them
+    # and their pre-fill placement stands.
+    world._soul_targets = {item.name: target for item, target in targets
+                           if item.name != PROGRESSIVE_MOVEMENT}
 
     # Place earliest-target first, recomputing the state each time so a later item can reach gated
     # locations behind the already-placed earlier ones (topological order: none behind itself).
-    for item in sorted(targets, key=lambda it: targets[it]):
-        base_state = _all_state_except(multiworld, [it for it in targets if it.location is None])
+    for item, target in sorted(targets, key=lambda pair: pair[1]):
+        unplaced = [other for other, _target in targets if other.location is None]
+        base_state = _all_state_except(multiworld, unplaced)
         candidates = [loc for loc in lateness if loc.item is None and not loc.locked]
-        candidates.sort(key=lambda loc: (abs(lateness[loc] - targets[item]), loc.name))
+        candidates.sort(key=lambda loc: (abs(lateness[loc] - target), loc.name))
         # Single-item pool on purpose: fill_restrictive's swap branch (the only consumer of the shared
         # multiworld.random here) needs >=2 placements to run, so a 1-item pool keeps soul biasing free
         # of cross-player RNG-ordering -- multiworld-safe. Don't batch multiple souls into one call.
