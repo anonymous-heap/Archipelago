@@ -486,6 +486,20 @@ class CVAOSOptions(PerGameCommonOptions):
     death_link: DeathLink
 
 
+# Names of the options that determine which locations exist, which items are in the pool, or what
+# an access rule requires. fill_slot_data writes them into slot_data so Universal Tracker can
+# rebuild the world with the logic the seed was generated with. An option that starts affecting
+# logic must be added here; test_universal_tracker fails until it is.
+LOGIC_OPTION_NAMES: tuple[str, ...] = (
+    "goal",
+    "hard_mode",
+    "forbidden_area_button",
+    "oops_all_whips",
+    "logic_difficulty_preset",
+    *(technique.option for technique in TECHNIQUES),
+)
+
+
 cvaos_option_groups = [
     OptionGroup("Soul Shuffle", [
         SoulShuffle,

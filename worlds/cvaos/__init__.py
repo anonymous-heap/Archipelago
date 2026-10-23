@@ -1,4 +1,5 @@
 import base64
+import logging
 import os
 from typing import ClassVar, Sequence
 
@@ -10,7 +11,7 @@ import settings
 from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA_ROM_MD5
 from .items import FILLER_ITEM_NAMES, CVAOSItem, item_name_to_id, create_item, create_itempool
 from .locations import location_name_to_id
-from .options import CVAOSOptions, Goal, cvaos_option_groups
+from .options import LOGIC_OPTION_NAMES, CVAOSOptions, Goal, cvaos_option_groups
 from .regions import create_regions, can_reach_room
 from .client import CVAOSClient  # noqa: F401  (imported for its registration side effect)
 
@@ -140,9 +141,45 @@ class CVAOSWorld(World):
     # Set in create_items: the items that item smoothing places in pre_fill, kept out of the
     # multiworld pool (item_smoothing.take_smoothing_items).
     _smoothing_items: Sequence[Item] = ()
+    # Universal Tracker rebuilds this world from the seed's slot_data, without the player's YAML. It
+    # passes slot_data through interpret_slot_data and stores the result in
+    # multiworld.re_gen_passthrough. It then runs the generation steps up to generate_basic, and
+    # generate_early reads the options back from the passthrough. The YAML-less choice is made for
+    # the whole world, so it applies to older seeds too (see interpret_slot_data).
+    ut_can_gen_without_yaml = True
+
+    @staticmethod
+    def interpret_slot_data(slot_data: dict) -> dict:
+        """Return ``slot_data`` unchanged, so Universal Tracker rebuilds the world from it.
+
+        A seed generated before slot_data carried every logic option is still rebuilt, and the
+        missing options take their defaults. A warning names them, because the tracker's logic can
+        then differ from the seed's.
+        """
+        missing = [name for name in LOGIC_OPTION_NAMES if name not in slot_data]
+        if missing:
+            logging.getLogger("Client").warning(
+                "This Aria of Sorrow seed was generated before its slot data recorded every logic "
+                "option, so the tracker assumes the default for: %s.", ", ".join(missing))
+        return slot_data
 
     def generate_early(self) -> None:
+        self._restore_logic_options_for_tracker()
         self.auth = bytearray(self.random.getrandbits(8) for _ in range(16))
+
+    def _restore_logic_options_for_tracker(self) -> None:
+        """When Universal Tracker regenerates this world, take the logic options from slot_data.
+
+        slot_data from a seed generated before an option was added to LOGIC_OPTION_NAMES has no
+        key for it, so that option keeps the value the rebuilt world started with.
+        """
+        passthrough = getattr(self.multiworld, "re_gen_passthrough", {}).get(self.game)
+        if not passthrough:
+            return
+        for name in LOGIC_OPTION_NAMES:
+            if name in passthrough:
+                option_type = type(getattr(self.options, name))
+                setattr(self.options, name, option_type.from_any(passthrough[name]))
 
     def create_regions(self) -> None:
         create_regions(self)
@@ -226,8 +263,6 @@ class CVAOSWorld(World):
         return {
             "target_platform": self.options.target_platform.value,
             "randomize_pickups": self.options.randomize_pickups.value,
-            "goal": self.options.goal.value,
-            "hard_mode": self.options.hard_mode.value,
             "skull_key_warp": self.options.skull_key_warp.value,
             "new_soul_pause": self.options.new_soul_pause.value,
             "death_link": self.options.death_link.value,
@@ -235,6 +270,7 @@ class CVAOSWorld(World):
             # counter.
             # Seeds without this key were generated for a client that did neither.
             "starting_inventory_from_server": True,
+            **self.options.as_dict(*LOGIC_OPTION_NAMES),
         }
 
     def modify_multidata(self, multidata: dict) -> None:
