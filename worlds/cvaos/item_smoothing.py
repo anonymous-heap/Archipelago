@@ -78,11 +78,13 @@ SOUL_LATE_TARGETS = {
     "Hippogryph": (0.86, 0.13),  # generally late (pushed further right)
     "Giant Bat": (0.92, 0.10),   # latest
 }
-# Each run, with EARLY_GUARANTEE probability, one of the three is pulled early so you have basic
-# mobility in the first third; the other ~7% of runs leave all three on their late targets. Which
-# soul is the early pick is weighted toward double jump.
+# Each run, with EARLY_GUARANTEE probability, Malphas or Hippogryph is pulled early so you have
+# basic mobility in the first third; the other ~7% of runs leave all three on their late targets.
+# The early pick is weighted toward double jump. Giant Bat is never the early pick, because its
+# flight reaches nearly everything the other two souls do. An early Giant Bat would open most of
+# the castle at once.
 EARLY_GUARANTEE = 0.93
-EARLY_PICK_WEIGHTS = {"Malphas": 0.72, "Hippogryph": 0.18, "Giant Bat": 0.1}
+EARLY_PICK_WEIGHTS = {"Malphas": 0.8, "Hippogryph": 0.2, "Giant Bat": 0.0}
 EARLY_BAND = 0.33            # designated-early soul lands uniformly across the first third (lateness),
                              # rather than pinned to the literal first pickup
 SOUL_NU = 3.0                # moderate tail weight for the late soul targets
@@ -512,6 +514,21 @@ def _soul_tiers(multiworld: MultiWorld, player: int, pool: List[Item], souls: Li
     return tier
 
 
+def _designate_early_soul(rng, names: List[str], guarantee: float) -> Optional[str]:
+    """Return the soul to place in the first third of the run, or None.
+
+    With probability ``guarantee``, the soul is drawn from ``names`` using ``EARLY_PICK_WEIGHTS``.
+    Otherwise, or when no soul in ``names`` has a positive weight (Giant Bat alone, after plando or
+    an item link removed the others), every soul keeps its late target.
+    """
+    if rng.random() >= guarantee:
+        return None
+    eligible = [name for name in names if EARLY_PICK_WEIGHTS[name] > 0]
+    if not eligible:
+        return None
+    return rng.choices(eligible, weights=[EARLY_PICK_WEIGHTS[name] for name in eligible])[0]
+
+
 def bias_progression_souls(world: "CVAOSWorld") -> None:
     """
     Aim the gating mobility souls at soft *lateness* targets, logic-safely.
@@ -557,10 +574,7 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
     present = [found[name] for name in BIASED_SOULS if name in found]
     if mode != "off" and present:
         guarantee = 1.0 if mode == "guarantee_early" else EARLY_GUARANTEE
-        designated = None
-        if rng.random() < guarantee:
-            names = [item.name for item in present]
-            designated = rng.choices(names, weights=[EARLY_PICK_WEIGHTS[n] for n in names])[0]
+        designated = _designate_early_soul(rng, [item.name for item in present], guarantee)
 
         def soul_target(name: str) -> float:
             if name == designated:

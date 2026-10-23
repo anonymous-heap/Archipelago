@@ -7,8 +7,10 @@ Tests for the item-smoothing placement feature (see data/item_balancing/README.m
 """
 
 import random
+import statistics
 import unittest
 from argparse import Namespace
+from collections import Counter
 
 from BaseClasses import CollectionState, MultiWorld
 from Fill import distribute_items_restrictive
@@ -24,9 +26,11 @@ from worlds.cvaos.item_smoothing import (
     BIASED_SOULS,
     BLACK_PANTHER_EARLY_WINDOW,
     EARLY_BAND,
+    EARLY_GUARANTEE,
     _UNREACHED_DEPTH,
     _base_name,
     _category,
+    _designate_early_soul,
     _region_depth,
     _run_position,
     smoothable_locations_in_order,
@@ -184,20 +188,62 @@ class TestEarlyMobilityOff(CVAOSWorldTestBase):
                         "off must leave the mobility souls in the itempool, not pre-place them")
 
 
+class EarlySoulChoiceTest(unittest.TestCase):
+    """The choice of the run's early mobility soul, drawn many times from fixed seeds."""
+
+    def _picks(self, guarantee: float, names=BIASED_SOULS) -> Counter:
+        return Counter(_designate_early_soul(random.Random(seed), list(names), guarantee)
+                       for seed in range(2000))
+
+    def test_the_early_soul_is_usually_malphas_and_otherwise_hippogryph(self):
+        picks = self._picks(1.0)
+        self.assertEqual(set(picks), {"Malphas", "Hippogryph"})
+        self.assertGreater(picks["Malphas"], 3 * picks["Hippogryph"])
+
+    def test_bias_early_leaves_some_runs_without_an_early_soul(self):
+        fraction = self._picks(EARLY_GUARANTEE)[None] / 2000
+        self.assertTrue(0.04 < fraction < 0.10, fraction)
+
+    def test_giant_bat_alone_gives_no_early_soul(self):
+        # Plando or an item link can take Malphas and Hippogryph out of the pool.
+        self.assertEqual(self._picks(1.0, names=["Giant Bat"]), Counter({None: 2000}))
+
+
 class TestEarlyMobilityGuaranteed(CVAOSWorldTestBase):
-    """early_mobility_souls=guarantee_early always designates an early soul, so one of the three is
-    always aimed at the early band (vs ~93% of seeds for the bias_early default)."""
+    """early_mobility_souls=guarantee_early always designates an early soul, so Malphas or
+    Hippogryph is always aimed at the early band (vs ~93% of seeds for the bias_early default)."""
     options = {"item_smoothing": "strict", "early_mobility_souls": "guarantee_early",
                "black_panther_bias": False}
 
-    def test_one_soul_always_targeted_early(self):
+    def test_malphas_or_hippogryph_is_always_targeted_early(self):
         for seed in range(900, 906):
             self.world_setup(seed=seed)
             world = self.multiworld.worlds[self.player]
             targets = getattr(world, "_soul_targets", None)
             self.assertTrue(targets, f"seed {seed}: guarantee_early must store soul targets")
-            self.assertLess(min(targets.values()), EARLY_BAND,
+            early = min(targets, key=targets.get)
+            self.assertLess(targets[early], EARLY_BAND,
                             f"seed {seed}: guarantee_early must aim one soul at the early band")
+            self.assertIn(early, ("Malphas", "Hippogryph"), f"seed {seed}")
+            self.assertGreater(targets["Giant Bat"], EARLY_BAND, f"seed {seed}")
+
+
+class TestGiantBatLandsLate(CVAOSWorldTestBase):
+    """With the default bias, Giant Bat is aimed late and, after the fill and the refine pass,
+    usually ends up in the later part of the run."""
+    options = {"item_smoothing": "strict"}
+
+    def test_giant_bat_is_aimed_late_and_usually_lands_late(self):
+        positions = []
+        for seed in range(910, 918):
+            self.world_setup(seed=seed)
+            targets = self.multiworld.worlds[self.player]._soul_targets
+            self.assertGreater(targets["Giant Bat"], EARLY_BAND, f"seed {seed}")
+            _run_fill(self.multiworld)
+            run_position = _run_position(self.multiworld, self.player)
+            positions.append(next(position for loc, position in run_position.items()
+                                  if loc.item.name == "Giant Bat"))
+        self.assertGreater(statistics.median(positions), 0.5, positions)
 
 
 class TestBlackPantherBiasOff(CVAOSWorldTestBase):

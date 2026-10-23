@@ -339,9 +339,14 @@ class EarlyMobilitySouls(Choice):
        Giant bat) are placed. They gate movement, so this is a separate axis from item desirability.
     
     - off: no special handling -- the souls place like any other progression item.
-    - bias_early: ~93% of seeds pull one mobility soul (usually double jump) into the first third of
-      the run, while the heavier flight souls stay late; the rest leave all three late.
-    - guarantee_early: always pull one mobility soul early, so you never start fully mobility-starved.
+    - bias_early: ~93% of seeds pull Malphas or, less often, Hippogryph into the first third of the
+      run. The other seeds leave all three late.
+    - guarantee_early: always pull Malphas or Hippogryph early, so you never start fully
+      mobility-starved.
+
+    With bias_early or guarantee_early, Giant Bat is never the soul pulled early, and it usually
+       lands in the later part of the run. Its flight reaches nearly everything the other two souls
+       do, so an early Giant Bat would open most of the castle at once.
     """
     display_name = "Early Mobility Souls"
     option_off = 0
