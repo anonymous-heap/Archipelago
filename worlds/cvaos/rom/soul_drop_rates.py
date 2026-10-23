@@ -26,10 +26,11 @@ ENEMY_TABLE_GBA = ENEMY_TABLE.addr
 ENEMY_STRIDE = sizeof(EnemyDNA)
 SOUL_RATE_OFF = offset_of(EnemyDNA, "soul_rate")
 
-# The rate byte only enters the chance as ``rate*8 + 32``, i.e. ``8 * (rate + 4)``, so the
-# ratio between two rates is exactly ``(old + 4) / (new + 4)`` -- LCK and the numerator
-# cancel. That reproduces every multiplier SOUL_RATE_OVERRIDES documents (32->5 is 4.00x,
-# 50->9 is 4.15x, 50->10 is 3.86x), which is where this constant comes from.
+# The rate byte enters the chance's denominator as ``rate*8 + 32``, i.e. ``8 * (rate + 4)``,
+# and LCK/16 is subtracted from that. The numerator cancels between two rates, so their ratio
+# is ``(old + 4) / (new + 4)``: exactly while LCK is below 16 and the floor of 16 does not
+# apply, and closely otherwise. That reproduces every multiplier SOUL_RATE_OVERRIDES documents
+# (32->5 is 4.00x, 50->9 is 4.15x, 50->10 is 3.86x), which is where this constant comes from.
 RATE_CHANCE_BIAS = 4
 
 # enemy_id -> (name, expected current +0x12 byte, new +0x12 byte)
