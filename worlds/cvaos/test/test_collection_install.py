@@ -9,6 +9,7 @@ against it for real. ``collection_running`` is stubbed so no process attach happ
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import tempfile
@@ -30,6 +31,13 @@ _STOCK_AOS_BYTES = b"stock collection AoS rom stand-in"  # size need not be 8 Mi
 
 def _quiet(_msg: str) -> None:
     pass
+
+
+def _treat_as_stock(test: unittest.TestCase, aos_bytes: bytes) -> None:
+    """Make the installer accept ``aos_bytes`` as the collection's stock ROM for this test."""
+    patcher = mock.patch.object(install, "AC_USA_ROM_MD5", hashlib.md5(aos_bytes).hexdigest())
+    patcher.start()
+    test.addCleanup(patcher.stop)
 
 
 def _make_patched_rom(marker: str = ARCHIPELAGO_IDENTIFIER, with_bridge: bool = True,
@@ -91,6 +99,7 @@ class _InstallerCase(unittest.TestCase):
         patcher = mock.patch.object(install, "collection_running", return_value=False)
         self.running_stub = patcher.start()
         self.addCleanup(patcher.stop)
+        _treat_as_stock(self, _STOCK_AOS_BYTES)
         self.rom_path = os.path.join(self.root, "patched.gba")
         with open(self.rom_path, "wb") as f:
             f.write(_make_patched_rom())
@@ -133,6 +142,42 @@ class InstallTest(_InstallerCase):
         with self.assertRaisesRegex(InstallError, "running"):
             install_rom(self.rom_path, self.exe_path, log=_quiet)
         self.assertEqual(self._member(AOS_MEMBER), _STOCK_AOS_BYTES, "must not modify anything")
+
+    def test_a_non_stock_archive_is_never_backed_up(self) -> None:
+        # A seed installed by other means: its live archive must not become the "pristine" copy.
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        for name in install.WINDATA_FILES:
+            os.remove(os.path.join(self.windata, name + BACKUP_SUFFIX))
+        with self.assertRaisesRegex(InstallError, "not the stock one"):
+            install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertFalse(any(os.path.exists(os.path.join(self.windata, name + BACKUP_SUFFIX))
+                             for name in install.WINDATA_FILES))
+
+    def test_a_reinstall_rebuilds_from_the_backups_not_the_live_files(self) -> None:
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        # Damage the live pair the way a half-finished swap would: payload only.
+        with open(os.path.join(self.windata, "alldata.bin"), "r+b") as f:
+            f.write(b"\xff" * 64)
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
+        self.assertEqual(self._member(AOS_MEMBER), _make_patched_rom())
+
+    def test_a_failed_index_swap_restores_the_stock_pair(self) -> None:
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        real_replace = os.replace
+
+        def fail_on_index(src, dst):
+            if os.path.basename(dst) == "alldata.psb.m" and "_ap_staging" in src:
+                raise PermissionError("index is locked")
+            return real_replace(src, dst)
+
+        rom2 = bytearray(_make_patched_rom())
+        rom2[0x100000] = 0x77
+        with mock.patch.object(install.os, "replace", side_effect=fail_on_index):
+            with self.assertRaisesRegex(InstallError, "restored to the stock game"):
+                install_rom(self._write_rom(bytes(rom2)), self.exe_path, log=_quiet)
+        self.assertEqual(self._member(AOS_MEMBER), _STOCK_AOS_BYTES)
+        self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
 
     def test_inconsistent_backup_state_aborts(self) -> None:
         install_rom(self.rom_path, self.exe_path, log=_quiet)
@@ -262,6 +307,7 @@ class ExtractBaseRomTest(unittest.TestCase):
 
     def test_prefers_the_pristine_backups_once_a_seed_is_installed(self) -> None:
         stock = _make_stock_base_rom()
+        _treat_as_stock(self, stock)
         exe = self._collection(stock)
         rom_path = os.path.join(os.path.dirname(exe), "patched.gba")
         with open(rom_path, "wb") as f:

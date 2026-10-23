@@ -45,13 +45,14 @@ CLI (from the Archipelago repo root)::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import shutil
 from typing import Callable
 
 from . import cac_archive
 from .._bytemaker_compat import Entry
-from ..constants import AC_DEFAULT_EXE_PATH
+from ..constants import AC_DEFAULT_EXE_PATH, AC_USA_ROM_MD5
 from ..rom.address_space import M2_AUDIO_BRIDGE, M2_GRAPHIC, gba_space
 from ..rom.patch import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START
 
@@ -218,6 +219,15 @@ def ensure_backup(windata: str, log: Log = print) -> bool:
         raise InstallError(
             f"Inconsistent backup state: only {present} exists. Verify the game files in "
             "Steam (restores stock), delete the stray backup, and run the installer again.")
+    # The backups are what restore puts back and where every later install and base ROM comes
+    # from, so only the stock files may become them.
+    live_rom = cac_archive.extract_member(os.path.join(windata, "alldata.psb.m"),
+                                          os.path.join(windata, "alldata.bin"), AOS_MEMBER)
+    if hashlib.md5(live_rom).hexdigest() != AC_USA_ROM_MD5:
+        raise InstallError(
+            "The collection's archive is not the stock one (its Aria of Sorrow ROM has been "
+            "changed), so it cannot be kept as the backup. Use Steam's \"Verify integrity of "
+            "game files\" to restore the stock files, then run the installer again.")
     for name in WINDATA_FILES:
         src = os.path.join(windata, name)
         dst = src + BACKUP_SUFFIX
@@ -270,6 +280,30 @@ def _apply_patch_file(patch_path: str, log: Log = print) -> str:
     return out_path
 
 
+def _swap_failed_message(windata: str, exc: OSError, log: Log) -> str:
+    """Put the live pair back in step after the index could not replace the old one.
+
+    The new payload is already live by then, and it does not match the old index, so every member
+    after the AoS ROM would read from the wrong offset. Restoring both files from the backups
+    returns the collection to its stock, consistent state.
+    """
+    try:
+        for name in WINDATA_FILES:
+            live = os.path.join(windata, name)
+            log(f"restoring {name} from backup after the failed install")
+            tmp = live + ".tmp"
+            shutil.copy2(live + BACKUP_SUFFIX, tmp)
+            os.replace(tmp, live)
+    except OSError as restore_exc:
+        return (f"Install failed ({exc}), and restoring the stock files also failed "
+                f"({restore_exc}). The collection's files do not match each other, so run the "
+                "installer's restore option or Steam's \"Verify integrity of game files\" before "
+                "playing.")
+    return (f"Install failed ({exc}). The collection's files were restored to the stock game. "
+            "Close anything that may be using them (the collection, an antivirus scan) and run "
+            "the installer again.")
+
+
 def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
     """Install *rom_path* — a patched ``.gba`` **or** a ``.apcvaos`` patch (applied first) —
     as the collection's AoS ROM. Returns a user-facing summary."""
@@ -289,36 +323,42 @@ def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
     live_psb = os.path.join(windata, "alldata.psb.m")
     free = shutil.disk_usage(windata).free
     needed = os.path.getsize(live_bin) + (64 << 20)  # rebuilt copy + slack
+    if not all(os.path.isfile(os.path.join(windata, name + BACKUP_SUFFIX)) for name in WINDATA_FILES):
+        needed += os.path.getsize(live_bin) + os.path.getsize(live_psb)  # the first install backs up
     if free < needed:
-        raise InstallError(f"Not enough free disk space on the game drive: the rebuild "
+        raise InstallError(f"Not enough free disk space on the game drive: the install "
                            f"needs ~{needed >> 20} MiB, {free >> 20} MiB free.")
-
-    ensure_backup(windata, log)
 
     # Stage under the real filenames: the MDF key is derived from the basename, and
     # os.replace within the same directory is atomic on the same volume.
     staging = os.path.join(windata, f"_ap_staging_{os.getpid()}")
     try:
+        ensure_backup(windata, log)
         os.makedirs(staging, exist_ok=True)
         out_bin = os.path.join(staging, "alldata.bin")
         out_psb = os.path.join(staging, "alldata.psb.m")
         log("rebuilding alldata.bin with the patched ROM (this can take a minute)...")
-        cac_archive.replace_member(live_psb, live_bin, AOS_MEMBER, rom_bytes,
-                                   out_psb, out_bin)
+        # Rebuild from the stock backups rather than the live pair, so whatever state an earlier
+        # install left the live files in never carries into this one.
+        stock_psb, stock_bin = _stock_archive_pair(windata)
+        cac_archive.replace_member(stock_psb, stock_bin, AOS_MEMBER, rom_bytes,
+                                   out_psb, out_bin, index_key_name=INDEX_KEY_NAME)
         if cac_archive.extract_member(out_psb, out_bin, AOS_MEMBER) != rom_bytes:
             raise InstallError("Verification failed: the rebuilt archive does not round-trip "
-                               "the ROM. Nothing was changed — please report this bug.")
+                               "the ROM. Nothing was changed. Please report this bug.")
         # The AoS member is MDF-compressed, so its stored size (and every later member's
         # offset) changes with the ROM's content: the two files only agree as a pair. Payload
         # first, so the disagreement window is the single os.replace of the index.
         os.replace(out_bin, live_bin)
-        os.replace(out_psb, live_psb)
+        try:
+            os.replace(out_psb, live_psb)
+        except OSError as exc:
+            raise InstallError(_swap_failed_message(windata, exc, log)) from exc
     except InstallError:
         raise
     except (OSError, ValueError, KeyError) as exc:
-        raise InstallError(f"Install failed ({exc}). Nothing should be half-written — the "
-                           "live files are only touched by atomic replaces. If this is a "
-                           "permissions problem, run as administrator.") from exc
+        raise InstallError(f"Install failed ({exc}). The live files were not changed. If this "
+                           "is a permissions problem, run as administrator.") from exc
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
@@ -369,6 +409,10 @@ def run_from_launcher(*args: str) -> None:
             summary = install_rom(rom_path, exe_path, log)
     except InstallError as exc:
         messagebox("CVAoS Collection ROM Installer", str(exc), True)
+        return
+    except Exception as exc:  # noqa: BLE001 - the Launcher would otherwise only log it
+        logging.getLogger("CVAoSCollectionInstaller").exception("installer failed")
+        messagebox("CVAoS Collection ROM Installer", f"The installer failed: {exc}", True)
         return
     log(summary)
     messagebox("CVAoS Collection ROM Installer", summary)

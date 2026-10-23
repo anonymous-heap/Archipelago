@@ -757,7 +757,9 @@ def replace_member(alldata_psb_m: str, alldata_bin: str, member_name: str,
     key.  It must match the name the file will have when the game loads it
     (``alldata.psb.m``), NOT the temporary output filename.
     """
-    root = load_index(alldata_psb_m)
+    # The source index may be a renamed copy (a backup), so its key also comes from the name
+    # the game knows it by.
+    root = load_index(alldata_psb_m, index_key_name)
     fi = root["file_info"]
     target = _resolve_member(fi, member_name)
 
