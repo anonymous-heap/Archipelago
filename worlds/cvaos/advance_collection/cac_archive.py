@@ -756,6 +756,10 @@ def replace_member(alldata_psb_m: str, alldata_bin: str, member_name: str,
     *index_key_name* is the filename used to derive the index's encryption
     key.  It must match the name the file will have when the game loads it
     (``alldata.psb.m``), NOT the temporary output filename.
+
+    Both outputs are written to temporary files first and moved into place
+    only once the rebuild is complete, so the outputs may be the inputs
+    themselves, and a failed rebuild leaves both untouched.
     """
     # The source index may be a renamed copy (a backup), so its key also comes from the name
     # the game knows it by.
@@ -770,8 +774,24 @@ def replace_member(alldata_psb_m: str, alldata_bin: str, member_name: str,
 
     order = sorted(fi.items(), key=lambda kv: kv[1][0])
     new_file_info = dict(fi)  # keep original dict for non-layout keys
-    pos = 0
     chunk = 1 << 20
+    bin_tmp, psb_tmp = out_bin + ".tmp", out_psb_m + ".tmp"
+    try:
+        _rebuild_to(alldata_bin, bin_tmp, psb_tmp, root, order, target, new_blob,
+                    new_file_info, chunk, verbose, index_key_name)
+        os.replace(bin_tmp, out_bin)
+        os.replace(psb_tmp, out_psb_m)
+    finally:
+        for leftover in (bin_tmp, psb_tmp):
+            if os.path.exists(leftover):
+                os.remove(leftover)
+
+
+def _rebuild_to(alldata_bin: str, out_bin: str, out_psb_m: str, root: dict, order: list,
+                target: str, new_blob: bytes, new_file_info: dict, chunk: int, verbose: bool,
+                index_key_name: str) -> None:
+    """Write the rebuilt payload to *out_bin* and its index to *out_psb_m* (see replace_member)."""
+    pos = 0
     with open(alldata_bin, "rb") as src, open(out_bin, "wb") as dst:
         for name, (off, size) in order:
             start = _align(pos)

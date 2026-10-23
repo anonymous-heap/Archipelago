@@ -143,6 +143,14 @@ class InstallTest(_InstallerCase):
             install_rom(self.rom_path, self.exe_path, log=_quiet)
         self.assertEqual(self._member(AOS_MEMBER), _STOCK_AOS_BYTES, "must not modify anything")
 
+    def test_replace_member_can_rebuild_the_archive_in_place(self) -> None:
+        psb = os.path.join(self.windata, "alldata.psb.m")
+        bin_ = os.path.join(self.windata, "alldata.bin")
+        cac_archive.replace_member(psb, bin_, AOS_MEMBER, b"a new member", psb, bin_)
+        self.assertEqual(self._member(AOS_MEMBER), b"a new member")
+        self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
+        self.assertFalse([p for p in os.listdir(self.windata) if p.endswith(".tmp")])
+
     def test_a_non_stock_archive_is_never_backed_up(self) -> None:
         # A seed installed by other means: its live archive must not become the "pristine" copy.
         install_rom(self.rom_path, self.exe_path, log=_quiet)
@@ -167,7 +175,7 @@ class InstallTest(_InstallerCase):
         real_replace = os.replace
 
         def fail_on_index(src, dst):
-            if os.path.basename(dst) == "alldata.psb.m" and "_ap_staging" in src:
+            if dst == os.path.join(self.windata, "alldata.psb.m") and "_ap_staging" in src:
                 raise PermissionError("index is locked")
             return real_replace(src, dst)
 
