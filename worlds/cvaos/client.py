@@ -86,6 +86,8 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
             return
         try:
             await self._tick(ctx, AoSRAM(BizHawkBackend(ctx.bizhawk_ctx)))
-        except bizhawk.RequestFailedError:
-            # Emulator/connection hiccup; retry next tick.
+        except (bizhawk.RequestFailedError, bizhawk.NotConnectedError):
+            # Emulator/connection hiccup; retry next tick. A request that times out drops the
+            # connector, so the next request raises NotConnectedError. That must not end the
+            # watcher either, because the context reconnects and calls it again.
             return
