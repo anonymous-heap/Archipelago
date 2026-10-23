@@ -336,9 +336,11 @@ def _lateness_ranking(multiworld: MultiWorld, player: int, depth: Dict[str, int]
     """
     world = multiworld.worlds[player]
     souls = [item for item in multiworld.itempool if item.player == player and item.name in MOVEMENT_SOULS]
+    # Excluded locations are left out, so the pre-fill bias never puts a soul in one.
     locs = [loc for loc in multiworld.get_locations(player)
             if loc.address is not None and loc.parent_region is not None
-            and loc.parent_region.name in depth]
+            and loc.parent_region.name in depth
+            and loc.progress_type != LocationProgressType.EXCLUDED]
 
     base = CollectionState(multiworld)
     for item in multiworld.itempool:
@@ -513,6 +515,31 @@ def _accessible(multiworld: MultiWorld) -> bool:
         return False
 
 
+def _state_without(multiworld: MultiWorld, own_loc: Location) -> CollectionState:
+    """The state a player reaches with every placed item except the one at ``own_loc``.
+
+    It starts from the starting items and sweeps every other filled location, so an item that is
+    itself behind the excluded one is not counted either. A location reachable in this state does
+    not need the item at ``own_loc``, so moving that item there cannot strand it behind itself.
+    """
+    state = CollectionState(multiworld)
+    state.sweep_for_advancements(
+        locations=[loc for loc in multiworld.get_filled_locations() if loc is not own_loc])
+    return state
+
+
+def _swap_allowed(own_loc: Location, dest: Location) -> bool:
+    """Whether swapping the progression item at ``own_loc`` with the item at ``dest`` respects the
+    player's location settings and each location's item rule.
+
+    Progression never moves into an excluded location, and a priority location never gives up its
+    progression item for a non-progression one.
+    """
+    return (dest.progress_type != LocationProgressType.EXCLUDED
+            and own_loc.progress_type != LocationProgressType.PRIORITY
+            and dest.item_rule(own_loc.item) and own_loc.item_rule(dest.item))
+
+
 def _swap_if_safe(multiworld: MultiWorld, soul_loc: Location, dest: Location) -> bool:
     """
     Swap the items at ``soul_loc`` and ``dest``, keeping it only if the *whole* multiworld still
@@ -535,7 +562,8 @@ def refine_soul_positions(world: "CVAOSWorld") -> None:
     Move each biased soul to its target run-position (chosen in pre_fill) using the real post-fill
        spheres, via logic-verified swaps with a non-progression item.
     Candidates are pre-filtered to
-       locations reachable *without* this soul (so it is never placed behind itself), and each swap is
+       locations reachable *without* this soul (so it is never placed behind itself) and to swaps that
+       keep progression out of excluded locations and in priority locations, and each swap is
        kept only if the multiworld still fulfills accessibility -- so it can never make a seed (in any
        game combination) unbeatable. A soul that can't be moved safely stays where pre_fill left it.
     Runs before the equipment smoothing, which recomputes spheres afterward."""
@@ -552,21 +580,13 @@ def refine_soul_positions(world: "CVAOSWorld") -> None:
                          and loc.item.name == name), None)
         if soul_loc is None:  # soul wound up off-world (rare fallback) -> leave it
             continue
-        soul = soul_loc.item
-        # State reachable with every placed item except this soul -> any location reachable here does
-        # not need the soul, so moving it there can't strand the soul behind itself.
-        without_soul = CollectionState(multiworld)
-        for loc in multiworld.get_filled_locations():
-            if loc.item is not soul:
-                multiworld.worlds[loc.item.player].collect(without_soul, loc.item)
-        without_soul.sweep_for_advancements()
-
+        without_soul = _state_without(multiworld, soul_loc)
         position = _run_position(multiworld, player)
         target = targets[name]
         candidates = sorted(
             (loc for loc in position if loc is not soul_loc and loc.item is not None
              and loc.item.player == player and not loc.item.advancement and not loc.locked
-             and loc.can_reach(without_soul)),
+             and _swap_allowed(soul_loc, loc) and loc.can_reach(without_soul)),
             key=lambda loc: (abs(position[loc] - target), loc.name))
         for dest in candidates[:SOUL_REFINE_TRIES]:
             if _swap_if_safe(multiworld, soul_loc, dest):
@@ -592,9 +612,13 @@ def refine_ancient_books(world: "CVAOSWorld") -> None:
     multiworld = world.multiworld
     player = world.player
     rng = world.random
+    # A locked book that spread_ancient_books did not place was put there on purpose (plando), so it
+    # stays. Books the main fill placed are unlocked and may move.
+    spread = {id(book) for book in getattr(world, "_spread_books", ())}
     book_locs = [loc for loc in multiworld.get_locations(player)
                  if loc.item is not None and loc.item.player == player
-                 and loc.item.name in ANCIENT_BOOK_NAMES]
+                 and loc.item.name in ANCIENT_BOOK_NAMES
+                 and (not loc.locked or id(loc.item) in spread)]
     if not book_locs:
         return
 
@@ -604,21 +628,14 @@ def refine_ancient_books(world: "CVAOSWorld") -> None:
     targets = [rng.uniform(0.0, 1 / 3), rng.uniform(1 / 3, 2 / 3), rng.uniform(1 / 2, 3 / 4)]
     rng.shuffle(targets)
     for book_loc, target in sorted(zip(book_locs, targets), key=lambda pair: pair[1]):
-        book = book_loc.item
-        # State reachable with every placed item except this book -> any location reachable here does
-        # not need the book, so moving it there can't strand the book (or anything gated behind it,
-        # e.g. Graham once the books are required) behind itself.
-        without_book = CollectionState(multiworld)
-        for loc in multiworld.get_filled_locations():
-            if loc.item is not book:
-                multiworld.worlds[loc.item.player].collect(without_book, loc.item)
-        without_book.sweep_for_advancements()
-
+        # Any location reachable here does not need the book, so moving it there can't strand the
+        # book (or anything gated behind it, e.g. Graham once the books are required) behind itself.
+        without_book = _state_without(multiworld, book_loc)
         position = _run_position(multiworld, player)
         candidates = sorted(
             (loc for loc in position if loc is not book_loc and loc.item is not None
              and loc.item.player == player and not loc.item.advancement and not loc.locked
-             and loc.can_reach(without_book)),
+             and _swap_allowed(book_loc, loc) and loc.can_reach(without_book)),
             key=lambda loc: (abs(position[loc] - target), loc.name))
         for dest in candidates[:BOOK_REFINE_TRIES]:
             if _swap_if_safe(multiworld, book_loc, dest):
@@ -647,6 +664,7 @@ def spread_ancient_books(world: "CVAOSWorld") -> None:
     depth = _region_depth(multiworld, player)
     candidates = [loc for loc in multiworld.get_locations(player)
                   if loc.address is not None and loc.item is None and not loc.locked
+                  and loc.progress_type != LocationProgressType.EXCLUDED
                   and loc.parent_region is not None and loc.parent_region.name in depth]
     if not candidates:
         return
@@ -665,9 +683,12 @@ def spread_ancient_books(world: "CVAOSWorld") -> None:
     without_books.sweep_for_advancements()
 
     rng.shuffle(books)  # so Book 1/2/3 aren't deterministically early/mid/late
+    world._spread_books = []
     for index, book in enumerate(books):
         multiworld.itempool.remove(book)
-        if not _place_in_band(book, bands, index, params, rng, without_books):
+        if _place_in_band(book, bands, index, params, rng, without_books):
+            world._spread_books.append(book)
+        else:
             multiworld.itempool.append(book)  # safety: no candidate fit -> let the main fill place it
 
 
