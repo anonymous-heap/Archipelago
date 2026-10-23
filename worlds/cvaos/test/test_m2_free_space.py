@@ -85,6 +85,8 @@ class M2FreeSpaceTest(unittest.TestCase):
         # The extended icon table holds at least MAX_SHADOW_SLOT + 1 entries of CONSUMABLE_ENTRY_SIZE bytes.
         self._assert_clear(cp.CUSTOM_ICON_TABLE_GBA - GBA_ROM_BASE, 0x2C0, "extended icon table")
         self._assert_clear(im.MENU_BLOB_GBA - GBA_ROM_BASE, len(im.MENU_BLOB), "menu blob")
+        self._assert_clear(sgh.BOOK_DESCRIPTIONS.addr - GBA_ROM_BASE, sgh.BOOK_DESCRIPTIONS.size,
+                           "Ancient Book descriptions")
         for name in ("EXT_NAME_TABLE_GBA", "EXT_DESC_TABLE_GBA", "EXT_STRINGPTR_GBA", "NEW_STRINGS_GBA"):
             with self.subTest(table=name):
                 self._assert_clear(getattr(im, name) - GBA_ROM_BASE, 1, name)

@@ -175,11 +175,13 @@ class SoulDropRateMultiplier(NamedRange):
 
 class AncientBookSoulDrops(DefaultOnToggle):
     """
-    Once an Ancient Book is in your inventory, the enemy that drops the soul it describes always
-    drops it: Book 1 the Flame Demon soul, Book 2 the Giant Bat soul, Book 3 the Succubus soul.
+    While you carry Ancient Book 1, every Flame Demon you defeat drops its soul. Ancient Book 3
+       does the same for the Succubus. Both books' pause-menu descriptions say so.
 
-    Follows Soul Shuffle (whichever enemy drops that soul now). Done by the ROM itself, so it
-    works in any emulator and needs no client.
+    Ancient Book 2 describes the Giant Bat soul. That soul is an item in the multiworld pool rather
+       than an enemy drop, so this option does nothing for Book 2.
+
+    The guaranteed drops are built into the ROM, so they work in any emulator and need no client.
     """
     display_name = "Ancient Book Soul Drops"
 

@@ -195,9 +195,12 @@ class CVAOSPatchExtension(APPatchExtension):
             apply(skull_key_warp.build_writes())
 
         # Ancient Book soul drops: the enemy-death roll hook (rom/soul_guarantee_hook.py). It checks
-        # the instructions it replaces against the base ROM, which is why it is applied here.
+        # the instructions it replaces against the base ROM, which is why it is applied here. The
+        # book descriptions are installed by repointing entries in the string-pointer array, so
+        # they must be applied before the Item-Use menu extension further down copies that array.
         if config.get("ancient_book_soul_drops"):
             apply(soul_guarantee_hook.build_writes(bytes(working)))
+            apply(soul_guarantee_hook.build_description_writes(bytes(working)))
 
         # Forbidden Area gate-unlock pickup toggle (replaces the A01 press-button
         # with an inert object and a shuffled Study Sealswitch).
