@@ -120,6 +120,14 @@ _HARD_PICKUP_ITEM_NAMES: frozenset[str] = frozenset(
     p.display_name for p in pickup_infos if p.is_hard_mode_only)
 
 
+# Plain filler that every seed can hold: no progression, nothing that exists only in Hard Mode,
+# and none of the synthetic items. CVAOSWorld.get_filler_item_name picks from these.
+FILLER_ITEM_NAMES: tuple[str, ...] = tuple(sorted(
+    name for name, data in item_table.items()
+    if data.classification == ItemClassification.filler
+    and name not in _HARD_PICKUP_ITEM_NAMES and name not in _SYNTHETIC_ITEM_NAMES))
+
+
 def create_item(world: "CVAOSWorld", name: str) -> CVAOSItem:
     data = item_table[name]
     return CVAOSItem(name, data.classification, data.code, world.player)

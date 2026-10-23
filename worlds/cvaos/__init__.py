@@ -8,7 +8,7 @@ from worlds.LauncherComponents import Component, Type, components, launch as lau
 import settings
 
 from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA_ROM_MD5
-from .items import CVAOSItem, item_name_to_id, create_item, create_itempool
+from .items import FILLER_ITEM_NAMES, CVAOSItem, item_name_to_id, create_item, create_itempool
 from .locations import location_name_to_id
 from .options import CVAOSOptions, Goal, cvaos_option_groups
 from .regions import create_regions, can_reach_room
@@ -156,6 +156,11 @@ class CVAOSWorld(World):
             from .item_smoothing import bias_progression_souls, spread_ancient_books
             bias_progression_souls(self)
             spread_ancient_books(self)
+
+    def get_filler_item_name(self) -> str:
+        # Item links and fill fallbacks create filler through this. The default picks any item
+        # name, which here includes progression souls and items that exist only in Hard Mode.
+        return self.random.choice(FILLER_ITEM_NAMES)
 
     @classmethod
     def stage_post_fill(cls, multiworld: MultiWorld) -> None:
