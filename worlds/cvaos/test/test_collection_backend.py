@@ -16,14 +16,15 @@ import base64
 import unittest
 
 from ..collection_client import (
-    EWRAM_SIZE, ROM_SIZE, ROM_TITLE, CollectionBackend, CollectionError,
+    COLLECTION_GBA_ROMS, EWRAM_SIZE, ROM_SIZE, ROM_TITLE, CollectionBackend, CollectionError,
     _EWRAM_STRUCT_OFFSET, _ROM_GAMECODE, _ROM_GAMECODE_OFFSET, _ROM_LOGO_OFFSET,
-    _ROM_LOGO_PREFIX, RomImage, ewram_offset, ewram_signature_ok, find_ewram_base,
-    validated_rom_base_in,
+    _ROM_LOGO_PREFIX, RomImage, collection_roms_in, ewram_offset, ewram_signature_ok,
+    find_ewram_base, find_rom_image, validated_rom_base_in,
 )
 from ..ram import addresses as addr
 from ..ram.addresses import EWRAM, GameState
 from ..ram.backend import GuardedWrite
+from ..rom import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START
 
 ROM_DOMAIN = "ROM"
 ROM_TITLE_OFFSET = 0xA0
@@ -56,12 +57,14 @@ def _make_ewram_ingame(overrides: dict[int, int] | None = None) -> bytearray:
     return buf
 
 
-def _make_rom_header() -> bytes:
-    """Minimal bytes with a valid AoS ROM header at offset 0 (title + logo + game code)."""
+def _make_rom_header(code: bytes = _ROM_GAMECODE) -> bytes:
+    """Minimal bytes with a valid collection ROM header at offset 0 (title + logo + game code).
+    ``code`` defaults to the US Aria of Sorrow."""
+    title = COLLECTION_GBA_ROMS[code].title
     buf = bytearray(0x200)
-    buf[ROM_TITLE_OFFSET:ROM_TITLE_OFFSET + len(ROM_TITLE)] = ROM_TITLE
+    buf[ROM_TITLE_OFFSET:ROM_TITLE_OFFSET + len(title)] = title
     buf[_ROM_LOGO_OFFSET:_ROM_LOGO_OFFSET + len(_ROM_LOGO_PREFIX)] = _ROM_LOGO_PREFIX
-    buf[_ROM_GAMECODE_OFFSET:_ROM_GAMECODE_OFFSET + len(_ROM_GAMECODE)] = _ROM_GAMECODE
+    buf[_ROM_GAMECODE_OFFSET:_ROM_GAMECODE_OFFSET + len(code)] = code
     return bytes(buf)
 
 
@@ -256,11 +259,119 @@ class RomHeaderValidationTest(unittest.TestCase):
 
     def test_rejects_wrong_game_code(self) -> None:
         header = bytearray(_make_rom_header())
-        header[_ROM_GAMECODE_OFFSET:_ROM_GAMECODE_OFFSET + 4] = b"ACME"  # Circle of the Moon
+        header[_ROM_GAMECODE_OFFSET:_ROM_GAMECODE_OFFSET + 4] = b"ACME"  # no collection ROM's code
         self.assertIsNone(validated_rom_base_in(bytes(header), 0))
 
     def test_no_title_at_all(self) -> None:
         self.assertIsNone(validated_rom_base_in(bytes(0x200), 0))
+
+    def test_other_collection_roms_are_recognized_but_not_validated(self) -> None:
+        buf = bytes(0x40) + _make_rom_header(b"A2CJ") + _make_rom_header(b"AAME")
+        self.assertEqual(collection_roms_in(buf, 0x1000),
+                         [(0x1040, b"A2CJ"), (0x1240, b"AAME")])
+        self.assertIsNone(validated_rom_base_in(buf, 0x1000))
+
+    def test_a_code_with_the_wrong_title_is_not_a_collection_rom(self) -> None:
+        header = bytearray(_make_rom_header(b"AAME"))
+        header[ROM_TITLE_OFFSET:ROM_TITLE_OFFSET + len(ROM_TITLE)] = ROM_TITLE
+        self.assertEqual(collection_roms_in(bytes(header), 0), [])
+
+    def test_a_header_that_would_start_before_the_buffer_is_ignored(self) -> None:
+        # A logo at offset 0 puts the header's start 4 bytes before the buffer, while its code
+        # and title would still land inside it.
+        buf = bytearray(0x200)
+        buf[0:len(_ROM_LOGO_PREFIX)] = _ROM_LOGO_PREFIX
+        buf[_ROM_GAMECODE_OFFSET - 4:_ROM_GAMECODE_OFFSET] = _ROM_GAMECODE
+        buf[ROM_TITLE_OFFSET - 4:ROM_TITLE_OFFSET - 4 + len(ROM_TITLE)] = ROM_TITLE
+        self.assertEqual(collection_roms_in(bytes(buf), 0x1000), [])
+
+
+class _UnreadableFirstRegion(_ScanProc):
+    """A process whose first region disappears before it can be read."""
+
+    def read(self, address: int, size: int) -> bytes:
+        if address == self._regions[0].base and size == self._regions[0].size:
+            raise CollectionError("simulated vanished region")
+        return super().read(address, size)
+
+
+class FindRomImageTest(unittest.TestCase):
+    """find_rom_image anchors a patched US Aria of Sorrow, and otherwise raises an error that says
+    what to fix."""
+
+    REGION_SIZE = 0x10000
+    REGION_STRIDE = 0x1000000
+
+    def _proc(self, *codes: bytes, marker: bytes = b"", header_offset: int = 0x20,
+              proc_class: type = _ScanProc) -> _ScanProc:
+        """One region per code, each holding that ROM's header ``header_offset`` into it, which
+        is where the emulator puts the ROM it runs. ``marker`` goes at the AP identifier's
+        address in every ROM; that address lies past the small fake region on purpose, since
+        find_rom_image reads it separately."""
+        from ..collection_client import _Region
+        regions = [_Region(self._region(i), self.REGION_SIZE, protect=0x04, state=0x1000,
+                           mem_type=0x20000) for i in range(len(codes))]
+        proc = proc_class(regions)
+        for i, code in enumerate(codes):
+            rom_base = self._region(i) + header_offset
+            proc.write(rom_base, _make_rom_header(code))
+            proc.write(rom_base + ARCHIPELAGO_IDENTIFIER_START, marker)
+        return proc
+
+    def _region(self, index: int) -> int:
+        return 0x20000000 + self.REGION_STRIDE * index
+
+    def _error(self, proc: _ScanProc) -> str:
+        with self.assertRaises(CollectionError) as caught:
+            find_rom_image(proc)
+        return str(caught.exception)
+
+    def test_patched_us_rom_is_anchored(self) -> None:
+        rom = find_rom_image(self._proc(b"A2CE", marker=ARCHIPELAGO_IDENTIFIER.encode()))
+        base = self._region(0)
+        self.assertEqual(rom, RomImage(base + 0x20, base, base + self.REGION_SIZE))
+
+    def test_patched_us_rom_after_another_game_is_anchored(self) -> None:
+        rom = find_rom_image(self._proc(b"AAME", b"A2CE", marker=ARCHIPELAGO_IDENTIFIER.encode()))
+        self.assertEqual(rom.base, self._region(1) + 0x20)
+
+    def test_an_unreadable_region_is_skipped(self) -> None:
+        proc = self._proc(b"AAME", b"A2CE", marker=ARCHIPELAGO_IDENTIFIER.encode(),
+                          proc_class=_UnreadableFirstRegion)
+        self.assertEqual(find_rom_image(proc).base, self._region(1) + 0x20)
+
+    def test_another_region_of_aria_is_named(self) -> None:
+        self.assertIn("has loaded Aria of Sorrow (Japan), but Archipelago only patches the US "
+                      "version", self._error(self._proc(b"A2CJ")))
+
+    def test_another_region_of_aria_is_named_instead_of_another_game(self) -> None:
+        message = self._error(self._proc(b"AAME", b"A2CP"))
+        self.assertIn("has loaded Aria of Sorrow (Europe), but Archipelago only patches", message)
+        self.assertNotIn("Circle of the Moon", message)
+
+    def test_another_collection_game_is_named(self) -> None:
+        self.assertIn("has loaded Harmony of Dissonance (US), not Aria of Sorrow",
+                      self._error(self._proc(b"ACHE")))
+
+    def test_every_loaded_game_is_named(self) -> None:
+        self.assertIn("Circle of the Moon (US) and Harmony of Dissonance (US)",
+                      self._error(self._proc(b"AAME", b"ACHE")))
+
+    def test_a_header_away_from_the_allocation_start_is_not_named(self) -> None:
+        message = self._error(self._proc(b"AAME", header_offset=0x420))
+        self.assertIn("not loaded", message)
+        self.assertNotIn("Circle of the Moon", message)
+
+    def test_nothing_loaded_asks_for_the_us_version(self) -> None:
+        self.assertRegex(self._error(self._proc()), "not loaded.*US version")
+
+    def test_unpatched_us_rom_points_at_the_installer(self) -> None:
+        self.assertRegex(self._error(self._proc(b"A2CE")), "not patched.*ROM Installer")
+
+    def test_seed_from_another_apworld_version_names_both_identifiers(self) -> None:
+        message = self._error(self._proc(b"A2CE", marker=b"CVAOS_AP_V0.0"))
+        self.assertIn("CVAOS_AP_V0.0", message)
+        self.assertIn(ARCHIPELAGO_IDENTIFIER, message)
 
 
 class EwramSignatureTest(unittest.TestCase):

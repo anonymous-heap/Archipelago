@@ -15,8 +15,11 @@ tuned against the live process:
   backed by the Nintendo logo at +0x04 and the "A2CE" game code at +0xAC. That uniquely
   picks the one true ROM out of the ~188 stray copies of the title string in memory.
   We then read ARCHIPELAGO_IDENTIFIER at ROM+0x670000 to confirm the ROM is patched and
-  version-matched (a bare header = unpatched -> point at cac_archive.py; a different
-  version suffix = stale install). The ROM sits in its own committed private-RW region.
+  version-matched (a bare header = unpatched -> point at the ROM installer; a different
+  version suffix = a seed from another apworld version). The ROM sits in its own committed
+  private-RW region. When the US Aria of Sorrow is absent, the same scan recognizes the
+  collection's other eight GBA ROMs by their game codes, so the error message can name the
+  game or region that is loaded instead.
 * EWRAM: M2 heap-allocates the emulated GBA memory (no static pointer to it exists in
   game.exe). The emulator's allocator prefixes every block with a header whose ``next`` and
   ``prev`` words link the blocks, and the GBA-memory object is allocated right before the
@@ -86,6 +89,32 @@ _ROM_LOGO_OFFSET = 0x04
 _ROM_LOGO_PREFIX = bytes.fromhex("24ffae5169")  # first 5 bytes of the GBA logo
 _ROM_GAMECODE_OFFSET = 0xAC
 _ROM_GAMECODE = b"A2CE"
+
+
+class CollectionRom(NamedTuple):
+    title: bytes   # the header's internal title at +0xA0
+    game: str
+    region: str
+
+    @property
+    def label(self) -> str:
+        return f"{self.game} ({self.region})"
+
+
+# The collection's nine GBA ROMs, keyed by the game code in each ROM's header. The codes come from
+# the ROMs in the collection's archive. The installer replaces only the US Aria of Sorrow, so every
+# other entry here is a game or region the player has to switch away from.
+COLLECTION_GBA_ROMS: dict[bytes, CollectionRom] = {
+    b"AAME": CollectionRom(b"DRACULA AGB1", "Circle of the Moon", "US"),
+    b"AAMJ": CollectionRom(b"DRACULA AGB1", "Circle of the Moon", "Japan"),
+    b"AAMP": CollectionRom(b"DRACULA AGB1", "Circle of the Moon", "Europe"),
+    b"ACHE": CollectionRom(b"CASTLEVANIA1", "Harmony of Dissonance", "US"),
+    b"ACHJ": CollectionRom(b"CASTLEVANIA1", "Harmony of Dissonance", "Japan"),
+    b"ACHP": CollectionRom(b"CASTLEVANIA1", "Harmony of Dissonance", "Europe"),
+    b"A2CE": CollectionRom(ROM_TITLE, "Aria of Sorrow", "US"),
+    b"A2CJ": CollectionRom(ROM_TITLE, "Aria of Sorrow", "Japan"),
+    b"A2CP": CollectionRom(ROM_TITLE, "Aria of Sorrow", "Europe"),
+}
 
 # In-game EWRAM signature bounds. Loose enough never to reject a real save, tight enough to
 # exclude essentially all random memory (verified against the live process).
@@ -220,8 +249,8 @@ class GameProcess:
             pm = pymem.Pymem(PROCESS_NAME)
         except pymem.exception.ProcessNotFound as exc:
             raise CollectionError(
-                f"{PROCESS_NAME} is not running. Launch the Castlevania Advance Collection "
-                "and load Aria of Sorrow.") from exc
+                "The Castlevania Advance Collection is not running. Launch it from Steam and "
+                "start the US version of Aria of Sorrow.") from exc
         except pymem.exception.PymemError as exc:
             raise CollectionError(f"Could not attach to {PROCESS_NAME}: {exc}") from exc
         path = _main_module_path(pm.process_handle)
@@ -267,25 +296,64 @@ class RomImage(NamedTuple):
     region_end: int
 
 
-def validated_rom_base_in(buf: bytes, region_base: int) -> int | None:
-    """Host base of a byte-valid AoS ROM header in ``buf`` (title + Nintendo logo +
-    "A2CE" game code), or None. Pure/testable."""
-    idx = buf.find(ROM_TITLE)
+def collection_roms_in(buf: bytes, region_base: int) -> list[tuple[int, bytes]]:
+    """Find every collection ROM header in ``buf`` and return its host address and game code.
+
+    A header counts only when the Nintendo logo, a game code from
+    :data:`COLLECTION_GBA_ROMS`, and that code's title all sit at their header offsets.
+    Pure/testable.
+    """
+    found = []
+    idx = buf.find(_ROM_LOGO_PREFIX)
     while idx != -1:
-        rom_off = idx - ROM_TITLE_OFFSET
-        if (rom_off >= 0
-                and buf[rom_off + _ROM_LOGO_OFFSET:rom_off + _ROM_LOGO_OFFSET + len(_ROM_LOGO_PREFIX)]
-                == _ROM_LOGO_PREFIX
-                and buf[rom_off + _ROM_GAMECODE_OFFSET:rom_off + _ROM_GAMECODE_OFFSET + len(_ROM_GAMECODE)]
-                == _ROM_GAMECODE):
-            return region_base + rom_off
-        idx = buf.find(ROM_TITLE, idx + 1)
-    return None
+        rom_off = idx - _ROM_LOGO_OFFSET
+        code = bytes(buf[rom_off + _ROM_GAMECODE_OFFSET:rom_off + _ROM_GAMECODE_OFFSET + 4])
+        rom = COLLECTION_GBA_ROMS.get(code)
+        if (rom_off >= 0 and rom is not None
+                and buf[rom_off + ROM_TITLE_OFFSET:rom_off + ROM_TITLE_OFFSET + len(rom.title)]
+                == rom.title):
+            found.append((region_base + rom_off, code))
+        idx = buf.find(_ROM_LOGO_PREFIX, idx + 1)
+    return found
+
+
+def validated_rom_base_in(buf: bytes, region_base: int) -> int | None:
+    """Host base of a byte-valid US Aria of Sorrow ROM header in ``buf`` (title + Nintendo
+    logo + "A2CE" game code), or None. Pure/testable."""
+    return next((base for base, code in collection_roms_in(buf, region_base)
+                 if code == _ROM_GAMECODE), None)
+
+
+def _wrong_rom_message(codes: set[bytes]) -> str:
+    """Return the error for a collection that has loaded anything but US Aria of Sorrow, or
+    nothing at all.
+
+    If another region of Aria of Sorrow is among ``codes``, the message names only that one,
+    because it is the likelier mistake.
+    """
+    roms = [COLLECTION_GBA_ROMS[code] for code in sorted(codes)]
+    other_regions = [rom for rom in roms if rom.title == ROM_TITLE]
+    if other_regions:
+        return (f"The collection has loaded {other_regions[0].label}, but Archipelago only "
+                f"patches the US version. Return to the collection's menu and start the US "
+                f"version instead.")
+    if roms:
+        loaded = " and ".join(rom.label for rom in roms)
+        return (f"The collection has loaded {loaded}, not Aria of Sorrow. Return to the "
+                f"collection's menu and start the US version of Aria of Sorrow.")
+    return ("Aria of Sorrow is not loaded in the collection yet. Start the US version of Aria "
+            "of Sorrow from the collection's menu, and the client will detect it once the game "
+            "is running.")
 
 
 def find_rom_image(proc: GameProcess) -> RomImage:
     """Locate the loaded AoS ROM by validating its GBA header, then confirm it is patched
-    with a compatible AP identifier. Raises with an actionable message otherwise."""
+    with a compatible AP identifier.
+
+    Raise CollectionError with an actionable message otherwise. If the collection has loaded
+    another game or region, the message names it.
+    """
+    others: set[bytes] = set()
     for region in proc.regions():
         if not region.readable or region.size < 0x10000:
             continue
@@ -293,8 +361,13 @@ def find_rom_image(proc: GameProcess) -> RomImage:
             buf = proc.read(region.base, region.size)
         except CollectionError:
             continue  # region vanished mid-scan; harmless
-        rom_base = validated_rom_base_in(buf, region.base)
+        roms = collection_roms_in(buf, region.base)
+        rom_base = next((base for base, code in roms if code == _ROM_GAMECODE), None)
         if rom_base is None:
+            # The emulator puts the ROM it runs right after its block's allocation header (see
+            # ewram_via_allocation_links). A header anywhere else may be a stale copy, so it
+            # is not named in the error.
+            others.update(code for base, code in roms if base == region.base + _ALLOC_HEADER)
             continue
         # Found the one true ROM image. Confirm it carries our patch (the client can only
         # play a patched ROM: it reads the identifier/auth and the game data expects the hooks).
@@ -304,16 +377,14 @@ def find_rom_image(proc: GameProcess) -> RomImage:
         if marker.startswith(_IDENTIFIER_PREFIX):
             ver = marker.split(b"\x00", 1)[0].decode("ascii", "replace")
             raise CollectionError(
-                f"The collection's AoS ROM was patched by an incompatible version ({ver}; "
-                f"this client needs {ARCHIPELAGO_IDENTIFIER}). Re-install a ROM patched for "
-                f"this version.")
+                f"The installed seed uses patch format {ver}, but this client reads "
+                f"{ARCHIPELAGO_IDENTIFIER}. Install a seed generated with this apworld, or "
+                f"switch to the apworld that generated the seed.")
         raise CollectionError(
-            "Aria of Sorrow is loaded but its ROM is unpatched. Apply your .apcvaos to the "
-            "AC-extracted ROM and install it with advance_collection/cac_archive.py (see "
-            "the setup guide).")
-    raise CollectionError(
-        "No Aria of Sorrow ROM found in the collection's memory. Select Aria of Sorrow in "
-        "the collection first (the ROM is only loaded once a game is chosen).")
+            "Aria of Sorrow (US) is running, but its ROM is not patched for Archipelago. Close "
+            "the collection, install your .apcvaos with \"CVAoS Collection ROM Installer\" in "
+            "the Archipelago Launcher, then start Aria of Sorrow (US) again.")
+    raise CollectionError(_wrong_rom_message(others))
 
 
 def ewram_signature_ok(buf: bytes, off: int) -> bool:
