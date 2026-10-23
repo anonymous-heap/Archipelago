@@ -3,6 +3,7 @@ ROM patching for Castlevania: Aria of Sorrow.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from typing import TYPE_CHECKING, Dict, List
@@ -241,7 +242,22 @@ class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
 
     @classmethod
     def get_source_data(cls) -> bytes:
-        return get_base_rom_bytes()
+        return cls._checked_base(get_base_rom_bytes())
+
+    @classmethod
+    def _checked_base(cls, base: bytes) -> bytes:
+        """Return ``base`` if it is one of the two accepted base ROMs, and raise otherwise.
+
+        AP records ``hash`` in the patch but never compares it, so without this a wrong base (a
+        previous seed's .gba, say) only fails later, at some feature's ROM-mismatch guard.
+        """
+        digest = hashlib.md5(base).hexdigest()
+        if digest not in cls.hash:
+            raise ValueError(
+                f"The base ROM is not an unmodified Castlevania: Aria of Sorrow (USA) ROM (MD5 "
+                f"{digest}). Point the patcher at the original US ROM, or at the Advance "
+                f"Collection's game.exe, not at a ROM that was already patched.")
+        return base
 
     def get_source_data_with_cache(self) -> bytes:  # type: ignore[override]
         # Per-seed override of the base-class classmethod: the base ROM source depends on the
@@ -253,7 +269,7 @@ class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
                                                                           TARGET_GBA))
         except (KeyError, ValueError, json.JSONDecodeError):
             target = TARGET_GBA
-        return get_base_rom_bytes(target)
+        return self._checked_base(get_base_rom_bytes(target))
 
 
 def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[int, bytes]) -> None:
