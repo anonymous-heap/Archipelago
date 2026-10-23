@@ -520,7 +520,8 @@ from CommonClient import CommonContext, get_base_parser, gui_enabled, logger, se
 
 class CVAOSCollectionContext(CommonContext):
     game = "Castlevania - Aria of Sorrow"
-    items_handling = 0b001
+    # Items from other worlds plus the starting inventory, as in the BizHawk client.
+    items_handling = 0b101
     want_slot_data = True
 
     def __init__(self, server_address: str | None, password: str | None) -> None:

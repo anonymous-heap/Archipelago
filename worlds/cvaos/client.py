@@ -59,7 +59,9 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
             return False
 
         ctx.game = self.game
-        ctx.items_handling = 0b001  # receive items from other worlds
+        # Receive items from other worlds and the starting inventory. Nothing else delivers the
+        # starting inventory to the game, while logic counts it as owned from the start.
+        ctx.items_handling = 0b101
         ctx.want_slot_data = True
         ctx.watcher_timeout = 0.125
         return True
