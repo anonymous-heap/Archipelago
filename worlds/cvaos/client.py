@@ -33,6 +33,9 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
     game = "Castlevania - Aria of Sorrow"
     system = "GBA"
     patch_suffix = ".apcvaos"
+    # The auth of the seed the last session played. BizHawk keeps one handler for the life of the
+    # client, so this survives a reconnect.
+    _session_auth: str | None = None
 
     async def validate_rom(self, ctx: "BizHawkClientContext") -> bool:
         from CommonClient import logger
@@ -69,7 +72,9 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
     async def set_auth(self, ctx: "BizHawkClientContext") -> None:
         auth_raw = (await bizhawk.read(ctx.bizhawk_ctx, [(AUTH_NUMBER_START, 16, "ROM")]))[0]
         ctx.auth = base64.b64encode(auth_raw).decode("ascii")
-        self._reset_session_state()
+        # This runs on every connect to the server, including an automatic reconnect.
+        self._reset_session_state(same_seed=ctx.auth == self._session_auth)
+        self._session_auth = ctx.auth
 
     def on_package(self, ctx: "BizHawkClientContext", cmd: str, args: dict) -> None:
         if cmd == "Connected":

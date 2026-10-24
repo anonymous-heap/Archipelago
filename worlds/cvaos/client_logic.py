@@ -39,18 +39,23 @@ class CVAOSClientLogic:
     # Per-session state, (re)initialized in _reset_session_state.
     death_causes: list[str]
     local_checked_locations: set[int]
-    currently_dead: bool
+    currently_dead: bool | None
     time_of_sent_death: float | None
     goaled: bool
 
-    def _reset_session_state(self) -> None:
+    def _reset_session_state(self, *, same_seed: bool = False) -> None:
         # Reset per-session state so swapping ROMs/games without restarting the client can't
-        # carry anything stale over.
+        # carry anything stale over. Each client calls this on every connect or attach, with
+        # same_seed True when it is reconnecting to the seed it was already playing.
         self.death_causes = []
         self.local_checked_locations = set()
-        # DeathLink: whether we currently consider Soma dead: guards re-sending our own death and
-        # re-applying an incoming one until HP recovers.
-        self.currently_dead = False
+        # DeathLink: whether we currently consider Soma dead. It guards against re-sending our own
+        # death and re-applying an incoming one until HP recovers. A reconnect to the same seed
+        # keeps it, so a death sent before the disconnect is not sent again, while one that
+        # happened during the disconnect still is. Otherwise it is None until the first tick
+        # reads the game.
+        if not same_seed:
+            self.currently_dead = None
         # AP's timestamp on the death we last sent, so the bounce handler can recognize our own echo.
         self.time_of_sent_death = None
         # Goal: latched True once we've reported completion, so we report it only once.
@@ -179,6 +184,16 @@ class CVAOSClientLogic:
         # screen. The sub-state is gated on INGAME so we never misread the byte outside gameplay.
         dead = ((game_state == addr.GameState.INGAME and menu_state == addr.MENU_STATE_DEATH)
                 or game_state == addr.GameState.GAME_OVER)
+
+        # When the latch is unknown (a first connect, or a different seed), set it from the game's
+        # current state. A death already on screen began before the client connected, and a kill
+        # request the ROM hook has not run yet is another world's death. Neither should be
+        # broadcast as a new death of Soma's. If the latch starts set, a death queued before this
+        # read is dropped, just as the bounce handler drops one that arrives while Soma is dead.
+        if self.currently_dead is None:
+            self.currently_dead = dead or await ram.get_kill_request()
+            if self.currently_dead:
+                self.death_causes.clear()
 
         # Re-arm first: once Soma is alive again in normal play and no kill is still pending, clear the
         # latch so the next death in either direction is detected. The pending-kill guard covers the

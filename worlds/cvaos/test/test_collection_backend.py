@@ -321,7 +321,7 @@ class ReattachTest(unittest.IsolatedAsyncioTestCase):
 
     OLD_AUTH, NEW_AUTH = bytes(range(16)), bytes(range(16, 32))
 
-    async def attach_with(self, installed_auth: bytes):
+    async def attach_with(self, installed_auth: bytes, currently_dead: bool | None = None):
         from unittest import mock
 
         from .. import collection_client
@@ -334,6 +334,7 @@ class ReattachTest(unittest.IsolatedAsyncioTestCase):
         proc.close = lambda: None
         rom = RomImage(0x30000020, 0x30000000, 0x30800000)
         proc.write(rom.base + AUTH_NUMBER_START, installed_auth)
+        ctx.brain.currently_dead = currently_dead
         with mock.patch.object(collection_client.GameProcess, "attach", return_value=proc), \
                 mock.patch.object(collection_client, "find_rom_image", return_value=rom), \
                 mock.patch.object(collection_client, "find_ewram_base", return_value=0x10000170), \
@@ -350,6 +351,14 @@ class ReattachTest(unittest.IsolatedAsyncioTestCase):
     async def test_the_same_seed_keeps_the_connection(self) -> None:
         _ctx, disconnect = await self.attach_with(self.OLD_AUTH)
         disconnect.assert_not_awaited()
+
+    async def test_the_same_seed_keeps_the_deathlink_latch(self) -> None:
+        ctx, _disconnect = await self.attach_with(self.OLD_AUTH, currently_dead=True)
+        self.assertIs(ctx.brain.currently_dead, True)
+
+    async def test_a_different_seed_leaves_the_deathlink_latch_unknown(self) -> None:
+        ctx, _disconnect = await self.attach_with(self.NEW_AUTH, currently_dead=True)
+        self.assertIsNone(ctx.brain.currently_dead)
 
 
 if __name__ == "__main__":

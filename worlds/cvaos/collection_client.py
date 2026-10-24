@@ -605,7 +605,7 @@ class CVAOSCollectionContext(CommonContext):
             return
         self._attach_error_shown = None
         self.backend = CollectionBackend(proc, rom.base, ewram_base)
-        self.brain._reset_session_state()
+        self.brain._reset_session_state(same_seed=installed == self._connected_auth)
         self._last_revalidate = now
         logger.info("Attached to the Advance Collection (ROM at %#x, EWRAM at %#x).",
                     rom.base, ewram_base)

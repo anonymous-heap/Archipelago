@@ -13,6 +13,10 @@ RAM accessor, so they need no emulator. Run from the Archipelago root:
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
+from unittest import mock
+
+import worlds._bizhawk as bizhawk
 
 from ..client import CVAOSClient
 from ..ram import addresses as addr
@@ -67,7 +71,7 @@ class FakeRam:
 
 def _new_client() -> CVAOSClient:
     # Bypass BizHawkClient.__init__ (registration / emulator wiring) and set just the per-session
-    # DeathLink state set_auth would normally initialize.
+    # DeathLink state. currently_dead starts False, as if the first tick had already read the game.
     client = CVAOSClient.__new__(CVAOSClient)
     client.death_causes = []
     client.currently_dead = False
@@ -180,6 +184,95 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
         await self.relay(INGAME, DEATH, hp=0)
         self.assertEqual(self.client.death_causes, [])
 
+    # A reconnect to the same seed: set_auth runs the reset again and keeps the latch.
+    def reconnect(self) -> None:
+        self.client._reset_session_state(same_seed=True)
+
+    # A first connect, or a different seed: the latch is unknown until a relay reads the game.
+    def connect_fresh(self) -> None:
+        self.client._reset_session_state()
+
+    async def test_a_reconnect_does_not_send_the_same_death_again(self) -> None:
+        await self.relay(INGAME, NORMAL)
+        await self.relay(INGAME, DEATH, hp=0)
+        self.assertEqual(len(self.ctx.sent_deaths), 1)
+        self.reconnect()
+        await self.relay(INGAME, DEATH, hp=0)
+        await self.relay(GAME_OVER, 0, hp=0)
+        self.assertEqual(len(self.ctx.sent_deaths), 1,
+                         "a reconnect must not re-broadcast the death")
+        await self.relay(INGAME, NORMAL, hp=100)    # continue: alive again, so the latch clears
+        await self.relay(INGAME, DEATH, hp=0)
+        self.assertEqual(len(self.ctx.sent_deaths), 2)
+
+    async def test_a_death_during_the_disconnect_is_sent_after_reconnecting(self) -> None:
+        await self.relay(INGAME, NORMAL)            # alive when the connection drops
+        self.reconnect()
+        await self.relay(GAME_OVER, 0, hp=0)        # he died while nothing could send it
+        self.assertEqual(len(self.ctx.sent_deaths), 1)
+
+    async def test_a_reconnect_with_a_kill_pending_does_not_broadcast_it(self) -> None:
+        await self.relay(INGAME, NORMAL)
+        self.client.death_causes.append("Someone else died")
+        await self.relay(INGAME, NORMAL, hp=100)    # kill requested; the hook has not run yet
+        self.reconnect()
+        await self.relay(INGAME, NORMAL, hp=100)
+        self.ram.kill_request = False               # the hook runs the death routine
+        await self.relay(INGAME, DEATH, hp=0)
+        self.assertEqual(self.ctx.sent_deaths, [],
+                         "a kill pending at the reconnect must not be broadcast as our own death")
+
+    async def test_connecting_during_a_death_does_not_broadcast_it(self) -> None:
+        self.connect_fresh()
+        await self.relay(INGAME, DEATH, hp=0)
+        await self.relay(GAME_OVER, 0, hp=0)
+        self.assertEqual(self.ctx.sent_deaths, [], "the death began before the client connected")
+        await self.relay(INGAME, NORMAL, hp=100)
+        await self.relay(INGAME, DEATH, hp=0)
+        self.assertEqual(len(self.ctx.sent_deaths), 1)
+
+    async def test_a_kill_pending_at_a_fresh_connect_is_not_broadcast(self) -> None:
+        self.ram.kill_request = True                # left by an earlier client on this seed
+        self.connect_fresh()
+        await self.relay(INGAME, NORMAL, hp=100)
+        self.ram.kill_request = False
+        await self.relay(INGAME, DEATH, hp=0)
+        self.assertEqual(self.ctx.sent_deaths, [])
+
+    async def test_the_first_death_after_a_fresh_connect_is_broadcast(self) -> None:
+        self.connect_fresh()
+        await self.relay(INGAME, NORMAL, hp=100)
+        self.assertIs(self.client.currently_dead, False)
+        await self.relay(INGAME, DEATH, hp=0)
+        self.assertEqual(len(self.ctx.sent_deaths), 1)
+
+    async def test_a_fresh_connect_while_paused_reads_soma_as_alive(self) -> None:
+        self.connect_fresh()
+        await self.relay(INGAME, PAUSE, hp=100)
+        self.assertIs(self.client.currently_dead, False)
+
+    async def test_a_queued_death_is_applied_if_soma_is_alive_at_the_first_read(self) -> None:
+        self.connect_fresh()
+        self.bounce("Someone else died")
+        await self.relay(INGAME, NORMAL, hp=100)
+        self.assertEqual(self.ram.kill_calls, 1)
+
+    async def test_a_queued_death_is_dropped_if_soma_is_dead_at_the_first_read(self) -> None:
+        self.connect_fresh()
+        self.bounce("Someone else died")
+        await self.relay(GAME_OVER, 0, hp=0)
+        self.assertEqual(self.ctx.sent_deaths, [])
+        await self.relay(INGAME, NORMAL, hp=100)
+        self.assertEqual(self.ram.kill_calls, 0)
+
+    async def test_a_queued_death_is_dropped_if_a_kill_is_pending_at_the_first_read(self) -> None:
+        self.ram.kill_request = True
+        self.connect_fresh()
+        self.bounce("Someone else died")
+        await self.relay(INGAME, NORMAL, hp=100)
+        self.assertEqual(self.client.death_causes, [])
+        self.assertEqual(self.ram.kill_calls, 0)
+
     async def test_received_death_is_not_rebroadcast(self) -> None:
         # Applying an incoming death must not later echo back out as our own broadcast.
         await self.relay(INGAME, NORMAL)
@@ -190,6 +283,29 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
         await self.relay(INGAME, DEATH, hp=0)       # the game now enters its death fade
         self.assertEqual(len(self.ctx.sent_deaths), sent_before,
                          "a received death must not be rebroadcast as our own")
+
+
+class SetAuthTest(unittest.IsolatedAsyncioTestCase):
+    """set_auth runs on every connect, and keeps the DeathLink latch only for the same seed."""
+
+    async def connect(self, client: CVAOSClient, auth: bytes) -> None:
+        ctx = SimpleNamespace(bizhawk_ctx=None, auth=None)
+        with mock.patch.object(bizhawk, "read", mock.AsyncMock(return_value=[auth])):
+            await client.set_auth(ctx)
+
+    async def test_a_reconnect_to_the_same_seed_keeps_the_latch(self) -> None:
+        client = CVAOSClient.__new__(CVAOSClient)
+        await self.connect(client, bytes(16))
+        client.currently_dead = True
+        await self.connect(client, bytes(16))
+        self.assertIs(client.currently_dead, True)
+
+    async def test_a_different_seed_leaves_the_latch_unknown(self) -> None:
+        client = CVAOSClient.__new__(CVAOSClient)
+        await self.connect(client, bytes(16))
+        client.currently_dead = True
+        await self.connect(client, bytes(range(16)))
+        self.assertIsNone(client.currently_dead)
 
 
 if __name__ == "__main__":
