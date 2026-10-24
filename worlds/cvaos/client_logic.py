@@ -136,9 +136,11 @@ class CVAOSClientLogic:
         await ram.cap_skull_keys(floor=1 if ctx.slot_data.get("skull_key_warp") else 0)
 
     async def _receive_items(self, ctx: "CommonContext", ram: AoSRAM) -> None:
-        # Receive items from the server: grant each not-yet-given item, then advance the saved
-        # received-counter (guarded) so a reload doesn't re-give them. Stop on a lost guarded write
-        # (a race with the game's writes, or the counter changing underneath us) and retry.
+        # Receive items from the server: grant each not-yet-given item and advance the saved
+        # received-counter past it, so a reload doesn't re-give it. An item's transfer and the
+        # counter's advance go in one guarded write, so a connector failure can neither grant an
+        # item twice nor skip one. Stop on a lost guarded write (a race with the game's writes, or
+        # the counter changing underneath us) and retry next tick.
         from CommonClient import logger
 
         received = await ram.get_received_count()
@@ -153,12 +155,13 @@ class CVAOSClientLogic:
                 # Unreachable today (every item is a pickup); log instead of silently dropping a
                 # received item if a non-pickup item is ever added to the pool.
                 logger.warning("CVAoS: received item code %s has no grant mapping; skipping.", code)
-            elif not await item_granting.grant(
-                    ram, action, new_soul_pause=bool(ctx.slot_data.get("new_soul_pause", True))):
-                break  # lost a guarded write on the grant; retry next tick without advancing
-            # Advance the saved counter, guarded on its prior value so we never blind-stomp it.
-            if not await ram.set_received_count(received + 1, expected=received):
-                break  # counter changed underneath us; re-read and retry next tick
+                done = await ram.set_received_count(received + 1, expected=received)
+            else:
+                done = await item_granting.grant(
+                    ram, action, new_soul_pause=bool(ctx.slot_data.get("new_soul_pause", True)),
+                    together_with=[ram.received_count_write(received + 1, expected=received)])
+            if not done:
+                break  # lost a guarded write, so the counter was not advanced; retry next tick
             received += 1
             granted_this_tick += 1
 

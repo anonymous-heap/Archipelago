@@ -14,6 +14,10 @@ interface, and ``AoSRAM`` runs on whichever backend the client hands it:
   written only if they still equal ``expected``; False means the caller retries next tick.
   BizHawk's is frame-atomic; a read-compare-write implementation has a small race window that
   the retry contract already tolerates.
+* ``guarded_write_many([GuardedWrite]) -> bool``: several compare-and-writes as one step. Every
+  guard is checked before anything is written, so either every write happens or none does.
+  BizHawk runs the batch between two frames. A process-memory transport checks the guards and
+  then makes the writes back to back, which has the same small race window as ``guarded_write``.
 
 Domains are the BizHawk names ``"EWRAM"`` (offset relative to GBA 0x02000000) and ``"ROM"``
 (offset = file offset, GBA 0x08000000-relative), the only two this world uses.
@@ -24,12 +28,25 @@ raises and retries or re-attaches.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, Sequence
+from typing import TYPE_CHECKING, NamedTuple, Protocol, Sequence
 
 import worlds._bizhawk as bizhawk
 
 if TYPE_CHECKING:
     from worlds._bizhawk import BizHawkContext
+
+
+class GuardedWrite(NamedTuple):
+    """
+    One compare-and-write in a ``guarded_write_many`` batch.
+
+    ``data`` is written at ``offset`` in ``domain`` only if the bytes there still equal
+    ``expected``.
+    """
+    offset: int
+    data: bytes
+    expected: bytes
+    domain: str
 
 
 class RamBackend(Protocol):
@@ -41,6 +58,8 @@ class RamBackend(Protocol):
 
     async def guarded_write(self, offset: int, data: Sequence[int],
                             expected: Sequence[int], domain: str) -> bool: ...
+
+    async def guarded_write_many(self, writes: Sequence[GuardedWrite]) -> bool: ...
 
 
 class BizHawkBackend:
@@ -60,3 +79,9 @@ class BizHawkBackend:
                             expected: Sequence[int], domain: str) -> bool:
         return await bizhawk.guarded_write(
             self.ctx, [(offset, list(data), domain)], [(offset, list(expected), domain)])
+
+    async def guarded_write_many(self, writes: Sequence[GuardedWrite]) -> bool:
+        return await bizhawk.guarded_write(
+            self.ctx,
+            [(w.offset, list(w.data), w.domain) for w in writes],
+            [(w.offset, list(w.expected), w.domain) for w in writes])

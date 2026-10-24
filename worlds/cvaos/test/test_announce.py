@@ -200,8 +200,8 @@ class GrantIntegrationTest(unittest.TestCase):
         async def lose(*_a, **_k):
             return False
 
-        self.ram.guarded_write = lose
-        self.run_(item_granting.grant(self.ram, action))
+        self.ram.guarded_write_many = lose
+        self.assertFalse(self.run_(item_granting.grant(self.ram, action)))
         self.assertEqual(bytes(self.ewram[MB:MB + box.MAILBOX_SIZE]), bytes(box.MAILBOX_SIZE),
                          "a grant that lost its guarded write must not announce")
 

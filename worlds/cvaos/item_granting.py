@@ -25,12 +25,13 @@ once the offsets are known (see the TODO in items.py).
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import NamedTuple, TYPE_CHECKING
+from typing import NamedTuple, Sequence, TYPE_CHECKING
 
 from .data.item_info import by_item_number as _by_item_number
 
 if TYPE_CHECKING:
     from .ram import AoSRAM
+    from .ram.backend import GuardedWrite
 
 
 class TransferCategory(IntEnum):
@@ -105,33 +106,39 @@ def resolve(code: int) -> "ReceiveAction | None":
     )
 
 
-async def grant(ram: "AoSRAM", action: ReceiveAction, *, new_soul_pause: bool = True) -> bool:
+async def grant(ram: "AoSRAM", action: ReceiveAction, *, new_soul_pause: bool = True,
+                together_with: Sequence["GuardedWrite"] = ()) -> bool:
     """Apply a resolved action through the RAM accessors. Returns ``False`` only if a guarded
-    write lost a race, so the caller retries next tick without advancing the received-counter.
+    write lost a race, and the caller then retries next tick.
+
+    ``together_with`` holds other guarded writes to make in the same step as the transfer, so
+    either all of them happen or none do. The client passes the received-counter's advance here,
+    so a ``False`` return also means the counter was not advanced. When an action has no transfer,
+    ``grant`` makes these writes as a batch of their own.
 
     ``new_soul_pause`` is the New Soul Pause option: whether a soul the player did not already
     own is announced with the game's stop-the-action first-soul box, or with the short banner a
     duplicate gets. It only shapes the announcement, never the grant.
     """
-    # ORDER MATTERS: run the idempotent op (set_flag_bit -- a no-op when the bit is already at the
-    # target value) FIRST, and the non-idempotent transfer (give_item/add_gold, a real increment)
-    # LAST, so on a retry only the last committed op can re-run. If the flag write loses its guarded
-    # race we return before any transfer (clean retry); if the transfer loses its race, re-setting the
-    # flag next tick is harmless. This preserves "at most one non-idempotent op per grant" and becomes
-    # load-bearing once maps pack set_flag=1 (TODO in items.py) -- do not reorder back.
+    # ORDER MATTERS: set the flag (idempotent, a no-op when the bit already has the target value)
+    # FIRST, and make the transfer LAST, in the same batch as the received-counter's advance.
+    # Nothing after that batch is retried, so the flag has to land before it. If the flag write
+    # loses its guarded race we return before any transfer; if the transfer loses, re-setting the
+    # flag next tick is harmless. Do not reorder.
     if action.set_flag:
         if not await ram.set_flag_bit(action.flag_offset, action.flag_bit, action.flag_value):
             return False
-    return await _grant_transfer(ram, action, new_soul_pause)
+    return await _grant_transfer(ram, action, new_soul_pause, together_with)
 
 
-async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction, new_soul_pause: bool) -> bool:
+async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction, new_soul_pause: bool,
+                          together_with: Sequence["GuardedWrite"]) -> bool:
     category = action.category
     if category == TransferCategory.MONEY:
-        return await ram.add_gold(action.id_or_value)
+        return await ram.add_gold(action.id_or_value, together_with=together_with)
     if category in (TransferCategory.PICKUP, TransferCategory.OTHER_ITEM):
         info = _by_item_number[action.id_or_value]
-        granted = await ram.give_item(info.item_category, info.id)
+        granted = await ram.give_item(info.item_category, info.id, together_with=together_with)
         if granted:
             # Cosmetic, and only after the item is really in the inventory. announce_* never
             # raises and never blocks, so it cannot turn a delivered item into a retry.
@@ -140,13 +147,17 @@ async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction, new_soul_pause: 
                                                 new_soul_pause=new_soul_pause)
         return granted
     if category == TransferCategory.FLAG_ONLY:
-        # The whole grant was the set_flag bit (already applied in grant()). If a custom pickup
+        # The whole grant was the set_flag bit (already applied in grant()), so only the
+        # together_with writes remain, and they go before the announcement. If a custom pickup
         # sets that same flag on collection (the Study Sealswitch), announce it under the pickup's
         # name, as the floor copy does; the id field carries nothing to name it by.
+        if not await ram.guarded_write_many(together_with):
+            return False
         from . import announce
         await announce.announce_flag(ram, action.flag_offset, action.flag_bit)
         return True
-    # EVENT / TO_BE_IMPLEMENTED: reserved, not yet grantable. Skip loudly (never silently).
+    # EVENT / TO_BE_IMPLEMENTED: reserved, not yet grantable. Skip loudly (never silently), but
+    # still make the together_with writes so the received-counter moves past it.
     from CommonClient import logger
     logger.warning("CVAoS: received reserved category %s; skipping.", category.name)
-    return True
+    return await ram.guarded_write_many(together_with)

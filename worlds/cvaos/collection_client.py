@@ -58,6 +58,7 @@ from .client_logic import CVAOSClientLogic
 from .options import TARGET_ADVANCE_COLLECTION
 from .ram import AoSRAM, addresses as addr
 from .ram.addresses import EWRAM
+from .ram.backend import GuardedWrite
 from .rom import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUMBER_START
 
 if TYPE_CHECKING:
@@ -473,9 +474,9 @@ def _live_candidates(proc: GameProcess, candidates: list[int]) -> list[int]:
 class CollectionBackend:
     """``RamBackend`` implementation over an anchored game.exe.
 
-    ``guarded_write`` is read-compare-write: unlike BizHawk's frame-atomic version there
-    is a small race window between the compare and the write, which the callers'
-    retry-next-tick contract already tolerates (see ram/backend.py)."""
+    ``guarded_write`` and ``guarded_write_many`` read, compare, then write. Unlike BizHawk's
+    frame-atomic versions, they leave a small race window between the compare and the write. The
+    callers' retry-next-tick contract accepts that window (see ram/backend.py)."""
 
     def __init__(self, proc: GameProcess, rom_base: int, ewram_base: int) -> None:
         self.proc = proc
@@ -508,6 +509,17 @@ class CollectionBackend:
         if self.proc.read(address, len(guard)) != guard:
             return False
         self.proc.write(address, payload)
+        return True
+
+    async def guarded_write_many(self, writes: Sequence[GuardedWrite]) -> bool:
+        # Resolve every address and check every guard before the first write, so an out-of-range
+        # entry or a stale guard leaves memory untouched.
+        targets = [(self._host(w.offset, len(w.data), w.domain), bytes(w.data), bytes(w.expected))
+                   for w in writes]
+        if any(self.proc.read(address, len(guard)) != guard for address, _, guard in targets):
+            return False
+        for address, payload, _ in targets:
+            self.proc.write(address, payload)
         return True
 
 

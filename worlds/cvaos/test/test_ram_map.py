@@ -75,8 +75,8 @@ class EwramMapTest(unittest.TestCase):
 class FakeBackend:
     """A ``RamBackend`` over dict-of-bytearray memory.
 
-    Reads are batched, writes are plain, and a guarded write checks its guard before applying
-    anything, which is the connector's frame-atomic semantics.
+    Reads are batched, writes are plain, and a guarded write or batch checks every guard before
+    applying anything, which is the connector's frame-atomic semantics.
     """
 
     def __init__(self, memory: dict) -> None:
@@ -94,6 +94,15 @@ class FakeBackend:
         if bytes(self.memory[domain][offset:offset + len(expected)]) != expected:
             return False
         await self.write(offset, data, domain)
+        return True
+
+    async def guarded_write_many(self, writes):
+        for w in writes:
+            current = bytes(self.memory[w.domain][w.offset:w.offset + len(w.expected)])
+            if current != bytes(w.expected):
+                return False
+        for w in writes:
+            await self.write(w.offset, w.data, w.domain)
         return True
 
 
@@ -230,6 +239,17 @@ class BizHawkBackendTest(unittest.TestCase):
             ("read", ctx, [(0x10, 1, EWRAM), (0x64, 2, EWRAM)]),
             ("write", ctx, [(0x10, [4], EWRAM)]),
             ("guarded_write", ctx, [(0x10, [5], EWRAM)], [(0x10, [4], EWRAM)]),
+        ])
+
+    def test_a_batch_is_one_connector_call_guarding_every_write(self):
+        connector, ctx = self.Connector(), object()
+        writes = [backend_module.GuardedWrite(0x10, b"\x05", b"\x04", EWRAM),
+                  backend_module.GuardedWrite(0x20, b"\x07\x00", b"\x06\x00", EWRAM)]
+        with patch.object(backend_module, "bizhawk", connector):
+            self.assertTrue(asyncio.run(BizHawkBackend(ctx).guarded_write_many(writes)))
+        self.assertEqual(connector.calls, [
+            ("guarded_write", ctx, [(0x10, [5], EWRAM), (0x20, [7, 0], EWRAM)],
+             [(0x10, [4], EWRAM), (0x20, [6, 0], EWRAM)]),
         ])
 
     def test_backend_types_are_exported_from_the_package(self):

@@ -23,6 +23,7 @@ from ..collection_client import (
 )
 from ..ram import addresses as addr
 from ..ram.addresses import EWRAM, GameState
+from ..ram.backend import GuardedWrite
 
 ROM_DOMAIN = "ROM"
 ROM_TITLE_OFFSET = 0xA0
@@ -204,6 +205,29 @@ class GuardedWriteTest(unittest.TestCase):
         ok = _run(self.backend.guarded_write(0x1328A, [0x06, 0x00], [0x04, 0x00], EWRAM))
         self.assertFalse(ok)
         self.assertEqual(self.proc.read(self.host, 2), b"\x05\x00", "must not write on a lost guard")
+
+    def batch(self, counter_guard: bytes) -> list[GuardedWrite]:
+        # Gold 0 -> 500, and the received-counter from counter_guard to 6.
+        return [GuardedWrite(0x13290, (500).to_bytes(4, "little"), bytes(4), EWRAM),
+                GuardedWrite(0x1328A, b"\x06\x00", counter_guard, EWRAM)]
+
+    def test_a_batch_with_matching_guards_makes_every_write(self) -> None:
+        self.assertTrue(_run(self.backend.guarded_write_many(self.batch(b"\x05\x00"))))
+        self.assertEqual(self.proc.read(0x10000000 + 0x13290, 4), (500).to_bytes(4, "little"))
+        self.assertEqual(self.proc.read(self.host, 2), b"\x06\x00")
+
+    def test_one_stale_guard_leaves_the_whole_batch_unwritten(self) -> None:
+        self.assertFalse(_run(self.backend.guarded_write_many(self.batch(b"\x04\x00"))))
+        self.assertEqual(self.proc.read(0x10000000 + 0x13290, 4), bytes(4),
+                         "the write before the stale guard must not land either")
+        self.assertEqual(self.proc.read(self.host, 2), b"\x05\x00")
+
+    def test_an_out_of_range_write_leaves_the_whole_batch_unwritten(self) -> None:
+        bad = GuardedWrite(0x40000, b"\x01", b"\x00", EWRAM)
+        with self.assertRaises(CollectionError):
+            _run(self.backend.guarded_write_many([*self.batch(b"\x05\x00"), bad]))
+        self.assertEqual(self.proc.read(0x10000000 + 0x13290, 4), bytes(4))
+        self.assertEqual(self.proc.read(self.host, 2), b"\x05\x00")
 
 
 class ErrorWrappingTest(unittest.TestCase):

@@ -1,11 +1,12 @@
 """
 Async helpers for reading/writing Aria of Sorrow live memory.
 
-``AoSRAM`` wraps a transport backend (``backend.RamBackend``; the BizHawk connector is one) with
-three transport primitives (``read`` / ``write`` / ``guarded_write``, one round-trip each)
-and semantic accessors over the ``Entry`` declarations in ``addresses.py``. An entry supplies the
-``(offset, nbytes)`` a request needs and the codec that decodes or encodes the bytes, so an
-accessor names *what* it touches and never restates an address, a size, or a signedness.
+``AoSRAM`` wraps a transport backend (``backend.RamBackend``; the BizHawk connector is one). Its
+transport primitives are ``read``, ``write``, ``guarded_write`` and ``guarded_write_many``, one
+round-trip each. Its semantic accessors work over the ``Entry`` declarations in ``addresses.py``.
+An entry supplies the ``(offset, nbytes)`` a request needs and the codec that decodes or encodes
+the bytes, so an accessor names *what* it touches and never restates an address, a size, or a
+signedness.
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from typing import Any, Sequence
 from . import addresses as addr
 from .._bytemaker_compat import Entry
 from .addresses import EWRAM
-from .backend import RamBackend
+from .backend import GuardedWrite, RamBackend
 from .structures import EquippedGear, PlayerVitals, SoulPair
 
 
@@ -43,6 +44,18 @@ class AoSRAM:
         """
         return await self.backend.guarded_write(offset, data, expected, domain)
 
+    async def guarded_write_many(self, writes: Sequence[GuardedWrite]) -> bool:
+        """
+        Makes every write in ``writes``, or none of them if any target no longer holds its
+        ``expected`` bytes.
+
+        Returns False if any guard fails, and the caller retries next tick. An empty batch returns
+        True without sending a request.
+        """
+        if not writes:
+            return True
+        return await self.backend.guarded_write_many(writes)
+
     # --- entry-shaped helpers -------------------------------------------------
     async def _fetch(self, entry: Entry, domain: str = EWRAM) -> Any:
         """
@@ -67,6 +80,14 @@ class AoSRAM:
     async def _cas_bytes(self, entry: Entry, new: bytes, expected: bytes, domain: str = EWRAM) -> bool:
         offset, _ = entry.request()
         return await self.guarded_write(offset, new, expected, domain)
+
+    @staticmethod
+    def _guarded(entry: Entry, new: bytes, expected: bytes, domain: str = EWRAM) -> GuardedWrite:
+        """
+        Build the guarded write :meth:`_cas_bytes` would send, as a ``GuardedWrite`` for a batch.
+        """
+        offset, _ = entry.request()
+        return GuardedWrite(offset, bytes(new), bytes(expected), domain)
 
     async def read_group(self, *entries: Entry, domain: str = EWRAM) -> list[Any]:
         """
@@ -230,7 +251,18 @@ class AoSRAM:
         belt-and-suspenders: returns ``False`` only if the word changed underneath us, in which case
         the caller re-reads and retries next tick instead of advancing.
         """
-        return await self._cas(addr.AP_RECEIVED_COUNT, count & 0xFFFF, expected & 0xFFFF)
+        return await self.guarded_write_many([self.received_count_write(count, expected)])
+
+    def received_count_write(self, count: int, expected: int) -> GuardedWrite:
+        """
+        Builds the guarded write that :meth:`set_received_count` sends, without sending it.
+
+        Pass it in a grant's ``together_with`` to advance the counter in the same step as the item.
+        Either both change or neither does, so a failed request cannot leave the item granted and
+        the counter behind it.
+        """
+        entry = addr.AP_RECEIVED_COUNT
+        return self._guarded(entry, entry.pack(count & 0xFFFF), entry.pack(expected & 0xFFFF))
 
     # --- giving items -------------------------------------------------------
     @staticmethod
@@ -252,7 +284,8 @@ class AoSRAM:
             return getattr(pair, "odd" if index % 2 else "even")
         return await self._fetch(array.entry.item(index))
 
-    async def give_item(self, category: str, index: int, *, cap: int = 9) -> bool:
+    async def give_item(self, category: str, index: int, *, cap: int = 9,
+                        together_with: Sequence[GuardedWrite] = ()) -> bool:
         """
         Increments the owned-count for one item, race-safely.
 
@@ -262,9 +295,13 @@ class AoSRAM:
         the pickup ``var_b`` for souls). AoS caps every owned-count -- consumables,
         equipment, and souls alike -- at ``cap`` (9); the game accepts a pickup at the
         cap but won't count it past 9, and we mirror that. A received item that would
-        exceed the cap is dropped and logged (still returns ``True`` so the counter
-        advances). Returns ``True`` on success/at-cap, or ``False`` if the guarded write
-        lost a race -- retry next tick and do **not** advance the received counter.
+        exceed the cap is dropped and logged rather than treated as a lost race. Returns
+        ``False`` only if a guarded write lost a race, in which case nothing was written and
+        the caller retries next tick.
+
+        ``together_with`` holds other guarded writes to make in the same step as the item's own,
+        so either all of them happen or none do. They are made even when the item is already at
+        its cap, so a received-counter advance passed here still happens when the copy is dropped.
 
         A soul also adds one to the game's souls-collected statistic, which is what the vanilla
         collect path does after its own add.
@@ -274,31 +311,36 @@ class AoSRAM:
 
         if array.nibble_packed:
             # Two counts share the byte: read the pair, bump one nibble, and guard on the whole
-            # byte so the neighbour's count rides along untouched.
+            # byte so the neighbour's count rides along untouched. At the cap the byte is written
+            # back unchanged, as in the byte-array case below.
             slot = array.entry.item(index // 2)
             pair: SoulPair = await self._fetch(slot)
             old_byte = slot.pack(pair)
             which = "odd" if index % 2 else "even"
             current: int = getattr(pair, which)
             new = min(current + 1, cap)
+            setattr(pair, which, new)
+            if not await self.guarded_write_many(
+                    [self._guarded(slot, slot.pack(pair), old_byte), *together_with]):
+                return False
             if new == current:
                 self._report_at_cap(category, index, cap)
-            else:
-                setattr(pair, which, new)
-                if not await self._cas_bytes(slot, slot.pack(pair), old_byte):
-                    return False
             # Only souls reach here, and vanilla's collect path bumps the souls-collected
             # statistic after its add, so a granted soul counts the same way.
             await self._count_soul_collected()
             return True
 
+        # At the cap the slot is written back unchanged, so the guard still catches a change made
+        # between the read and the write (the player using one, say). The next tick then grants it.
         slot = array.entry.item(index)
         current = await self._fetch(slot)
         new = min(current + 1, cap)
+        if not await self.guarded_write_many(
+                [self._guarded(slot, slot.pack(new), slot.pack(current)), *together_with]):
+            return False
         if new == current:
             self._report_at_cap(category, index, cap)
-            return True
-        return await self._cas(slot, new, current)
+        return True
 
     async def _count_soul_collected(self) -> None:
         """Add one to the game's souls-collected statistic, the way a real pickup does.
@@ -307,8 +349,9 @@ class AoSRAM:
         client grants has to count here or the file screen undercounts. It counts souls absorbed
         rather than distinct souls owned, which is why an at-cap grant still counts.
 
-        Best-effort on purpose: the soul is already in the inventory by now, so losing this race
-        must not fail the grant (the retry would hand out the soul twice).
+        Best-effort on purpose: the soul and any ``together_with`` writes are already in memory by
+        now, so losing this race must not fail the grant. A failed grant would skip the soul's
+        announcement.
         """
         current: int = await self._fetch(addr.SOULS_COLLECTED)
         new = min(current + 1, addr.SOULS_COLLECTED_CAP)
@@ -318,19 +361,24 @@ class AoSRAM:
     @staticmethod
     def _report_at_cap(category: str, index: int, cap: int) -> None:
         # Already at the cap: AoS accepts the pickup but won't count it past 9, so a received copy
-        # has nowhere to go. Log it (a real drop, not a race) rather than swallow it silently; the
-        # caller then reports success so the received-counter still advances.
+        # has nowhere to go. Log it (a real drop, not a race) rather than swallow it silently.
+        # give_item still makes its together_with writes, so the received-counter moves past it.
         from CommonClient import logger
         logger.warning("CVAoS: %s slot %d already at cap %d; received item dropped.",
                        category, index, cap)
 
-    async def add_gold(self, amount: int) -> bool:
+    async def add_gold(self, amount: int, *, together_with: Sequence[GuardedWrite] = ()) -> bool:
         """
         Adds ``amount`` to the player's gold (subtype-1 'money' pickups),
         race-safely. The caller resolves the money item to its gold value.
+
+        ``together_with`` works as in :meth:`give_item`.
         """
-        current: int = await self._fetch(addr.CURRENT_GOLD)
-        return await self._cas(addr.CURRENT_GOLD, min(current + amount, 0xFFFFFFFF), current)
+        entry = addr.CURRENT_GOLD
+        current: int = await self._fetch(entry)
+        new = min(current + amount, 0xFFFFFFFF)
+        gold = self._guarded(entry, entry.pack(new), entry.pack(current))
+        return await self.guarded_write_many([gold, *together_with])
 
     async def cap_skull_keys(self, *, limit: int = 1, floor: int = 0) -> None:
         """
