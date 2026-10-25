@@ -354,6 +354,10 @@ _ABILITY_TO_ITEM: dict[AbilityCombo, str] = {
     AbilityCombo.Panth: "Black Panther",
     AbilityCombo.Bat: "Giant Bat",
     AbilityCombo.BDash: "Grave Keeper",
+    # Kicker Skeleton has no pickup or location. Its soul is a rare enemy drop (rate 2), so no
+    # item has this name and every Kick route stays out of logic. Putting Kick in logic would
+    # need an enemy region for the Kicker Skeleton in room 505, read the way Tform reads Devil and
+    # Manticore. It would also ask players to farm that drop for an optional route.
     AbilityCombo.Kick: "Kicker Skeleton",
     AbilityCombo.Galamoth: "Galamoth",
     # Chronomage currently has no pickup/location (b/c Galamoth accomplishes
