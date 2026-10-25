@@ -32,12 +32,18 @@ SMOOTHED = (*BIASED_SOULS, BLACK_PANTHER, *ANCIENT_BOOK_NAMES)
 
 
 def generate(seed: int, options: dict) -> MultiWorld:
-    """Run the generation steps the way Main does, with exclusion rules and item plando."""
-    multiworld = setup_multiworld(CVAOSWorld, BEFORE_FILL, seed=seed,
+    """Generate one world the way Main does, including its location settings and item plando."""
+    multiworld = setup_multiworld(CVAOSWorld, BEFORE_FILL[:4], seed=seed,
                                   options={"item_smoothing": "strict", **options})
     world = multiworld.worlds[1]
-    exclusion_rules(multiworld, 1, world.options.exclude_locations.value)
+    excluded = world.options.exclude_locations.value
+    exclusion_rules(multiworld, 1, excluded)
+    existing = {location.name for location in multiworld.get_locations(1)}
+    for name in (world.options.priority_locations.value - excluded) & existing:
+        multiworld.get_location(name, 1).progress_type = LocationProgressType.PRIORITY
     multiworld.plando_item_blocks = parse_planned_blocks(multiworld)
+    for step in BEFORE_FILL[4:]:
+        call_all(multiworld, step)
     resolve_early_locations_for_planned(multiworld)
     distribute_planned_blocks(multiworld, multiworld.plando_item_blocks[1])
     call_all(multiworld, "pre_fill")
@@ -58,9 +64,13 @@ class LocationSettingsTest(unittest.TestCase):
 
     def test_priority_locations_keep_progression(self):
         for seed in range(3):
-            priority = set(random.Random(100 + seed).sample(LOCATION_NAMES, 10))
+            priority = set(random.Random(100 + seed).sample(LOCATION_NAMES, 20))
             multiworld = generate(seed, {"priority_locations": priority})
             with self.subTest(seed=seed):
+                names = {loc.name for loc in multiworld.get_locations(1)}
+                marked = {loc.name for loc in multiworld.get_locations(1)
+                          if loc.progress_type == LocationProgressType.PRIORITY}
+                self.assertEqual(marked, priority & names)
                 wrong = [loc.name for loc in multiworld.get_locations(1)
                          if loc.progress_type == LocationProgressType.PRIORITY
                          and not loc.item.advancement]
