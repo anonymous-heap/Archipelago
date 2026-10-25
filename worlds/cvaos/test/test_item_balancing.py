@@ -74,7 +74,7 @@ class TestBooksSpread(CVAOSWorldTestBase):
             self.assertTrue(loc.locked, f"{name} should be locked in place")
             self.assertIsNotNone(loc.address)
         self.assertEqual([it for it in multiworld.itempool if it.name in ANCIENT_BOOK_NAMES], [],
-                         "placed books must be removed from the itempool")
+                         "placed books must not be in the itempool")
 
     def test_books_spread_over_spheres(self):
         # After the post-fill refine, the books sit at distinct points of the *run* (sphere ordering)

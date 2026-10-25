@@ -23,7 +23,7 @@ import math
 import re
 from collections import deque
 from dataclasses import dataclass
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
 from BaseClasses import CollectionState, Item, Location, LocationProgressType, MultiWorld
 
@@ -320,6 +320,99 @@ def smoothable_locations_in_order(multiworld: MultiWorld, player: int, spheres: 
     return candidates
 
 
+# --- hold back the items the pre_fill passes place (create_items, pre_fill) ------------------
+
+def take_smoothing_items(world: "CVAOSWorld", itempool: List[Item]) -> List[Item]:
+    """
+    Remove and return the items in ``itempool`` that the pre_fill passes place.
+
+    A world must not change the multiworld pool after create_items, so these items never enter it.
+    The world returns them from ``get_pre_fill_items`` until they are placed, so ``get_all_state``
+    still collects them.
+
+    Nothing is taken when ``item_smoothing`` is off. Otherwise the Ancient Books are taken, and so
+    are the three gating souls unless ``early_mobility_souls`` is off. Black Panther is taken when
+    ``black_panther_bias`` is on and this run's ``BLACK_PANTHER_EARLY_CHANCE`` roll, made here,
+    succeeds. An item that the core needs in the pool for an item link, a plando or
+    ``non_local_items`` is left there (see ``_names_used_elsewhere``).
+    """
+    options = world.options
+    if options.item_smoothing.current_key == "off":
+        return []
+    names = set(ANCIENT_BOOK_NAMES)
+    if options.early_mobility_souls.current_key != "off":
+        names |= set(BIASED_SOULS)
+    if options.black_panther_bias.value and world.random.random() < BLACK_PANTHER_EARLY_CHANCE:
+        names.add(BLACK_PANTHER)
+    names -= _names_used_elsewhere(world)
+    taken = [item for item in itempool if item.name in names]
+    itempool[:] = [item for item in itempool if item.name not in names]
+    return taken
+
+
+def _names_used_elsewhere(world: "CVAOSWorld") -> Set[str]:
+    """
+    Return the names of this player's items that other generation steps need in the pool.
+
+    Before pre_fill, the core replaces linked items with their group's item and places plando'd
+    items, taking both from the pool. It also keeps ``non_local_items`` out of this world's
+    locations, so only the main fill can place them. Smoothing leaves all of these in the pool.
+    Item group names are expanded to the items they contain.
+    """
+    names: Set[str] = set(world.options.non_local_items.value)
+    for group in world.multiworld.groups.values():
+        if world.player in group["players"]:
+            names |= set(group["item_pool"])
+    for block in world.options.plando_items.value:
+        names |= set(block.items)
+    expanded: Set[str] = set()
+    for name in names:
+        expanded |= set(world.item_name_groups.get(name, {name}))
+    return expanded
+
+
+def _all_state_except(multiworld: MultiWorld, unplaced: List[Item]) -> CollectionState:
+    """
+    The same state as ``multiworld.get_all_state()``, without the pre-fill items in ``unplaced``.
+
+    ``bias_progression_souls`` calls this with every soul it has not placed yet, including the one
+    it is about to place. That soul then cannot land behind itself, or behind a soul placed after
+    it. The Ancient Books, which the next pass places, are still counted.
+    """
+    state = multiworld.get_all_state(collect_pre_fill_items=False, perform_sweep=False)
+    held_back = {id(item) for item in unplaced}
+    for player in multiworld.player_ids:
+        world = multiworld.worlds[player]
+        for item in world.get_pre_fill_items():
+            if id(item) not in held_back:
+                world.collect(state, item)
+    state.sweep_for_advancements()
+    return state
+
+
+def _add_to_pool(world: "CVAOSWorld", item: Item) -> None:
+    """
+    Add an item that a pre-fill pass could not place to the multiworld pool, for the main fill.
+
+    This is the only time smoothing adds to the multiworld pool after create_items. It happens only
+    when the pass finds no free candidate location that logic can reach without the item. The item
+    is also removed from the world's pre-fill items, so ``get_all_state`` does not collect it twice.
+    """
+    world._smoothing_items = [other for other in world._smoothing_items if other is not item]
+    world.multiworld.itempool.append(item)
+
+
+def add_unplaced_to_pool(world: "CVAOSWorld") -> None:
+    """
+    Add every held-back item that the pre_fill passes left unplaced to the multiworld pool.
+
+    A pass can return before placing anything, for example when every location of this world is
+    excluded, so the world calls this after both passes.
+    """
+    for item in world.get_pre_fill_items():
+        _add_to_pool(world, item)
+
+
 # --- pass 0: bias the gating mobility souls (pre_fill) ----------------------------------------
 
 def _lateness_ranking(multiworld: MultiWorld, player: int, depth: Dict[str, int]) -> Dict[Location, float]:
@@ -335,7 +428,10 @@ def _lateness_ranking(multiworld: MultiWorld, player: int, depth: Dict[str, int]
        run once per world during pre_fill.)
     """
     world = multiworld.worlds[player]
-    souls = [item for item in multiworld.itempool if item.player == player and item.name in MOVEMENT_SOULS]
+    # The souls that smoothing places never enter the multiworld pool, so add this world's pre-fill
+    # items.
+    pool = [*multiworld.itempool, *world.get_pre_fill_items()]
+    souls = [item for item in pool if item.player == player and item.name in MOVEMENT_SOULS]
     # Excluded locations are left out, so the pre-fill bias never puts a soul in one.
     locs = [loc for loc in multiworld.get_locations(player)
             if loc.address is not None and loc.parent_region is not None
@@ -343,7 +439,7 @@ def _lateness_ranking(multiworld: MultiWorld, player: int, depth: Dict[str, int]
             and loc.progress_type != LocationProgressType.EXCLUDED]
 
     base = CollectionState(multiworld)
-    for item in multiworld.itempool:
+    for item in pool:
         if not (item.player == player and item.name in MOVEMENT_SOULS):
             multiworld.worlds[item.player].collect(base, item)
     base.sweep_for_advancements()
@@ -393,8 +489,8 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
     Items are placed earliest-target first, recomputing reachability after each, so
        a later one may *use* an already-placed earlier one to reach gated locations while never depending
        on one placed after it (topological: none behind itself). ``fill_restrictive`` refuses to place
-       where unreachable; if nothing fits, the item is handed back to the normal fill, so the bias can
-       never make a seed unbeatable.
+       where unreachable; if nothing fits, the item goes into the multiworld pool for the normal
+       fill to place, so the bias can never make a seed unbeatable.
 
     Gating: the three souls follow ``early_mobility_souls`` (``off`` skips them; ``guarantee_early``
        forces one early every run; ``bias_early`` does so ~``EARLY_GUARANTEE`` of runs). Black Panther is
@@ -407,12 +503,12 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
     player = world.player
     rng = world.random
 
-    # Candidate items: the three gating souls and, separately, Black Panther. Each may get a lateness
-    # target in [0, 1] (0 = earliest by sphere ordering, 1 = latest); all targeted ones are then placed.
+    # Candidate items: the three gating souls and Black Panther, but only those take_smoothing_items
+    # kept out of the pool. Each gets a lateness target in [0, 1] (0 = earliest by sphere ordering,
+    # 1 = latest), and all of them are then placed.
     found: Dict[str, Item] = {}
-    for item in multiworld.itempool:
-        if (item.player == player and item.name not in found
-                and (item.name in BIASED_SOULS or item.name == BLACK_PANTHER)):
+    for item in world.get_pre_fill_items():
+        if item.name not in found and (item.name in BIASED_SOULS or item.name == BLACK_PANTHER):
             found[item.name] = item
 
     targets: Dict[Item, float] = {}
@@ -438,13 +534,13 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
         for item in present:
             targets[item] = soul_target(item.name)
 
-    # Black Panther: independent on/off toggle (black_panther_bias) -- when on, ~BLACK_PANTHER_EARLY_CHANCE
-    # of runs aim it into the first BLACK_PANTHER_EARLY_WINDOW of the run (same seed/sphere-ordering axis
-    # as the souls above).
+    # Black Panther is present only when black_panther_bias is on and this run's
+    # BLACK_PANTHER_EARLY_CHANCE roll succeeded, both checked in take_smoothing_items. Its target
+    # falls in the first BLACK_PANTHER_EARLY_WINDOW of the run (same seed/sphere-ordering axis as
+    # the souls above).
     panther = found.get(BLACK_PANTHER)
-    if panther is not None and world.options.black_panther_bias.value:
-        if rng.random() < BLACK_PANTHER_EARLY_CHANCE:
-            targets[panther] = rng.uniform(0.0, BLACK_PANTHER_EARLY_WINDOW)
+    if panther is not None:
+        targets[panther] = rng.uniform(0.0, BLACK_PANTHER_EARLY_WINDOW)
 
     if not targets:
         return
@@ -455,13 +551,10 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
     # position (sphere ordering); these values double as the rough pre-fill lateness used just below.
     world._soul_targets = {item.name: target for item, target in targets.items()}
 
-    for item in targets:
-        multiworld.itempool.remove(item)
-
     # Place earliest-target first, recomputing the state each time so a later item can reach gated
     # locations behind the already-placed earlier ones (topological order: none behind itself).
     for item in sorted(targets, key=lambda it: targets[it]):
-        base_state = multiworld.get_all_state()
+        base_state = _all_state_except(multiworld, [it for it in targets if it.location is None])
         candidates = [loc for loc in lateness if loc.item is None and not loc.locked]
         candidates.sort(key=lambda loc: (abs(lateness[loc] - targets[item]), loc.name))
         # Single-item pool on purpose: fill_restrictive's swap branch (the only consumer of the shared
@@ -471,7 +564,7 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
         fill_restrictive(multiworld, base_state, candidates, pool,
                          single_player_placement=True, lock=True, allow_partial=True)
         if pool:  # nothing reachable fit its target -> let the normal fill place it
-            multiworld.itempool.append(item)
+            _add_to_pool(world, item)
 
 
 # --- pass 0b: refine soul positions against the real spheres (post-fill) ----------------------
@@ -656,8 +749,7 @@ def spread_ancient_books(world: "CVAOSWorld") -> None:
     params = PARAMS_BY_KEY[world.options.item_smoothing.current_key]
     rng = world.random
 
-    books = [item for item in multiworld.itempool
-             if item.player == player and item.name in ANCIENT_BOOK_NAMES]
+    books = [item for item in world.get_pre_fill_items() if item.name in ANCIENT_BOOK_NAMES]
     if not books:
         return
 
@@ -675,7 +767,7 @@ def spread_ancient_books(world: "CVAOSWorld") -> None:
     # own gate. A no-op while the books gate nothing, but required once they become real progression
     # (e.g. needed to reach Graham for the good ending) -- the same guard the gating souls rely on.
     without_books = CollectionState(multiworld)
-    for item in multiworld.itempool:
+    for item in [*multiworld.itempool, *world.get_pre_fill_items()]:
         if not (item.player == player and item.name in ANCIENT_BOOK_NAMES):
             multiworld.worlds[item.player].collect(without_books, item)
     for loc in multiworld.get_filled_locations():
@@ -685,11 +777,10 @@ def spread_ancient_books(world: "CVAOSWorld") -> None:
     rng.shuffle(books)  # so Book 1/2/3 aren't deterministically early/mid/late
     world._spread_books = []
     for index, book in enumerate(books):
-        multiworld.itempool.remove(book)
         if _place_in_band(book, bands, index, params, rng, without_books):
             world._spread_books.append(book)
         else:
-            multiworld.itempool.append(book)  # safety: no candidate fit -> let the main fill place it
+            _add_to_pool(world, book)  # safety: no candidate fit -> let the main fill place it
 
 
 def _partition(items: List[Location], parts: int) -> List[List[Location]]:

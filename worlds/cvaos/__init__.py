@@ -1,8 +1,8 @@
 import base64
 import os
-from typing import ClassVar
+from typing import ClassVar, Sequence
 
-from BaseClasses import MultiWorld, Tutorial
+from BaseClasses import Item, MultiWorld, Tutorial
 from worlds.AutoWorld import WebWorld, World
 from worlds.LauncherComponents import Component, Type, components, launch as launch_component
 import settings
@@ -122,6 +122,10 @@ class CVAOSWorld(World):
     # connect_names (modify_multidata) so the client can connect by reading it from the ROM.
     auth: bytearray
 
+    # Set in create_items: the items that item smoothing places in pre_fill, kept out of the
+    # multiworld pool (item_smoothing.take_smoothing_items).
+    _smoothing_items: Sequence[Item] = ()
+
     def generate_early(self) -> None:
         self.auth = bytearray(self.random.getrandbits(8) for _ in range(16))
 
@@ -141,8 +145,17 @@ class CVAOSWorld(World):
                 lambda state: can_reach_room(state, self, "B14")
 
     def create_items(self) -> None:
+        from .item_smoothing import take_smoothing_items
         itempool = create_itempool(self)
+        # Hold back the items smoothing places in pre_fill, because the pool must not change after
+        # create_items.
+        self._smoothing_items = take_smoothing_items(self, itempool)
         self.multiworld.itempool += itempool
+
+    def get_pre_fill_items(self) -> list[Item]:
+        # Return the held-back smoothing items that pre_fill has not placed yet, so get_all_state
+        # still collects them.
+        return [item for item in self._smoothing_items if item.location is None]
 
     def create_item(self, name: str) -> CVAOSItem:
         return create_item(self, name)
@@ -153,9 +166,11 @@ class CVAOSWorld(World):
         #  - spread the Ancient Books across early/mid/late (rough pass; refined post-fill, and
         #    logic-safe even once the books are required to reach Graham for the good ending).
         if self.options.item_smoothing.current_key != "off":
-            from .item_smoothing import bias_progression_souls, spread_ancient_books
+            from .item_smoothing import (add_unplaced_to_pool, bias_progression_souls,
+                                         spread_ancient_books)
             bias_progression_souls(self)
             spread_ancient_books(self)
+            add_unplaced_to_pool(self)
 
     def get_filler_item_name(self) -> str:
         # Item links and fill fallbacks create filler through this. The default picks any item
