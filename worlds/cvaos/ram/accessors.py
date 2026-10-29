@@ -175,6 +175,13 @@ class AoSRAM:
         """
         return await self._fetch(addr.CURRENT_HP)
 
+    async def get_player_room_position(self) -> tuple[int, int, int, int]:
+        """Return Soma's area, room, and his x and y in pixels within the room, in one read."""
+        area, room, camera_x, camera_y, screen_x, screen_y = await self.read_group(
+            addr.CURRENT_AREA, addr.CURRENT_ROOM, addr.CAMERA_X, addr.CAMERA_Y,
+            addr.PLAYER_SCREEN_X, addr.PLAYER_SCREEN_Y)
+        return area, room, camera_x + screen_x, camera_y + screen_y
+
     async def get_max_hp(self) -> int:
         """
         Lean single-field read for the DeathLink poll. See `get_vitals` for the

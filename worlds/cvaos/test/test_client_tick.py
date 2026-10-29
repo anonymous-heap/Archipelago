@@ -61,6 +61,11 @@ class TickSaveBlockGateTest(unittest.IsolatedAsyncioTestCase):
             return run
 
         self.client._send_location_checks = recorder("checks")
+
+        async def ignore(ctx, ram) -> None:
+            pass
+
+        self.client._report_position = ignore  # tested in test_tracker_map
         self.client._receive_items = recorder("items")
         self.client._report_goal = recorder("goal")
 

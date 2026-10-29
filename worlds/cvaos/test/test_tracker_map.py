@@ -10,8 +10,11 @@ import json
 import pkgutil
 import unittest
 from collections import Counter
+from types import SimpleNamespace
+from unittest import mock
 
-from .. import CVAOSSettings, CVAOSWorld, tracker_map
+from .. import CVAOSSettings, CVAOSWorld, client_logic, tracker_map
+from ..client_logic import CVAOSClientLogic
 from ..locations import location_name_to_id
 
 
@@ -61,10 +64,86 @@ class TrackerMapTest(unittest.TestCase):
         self.assertEqual((castle["x"], castle["y"]),
                          (86 + round(24 * (0 + 384 / 256)), 49 + round(24 * (19 + 184 / 256))))
 
+    def test_soma_is_drawn_where_his_room_is(self):
+        castle, realm, combined = range(3)
+        icon = tracker_map.position_icon(castle, ["000", 384, 184])
+        self.assertEqual(icon, (122, 522, tracker_map.POSITION_ICON))
+        self.assertEqual(tracker_map.position_icon(combined, ["000", 384, 184]), icon)
+        self.assertIsNone(tracker_map.position_icon(realm, ["000", 384, 184]),
+                          "the Chaotic Realm map does not show the castle")
+        self.assertIsNotNone(tracker_map.position_icon(realm, ["B14", 100, 100]))
+
+    def test_soma_has_no_icon_until_ut_can_place_him(self):
+        # UT passes "" or None before the client writes, and None before a map loads. Any
+        # exception would disconnect UT.
+        for map_id, value in ((0, ""), (0, None), (None, ["000", 0, 0]), (3, ["000", 0, 0]),
+                              (-1, ["000", 0, 0]), (0, ["ZZZ", 0, 0]), (0, ["000", "x", 0]),
+                              (0, {"room": "000"}), (0, ["000", 0])):
+            with self.subTest(map_id=map_id, value=value):
+                self.assertIsNone(tracker_map.position_icon(map_id, value))
+
     def test_the_pack_path_is_an_optional_setting(self):
         key = CVAOSWorld.tracker_world["external_pack_key"]
         self.assertIn(key, CVAOSSettings.__annotations__)
         self.assertFalse(CVAOSSettings.UTPoptrackerPath.required)
+
+
+
+class FakeRam:
+    def __init__(self) -> None:
+        self.position = (0, 0, 384, 184)
+
+    async def get_player_room_position(self):
+        return self.position
+
+
+class PositionReportTest(unittest.IsolatedAsyncioTestCase):
+    """The client keeps Soma's position in data storage for the tracker's map."""
+
+    def setUp(self) -> None:
+        self.client = CVAOSClientLogic()
+        self.client._reset_session_state()
+        self.sent: list[dict] = []
+
+        async def send_msgs(msgs):
+            self.sent.extend(msgs)
+
+        self.ctx = SimpleNamespace(team=0, slot=3, send_msgs=send_msgs)
+        self.ram = FakeRam()
+        self.now = 100.0
+        clock = mock.patch.object(client_logic.time, "monotonic", lambda: self.now)
+        clock.start()
+        self.addCleanup(clock.stop)
+
+    async def test_the_position_goes_to_the_key_ut_reads(self):
+        await self.client._report_position(self.ctx, self.ram)
+        self.assertEqual(self.sent, [{
+            "cmd": "Set", "key": "cvaos_position_0_3", "default": None, "want_reply": False,
+            "operations": [{"operation": "replace", "value": ["000", 384, 184]}]}])
+        self.assertEqual(tracker_map.POSITION_KEY.format(team=0, player=3), "cvaos_position_0_3")
+
+    async def test_a_small_move_is_not_sent(self):
+        await self.client._report_position(self.ctx, self.ram)
+        self.now += 5
+        self.ram.position = (0, 0, 384 + client_logic.POSITION_STEP - 1, 184)
+        await self.client._report_position(self.ctx, self.ram)
+        self.assertEqual(len(self.sent), 1)
+
+    async def test_a_new_room_is_sent_but_not_twice_in_one_interval(self):
+        await self.client._report_position(self.ctx, self.ram)
+        self.ram.position = (0, 2, 10, 10)
+        await self.client._report_position(self.ctx, self.ram)
+        self.assertEqual(len(self.sent), 1, "too soon after the last message")
+        self.now += client_logic.POSITION_INTERVAL
+        await self.client._report_position(self.ctx, self.ram)
+        self.assertEqual(self.sent[-1]["operations"][0]["value"], ["002", 10, 10])
+
+    async def test_a_new_session_sends_the_position_again(self):
+        await self.client._report_position(self.ctx, self.ram)
+        self.client._reset_session_state()
+        self.now += client_logic.POSITION_INTERVAL
+        await self.client._report_position(self.ctx, self.ram)
+        self.assertEqual(len(self.sent), 2)
 
 
 if __name__ == "__main__":

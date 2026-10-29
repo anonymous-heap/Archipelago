@@ -12,6 +12,9 @@ the game's own map-cell routine (sub_0804F7A4). The pack's map images use that s
 :data:`MAPS` gives the image position of cell (0, 0) on each. UT shows a section only when its name
 is a location the server has, so the Hard Mode pickups appear only in seeds that have them.
 
+UT also shows Soma on the map. The client keeps his room and position in data storage under
+:data:`POSITION_KEY`, and :func:`position_icon` turns that into an icon on the current map.
+
     python -m worlds.cvaos.tracker_map
 """
 from __future__ import annotations
@@ -50,10 +53,47 @@ MAPS_FILE = "maps.json"
 LOCATIONS_FILE = "locations.json"
 
 
+# Soma's position, kept in data storage by the client as [room, x, y]: the room's identifier and
+# his position in it, in pixels. UT fills in the team and slot.
+POSITION_KEY = "cvaos_position_{team}_{player}"
+POSITION_ICON = "images/abilities/backdash.png"   # a Soma sprite in the pack zip
+POSITION_ICON_SIZE = 32
+
+
 def cell_position(room_identifier: str, x: int, y: int) -> tuple[float, float]:
     """Return the map-cell coordinates of a point ``x``, ``y`` pixels into a room."""
     room = rooms_by_identifier[room_identifier]
     return int(room.x) + x / ROOM_CELL[0], int(room.y) + y / ROOM_CELL[1]
+
+
+def shows_room(tracker: TrackerMap, room_identifier: str) -> bool:
+    """Whether ``tracker`` draws the room ``room_identifier``."""
+    chaotic = rooms_by_identifier[room_identifier].Region == CHAOTIC_REALM
+    return tracker.chaotic if chaotic else tracker.castle
+
+
+def position_value(area: int, room: int, x: int, y: int) -> list:
+    """Return the data storage value for Soma at ``x``, ``y`` in room ``room`` of area ``area``."""
+    return [f"{area:X}{room:02X}", x, y]
+
+
+def position_icon(map_id, value):
+    """Return Soma's icon for map ``map_id``, as ``(x, y, image)``, or None when it has none.
+
+    UT calls this with "" or None before the client has written a position, and with a map_id of
+    None before a map has loaded. An exception here would disconnect UT, so anything it cannot place
+    returns None instead.
+    """
+    if not isinstance(map_id, int) or not 0 <= map_id < len(MAPS):
+        return None
+    try:
+        room_identifier, x, y = value
+        if not shows_room(MAPS[map_id], room_identifier):
+            return None
+        return (*pin(MAPS[map_id].origin, cell_position(room_identifier, int(x), int(y))),
+                POSITION_ICON)
+    except (TypeError, ValueError, KeyError):
+        return None
 
 
 def pin(origin: tuple[int, int], cell: tuple[float, float]) -> tuple[int, int]:
@@ -63,14 +103,13 @@ def pin(origin: tuple[int, int], cell: tuple[float, float]) -> tuple[int, int]:
 
 def build() -> tuple[list[dict], list[dict]]:
     """Return the maps file and the locations file, as the JSON values UT reads."""
-    maps = [{"name": m.name, "img": m.img, "location_size": 15, "location_border_thickness": 3}
-            for m in MAPS]
+    maps = [{"name": m.name, "img": m.img, "location_size": 15, "location_border_thickness": 3,
+             "location_icon_size": POSITION_ICON_SIZE} for m in MAPS]
     locations = []
     for pickup in sorted(pickup_info_collection, key=lambda p: p.ptr_address):
         cell = cell_position(pickup.room_identifier, pickup.x, pickup.y)
-        chaotic = rooms_by_identifier[pickup.room_identifier].Region == CHAOTIC_REALM
         map_locations = [dict(zip(("map", "x", "y"), (m.name, *pin(m.origin, cell))))
-                         for m in MAPS if (m.chaotic if chaotic else m.castle)]
+                         for m in MAPS if shows_room(m, pickup.room_identifier)]
         locations.append({"name": pickup.room_identifier,
                           "sections": [{"name": pickup.location_name}],
                           "map_locations": map_locations})

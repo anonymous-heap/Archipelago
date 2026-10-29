@@ -142,11 +142,14 @@ class CVAOSWorld(World):
     # Universal Tracker's map tab. The maps and the pin for each location come from this world's
     # data (tracker_map.py builds them into tracker/), so they follow its locations. Only the map
     # images come from the player's CVAoSPT pack zip, saved as ut_poptracker_path in host.yaml.
+    # Soma's icon follows the position the client keeps in data storage.
     tracker_world: ClassVar[dict] = {
         "map_page_folder": tracker_map.FOLDER,
         "map_page_maps": [tracker_map.MAPS_FILE],
         "map_page_locations": [tracker_map.LOCATIONS_FILE],
         "external_pack_key": "ut_poptracker_path",
+        "location_setting_key": tracker_map.POSITION_KEY,
+        "location_icon_coords": tracker_map.position_icon,
     }
 
     @staticmethod
