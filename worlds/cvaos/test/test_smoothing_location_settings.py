@@ -79,6 +79,19 @@ class LocationSettingsTest(unittest.TestCase):
                          and not loc.item.advancement]
                 self.assertEqual(wrong, [])
 
+    def test_many_priority_locations_leave_the_smoothing_items_to_the_main_fill(self):
+        # With nearly every progression item needed for a priority location, smoothing holding some
+        # back made the main fill run out. Seeds 4, 5 and 9 failed to generate that way.
+        for seed in (4, 5, 9):
+            priority = set(random.Random(1000 + seed).sample(LOCATION_NAMES, 30))
+            multiworld = generate(seed, {"priority_locations": priority})
+            with self.subTest(seed=seed):
+                self.assertFalse(multiworld.worlds[1]._smoothing_items)
+                unmet = [loc.name for loc in multiworld.get_locations(1)
+                         if loc.progress_type == LocationProgressType.PRIORITY
+                         and not loc.item.advancement]
+                self.assertEqual(unmet, [])
+
     def test_post_fill_smoothing_leaves_a_priority_location_alone(self):
         # A ceiling or floor breaker is progression that the post-fill pass may reorder, so a
         # priority location holding one must not be among the locations it reorders.

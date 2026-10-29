@@ -347,8 +347,28 @@ def take_smoothing_items(world: "CVAOSWorld", itempool: List[Item]) -> List[Item
         names.add(BLACK_PANTHER)
     names -= _names_used_elsewhere(world)
     taken = [item for item in itempool if item.name in names]
+    if _starves_priority_locations(world, itempool, taken):
+        return []
     itempool[:] = [item for item in itempool if item.name not in names]
     return taken
+
+
+def _starves_priority_locations(world: "CVAOSWorld", itempool: List[Item],
+                                taken: List[Item]) -> bool:
+    """
+    Whether holding ``taken`` back would leave the main fill fewer progression items than this
+    world has priority locations.
+
+    The main fill puts progression into priority locations before anything else, and generation
+    fails when it runs out. The pre-fill passes place their items by lateness instead, so when the
+    priority locations need nearly every progression item, smoothing leaves its items in the pool.
+    """
+    options = world.options
+    existing = {location.name for location in world.multiworld.get_locations(world.player)}
+    priority = (options.priority_locations.value - options.exclude_locations.value) & existing
+    progression = sum(1 for item in itempool if item.advancement)
+    held = sum(1 for item in taken if item.advancement)
+    return len(priority) > progression - held
 
 
 def _names_used_elsewhere(world: "CVAOSWorld") -> Set[str]:
