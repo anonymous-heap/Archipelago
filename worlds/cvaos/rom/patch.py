@@ -37,7 +37,11 @@ if TYPE_CHECKING:
 # ARCHIPELAGO_IDENTIFIER doubles as the client/patch compatibility gate; bump it whenever the
 # patch/client contract changes.
 ARCHIPELAGO_IDENTIFIER_START = 0x670000   # 13 bytes
-ARCHIPELAGO_IDENTIFIER = "CVAOS_AP_V0.3"  # V0.3: hook/metadata block moved 0x660000 -> 0x670000
+ARCHIPELAGO_IDENTIFIER = "CVAOS_AP_V0.4"  # V0.4: Progressive Movement items need a newer client
+# Identifiers this version's clients and installer still accept. A V0.3 ROM (hook/metadata block at
+# 0x670000) holds nothing the current client cannot handle, so seeds already in progress keep
+# working. Older clients accept only their own identifier, so they refuse a V0.4 ROM.
+COMPATIBLE_IDENTIFIERS = frozenset({ARCHIPELAGO_IDENTIFIER, "CVAOS_AP_V0.3"})
 AUTH_NUMBER_START = 0x670010              # 16 bytes
 
 # SoulShuffle option value -> rom/soul_shuffle mode.

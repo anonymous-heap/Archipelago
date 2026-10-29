@@ -19,7 +19,8 @@ from worlds._bizhawk.client import BizHawkClient
 from .client_logic import CVAOSClientLogic
 from .options import TARGET_ADVANCE_COLLECTION
 from .ram import AoSRAM, BizHawkBackend
-from .rom import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUMBER_START
+from .rom import (ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUMBER_START,
+                  COMPATIBLE_IDENTIFIERS)
 
 if TYPE_CHECKING:
     from worlds._bizhawk.context import BizHawkClientContext
@@ -54,7 +55,7 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
                             "patch file and use it to create a patched ROM.")
                 return False
             # Reject a ROM patched by an incompatible generator/client version.
-            if identifier.decode("ascii", "ignore") != ARCHIPELAGO_IDENTIFIER:
+            if identifier.decode("ascii", "ignore") not in COMPATIBLE_IDENTIFIERS:
                 logger.info("ERROR: This ROM was patched by an incompatible version. Check your "
                             "client version against the one used to generate the seed.")
                 return False

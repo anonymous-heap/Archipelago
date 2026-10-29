@@ -13,7 +13,7 @@ once and persists the answer in host.yaml).
 Safety model, in order:
 
 * the patched ROM is validated before anything is touched — exact 8 MiB, AoS
-  header, ``CVAOS_AP_V0.3`` marker at 0x670000, and M2's two additions (the
+  header, a compatible ``CVAOS_AP_V0.x`` marker at 0x670000, and M2's two additions (the
   replacement graphic at 0x660000 and the audio bridge at 0x700000; a ROM
   patched from a cart dump instead of the collection-extracted base lacks both
   and would silently break the collection);
@@ -57,7 +57,7 @@ from . import cac_archive
 from .._bytemaker_compat import Entry
 from ..constants import AC_DEFAULT_EXE_PATH, AC_USA_ROM_MD5
 from ..rom.address_space import M2_AUDIO_BRIDGE, M2_GRAPHIC, gba_space
-from ..rom.patch import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START
+from ..rom.patch import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, COMPATIBLE_IDENTIFIERS
 
 AOS_MEMBER = "system/roms/03_Akatsuki_US.patch_210623m.bin"
 ROM_SIZE = 0x800000
@@ -174,7 +174,7 @@ def validate_patched_rom(rom_bytes: bytes) -> None:
         raise InstallError("Not an Aria of Sorrow ROM (bad header title).")
     ident = rom_bytes[ARCHIPELAGO_IDENTIFIER_START:
                       ARCHIPELAGO_IDENTIFIER_START + len(ARCHIPELAGO_IDENTIFIER)]
-    if ident != ARCHIPELAGO_IDENTIFIER.encode("ascii"):
+    if ident.decode("ascii", "replace") not in COMPATIBLE_IDENTIFIERS:
         if ident.startswith(_AP_MARKER_PREFIX):
             raise InstallError(
                 f"ROM was patched by a different world version ({ident.decode('ascii', 'replace')}, "

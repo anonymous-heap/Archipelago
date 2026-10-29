@@ -62,7 +62,8 @@ from .options import TARGET_ADVANCE_COLLECTION
 from .ram import AoSRAM, addresses as addr
 from .ram.addresses import EWRAM
 from .ram.backend import GuardedWrite
-from .rom import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUMBER_START
+from .rom import (ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUMBER_START,
+                  COMPATIBLE_IDENTIFIERS)
 
 if TYPE_CHECKING:
     import pymem
@@ -81,6 +82,7 @@ ROM_TITLE = b"CASTLEVANIA2"
 # we read the marker there to confirm patched/version.
 _IDENTIFIER_BYTES = ARCHIPELAGO_IDENTIFIER.encode("ascii")
 _IDENTIFIER_PREFIX = _IDENTIFIER_BYTES[:9]  # b"CVAOS_AP_" -- shared across patch versions
+_COMPATIBLE_BYTES = frozenset(ident.encode("ascii") for ident in COMPATIBLE_IDENTIFIERS)
 
 # GBA ROM header validation: the fixed Nintendo logo starts at ROM+0x04, and Aria of Sorrow
 # (USA) has game code "A2CE" at 0xAC. Title + logo + code uniquely identify the true ROM
@@ -372,7 +374,7 @@ def find_rom_image(proc: GameProcess) -> RomImage:
         # Found the one true ROM image. Confirm it carries our patch (the client can only
         # play a patched ROM: it reads the identifier/auth and the game data expects the hooks).
         marker = proc.read(rom_base + ARCHIPELAGO_IDENTIFIER_START, len(_IDENTIFIER_BYTES))
-        if marker == _IDENTIFIER_BYTES:
+        if marker in _COMPATIBLE_BYTES:
             return RomImage(rom_base, region.base, region.base + region.size)
         if marker.startswith(_IDENTIFIER_PREFIX):
             ver = marker.split(b"\x00", 1)[0].decode("ascii", "replace")
@@ -724,7 +726,7 @@ class CVAOSCollectionContext(CommonContext):
         self._last_revalidate = now
         marker = self.backend.proc.read(
             self.backend.rom_base + ARCHIPELAGO_IDENTIFIER_START, len(ARCHIPELAGO_IDENTIFIER))
-        if marker != ARCHIPELAGO_IDENTIFIER.encode("ascii"):
+        if marker not in _COMPATIBLE_BYTES:
             raise CollectionError("ROM identifier no longer at its anchor (game switched?)")
 
 
