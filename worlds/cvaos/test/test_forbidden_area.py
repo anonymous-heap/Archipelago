@@ -97,6 +97,14 @@ def test_key_displaces_one_filler():
     assert n_filler(pick) == n_filler(off) - 1, "exactly one filler should be displaced"
 
 
+def test_the_key_displaces_gold_rather_than_a_unique_item():
+    # The first filler in table order is the game's only Lucky Charm.
+    names = [i.name for i in _create_itempool(_mock_world(_FAB.option_pickup))]
+    assert "Lucky Charm" in names
+    assert "100 Gold (A)" not in names
+    assert "100 Gold (B)" in names
+
+
 # --- ROM: pickup mode replaces the A01 press-button with an inert object (in place) ---
 def test_rom_button_becomes_inert_object():
     import os

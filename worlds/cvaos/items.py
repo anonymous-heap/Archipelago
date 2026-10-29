@@ -120,6 +120,13 @@ _HARD_PICKUP_ITEM_NAMES: frozenset[str] = frozenset(
     p.display_name for p in pickup_infos if p.is_hard_mode_only)
 
 
+# The item the Study Sealswitch displaces when it is shuffled in: the smallest gold pickup, with
+# ties going to the first in table order. Every pickup's item is unique, so the displaced item
+# leaves the game, and gold is the one kind with near-duplicates to spare.
+_SEALSWITCH_DISPLACES: str = min(
+    (p for p in pickup_infos if p.subtype_num == _MONEY_SUBTYPE and not p.is_hard_mode_only),
+    key=lambda p: int(p.simple_name)).display_name
+
 # Plain filler that every seed can hold: no progression, nothing that exists only in Hard Mode,
 # and none of the synthetic items. CVAOSWorld.get_filler_item_name picks from these.
 FILLER_ITEM_NAMES: tuple[str, ...] = tuple(sorted(
@@ -145,11 +152,7 @@ def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
         # the location count.
         # This is because currently, the A01 button is removed, not turned into a new check).
         # At some point this will change.
-        switch = create_item(world, FORBIDDEN_AREA_SWITCH)
-        for i, existing in enumerate(pool):
-            if existing.classification == ItemClassification.filler:
-                pool[i] = switch
-                break
-        else:
-            raise Exception("CVAoS: no filler item available to displace for the Study Sealswitch")
+        displaced = next(i for i, existing in enumerate(pool)
+                         if existing.name == _SEALSWITCH_DISPLACES)
+        pool[displaced] = create_item(world, FORBIDDEN_AREA_SWITCH)
     return pool
