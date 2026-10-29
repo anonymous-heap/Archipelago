@@ -213,7 +213,7 @@ class ForbiddenAreaButton(Choice):
     - off: the button is present in A01 and opens the barrier when pressed.
     - pickup: the button is removed and the unlock becomes a shuffled "Study Sealswitch" pickup.
     """
-    display_name = "Library-to-Forbidden-Area Button Handling (Study Sealswitch)"
+    display_name = "Forbidden Area Button"
     option_off = 0
     option_pickup = 1
     default = option_pickup
@@ -259,8 +259,12 @@ class ItemSmoothing(Choice):
     **This is the flag to turn off if you want a totally-random-yet-finishable run.**
 
     Biases item placement so less-desirable items show up earlier and more-desirable ones later,
-       using community tier-list data (data/item_balancing). Progression items are never moved by
-       this; the three Ancient Books are spread across early/mid/late instead of treated as junk.
+       using community tier-list data (data/item_balancing).
+
+    Most progression items are placed as usual, with three exceptions. The three Ancient Books are
+       spread across early, mid and late. The mobility souls and Black Panther follow Early
+       Mobility Souls and Black Panther Bias. Weapons whose only progression use is breaking floors
+       or ceilings are ordered like other equipment.
 
     - off: vanilla placement -- any item can appear anywhere.
     - loose: gentle escalation with wide, long-tailed luck (more surprises, lucky early finds).
@@ -290,7 +294,9 @@ class ItemSmoothingOrder(Choice):
     We default to "option_map_distance" to make sure you can find good stuff if forced into a 
         hard area.
 
-    Note that this does not affect progression item placement, which is handled separately.
+    The Ancient Books, the mobility souls and Black Panther are placed by their own rules rather
+        than this order. Weapons whose only progression use is breaking floors or ceilings do
+        follow it.
 
     Options:
 
@@ -330,9 +336,9 @@ class BlackPantherBias(DefaultOnToggle):
     No effect when Item Smoothing is off.
 
     When Item Smoothing is on:
-       On: bias Black Panther (dash) to show up early: ~80% of seeds place it in
-          roughly the first half of the run (by seed/sphere ordering); the rest leave it to normal
-          placement.
+       On: aim Black Panther (dash) at roughly the first half of the run (by sphere ordering).
+          Logic sometimes leaves no early spot for it, so it lands there in most seeds rather
+          than all of them.
        Off: Black Panther places like any other progression item.
     """
     display_name = "Black Panther Bias"

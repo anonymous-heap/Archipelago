@@ -6,15 +6,17 @@ Two logic-safe passes, both gated on the ``item_smoothing`` option:
 * Ancient Books (``spread_ancient_books`` in ``World.pre_fill`` + ``refine_ancient_books`` in
      ``World.stage_post_fill``): spread across early/mid/late thirds -- roughed in by map depth
      before the fill, then refined onto the real sphere-thirds afterward via logic-verified swaps.
-* ``smooth_placed_items`` (``World.stage_post_fill``): non-progression items are re-assigned among
-     the locations that already hold them, ordered earliest-first along the axis chosen by the
-     ``item_smoothing_order`` option -- logical spheres (default, seed-specific) or structural map
-     distance (seed-independent) -- so low-desirability items land early and high-desirability items
+* ``smooth_placed_items`` (``World.stage_post_fill``): non-progression items, and the weapons whose
+     only progression use is breaking floors or ceilings, are re-assigned among the locations that
+     already hold them. They are ordered earliest-first along the axis chosen by the
+     ``item_smoothing_order`` option: structural map distance (the default, seed-independent) or
+     logical spheres (seed-specific). Low-desirability items land early and high-desirability items
      land late, with long-tailed per-item jitter (Student-t) plus a wildcard, so a lucky early find
      is rare-but-possible.
 
-Re-assigning only non-progression items among their own already-reachable locations never changes
-   reachability, so the post-fill pass cannot break logic.
+Re-assigning non-progression items among their own already-reachable locations never changes
+   reachability. Moving a breaker can, so when the result fails the accessibility check, the
+   breakers go back to the locations the fill gave them.
 """
 
 from __future__ import annotations
@@ -66,7 +68,7 @@ BIASED_SOULS = ("Malphas", "Hippogryph", "Giant Bat")
 # ceiling is structural for a gating soul under logic-safe placement -- so a single on/off is enough.
 BLACK_PANTHER = "Black Panther"
 BLACK_PANTHER_EARLY_WINDOW = 0.5   # when biased, aim into the first 50% of the run (sphere ordering)...
-BLACK_PANTHER_EARLY_CHANCE = 1.0   # ...in ~80% of seeds (100% saturates); the rest get normal placement
+BLACK_PANTHER_EARLY_CHANCE = 1.0   # ...in every seed; logic sometimes leaves no early spot for it
 
 # Each soul's "late" target (lateness center, jitter spread) for when it is NOT the run's early pick.
 # Kept genuinely late so only the *designated* soul lands early -- otherwise the joint guarantee is
