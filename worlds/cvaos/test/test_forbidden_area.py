@@ -97,8 +97,8 @@ def test_key_displaces_one_filler():
     assert n_filler(pick) == n_filler(off) - 1, "exactly one filler should be displaced"
 
 
-# --- ROM: pickup mode replaces the A01 press-button with an inert candle (in place) ---
-def test_rom_button_becomes_inert_candle():
+# --- ROM: pickup mode replaces the A01 press-button with an inert object (in place) ---
+def test_rom_button_becomes_inert_object():
     import os
     from ..rom import forbidden_area_button as fab
     rom_path = os.environ.get("CVAOS_USA_ROM",
@@ -113,8 +113,9 @@ def test_rom_button_becomes_inert_candle():
     w = fab.build_writes(base)
     assert set(w) == {off} and len(w[off]) == 12, "should be a single in-place 12-byte write"
     b = bytearray(base); b[off:off + 12] = w[off]
-    # after: an inert candle (subtype 0x07, varA=varB=0); barrier (next entity) untouched
+    # after: object 07 with varA=4, varB=0, which does nothing; barrier (next entity) untouched.
+    # varA=0 would be Castle Corridor's particle effect, not an inert object.
     assert b[off + 5] == 0x02 and b[off + 6] == 0x07
-    assert int.from_bytes(b[off + 8:off + 10], "little") == 0
+    assert int.from_bytes(b[off + 8:off + 10], "little") == 4
     assert int.from_bytes(b[off + 10:off + 12], "little") == 0
     assert bytes(b[off + 12:off + 24]) == base[off + 12:off + 24], "barrier must be untouched"

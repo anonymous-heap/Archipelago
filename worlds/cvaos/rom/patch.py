@@ -199,7 +199,7 @@ class CVAOSPatchExtension(APPatchExtension):
             apply(soul_guarantee_hook.build_writes(bytes(working)))
 
         # Forbidden Area gate-unlock pickup toggle (replaces the A01 press-button
-        # with a candle and a shuffled Study Sealswitch).
+        # with an inert object and a shuffled Study Sealswitch).
         if config["forbidden_area_pickup"]:
             apply(forbidden_area_button.build_writes(bytes(working)))
 
