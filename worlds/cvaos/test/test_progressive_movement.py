@@ -88,6 +88,13 @@ class CollectTest(unittest.TestCase):
                         reachable(progressive, [PROGRESSIVE_MOVEMENT] * k + extra),
                         reachable(plain, list(PROGRESSIVE_MOVEMENT_STAGES[:k]) + extra))
 
+    def test_a_copy_gives_nothing_while_the_option_is_off(self):
+        # The client grants no soul for a copy then, so logic must not count one either.
+        multiworld = build(False)
+        state = CollectionState(multiworld)
+        state.collect(multiworld.worlds[1].create_item(PROGRESSIVE_MOVEMENT), True)
+        self.assertFalse(state.has("Flying Armor", 1))
+
     def test_another_players_copy_gives_this_player_nothing(self):
         multiworld = setup_multiworld([CVAOSWorld, CVAOSWorld], STEPS, seed=4,
                                       options={"progressive_movement": True})

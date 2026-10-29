@@ -216,8 +216,10 @@ class CVAOSWorld(World):
     def collect(self, state: CollectionState, item: Item) -> bool:
         # Collecting a Progressive Movement copy also adds the next stage soul to the state. The
         # access rules ask for Flying Armor, Malphas or Giant Bat by name, so they work unchanged.
+        # With the option off, the client grants no soul for a copy (one put in the starting
+        # inventory or a plando, say), so logic counts none either.
         changed = super().collect(state, item)
-        if changed and item.name == PROGRESSIVE_MOVEMENT:
+        if changed and item.name == PROGRESSIVE_MOVEMENT and self.options.progressive_movement:
             stage = state.count(PROGRESSIVE_MOVEMENT, self.player)
             if stage <= len(PROGRESSIVE_MOVEMENT_STAGES):
                 state.add_item(PROGRESSIVE_MOVEMENT_STAGES[stage - 1], self.player)
@@ -226,7 +228,7 @@ class CVAOSWorld(World):
     def remove(self, state: CollectionState, item: Item) -> bool:
         stage = state.count(PROGRESSIVE_MOVEMENT, self.player)
         changed = super().remove(state, item)
-        if (changed and item.name == PROGRESSIVE_MOVEMENT
+        if (changed and item.name == PROGRESSIVE_MOVEMENT and self.options.progressive_movement
                 and 0 < stage <= len(PROGRESSIVE_MOVEMENT_STAGES)):
             state.remove_item(PROGRESSIVE_MOVEMENT_STAGES[stage - 1], self.player)
         return changed
