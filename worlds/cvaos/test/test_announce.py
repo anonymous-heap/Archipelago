@@ -51,6 +51,17 @@ class AnnounceTest(unittest.TestCase):
         self.assertEqual(self.mailbox()[box.MB_KIND], box.KIND_ITEM)
         self.assertEqual(self.mailbox()[box.MB_PENDING], 1)
 
+    def test_equipment_plays_the_equipment_sound(self):
+        # Vanilla plays 0xB7 for weapons and armor (accessories included), 0xB5 for consumables.
+        self.rom[:] = rom_with_names(g32=40, g92=41, g116=42)
+        for number, category in ((32, "weapon"), (92, "armor"), (116, "accessory")):
+            with self.subTest(category=category):
+                self.assertEqual(by_item_number[number].item_category, category)
+                self.ewram[MB + box.MB_PENDING] = 0
+                self.assertTrue(self.run_(announce.announce_item_number(self.ram, number)))
+                sfx = int.from_bytes(self.mailbox()[box.MB_SFX:box.MB_SFX + 2], "little")
+                self.assertEqual(sfx, box.SFX_ITEM_TO_INVENTORY)
+
     def test_soul_posts_the_soul_banner_request(self):
         info = by_item_number[200]                       # a blue_soul
         self.assertEqual(info.item_category, "blue_soul")

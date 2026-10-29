@@ -61,6 +61,14 @@ SOUL_TYPE_BY_CATEGORY = {
     "ability_soul": 3,
 }
 
+#: The sound vanilla's collect path plays for weapons and armor. Accessories are armor ids 25 and
+#: up in a pickup, so they take the armor branch. Every other item plays the plain item sound.
+SFX_BY_CATEGORY = {
+    "weapon": _box.SFX_ITEM_TO_INVENTORY,
+    "armor": _box.SFX_ITEM_TO_INVENTORY,
+    "accessory": _box.SFX_ITEM_TO_INVENTORY,
+}
+
 _text_id_cache: dict[int, int] = {}
 
 
@@ -90,7 +98,7 @@ def block_for(info: "ItemInfo", text_id: Optional[int], is_new: bool = True) -> 
         return _box.soul_mailbox_write(soul_index=info.id, soul_type=soul_type, is_new=is_new)
     if text_id is None:
         return None
-    return _box.mailbox_write(text_id)
+    return _box.mailbox_write(text_id, SFX_BY_CATEGORY.get(info.item_category, _box.SFX_ITEM))
 
 
 async def announce_item_number(ram: "AoSRAM", item_number: int, *,
