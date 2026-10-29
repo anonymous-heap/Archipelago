@@ -18,8 +18,10 @@ class GameWatcherTest(unittest.IsolatedAsyncioTestCase):
     async def run_tick_raising(self, error: Exception) -> None:
         client = _new_client()
         ctx = SimpleNamespace(server=object(), slot=1, bizhawk_ctx=None)
-        with mock.patch.object(type(client), "_tick", new=mock.AsyncMock(side_effect=error)):
+        with mock.patch.object(type(client), "_tick",
+                               new=mock.AsyncMock(side_effect=error)) as tick:
             await client.game_watcher(ctx)
+        tick.assert_awaited_once()
 
     async def test_a_failed_request_is_retried_next_tick(self) -> None:
         await self.run_tick_raising(bizhawk.RequestFailedError("timed out"))
