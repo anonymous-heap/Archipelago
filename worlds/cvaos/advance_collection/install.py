@@ -45,6 +45,8 @@ CLI (from the Archipelago repo root)::
 from __future__ import annotations
 
 import argparse
+import contextlib
+import filecmp
 import hashlib
 import os
 import shutil
@@ -282,27 +284,45 @@ def _apply_patch_file(patch_path: str, log: Log = print) -> str:
 
 
 def _swap_failed_message(windata: str, exc: OSError, log: Log) -> str:
-    """Put the live pair back in step after the index could not replace the old one.
+    """Restore both live files from the backups after the index swap failed, and return the error
+    to show.
 
     The new payload is already live by then, and it does not match the old index, so every member
     after the AoS ROM would read from the wrong offset. Restoring both files from the backups
-    returns the collection to its stock, consistent state.
+    returns the collection to its stock, consistent state. Each file is restored even if the other
+    one fails. When a restore fails, the message depends on whether the files on disk still match
+    the backups, which they do when the file that failed already held the stock bytes.
     """
-    try:
-        for name in WINDATA_FILES:
-            live = os.path.join(windata, name)
-            log(f"restoring {name} from backup after the failed install")
-            tmp = live + ".tmp"
+    restore_exc: OSError | None = None
+    for name in WINDATA_FILES:
+        live = os.path.join(windata, name)
+        log(f"restoring {name} from backup after the failed install")
+        tmp = live + ".tmp"
+        try:
             shutil.copy2(live + BACKUP_SUFFIX, tmp)
             os.replace(tmp, live)
-    except OSError as restore_exc:
-        return (f"Install failed ({exc}), and restoring the stock files also failed "
-                f"({restore_exc}). The collection's files do not match each other, so run the "
-                "installer's restore option or Steam's \"Verify integrity of game files\" before "
-                "playing.")
-    return (f"Install failed ({exc}). The collection's files were restored to the stock game. "
-            "Close anything that may be using them (the collection, an antivirus scan) and run "
-            "the installer again.")
+        except OSError as error:
+            restore_exc = restore_exc or error
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(tmp)
+    if restore_exc is None or all(_matches_backup(windata, name) for name in WINDATA_FILES):
+        return (f"Install failed ({exc}). The collection's files were restored to the stock game. "
+                "Close anything that may be using them (the collection, an antivirus scan) and run "
+                "the installer again.")
+    return (f"Install failed ({exc}), and restoring the stock files also failed "
+            f"({restore_exc}). The collection's files do not match each other, so run the "
+            "installer's restore option or Steam's \"Verify integrity of game files\" before "
+            "playing.")
+
+
+def _matches_backup(windata: str, name: str) -> bool:
+    """Whether the live file has the same bytes as its backup (False if either can't be read)."""
+    live = os.path.join(windata, name)
+    try:
+        return filecmp.cmp(live, live + BACKUP_SUFFIX, shallow=False)
+    except OSError:
+        return False
 
 
 def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:

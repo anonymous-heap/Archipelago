@@ -759,7 +759,9 @@ def replace_member(alldata_psb_m: str, alldata_bin: str, member_name: str,
 
     Both outputs are written to temporary files first and moved into place
     only once the rebuild is complete, so the outputs may be the inputs
-    themselves, and a failed rebuild leaves both untouched.
+    themselves.  A failure during the rebuild leaves both outputs untouched.
+    If the index cannot be moved into place after the payload has been, the
+    new index is kept beside its target and the error names it.
     """
     # The source index may be a renamed copy (a backup), so its key also comes from the name
     # the game knows it by.
@@ -776,14 +778,23 @@ def replace_member(alldata_psb_m: str, alldata_bin: str, member_name: str,
     new_file_info = dict(fi)  # keep original dict for non-layout keys
     chunk = 1 << 20
     bin_tmp, psb_tmp = out_bin + ".tmp", out_psb_m + ".tmp"
+    keep: set[str] = set()
     try:
         _rebuild_to(alldata_bin, bin_tmp, psb_tmp, root, order, target, new_blob,
                     new_file_info, chunk, verbose, index_key_name)
         os.replace(bin_tmp, out_bin)
-        os.replace(psb_tmp, out_psb_m)
+        try:
+            os.replace(psb_tmp, out_psb_m)
+        except OSError as exc:
+            # The new payload is already in place, and only psb_tmp holds the index that matches
+            # it. Deleting that file would leave no consistent pair, so keep it and name it.
+            keep.add(psb_tmp)
+            raise OSError(f"{out_bin} was replaced, but moving its index into place failed "
+                          f"({exc}). The matching index is {psb_tmp}; rename it to "
+                          f"{out_psb_m}.") from exc
     finally:
         for leftover in (bin_tmp, psb_tmp):
-            if os.path.exists(leftover):
+            if leftover not in keep and os.path.exists(leftover):
                 os.remove(leftover)
 
 

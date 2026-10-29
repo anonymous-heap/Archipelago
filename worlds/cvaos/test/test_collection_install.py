@@ -191,6 +191,38 @@ class InstallTest(_InstallerCase):
         self.assertEqual(self._member(AOS_MEMBER), _STOCK_AOS_BYTES)
         self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
 
+    def lock_the_live_index(self):
+        """Make every move onto the live index fail, the way a file another program holds does."""
+        real_replace = os.replace
+        live_psb = os.path.join(self.windata, "alldata.psb.m")
+
+        def fail_on_live_index(src, dst):
+            if os.path.normcase(dst) == os.path.normcase(live_psb):
+                raise PermissionError("index is locked")
+            return real_replace(src, dst)
+
+        return mock.patch.object(install.os, "replace", side_effect=fail_on_live_index)
+
+    def leftover_temp_files(self) -> list[str]:
+        return [name for name in os.listdir(self.windata) if name.endswith(".tmp")]
+
+    def test_a_first_install_whose_index_stays_locked_leaves_the_stock_game(self) -> None:
+        with self.lock_the_live_index():
+            with self.assertRaisesRegex(InstallError, "restored to the stock game"):
+                install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertEqual(self._member(AOS_MEMBER), _STOCK_AOS_BYTES)
+        self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
+        self.assertEqual(self.leftover_temp_files(), [])
+
+    def test_a_reinstall_whose_index_stays_locked_says_the_files_do_not_match(self) -> None:
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        rom2 = bytearray(_make_patched_rom())
+        rom2[0x100000] = 0x77
+        with self.lock_the_live_index():
+            with self.assertRaisesRegex(InstallError, "do not match each other"):
+                install_rom(self._write_rom(bytes(rom2)), self.exe_path, log=_quiet)
+        self.assertEqual(self.leftover_temp_files(), [])
+
     def test_a_damaged_archive_is_reported_as_an_install_error(self) -> None:
         live_psb = os.path.join(self.windata, "alldata.psb.m")
         with open(live_psb, "r+b") as f:
@@ -198,6 +230,24 @@ class InstallTest(_InstallerCase):
             f.write(b"\x00" * 64)
         with self.assertRaises(InstallError):
             install_rom(self.rom_path, self.exe_path, log=_quiet)
+
+    def test_an_in_place_rebuild_that_cannot_move_its_index_keeps_it(self) -> None:
+        psb = os.path.join(self.windata, "alldata.psb.m")
+        bin_ = os.path.join(self.windata, "alldata.bin")
+        real_replace = os.replace
+
+        def fail_on_index(src, dst):
+            if os.path.normcase(dst) == os.path.normcase(psb):
+                raise PermissionError("index is locked")
+            return real_replace(src, dst)
+
+        with mock.patch.object(cac_archive.os, "replace", side_effect=fail_on_index):
+            with self.assertRaisesRegex(OSError, "rename it"):
+                cac_archive.replace_member(psb, bin_, AOS_MEMBER, b"a new member", psb, bin_)
+        kept = cac_archive.extract_member(psb + ".tmp", bin_, AOS_MEMBER,
+                                          index_key_name="alldata.psb.m")
+        self.assertEqual(kept,
+                         b"a new member", "the kept index must match the new payload")
 
     def test_inconsistent_backup_state_aborts(self) -> None:
         install_rom(self.rom_path, self.exe_path, log=_quiet)
