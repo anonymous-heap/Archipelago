@@ -429,6 +429,14 @@ class ReattachTest(unittest.IsolatedAsyncioTestCase):
         ctx, _disconnect = await self.attach_with(self.OLD_AUTH, finished_game=True)
         self.assertTrue(ctx.finished_game)
 
+    async def test_a_reconnect_to_the_same_seed_sends_its_checks_again(self) -> None:
+        # A check sent into a connection that was already dead would otherwise never arrive.
+        ctx, _disconnect = await self.attach_with(self.OLD_AUTH, currently_dead=True)
+        ctx.brain.local_checked_locations = {123}
+        ctx.on_package("Connected", {"slot_data": {}})
+        self.assertEqual(ctx.brain.local_checked_locations, set())
+        self.assertIs(ctx.brain.currently_dead, True, "the DeathLink latch belongs to the game")
+
     async def test_ticks_wait_for_the_new_seeds_connection(self) -> None:
         ctx, _disconnect = await self.attach_with(self.NEW_AUTH)
         self.assertTrue(ctx._seed_changed)

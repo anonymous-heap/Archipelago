@@ -569,6 +569,10 @@ class CVAOSCollectionContext(CommonContext):
 
     def on_package(self, cmd: str, args: dict) -> None:
         if cmd == "Connected":
+            # A reconnect to the same seed starts a new server session, so the checks the last one
+            # sent are sent again (the server ignores repeats). One sent into a connection that was
+            # already dead would otherwise never arrive.
+            self.brain._reset_session_state(same_seed=self.auth == self._connected_auth)
             self._connected_auth = self.auth
             self._seed_changed = False
             self.slot_data = args.get("slot_data", {}) or {}
