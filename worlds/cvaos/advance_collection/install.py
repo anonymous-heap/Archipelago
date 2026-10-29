@@ -394,7 +394,7 @@ def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
 # ---------------------------------------------------------------------------
 
 def _exe_path_from_settings() -> str | None:
-    """The collection's game.exe from host.yaml, asking for it when it is not there.
+    """Return the collection's game.exe path from host.yaml, and ask for it when no file is there.
 
     ``collection_exe`` is optional, so AP never asks for it by itself, and a Steam library outside
     the default location would otherwise end in a "no windata" error. The chosen file must match

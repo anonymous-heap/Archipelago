@@ -162,9 +162,10 @@ class CVAOSWorld(World):
 
     def pre_fill(self) -> None:
         # Logic-aware placement before the main fill, gated on item_smoothing ("off" keeps vanilla):
-        #  - bias the gating mobility souls (double jump early; Hippogryph/Giant Bat late), and
+        #  - bias the gating mobility souls (double jump early; Hippogryph/Giant Bat late),
         #  - spread the Ancient Books across early/mid/late (rough pass; refined post-fill, and
-        #    logic-safe even once the books are required to reach Graham for the good ending).
+        #    logic-safe even once the books are required to reach Graham for the good ending), and
+        #  - put anything those passes could not place into the pool for the main fill.
         if self.options.item_smoothing.current_key != "off":
             from .item_smoothing import (add_unplaced_to_pool, bias_progression_souls,
                                          spread_ancient_books)

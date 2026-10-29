@@ -177,9 +177,9 @@ class CVAOSClientLogic:
         Return the received items that the saved received-counter counts, in server order.
 
         The server puts the starting inventory at the front of the list. A seed whose slot_data
-        has ``starting_inventory_from_server`` counts those items too. An older seed's saves count
-        only items from other worlds, because its client never asked for the starting inventory,
-        so for it they are left out. Its starting inventory is then not given, as before.
+        has ``starting_inventory_from_server`` counts those items in its saves. An older seed's
+        saves count only items from other worlds, so for it the starting inventory is left out
+        and is not given.
         """
         if ctx.slot_data.get("starting_inventory_from_server"):
             return ctx.items_received
@@ -230,7 +230,7 @@ class CVAOSClientLogic:
 
         if "DeathLink" in ctx.tags and dead and not self.currently_dead:
             # Died on our own. Mark dead BEFORE awaiting so a same-tick re-entry can't double-send.
-            # A death still pending from another world is spent by this one.
+            # A death still pending from another world is discarded, because Soma is already dead.
             self.currently_dead = True
             self.death_causes.clear()
             await ctx.send_death(f"{ctx.player_names[ctx.slot]} was slain. Dracula has won!")

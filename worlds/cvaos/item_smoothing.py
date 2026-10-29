@@ -394,9 +394,10 @@ def _add_to_pool(world: "CVAOSWorld", item: Item) -> None:
     """
     Add an item that a pre-fill pass could not place to the multiworld pool, for the main fill.
 
-    This is the only time smoothing adds to the multiworld pool after create_items. It happens only
-    when the pass finds no free candidate location that logic can reach without the item. The item
-    is also removed from the world's pre-fill items, so ``get_all_state`` does not collect it twice.
+    This is the only time smoothing adds to the multiworld pool after create_items. It happens
+    when a pass finds no free location that logic can reach without the item, or returns before
+    placing it. The item is also removed from the world's pre-fill items, so ``get_all_state``
+    does not collect it twice.
     """
     world._smoothing_items = [other for other in world._smoothing_items if other is not item]
     world.multiworld.itempool.append(item)
@@ -611,9 +612,10 @@ def _accessible(multiworld: MultiWorld) -> bool:
 def _state_without(multiworld: MultiWorld, own_loc: Location) -> CollectionState:
     """The state a player reaches with every placed item except the one at ``own_loc``.
 
-    It starts from the starting items and sweeps every other filled location, so an item that is
-    itself behind the excluded one is not counted either. A location reachable in this state does
-    not need the item at ``own_loc``, so moving that item there cannot strand it behind itself.
+    It starts from the starting items and sweeps every other filled location, so an item
+    reachable only through the item at ``own_loc`` is not counted either. A location reachable in
+    this state does not need the item at ``own_loc``, so moving that item there cannot strand it
+    behind itself.
     """
     state = CollectionState(multiworld)
     state.sweep_for_advancements(
