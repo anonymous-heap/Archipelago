@@ -144,10 +144,12 @@ def extract_base_rom_bytes(exe_path: str) -> bytes:
     if marker == _AP_MARKER_PREFIX:
         missing = ", ".join(name + BACKUP_SUFFIX for name in WINDATA_FILES
                             if not os.path.isfile(os.path.join(windata, name + BACKUP_SUFFIX)))
+        problem = (f"the pristine backup is incomplete ({missing} missing)" if missing
+                   else "so are its backups")
         raise InstallError(
-            f"The AoS ROM in {windata!r} is already Archipelago-patched, and the pristine backup "
-            f"is incomplete ({missing} missing). Use Steam's \"Verify integrity of game files\" "
-            "to restore the stock archive, then try again.")
+            f"The AoS ROM in {windata!r} is already Archipelago-patched, and {problem}. Use "
+            "Steam's \"Verify integrity of game files\" to restore the stock archive, then try "
+            "again.")
     return bytes(rom)
 
 
@@ -241,8 +243,9 @@ def ensure_backup(windata: str, log: Log = print) -> bool:
             src = os.path.join(windata, name)
             dst = src + BACKUP_SUFFIX
             log(f"backing up {name} -> {os.path.basename(dst)}")
-            shutil.copy2(src, dst + ".tmp")
+            # Listed before copying, so a copy that fails partway is removed too.
             copies.append((dst + ".tmp", dst))
+            shutil.copy2(src, dst + ".tmp")
         for tmp, dst in copies:
             os.replace(tmp, dst)
             created.append(dst)

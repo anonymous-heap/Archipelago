@@ -269,6 +269,27 @@ class InstallTest(_InstallerCase):
         install_rom(self.rom_path, self.exe_path, log=_quiet)
         self.assertEqual(self._member(AOS_MEMBER), _make_patched_rom())
 
+    def test_a_backup_copy_that_fails_partway_leaves_nothing_behind(self) -> None:
+        def write_half_then_fail(src, dst):
+            with open(src, "rb") as source, open(dst, "wb") as target:
+                target.write(source.read(16))
+            raise OSError("disk full")
+
+        with mock.patch.object(install.shutil, "copy2", side_effect=write_half_then_fail):
+            with self.assertRaises(InstallError):
+                install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertFalse([name for name in os.listdir(self.windata) if BACKUP_SUFFIX in name],
+                         "a partial temporary copy must be removed")
+
+    def test_patched_backups_are_reported_as_patched(self) -> None:
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        for name in install.WINDATA_FILES:
+            live = os.path.join(self.windata, name)
+            with open(live, "rb") as source, open(live + BACKUP_SUFFIX, "wb") as target:
+                target.write(source.read())
+        with self.assertRaisesRegex(InstallError, "so are its backups"):
+            install.extract_base_rom_bytes(self.exe_path)
+
     def test_a_killed_installs_staging_folder_is_removed(self) -> None:
         stale = os.path.join(self.windata, "_ap_staging_1")
         os.makedirs(stale)
