@@ -16,6 +16,7 @@ from ..options import (
     InboundsZipLogic,
     KickableEnemyLogic,
     LogicDifficultyPreset,
+    OopsAllWhips,
     PixelPerfectLogic,
     PlatformClipLogic,
     QuickSaveResetLogic,
@@ -40,7 +41,8 @@ _ALL_DIFFICULTIES = (LogicDifficultyPreset.option_canonical, LogicDifficultyPres
 
 def _options(difficulty: int = LogicDifficultyPreset.default, **overrides: str) -> SimpleNamespace:
     """An options stand-in: real option instances, only the fields the resolver reads."""
-    ns = SimpleNamespace(logic_difficulty_preset=LogicDifficultyPreset(difficulty))
+    ns = SimpleNamespace(logic_difficulty_preset=LogicDifficultyPreset(difficulty),
+                         oops_all_whips=OopsAllWhips.from_any(overrides.get("oops_all_whips", 0)))
     for attr, cls in _OPTION_CLASSES.items():
         ns.__dict__[attr] = cls.from_any(overrides.get(attr, "inherit"))
     return ns
@@ -56,6 +58,9 @@ class _State:
 
     def has_all(self, names, player) -> bool:
         return set(names) <= self.items
+
+    def has_any(self, names, player) -> bool:
+        return bool(set(names) & self.items)
 
     def can_reach_region(self, name, player) -> bool:
         return name in self.regions
@@ -157,6 +162,15 @@ def test_rule_world_fact_bits_are_out_of_logic():
     assert rule is not None
     assert not rule(_State("Malphas"))
     assert not rule(_State())
+
+
+def test_a_weapon_breaks_a_ceiling_unless_every_weapon_is_a_whip():
+    rule = _rule((int(AbilityCombo.Ceil),))
+    assert rule(_State("Great Sword"))
+    assert not rule(_State("Whip Sword"))
+    whips = _rule((int(AbilityCombo.Ceil),), oops_all_whips=1)
+    assert not whips(_State("Great Sword")), "every weapon swings like the Whip Sword"
+    assert whips(_State("Black Panther"))
 
 
 def test_rule_impossible_mask_stays_impossible():

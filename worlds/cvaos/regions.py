@@ -380,6 +380,17 @@ _CEILING_BREAKERS: frozenset[str] = frozenset(
     info.name for info in item_info_collection if info.breaks_ceilings)
 _FLOOR_BREAKERS: frozenset[str] = frozenset(
     info.name for info in item_info_collection if info.breaks_floors)
+# Oops! All Whips gives every weapon the Whip Sword's swing, and the Whip Sword breaks neither
+# ceilings nor floors. With it on, only the breakers that are not weapons count.
+_WEAPON_NAMES: frozenset[str] = frozenset(
+    info.name for info in item_info_collection if info.item_category == "weapon")
+
+
+def _breakers(world: CVAOSWorld) -> tuple[frozenset[str], frozenset[str]]:
+    """Return the items that break ceilings in ``world``, then the items that break floors."""
+    if world.options.oops_all_whips:
+        return _CEILING_BREAKERS - _WEAPON_NAMES, _FLOOR_BREAKERS - _WEAPON_NAMES
+    return _CEILING_BREAKERS, _FLOOR_BREAKERS
 _BREAK_BITS: int = int(AbilityCombo.Ceil | AbilityCombo.Floor)
 
 # TODO: implement Vert's real requirement, then move it out of here.
@@ -441,13 +452,14 @@ def _create_access_rule_from_routing(
     # Masks that differed only in now-resolved technique bits collapse together.
     resolved_needs = tuple(dict.fromkeys(needs))
     player = world.player
+    ceiling_breakers, floor_breakers = _breakers(world)
 
     def access_rule(state: CollectionState) -> bool:
         return any(
             state.has_all(items, player)
             and (not needs_tform or _tform_available(state, world))
-            and (not needs_ceiling or state.has_any(_CEILING_BREAKERS, player))
-            and (not needs_floor or state.has_any(_FLOOR_BREAKERS, player))
+            and (not needs_ceiling or state.has_any(ceiling_breakers, player))
+            and (not needs_floor or state.has_any(floor_breakers, player))
             for items, needs_tform, needs_ceiling, needs_floor in resolved_needs)
 
     return access_rule

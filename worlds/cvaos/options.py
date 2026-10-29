@@ -243,10 +243,9 @@ class OopsAllWhips(Toggle):
     """
     Every weapon attacks with the Whip Sword's swing animation.
        (From Xanthus's public AoS patch collection.)
-    
-    WARNING this can technically softlock if you don't get an ability that lets you break the
-        ground. In practice, this is unlikely to the point of ignoring it, but there is a
-        chance you'll have to find a soul to let you hit the ground.
+
+    The whip swing does not break floors or ceilings, so while this is on, logic expects Black
+        Panther for those rather than a weapon.
 
     Weapon stats are untouched, but effective reach follows the whip swing.
     """
