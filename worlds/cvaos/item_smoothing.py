@@ -309,7 +309,8 @@ def smoothable_locations_in_order(multiworld: MultiWorld, player: int, spheres: 
                   and loc.item.player == player
                   and loc.parent_region is not None
                   and not loc.locked
-                  and loc.progress_type != LocationProgressType.EXCLUDED
+                  and loc.progress_type not in (LocationProgressType.EXCLUDED,
+                                                LocationProgressType.PRIORITY)
                   and (not loc.item.advancement
                        or loc.item.name in logic_only_progression_names)]
     if by_map_distance:

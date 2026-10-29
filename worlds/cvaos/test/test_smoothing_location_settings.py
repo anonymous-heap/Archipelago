@@ -79,6 +79,19 @@ class LocationSettingsTest(unittest.TestCase):
                          and not loc.item.advancement]
                 self.assertEqual(wrong, [])
 
+    def test_post_fill_smoothing_leaves_a_priority_location_alone(self):
+        # A ceiling or floor breaker is progression that the post-fill pass may reorder, so a
+        # priority location holding one must not be among the locations it reorders.
+        multiworld = generate(3, {})
+        breaker = next(loc for loc in multiworld.get_filled_locations(1)
+                       if loc.item.player == 1 and not loc.locked
+                       and loc.item.name in logic_only_progression_names)
+        breaker.progress_type = LocationProgressType.PRIORITY
+        ordered = smoothable_locations_in_order(multiworld, 1, list(multiworld.get_spheres()),
+                                                _region_depth(multiworld, 1))
+        self.assertTrue(ordered)
+        self.assertNotIn(breaker, ordered)
+
     def test_the_lateness_tiers_count_each_soul_as_it_is_collected(self):
         # The pre-fill passes rank locations by the step at which they become reachable as the
         # movement souls are added. Without a fresh reachability check after each soul, every
