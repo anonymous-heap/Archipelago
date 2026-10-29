@@ -1,0 +1,2402 @@
+[
+ {
+  "name": "000",
+  "sections": [
+   {
+    "name": "Entrance Parapet [000 Lucky Charm]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 122,
+    "y": 522
+   },
+   {
+    "map": "Combined Castle",
+    "x": 122,
+    "y": 522
+   }
+  ]
+ },
+ {
+  "name": "002",
+  "sections": [
+   {
+    "name": "Outside Warp Suspended Platform [002 Vjaya]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 182,
+    "y": 501
+   },
+   {
+    "map": "Combined Castle",
+    "x": 182,
+    "y": 501
+   }
+  ]
+ },
+ {
+  "name": "002",
+  "sections": [
+   {
+    "name": "Outside Warp Alcove [002 Cestus]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 201,
+    "y": 512
+   },
+   {
+    "map": "Combined Castle",
+    "x": 201,
+    "y": 512
+   }
+  ]
+ },
+ {
+  "name": "005",
+  "sections": [
+   {
+    "name": "Fountain Room Left Stairs [005 Short Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 274,
+    "y": 576
+   },
+   {
+    "map": "Combined Castle",
+    "x": 274,
+    "y": 576
+   }
+  ]
+ },
+ {
+  "name": "005",
+  "sections": [
+   {
+    "name": "Fountain Room Top Staircase [005 Cape]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 278,
+    "y": 561
+   },
+   {
+    "map": "Combined Castle",
+    "x": 278,
+    "y": 561
+   }
+  ]
+ },
+ {
+  "name": "005",
+  "sections": [
+   {
+    "name": "Fountain Room in Front of Fountain [005 Grave Keeper]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 278,
+    "y": 588
+   },
+   {
+    "map": "Combined Castle",
+    "x": 278,
+    "y": 588
+   }
+  ]
+ },
+ {
+  "name": "009",
+  "sections": [
+   {
+    "name": "Tallest Ascent [009 Lance]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 378,
+    "y": 536
+   },
+   {
+    "map": "Combined Castle",
+    "x": 378,
+    "y": 536
+   }
+  ]
+ },
+ {
+  "name": "00B",
+  "sections": [
+   {
+    "name": "Secret Room behind Peeping Eye [00B Mind Up (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 450,
+    "y": 590
+   },
+   {
+    "map": "Combined Castle",
+    "x": 450,
+    "y": 590
+   }
+  ]
+ },
+ {
+  "name": "00D",
+  "sections": [
+   {
+    "name": "White Dragon Hallway [00D Potion (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 506,
+    "y": 450
+   },
+   {
+    "map": "Combined Castle",
+    "x": 506,
+    "y": 450
+   }
+  ]
+ },
+ {
+  "name": "00F",
+  "sections": [
+   {
+    "name": "Marble Staircase Pyramid Left Ledge [00F Potion (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 522,
+    "y": 437
+   },
+   {
+    "map": "Combined Castle",
+    "x": 522,
+    "y": 437
+   }
+  ]
+ },
+ {
+  "name": "00F",
+  "sections": [
+   {
+    "name": "Marble Staircase Pyramid Right Ledge [00F Leather Plate]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 586,
+    "y": 437
+   },
+   {
+    "map": "Combined Castle",
+    "x": 586,
+    "y": 437
+   }
+  ]
+ },
+ {
+  "name": "010",
+  "sections": [
+   {
+    "name": "Reservoir Entrance [010 Flying Armor]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 600,
+    "y": 587
+   },
+   {
+    "map": "Combined Castle",
+    "x": 600,
+    "y": 587
+   }
+  ]
+ },
+ {
+  "name": "019",
+  "sections": [
+   {
+    "name": "Tiny Alcove [019 Yasutsuna]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1025,
+    "y": 441
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1025,
+    "y": 441
+   }
+  ]
+ },
+ {
+  "name": "023",
+  "sections": [
+   {
+    "name": "Post-Creaking Skull Room [023 CASTLE MAP 1]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 490,
+    "y": 567
+   },
+   {
+    "map": "Combined Castle",
+    "x": 490,
+    "y": 567
+   }
+  ]
+ },
+ {
+  "name": "026",
+  "sections": [
+   {
+    "name": "Marble Staircase Underhang Left Ledge [026 Armor of Fire]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 670,
+    "y": 399
+   },
+   {
+    "map": "Combined Castle",
+    "x": 670,
+    "y": 399
+   }
+  ]
+ },
+ {
+  "name": "026",
+  "sections": [
+   {
+    "name": "Marble Staircase Underhang Right Ledge [026 Potion (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 678,
+    "y": 398
+   },
+   {
+    "map": "Combined Castle",
+    "x": 678,
+    "y": 398
+   }
+  ]
+ },
+ {
+  "name": "027",
+  "sections": [
+   {
+    "name": "Catoblepas Ledge [027 Copper Plate]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 750,
+    "y": 395
+   },
+   {
+    "map": "Combined Castle",
+    "x": 750,
+    "y": 395
+   }
+  ]
+ },
+ {
+  "name": "028",
+  "sections": [
+   {
+    "name": "White Dragon Ledge [028 Scarf]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 750,
+    "y": 422
+   },
+   {
+    "map": "Combined Castle",
+    "x": 750,
+    "y": 422
+   }
+  ]
+ },
+ {
+  "name": "029",
+  "sections": [
+   {
+    "name": "Right Reservoir: Left Annex [029 500 Gold (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 882,
+    "y": 495
+   },
+   {
+    "map": "Combined Castle",
+    "x": 882,
+    "y": 495
+   }
+  ]
+ },
+ {
+  "name": "02C",
+  "sections": [
+   {
+    "name": "Right Reservoir: Right Annex [02C Potion (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1040,
+    "y": 495
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1040,
+    "y": 495
+   }
+  ]
+ },
+ {
+  "name": "101",
+  "sections": [
+   {
+    "name": "Cathedral Cache [101 Anti-Venom]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1098,
+    "y": 516
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1098,
+    "y": 516
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Top-Left Corner Left Ledge [103 High Mind Up (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1130,
+    "y": 375
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1130,
+    "y": 375
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Bottom Left [103 100 Gold (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1130,
+    "y": 441
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1130,
+    "y": 441
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Center Left [103 Bamboo Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1147,
+    "y": 420
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1147,
+    "y": 420
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Top-Left Corner Right Ledge [103 High Potion (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1148,
+    "y": 375
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1148,
+    "y": 375
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Top Right [103 Mind Up (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1192,
+    "y": 375
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1192,
+    "y": 375
+   }
+  ]
+ },
+ {
+  "name": "105",
+  "sections": [
+   {
+    "name": "Cathedral [105 100 Gold (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1156,
+    "y": 498
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1156,
+    "y": 498
+   }
+  ]
+ },
+ {
+  "name": "106",
+  "sections": [
+   {
+    "name": "Manticore Arena Alcove [106 Tallhammer]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1208,
+    "y": 492
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1208,
+    "y": 492
+   }
+  ]
+ },
+ {
+  "name": "107",
+  "sections": [
+   {
+    "name": "Attic [107 Rapier]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1272,
+    "y": 429
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1272,
+    "y": 429
+   }
+  ]
+ },
+ {
+  "name": "108",
+  "sections": [
+   {
+    "name": "Grand Staircase Secret Cache [108 1000 Gold (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1234,
+    "y": 519
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1234,
+    "y": 519
+   }
+  ]
+ },
+ {
+  "name": "108",
+  "sections": [
+   {
+    "name": "Grand Staircase Right Nook [108 100 Gold (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1277,
+    "y": 471
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1277,
+    "y": 471
+   }
+  ]
+ },
+ {
+  "name": "109",
+  "sections": [
+   {
+    "name": "Underneath Grand Staircase [109 Silk Robe]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1233,
+    "y": 540
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1233,
+    "y": 540
+   }
+  ]
+ },
+ {
+  "name": "200",
+  "sections": [
+   {
+    "name": "Secret Room atop Stairs [200 Melon]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1024,
+    "y": 636
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1024,
+    "y": 636
+   }
+  ]
+ },
+ {
+  "name": "200",
+  "sections": [
+   {
+    "name": "Secret Room Hard Mode Item [200 Kaiser Knuckle]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1034,
+    "y": 642
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1034,
+    "y": 642
+   }
+  ]
+ },
+ {
+  "name": "201",
+  "sections": [
+   {
+    "name": "Ectoplasm Room [201 100 Gold (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1088,
+    "y": 637
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1088,
+    "y": 637
+   }
+  ]
+ },
+ {
+  "name": "202",
+  "sections": [
+   {
+    "name": "Evil Butcher Hallway [202 Uncurse Potion]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1106,
+    "y": 642
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1106,
+    "y": 642
+   }
+  ]
+ },
+ {
+  "name": "205",
+  "sections": [
+   {
+    "name": "Hammer's Room Malphas [205 Malphas]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1096,
+    "y": 708
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1096,
+    "y": 708
+   }
+  ]
+ },
+ {
+  "name": "208",
+  "sections": [
+   {
+    "name": "Top Cache [208 Hammer]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1225,
+    "y": 594
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1225,
+    "y": 594
+   }
+  ]
+ },
+ {
+  "name": "209",
+  "sections": [
+   {
+    "name": "Box Room Ceiling [209 Heart Pendant]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1218,
+    "y": 613
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1218,
+    "y": 613
+   }
+  ]
+ },
+ {
+  "name": "20A",
+  "sections": [
+   {
+    "name": "Box Room [20A Broadsword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1253,
+    "y": 651
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1253,
+    "y": 651
+   }
+  ]
+ },
+ {
+  "name": "20B",
+  "sections": [
+   {
+    "name": "After Demon Door [20B Whip Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1218,
+    "y": 695
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1218,
+    "y": 695
+   }
+  ]
+ },
+ {
+  "name": "20E",
+  "sections": [
+   {
+    "name": "Behind Tunnel [20E Ancient Book 1]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1063,
+    "y": 714
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1063,
+    "y": 714
+   }
+  ]
+ },
+ {
+  "name": "211",
+  "sections": [
+   {
+    "name": "Bottom Cache [211 100 Gold (E)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1202,
+    "y": 691
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1202,
+    "y": 691
+   }
+  ]
+ },
+ {
+  "name": "215",
+  "sections": [
+   {
+    "name": "Student Witch Library [215 Bastard Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1146,
+    "y": 615
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1146,
+    "y": 615
+   }
+  ]
+ },
+ {
+  "name": "301",
+  "sections": [
+   {
+    "name": "Secret Room behind Minotaur [301 Samurai Armor]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 193,
+    "y": 378
+   },
+   {
+    "map": "Combined Castle",
+    "x": 193,
+    "y": 378
+   }
+  ]
+ },
+ {
+  "name": "303",
+  "sections": [
+   {
+    "name": "Big Window Room Left Annex [303 100 Gold (F)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 210,
+    "y": 330
+   },
+   {
+    "map": "Combined Castle",
+    "x": 210,
+    "y": 330
+   }
+  ]
+ },
+ {
+  "name": "306",
+  "sections": [
+   {
+    "name": "Grand Ballroom [306 Cutall]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 234,
+    "y": 417
+   },
+   {
+    "map": "Combined Castle",
+    "x": 234,
+    "y": 417
+   }
+  ]
+ },
+ {
+  "name": "307",
+  "sections": [
+   {
+    "name": "Big Window Room [307 Mana Prism (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 251,
+    "y": 299
+   },
+   {
+    "map": "Combined Castle",
+    "x": 251,
+    "y": 299
+   }
+  ]
+ },
+ {
+  "name": "308",
+  "sections": [
+   {
+    "name": "Wine Cellar underneath Killer Doll [308 High Potion (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 249,
+    "y": 475
+   },
+   {
+    "map": "Combined Castle",
+    "x": 249,
+    "y": 475
+   }
+  ]
+ },
+ {
+  "name": "30A",
+  "sections": [
+   {
+    "name": "Wine Cellar Basement [30A Skeleton Blaze]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 241,
+    "y": 522
+   },
+   {
+    "map": "Combined Castle",
+    "x": 241,
+    "y": 522
+   }
+  ]
+ },
+ {
+  "name": "30C",
+  "sections": [
+   {
+    "name": "Big Window Room Right Annex [30C 100 Gold (G)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 296,
+    "y": 330
+   },
+   {
+    "map": "Combined Castle",
+    "x": 296,
+    "y": 330
+   }
+  ]
+ },
+ {
+  "name": "310",
+  "sections": [
+   {
+    "name": "Secret Ceiling Room [310 Sherman Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 378,
+    "y": 378
+   },
+   {
+    "map": "Combined Castle",
+    "x": 378,
+    "y": 378
+   }
+  ]
+ },
+ {
+  "name": "400",
+  "sections": [
+   {
+    "name": "Left Wing Atrium: Left Item [400 Dainslef]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 398,
+    "y": 282
+   },
+   {
+    "map": "Combined Castle",
+    "x": 398,
+    "y": 282
+   }
+  ]
+ },
+ {
+  "name": "400",
+  "sections": [
+   {
+    "name": "Left Wing Atrium: Right Item [400 Ancient Book 2]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 408,
+    "y": 280
+   },
+   {
+    "map": "Combined Castle",
+    "x": 408,
+    "y": 280
+   }
+  ]
+ },
+ {
+  "name": "403",
+  "sections": [
+   {
+    "name": "Left Exit [403 High Mind Up (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 452,
+    "y": 369
+   },
+   {
+    "map": "Combined Castle",
+    "x": 452,
+    "y": 369
+   }
+  ]
+ },
+ {
+  "name": "405",
+  "sections": [
+   {
+    "name": "Secret Room [405 High Potion (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 474,
+    "y": 399
+   },
+   {
+    "map": "Combined Castle",
+    "x": 474,
+    "y": 399
+   }
+  ]
+ },
+ {
+  "name": "409",
+  "sections": [
+   {
+    "name": "Secret-er Room [409 Ninja Suit]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 512,
+    "y": 403
+   },
+   {
+    "map": "Combined Castle",
+    "x": 512,
+    "y": 403
+   }
+  ]
+ },
+ {
+  "name": "40A",
+  "sections": [
+   {
+    "name": "Stormy Tower Left Parapet [40A Hrunting]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 528,
+    "y": 186
+   },
+   {
+    "map": "Combined Castle",
+    "x": 528,
+    "y": 186
+   }
+  ]
+ },
+ {
+  "name": "40A",
+  "sections": [
+   {
+    "name": "Stormy Tower Right Parapet [40A Undine]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 580,
+    "y": 186
+   },
+   {
+    "map": "Combined Castle",
+    "x": 580,
+    "y": 186
+   }
+  ]
+ },
+ {
+  "name": "412",
+  "sections": [
+   {
+    "name": "Lower Quarters Lobby [412 Mind Up (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 626,
+    "y": 402
+   },
+   {
+    "map": "Combined Castle",
+    "x": 626,
+    "y": 402
+   }
+  ]
+ },
+ {
+  "name": "503",
+  "sections": [
+   {
+    "name": "Terrace [503 CASTLE MAP 3]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 727,
+    "y": 525
+   },
+   {
+    "map": "Combined Castle",
+    "x": 727,
+    "y": 525
+   }
+  ]
+ },
+ {
+  "name": "504",
+  "sections": [
+   {
+    "name": "1st Island Left Ledge [504 1000 Gold (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 224,
+    "y": 176
+   },
+   {
+    "map": "Combined Castle",
+    "x": 224,
+    "y": 176
+   }
+  ]
+ },
+ {
+  "name": "504",
+  "sections": [
+   {
+    "name": "1st Island Right Ledge [504 1000 Gold (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 284,
+    "y": 176
+   },
+   {
+    "map": "Combined Castle",
+    "x": 284,
+    "y": 176
+   }
+  ]
+ },
+ {
+  "name": "509",
+  "sections": [
+   {
+    "name": "6th Island [509 500 Gold (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1227,
+    "y": 279
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1227,
+    "y": 279
+   }
+  ]
+ },
+ {
+  "name": "50A",
+  "sections": [
+   {
+    "name": "5th Island [50A 500 Gold (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1107,
+    "y": 207
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1107,
+    "y": 207
+   }
+  ]
+ },
+ {
+  "name": "50D",
+  "sections": [
+   {
+    "name": "2nd Island [50D 500 Gold (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 411,
+    "y": 111
+   },
+   {
+    "map": "Combined Castle",
+    "x": 411,
+    "y": 111
+   }
+  ]
+ },
+ {
+  "name": "603",
+  "sections": [
+   {
+    "name": "Basement [603 Pitch Black Suit]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 885,
+    "y": 426
+   },
+   {
+    "map": "Combined Castle",
+    "x": 885,
+    "y": 426
+   }
+  ]
+ },
+ {
+  "name": "609",
+  "sections": [
+   {
+    "name": "Pendulum Parkour [609 Burtgang]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 994,
+    "y": 372
+   },
+   {
+    "map": "Combined Castle",
+    "x": 994,
+    "y": 372
+   }
+  ]
+ },
+ {
+  "name": "611",
+  "sections": [
+   {
+    "name": "Clock Cache [611 Skula]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 913,
+    "y": 186
+   },
+   {
+    "map": "Combined Castle",
+    "x": 913,
+    "y": 186
+   }
+  ]
+ },
+ {
+  "name": "613",
+  "sections": [
+   {
+    "name": "Death's Door Hard Mode Item [613 Death's Sickle]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 993,
+    "y": 176
+   },
+   {
+    "map": "Combined Castle",
+    "x": 993,
+    "y": 176
+   }
+  ]
+ },
+ {
+  "name": "615",
+  "sections": [
+   {
+    "name": "Gearworks Floor [615 2000 Gold (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 970,
+    "y": 258
+   },
+   {
+    "map": "Combined Castle",
+    "x": 970,
+    "y": 258
+   }
+  ]
+ },
+ {
+  "name": "617",
+  "sections": [
+   {
+    "name": "Gearworks Crevice Hard Mode Item [617 Death's Robe]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 946,
+    "y": 270
+   },
+   {
+    "map": "Combined Castle",
+    "x": 946,
+    "y": 270
+   }
+  ]
+ },
+ {
+  "name": "61B",
+  "sections": [
+   {
+    "name": "Secret Room [61B Mystletain]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 889,
+    "y": 324
+   },
+   {
+    "map": "Combined Castle",
+    "x": 889,
+    "y": 324
+   }
+  ]
+ },
+ {
+  "name": "700",
+  "sections": [
+   {
+    "name": "Canal Entrance [700 Pendant]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 212,
+    "y": 618
+   },
+   {
+    "map": "Combined Castle",
+    "x": 212,
+    "y": 618
+   }
+  ]
+ },
+ {
+  "name": "701",
+  "sections": [
+   {
+    "name": "Canal [701 Tasty Meat]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 454,
+    "y": 612
+   },
+   {
+    "map": "Combined Castle",
+    "x": 454,
+    "y": 612
+   }
+  ]
+ },
+ {
+  "name": "702",
+  "sections": [
+   {
+    "name": "Canal Ceiling [702 Elfin Robe]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 378,
+    "y": 591
+   },
+   {
+    "map": "Combined Castle",
+    "x": 378,
+    "y": 591
+   }
+  ]
+ },
+ {
+  "name": "703",
+  "sections": [
+   {
+    "name": "Reservoir Air Bell [703 Rahab's Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 432,
+    "y": 657
+   },
+   {
+    "map": "Combined Castle",
+    "x": 432,
+    "y": 657
+   }
+  ]
+ },
+ {
+  "name": "708",
+  "sections": [
+   {
+    "name": "Cavern Air Bell [708 High Mind Up (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 466,
+    "y": 825
+   },
+   {
+    "map": "Combined Castle",
+    "x": 466,
+    "y": 825
+   }
+  ]
+ },
+ {
+  "name": "709",
+  "sections": [
+   {
+    "name": "Secret Storage Cavern [709 Pudding]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 450,
+    "y": 876
+   },
+   {
+    "map": "Combined Castle",
+    "x": 450,
+    "y": 876
+   }
+  ]
+ },
+ {
+  "name": "70C",
+  "sections": [
+   {
+    "name": "Cavern Attic [70C Mana Prism (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 540,
+    "y": 800
+   },
+   {
+    "map": "Combined Castle",
+    "x": 540,
+    "y": 800
+   }
+  ]
+ },
+ {
+  "name": "70E",
+  "sections": [
+   {
+    "name": "Aqueducts [70E Super Potion (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 563,
+    "y": 666
+   },
+   {
+    "map": "Combined Castle",
+    "x": 563,
+    "y": 666
+   }
+  ]
+ },
+ {
+  "name": "70F",
+  "sections": [
+   {
+    "name": "Behind the Waterfall [70F Super Potion (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 872,
+    "y": 711
+   },
+   {
+    "map": "Combined Castle",
+    "x": 872,
+    "y": 711
+   }
+  ]
+ },
+ {
+  "name": "711",
+  "sections": [
+   {
+    "name": "Boating Course [711 Milican's Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 701,
+    "y": 588
+   },
+   {
+    "map": "Combined Castle",
+    "x": 701,
+    "y": 588
+   }
+  ]
+ },
+ {
+  "name": "715",
+  "sections": [
+   {
+    "name": "Watering Holes [715 Armor of Water]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 798,
+    "y": 807
+   },
+   {
+    "map": "Combined Castle",
+    "x": 798,
+    "y": 807
+   }
+  ]
+ },
+ {
+  "name": "716",
+  "sections": [
+   {
+    "name": "Cemetery: Right Crypt [716 Galamoth]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 896,
+    "y": 878
+   },
+   {
+    "map": "Combined Castle",
+    "x": 896,
+    "y": 878
+   }
+  ]
+ },
+ {
+  "name": "718",
+  "sections": [
+   {
+    "name": "Waterfall Aerie [718 Ronginus' Spear]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 786,
+    "y": 660
+   },
+   {
+    "map": "Combined Castle",
+    "x": 786,
+    "y": 660
+   }
+  ]
+ },
+ {
+  "name": "719",
+  "sections": [
+   {
+    "name": "Boat Jump Alcove [719 1000 Gold (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 828,
+    "y": 621
+   },
+   {
+    "map": "Combined Castle",
+    "x": 828,
+    "y": 621
+   }
+  ]
+ },
+ {
+  "name": "719",
+  "sections": [
+   {
+    "name": "Boat Jump Cache [719 Handgun]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 830,
+    "y": 642
+   },
+   {
+    "map": "Combined Castle",
+    "x": 830,
+    "y": 642
+   }
+  ]
+ },
+ {
+  "name": "71C",
+  "sections": [
+   {
+    "name": "Right Reservoir: Vertical Cavern [71C Ancient Book 3]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 917,
+    "y": 549
+   },
+   {
+    "map": "Combined Castle",
+    "x": 917,
+    "y": 549
+   }
+  ]
+ },
+ {
+  "name": "71D",
+  "sections": [
+   {
+    "name": "Right Reservoir [71D 2000 Gold (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 882,
+    "y": 597
+   },
+   {
+    "map": "Combined Castle",
+    "x": 882,
+    "y": 597
+   }
+  ]
+ },
+ {
+  "name": "71F",
+  "sections": [
+   {
+    "name": "Right Reservoir: Right Cavern [71F Rune Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 988,
+    "y": 585
+   },
+   {
+    "map": "Combined Castle",
+    "x": 988,
+    "y": 585
+   }
+  ]
+ },
+ {
+  "name": "720",
+  "sections": [
+   {
+    "name": "Right Reservoir: Secret Room [720 Osafune]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 966,
+    "y": 684
+   },
+   {
+    "map": "Combined Castle",
+    "x": 966,
+    "y": 684
+   }
+  ]
+ },
+ {
+  "name": "721",
+  "sections": [
+   {
+    "name": "Waterfall Crest [721 Super Potion (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 850,
+    "y": 663
+   },
+   {
+    "map": "Combined Castle",
+    "x": 850,
+    "y": 663
+   }
+  ]
+ },
+ {
+  "name": "721",
+  "sections": [
+   {
+    "name": "Waterfall Basin [721 Eversing]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 845,
+    "y": 759
+   },
+   {
+    "map": "Combined Castle",
+    "x": 845,
+    "y": 759
+   }
+  ]
+ },
+ {
+  "name": "722",
+  "sections": [
+   {
+    "name": "Cemetery: Left Ambulatory [722 2000 Gold (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 546,
+    "y": 854
+   },
+   {
+    "map": "Combined Castle",
+    "x": 546,
+    "y": 854
+   }
+  ]
+ },
+ {
+  "name": "733",
+  "sections": [
+   {
+    "name": "Cemetery: Central Crypt [733 High Potion (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 738,
+    "y": 854
+   },
+   {
+    "map": "Combined Castle",
+    "x": 738,
+    "y": 854
+   }
+  ]
+ },
+ {
+  "name": "736",
+  "sections": [
+   {
+    "name": "Cemetery: Right Ambulatory [736 Gold Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 874,
+    "y": 854
+   },
+   {
+    "map": "Combined Castle",
+    "x": 874,
+    "y": 854
+   }
+  ]
+ },
+ {
+  "name": "800",
+  "sections": [
+   {
+    "name": "Catacomb Depths [800 Giant Bat]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 118,
+    "y": 805
+   },
+   {
+    "map": "Combined Castle",
+    "x": 118,
+    "y": 805
+   }
+  ]
+ },
+ {
+  "name": "802",
+  "sections": [
+   {
+    "name": "Giant Armory [802 Laevatain]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 202,
+    "y": 687
+   },
+   {
+    "map": "Combined Castle",
+    "x": 202,
+    "y": 687
+   }
+  ]
+ },
+ {
+  "name": "808",
+  "sections": [
+   {
+    "name": "Lavatory [808 Black Cloak]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 223,
+    "y": 711
+   },
+   {
+    "map": "Combined Castle",
+    "x": 223,
+    "y": 711
+   }
+  ]
+ },
+ {
+  "name": "80F",
+  "sections": [
+   {
+    "name": "Wrecking Ball Trial Reward [80F Olrox's Suit]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 321,
+    "y": 758
+   },
+   {
+    "map": "Combined Castle",
+    "x": 321,
+    "y": 758
+   }
+  ]
+ },
+ {
+  "name": "810",
+  "sections": [
+   {
+    "name": "Conveyor Belt Trial Reward Hard Mode Item [810 Silver Gun]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 316,
+    "y": 783
+   },
+   {
+    "map": "Combined Castle",
+    "x": 316,
+    "y": 783
+   }
+  ]
+ },
+ {
+  "name": "810",
+  "sections": [
+   {
+    "name": "Conveyor Belt Trial Reward on Altar [810 Balmung]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 321,
+    "y": 782
+   },
+   {
+    "map": "Combined Castle",
+    "x": 321,
+    "y": 782
+   }
+  ]
+ },
+ {
+  "name": "811",
+  "sections": [
+   {
+    "name": "Simon Says Trial Reward [811 Rare Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 321,
+    "y": 806
+   },
+   {
+    "map": "Combined Castle",
+    "x": 321,
+    "y": 806
+   }
+  ]
+ },
+ {
+  "name": "812",
+  "sections": [
+   {
+    "name": "Iron Maiden Altar [812 High Potion (E)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 345,
+    "y": 661
+   },
+   {
+    "map": "Combined Castle",
+    "x": 345,
+    "y": 661
+   }
+  ]
+ },
+ {
+  "name": "900",
+  "sections": [
+   {
+    "name": "Balcony Item by Railing [900 Dracula's Tunic]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 668,
+    "y": 137
+   },
+   {
+    "map": "Combined Castle",
+    "x": 668,
+    "y": 137
+   }
+  ]
+ },
+ {
+  "name": "900",
+  "sections": [
+   {
+    "name": "Balcony Center Item [900 Black Panther]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 673,
+    "y": 137
+   },
+   {
+    "map": "Combined Castle",
+    "x": 673,
+    "y": 137
+   }
+  ]
+ },
+ {
+  "name": "901",
+  "sections": [
+   {
+    "name": "Final Staircase under the Stairs [901 Mana Prism (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 670,
+    "y": 161
+   },
+   {
+    "map": "Combined Castle",
+    "x": 670,
+    "y": 161
+   }
+  ]
+ },
+ {
+  "name": "901",
+  "sections": [
+   {
+    "name": "Final Staircase Hard Mode Item [901 Tear of Blood]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 754,
+    "y": 129
+   },
+   {
+    "map": "Combined Castle",
+    "x": 754,
+    "y": 129
+   }
+  ]
+ },
+ {
+  "name": "902",
+  "sections": [
+   {
+    "name": "Secret Ceiling Room [902 Gungner]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 674,
+    "y": 275
+   },
+   {
+    "map": "Combined Castle",
+    "x": 674,
+    "y": 275
+   }
+  ]
+ },
+ {
+  "name": "906",
+  "sections": [
+   {
+    "name": "Secret Grave [906 Hippogryph]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 748,
+    "y": 278
+   },
+   {
+    "map": "Combined Castle",
+    "x": 748,
+    "y": 278
+   }
+  ]
+ },
+ {
+  "name": "908",
+  "sections": [
+   {
+    "name": "Flaming Hall [908 Satan's Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 754,
+    "y": 327
+   },
+   {
+    "map": "Combined Castle",
+    "x": 754,
+    "y": 327
+   }
+  ]
+ },
+ {
+  "name": "910",
+  "sections": [
+   {
+    "name": "Outlook [910 Mana Prism (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 798,
+    "y": 159
+   },
+   {
+    "map": "Combined Castle",
+    "x": 798,
+    "y": 159
+   }
+  ]
+ },
+ {
+  "name": "915",
+  "sections": [
+   {
+    "name": "Dragon Statue [915 Super Potion (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 844,
+    "y": 351
+   },
+   {
+    "map": "Combined Castle",
+    "x": 844,
+    "y": 351
+   }
+  ]
+ },
+ {
+  "name": "917",
+  "sections": [
+   {
+    "name": "Courtyard [917 Kaladbolg]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 670,
+    "y": 180
+   },
+   {
+    "map": "Combined Castle",
+    "x": 670,
+    "y": 180
+   }
+  ]
+ },
+ {
+  "name": "A04",
+  "sections": [
+   {
+    "name": "Secret Room by the Inferno [A04 Claimh Solais]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1098,
+    "y": 801
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1098,
+    "y": 801
+   }
+  ]
+ },
+ {
+  "name": "A06",
+  "sections": [
+   {
+    "name": "Treasure Chamber [A06 Joyeuse]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Dracula's Castle",
+    "x": 1018,
+    "y": 825
+   },
+   {
+    "map": "Combined Castle",
+    "x": 1018,
+    "y": 825
+   }
+  ]
+ },
+ {
+  "name": "B18",
+  "sections": [
+   {
+    "name": "Marble Annex [B18 Super Potion (E)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Chaotic Realm",
+    "x": 748,
+    "y": 519
+   },
+   {
+    "map": "Combined Castle",
+    "x": 258,
+    "y": 1050
+   }
+  ]
+ },
+ {
+  "name": "B1C",
+  "sections": [
+   {
+    "name": "Chair Room [B1C High Mind Up (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Chaotic Realm",
+    "x": 808,
+    "y": 447
+   },
+   {
+    "map": "Combined Castle",
+    "x": 318,
+    "y": 978
+   }
+  ]
+ },
+ {
+  "name": "B1D",
+  "sections": [
+   {
+    "name": "Hammer's Room [B1D Mana Prism (E)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Chaotic Realm",
+    "x": 793,
+    "y": 513
+   },
+   {
+    "map": "Combined Castle",
+    "x": 304,
+    "y": 1044
+   }
+  ]
+ }
+]

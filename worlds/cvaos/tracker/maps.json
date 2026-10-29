@@ -1,0 +1,20 @@
+[
+ {
+  "name": "Dracula's Castle",
+  "img": "images/maps/Dracula's Castle.png",
+  "location_size": 15,
+  "location_border_thickness": 3
+ },
+ {
+  "name": "Chaotic Realm",
+  "img": "images/maps/Chaotic Realm.png",
+  "location_size": 15,
+  "location_border_thickness": 3
+ },
+ {
+  "name": "Combined Castle",
+  "img": "images/maps/Combined.png",
+  "location_size": 15,
+  "location_border_thickness": 3
+ }
+]

@@ -13,6 +13,7 @@ from .items import CVAOSItem, item_name_to_id, create_item, create_itempool
 from .locations import location_name_to_id
 from .options import LOGIC_OPTION_NAMES, CVAOSOptions, Goal, cvaos_option_groups
 from .regions import create_regions, can_reach_room
+from . import tracker_map
 from .client import CVAOSClient  # noqa: F401  (imported for its registration side effect)
 
 
@@ -73,8 +74,16 @@ class CVAOSSettings(settings.Group):
         required = False
         md5s = [AC_GAME_EXE_MD5]
 
+    class UTPoptrackerPath(settings.FilePath):
+        """The CVAoSPT PopTracker pack's zip, which Universal Tracker's map tab takes its map images
+        from. Optional: Universal Tracker asks for it the first time it connects."""
+        description = "CVAoSPT PopTracker pack zip"
+        required = False
+        ut_dialog_name = "Select the CVAoSPT PopTracker pack zip"
+
     rom_file: RomFile = RomFile("Castlevania - Aria of Sorrow (USA).gba")
     collection_exe: CollectionExePath = CollectionExePath(AC_DEFAULT_EXE_PATH)
+    ut_poptracker_path: UTPoptrackerPath | str = UTPoptrackerPath()
 
 
 class CVAOSWebWorld(WebWorld):
@@ -129,6 +138,16 @@ class CVAOSWorld(World):
     # generate_early reads the options back from the passthrough. The YAML-less choice is made for
     # the whole world, so it applies to older seeds too (see interpret_slot_data).
     ut_can_gen_without_yaml = True
+
+    # Universal Tracker's map tab. The maps and the pin for each location come from this world's
+    # data (tracker_map.py builds them into tracker/), so they follow its locations. Only the map
+    # images come from the player's CVAoSPT pack zip, saved as ut_poptracker_path in host.yaml.
+    tracker_world: ClassVar[dict] = {
+        "map_page_folder": tracker_map.FOLDER,
+        "map_page_maps": [tracker_map.MAPS_FILE],
+        "map_page_locations": [tracker_map.LOCATIONS_FILE],
+        "external_pack_key": "ut_poptracker_path",
+    }
 
     @staticmethod
     def interpret_slot_data(slot_data: dict) -> dict:
