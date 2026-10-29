@@ -652,12 +652,15 @@ def load_index(psb_m_path: str, index_key_name: str | None = None):
     """Decrypt/parse ``alldata.psb.m``; returns the root object (a dict).
 
     *index_key_name* names the file for key derivation when it is not stored
-    under the name the game knows it by (a backup copy, say); the default is
-    the file's own basename."""
+    under the name the game knows it by; the default is the file's own
+    basename, with an installer backup's ``.apbackup`` suffix removed."""
     with open(psb_m_path, "rb") as f:
         data = f.read()
     if data[:4] == MDF_MAGIC:
-        data = mdf_decrypt(index_key_name or os.path.basename(psb_m_path), data)
+        default_name = os.path.basename(psb_m_path)
+        if default_name.endswith(".apbackup"):
+            default_name = default_name[:-len(".apbackup")]
+        data = mdf_decrypt(index_key_name or default_name, data)
     root = psb_read(data)
     if not isinstance(root, dict) or "file_info" not in root:
         raise PsbError("PSB does not look like an archive index")

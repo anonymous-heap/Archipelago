@@ -27,6 +27,13 @@ def launch_collection_installer(*args: str) -> None:
     run_from_launcher(*args)
 
 
+def launch_collection_restore(*args: str) -> None:
+    # Runs in the Launcher process, like the installer: puts the stock archive back from the
+    # installer's backups.
+    from .advance_collection.install import run_from_launcher
+    run_from_launcher("--restore", *args)
+
+
 # The BizHawk client auto-registers via its patch_suffix; the Advance Collection client
 # has no patch file to open, so it needs an explicit Launcher button.
 components.append(Component(
@@ -43,6 +50,14 @@ components.append(Component(
     description="Install a CVAoS seed into the Steam Castlevania Advance Collection: accepts "
                 "the .apcvaos patch (applied for you) or a patched .gba. Backs up the original "
                 "archive; restore any time.",
+))
+
+components.append(Component(
+    "CVAoS Collection Restore",
+    func=launch_collection_restore,
+    component_type=Type.TOOL,
+    description="Put the Steam Castlevania Advance Collection's stock game files back from the "
+                "backups the CVAoS Collection ROM Installer made.",
 ))
 
 

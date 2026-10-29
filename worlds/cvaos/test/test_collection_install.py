@@ -249,6 +249,37 @@ class InstallTest(_InstallerCase):
         self.assertEqual(kept,
                          b"a new member", "the kept index must match the new payload")
 
+    def test_a_failed_first_backup_leaves_no_backup_behind(self) -> None:
+        # Half a backup would make every later install refuse to run.
+        real_replace = os.replace
+        moves = []
+
+        def fail_on_second_backup(src, dst):
+            if dst.endswith(BACKUP_SUFFIX):
+                moves.append(dst)
+                if len(moves) == 2:
+                    raise PermissionError("disk full")
+            return real_replace(src, dst)
+
+        with mock.patch.object(install.os, "replace", side_effect=fail_on_second_backup):
+            with self.assertRaises(InstallError):
+                install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertFalse([name for name in os.listdir(self.windata)
+                          if BACKUP_SUFFIX in name], "no backup or temporary copy may remain")
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertEqual(self._member(AOS_MEMBER), _make_patched_rom())
+
+    def test_a_killed_installs_staging_folder_is_removed(self) -> None:
+        stale = os.path.join(self.windata, "_ap_staging_1")
+        os.makedirs(stale)
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertFalse(os.path.exists(stale))
+
+    def test_the_archive_tool_reads_a_backup_index_by_its_own_name(self) -> None:
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        backup = os.path.join(self.windata, "alldata.psb.m" + BACKUP_SUFFIX)
+        self.assertIn(AOS_MEMBER, cac_archive.load_index(backup)["file_info"])
+
     def test_inconsistent_backup_state_aborts(self) -> None:
         install_rom(self.rom_path, self.exe_path, log=_quiet)
         os.remove(os.path.join(self.windata, "alldata.psb.m" + BACKUP_SUFFIX))
@@ -349,6 +380,21 @@ class RestoreTest(_InstallerCase):
         for name in install.WINDATA_FILES:
             self.assertTrue(os.path.isfile(os.path.join(self.windata, name + BACKUP_SUFFIX)),
                             "restore must keep the backups")
+
+    def test_a_restore_whose_index_stays_locked_says_the_files_do_not_match(self) -> None:
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        real_replace = os.replace
+        live_psb = os.path.join(self.windata, "alldata.psb.m")
+
+        def fail_on_live_index(src, dst):
+            if os.path.normcase(dst) == os.path.normcase(live_psb):
+                raise PermissionError("index is locked")
+            return real_replace(src, dst)
+
+        with mock.patch.object(install.os, "replace", side_effect=fail_on_live_index):
+            with self.assertRaisesRegex(InstallError, "do not match each other"):
+                restore_backup(self.exe_path, log=_quiet)
+        self.assertFalse([name for name in os.listdir(self.windata) if name.endswith(".tmp")])
 
     def test_restore_without_backup_raises(self) -> None:
         with self.assertRaisesRegex(InstallError, "No backup"):

@@ -142,10 +142,12 @@ def extract_base_rom_bytes(exe_path: str) -> bytes:
         raise InstallError(f"The member extracted from {windata!r} is not an Aria of Sorrow ROM.")
     marker = rom[ARCHIPELAGO_IDENTIFIER_START:ARCHIPELAGO_IDENTIFIER_START + len(_AP_MARKER_PREFIX)]
     if marker == _AP_MARKER_PREFIX:
+        missing = ", ".join(name + BACKUP_SUFFIX for name in WINDATA_FILES
+                            if not os.path.isfile(os.path.join(windata, name + BACKUP_SUFFIX)))
         raise InstallError(
-            f"The AoS ROM in {windata!r} is already Archipelago-patched and no pristine backup "
-            f"({WINDATA_FILES[1]}{BACKUP_SUFFIX}) sits next to it. Use Steam's \"Verify integrity "
-            "of game files\" to restore the stock archive, then try again.")
+            f"The AoS ROM in {windata!r} is already Archipelago-patched, and the pristine backup "
+            f"is incomplete ({missing} missing). Use Steam's \"Verify integrity of game files\" "
+            "to restore the stock archive, then try again.")
     return bytes(rom)
 
 
@@ -230,13 +232,29 @@ def ensure_backup(windata: str, log: Log = print) -> bool:
             "The collection's archive is not the stock one (its Aria of Sorrow ROM has been "
             "changed), so it cannot be kept as the backup. Use Steam's \"Verify integrity of "
             "game files\" to restore the stock files, then run the installer again.")
-    for name in WINDATA_FILES:
-        src = os.path.join(windata, name)
-        dst = src + BACKUP_SUFFIX
-        log(f"backing up {name} -> {os.path.basename(dst)}")
-        tmp = dst + ".tmp"
-        shutil.copy2(src, tmp)
-        os.replace(tmp, dst)
+    # Both copies are made under temporary names first, and both backups are removed again if
+    # the second cannot be moved into place, so a failure never leaves half a backup behind.
+    copies: list[tuple[str, str]] = []
+    created: list[str] = []
+    try:
+        for name in WINDATA_FILES:
+            src = os.path.join(windata, name)
+            dst = src + BACKUP_SUFFIX
+            log(f"backing up {name} -> {os.path.basename(dst)}")
+            shutil.copy2(src, dst + ".tmp")
+            copies.append((dst + ".tmp", dst))
+        for tmp, dst in copies:
+            os.replace(tmp, dst)
+            created.append(dst)
+    except OSError:
+        for dst in created:
+            with contextlib.suppress(OSError):
+                os.remove(dst)
+        raise
+    finally:
+        for tmp, _dst in copies:
+            with contextlib.suppress(OSError):
+                os.remove(tmp)
     return True
 
 
@@ -251,17 +269,35 @@ def restore_backup(exe_path: str, log: Log = print) -> str:
         raise InstallError(
             f"No backup to restore ({', '.join(missing)} not found). If the archive needs "
             "resetting, use Steam's \"Verify integrity of game files\".")
-    try:
-        for name in WINDATA_FILES:
-            live = os.path.join(windata, name)
-            log(f"restoring {name} from backup")
-            tmp = live + ".tmp"
+    error = _restore_from_backups(windata, log)
+    if error is not None and not all(_matches_backup(windata, name) for name in WINDATA_FILES):
+        raise InstallError(
+            f"Restore failed ({error}). The collection's files do not match each other, so do not "
+            "play until they do: close anything that may be using them (the collection, an "
+            "antivirus scan) and restore again, or use Steam's \"Verify integrity of game "
+            "files\". If this is a permissions problem, run as administrator.") from error
+    return f"Restored the stock archive in {windata} (backups kept)."
+
+
+def _restore_from_backups(windata: str, log: Log) -> OSError | None:
+    """Copy each backup over its live file, and return the first error, if any.
+
+    Each file is restored even if the other one fails, and no temporary file is left behind.
+    """
+    error: OSError | None = None
+    for name in WINDATA_FILES:
+        live = os.path.join(windata, name)
+        log(f"restoring {name} from backup")
+        tmp = live + ".tmp"
+        try:
             shutil.copy2(live + BACKUP_SUFFIX, tmp)
             os.replace(tmp, live)
-    except OSError as exc:
-        raise InstallError(f"Restore failed ({exc}). If this is a permissions problem, "
-                           "run as administrator.") from exc
-    return f"Restored the stock archive in {windata} (backups kept)."
+        except OSError as exc:
+            error = error or exc
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(tmp)
+    return error
 
 
 # ---------------------------------------------------------------------------
@@ -294,26 +330,16 @@ def _swap_failed_message(windata: str, exc: OSError, log: Log) -> str:
     one fails. When a restore fails, the message depends on whether the files on disk still match
     the backups, which they do when the file that failed already held the stock bytes.
     """
-    restore_exc: OSError | None = None
-    for name in WINDATA_FILES:
-        live = os.path.join(windata, name)
-        log(f"restoring {name} from backup after the failed install")
-        tmp = live + ".tmp"
-        try:
-            shutil.copy2(live + BACKUP_SUFFIX, tmp)
-            os.replace(tmp, live)
-        except OSError as error:
-            restore_exc = restore_exc or error
-        finally:
-            with contextlib.suppress(OSError):
-                os.remove(tmp)
+    log("restoring the stock files after the failed install")
+    restore_exc = _restore_from_backups(windata, log)
     if restore_exc is None or all(_matches_backup(windata, name) for name in WINDATA_FILES):
         return (f"Install failed ({exc}). The collection's files were restored to the stock game. "
                 "Close anything that may be using them (the collection, an antivirus scan) and run "
                 "the installer again.")
     return (f"Install failed ({exc}), and restoring the stock files also failed "
             f"({restore_exc}). The collection's files do not match each other, so run the "
-            "installer's restore option or Steam's \"Verify integrity of game files\" before "
+            "Launcher's \"CVAoS Collection Restore\" or Steam's \"Verify integrity of game "
+            "files\" before "
             "playing.")
 
 
@@ -354,6 +380,10 @@ def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
     # Stage under the real filenames: the MDF key is derived from the basename, and
     # os.replace within the same directory is atomic on the same volume.
     staging = os.path.join(windata, f"_ap_staging_{os.getpid()}")
+    # A killed install leaves its staging folder behind, holding up to a full archive copy.
+    for entry in os.listdir(windata):
+        if entry.startswith("_ap_staging_") and entry != os.path.basename(staging):
+            shutil.rmtree(os.path.join(windata, entry), ignore_errors=True)
     try:
         ensure_backup(windata, log)
         os.makedirs(staging, exist_ok=True)
@@ -386,8 +416,8 @@ def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
 
     return (f"Installed {os.path.basename(rom_path)} into {windata}.\n"
             f"Stock files are kept as {WINDATA_FILES[0]}{BACKUP_SUFFIX} / "
-            f"{WINDATA_FILES[1]}{BACKUP_SUFFIX}; use the installer's restore option to go "
-            f"back.\n{_STEAM_VERIFY_NOTE}")
+            f"{WINDATA_FILES[1]}{BACKUP_SUFFIX}; use the Launcher's \"CVAoS Collection "
+            f"Restore\" to go back.\n{_STEAM_VERIFY_NOTE}")
 
 
 # ---------------------------------------------------------------------------
