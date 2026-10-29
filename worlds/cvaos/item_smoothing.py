@@ -439,41 +439,54 @@ def _lateness_ranking(multiworld: MultiWorld, player: int, depth: Dict[str, int]
             and loc.parent_region.name in depth
             and loc.progress_type != LocationProgressType.EXCLUDED]
 
+    tier = _soul_tiers(multiworld, player, pool, souls, locs)
+    locs.sort(key=lambda loc: (tier[loc], depth[loc.parent_region.name], loc.name))
+    denom = max(1, len(locs) - 1)
+    return {loc: i / denom for i, loc in enumerate(locs)}
+
+
+def _soul_tiers(multiworld: MultiWorld, player: int, pool: List[Item], souls: List[Item],
+                locs: List[Location]) -> Dict[Location, int]:
+    """
+    Return each location's ability tier for ``_lateness_ranking``.
+
+    The state starts with every item in ``pool`` except ``souls``, then collects the souls one at a
+    time, most-unlocking first. A location's tier is the step at which it first becomes reachable:
+    0 with no soul, and one past the last step if it never does. Each soul goes in through
+    ``CollectionState.collect``, which marks the cached reachability stale, so the next
+    ``can_reach`` accounts for it.
+    """
+    held_out = {id(soul) for soul in souls}
     base = CollectionState(multiworld)
     for item in pool:
-        if not (item.player == player and item.name in MOVEMENT_SOULS):
+        if id(item) not in held_out:
             multiworld.worlds[item.player].collect(base, item)
     base.sweep_for_advancements()
 
     def solo_reach(soul: Item) -> int:
         trial = base.copy()
-        world.collect(trial, soul)
+        trial.collect(soul, prevent_sweep=True)
         trial.sweep_for_advancements()
         return sum(1 for loc in locs if loc.can_reach(trial))
 
     # Most-unlocking first; name breaks ties so the order is a total order (independent of itempool
     # insertion order), matching the deterministic-sort discipline used everywhere else in this module.
-    souls.sort(key=lambda soul: (-solo_reach(soul), soul.name))
+    ordered = sorted(souls, key=lambda soul: (-solo_reach(soul), soul.name))
 
     state = base
     tier: Dict[Location, int] = {}
-    reached = set()
     step = 0
-    for soul in [None, *souls]:  # step 0 = no souls, then one soul per step
+    for soul in [None, *ordered]:  # step 0 = no souls, then one soul per step
         if soul is not None:
             step += 1
-            world.collect(state, soul)
+            state.collect(soul, prevent_sweep=True)
             state.sweep_for_advancements()
         for loc in locs:
-            if loc not in reached and loc.can_reach(state):
-                reached.add(loc)
+            if loc not in tier and loc.can_reach(state):
                 tier[loc] = step
     for loc in locs:
         tier.setdefault(loc, step + 1)  # never reachable -> latest
-
-    locs.sort(key=lambda loc: (tier[loc], depth[loc.parent_region.name], loc.name))
-    denom = max(1, len(locs) - 1)
-    return {loc: i / denom for i, loc in enumerate(locs)}
+    return tier
 
 
 def bias_progression_souls(world: "CVAOSWorld") -> None:

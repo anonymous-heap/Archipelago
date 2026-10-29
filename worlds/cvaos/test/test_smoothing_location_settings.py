@@ -22,7 +22,10 @@ from worlds.AutoWorld import call_all
 from worlds.generic.Rules import exclusion_rules
 
 from .. import CVAOSWorld
-from ..item_smoothing import ANCIENT_BOOK_NAMES, BIASED_SOULS, BLACK_PANTHER, _state_without
+from ..item_smoothing import (ANCIENT_BOOK_NAMES, BIASED_SOULS, BLACK_PANTHER, MOVEMENT_SOULS,
+                              _region_depth, _soul_tiers, _state_without,
+                              smoothable_locations_in_order)
+from ..items import logic_only_progression_names
 from ..locations import location_name_to_id
 
 BEFORE_FILL = ("generate_early", "create_regions", "create_items", "set_rules",
@@ -75,6 +78,20 @@ class LocationSettingsTest(unittest.TestCase):
                          if loc.progress_type == LocationProgressType.PRIORITY
                          and not loc.item.advancement]
                 self.assertEqual(wrong, [])
+
+    def test_the_lateness_tiers_count_each_soul_as_it_is_collected(self):
+        # The pre-fill passes rank locations by the step at which they become reachable as the
+        # movement souls are added. Without a fresh reachability check after each soul, every
+        # location after the first step looked unreachable.
+        multiworld = setup_multiworld(CVAOSWorld, BEFORE_FILL, seed=2)
+        world = multiworld.worlds[1]
+        pool = [*multiworld.itempool, *world.get_pre_fill_items()]
+        souls = [item for item in pool if item.player == 1 and item.name in MOVEMENT_SOULS]
+        depth = _region_depth(multiworld, 1)
+        locations = [loc for loc in multiworld.get_locations(1)
+                     if loc.address is not None and loc.parent_region.name in depth]
+        tiers = _soul_tiers(multiworld, 1, pool, souls, locations)
+        self.assertGreater(len(set(tiers.values())), 2, tiers)
 
     def test_a_plandoed_item_stays_where_it_was_put_and_is_not_placed_twice(self):
         for name, target in (("Ancient Book 3", "Entrance Parapet [000 Lucky Charm]"),
