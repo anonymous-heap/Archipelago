@@ -35,16 +35,18 @@ class BaseRomCheckTest(unittest.TestCase):
 
 
 class TargetBaseTest(unittest.TestCase):
-    """A seed made for the collection is never patched from a cart dump."""
+    """A seed made for the collection still patches from a cart dump, for an emulator."""
 
-    def test_a_collection_seed_refuses_a_cart_dump(self) -> None:
+    def test_a_collection_seed_patched_from_a_cart_dump_warns(self) -> None:
+        # The result plays in BizHawk; the collection's installer refuses it on its own.
         from ..options import TARGET_ADVANCE_COLLECTION
         from ..constants import USA_ROM_MD5
         from ..rom.patch import check_base_for_target
         with mock.patch("hashlib.md5") as md5:
             md5.return_value.hexdigest.return_value = USA_ROM_MD5
-            with self.assertRaisesRegex(ValueError, "collection's own ROM"):
-                check_base_for_target(b"cart", TARGET_ADVANCE_COLLECTION)
+            with self.assertLogs("Patch", level="WARNING") as logs:
+                self.assertEqual(check_base_for_target(b"cart", TARGET_ADVANCE_COLLECTION), b"cart")
+        self.assertIn("Collection ROM Installer", logs.output[0])
 
     def test_a_gba_seed_accepts_a_cart_dump(self) -> None:
         from ..options import TARGET_GBA

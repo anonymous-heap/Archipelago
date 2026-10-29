@@ -31,10 +31,10 @@ Safety model, in order:
 Steam's "Verify integrity of game files" restores M2's stock files; the fix is
 simply to run the installer again (the backups stay valid).
 
-The install input may be a patched ``.gba`` or the ``.apcvaos`` patch itself — a patch is
-applied first (``Patch.create_rom_file``; an advance_collection-target patch auto-sources
-its base ROM from the installed collection), so a player handed only the patch file never
-touches an intermediate ROM.
+The install input may be a patched ``.gba`` or the ``.apcvaos`` patch itself. A patch is
+applied first, against the stock ROM of the collection being installed into, whatever target
+the seed was generated for, so a player handed only the patch file never touches an
+intermediate ROM.
 
 CLI (from the Archipelago repo root)::
 
@@ -315,7 +315,10 @@ def _apply_patch_file(patch_path: str, exe_path: str, log: Log = print) -> str:
     import Patch  # deferred: full AP import chain, only needed for this path
     from ..rom.patch import base_rom_override
     with base_rom_override(extract_base_rom_bytes(exe_path)):
-        _meta, out_path = Patch.create_rom_file(patch_path)
+        try:
+            _meta, out_path = Patch.create_rom_file(patch_path)
+        except ValueError as exc:  # the base ROM check, shown as the installer's own message
+            raise InstallError(str(exc)) from exc
     log(f"patched ROM written to {out_path}")
     return out_path
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import logging
 import os
 from typing import TYPE_CHECKING, Dict, List
 
@@ -295,17 +296,17 @@ class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
 
 
 def check_base_for_target(base: bytes, target: int) -> bytes:
-    """Return ``base`` unless a seed made for the collection would be patched from a cart dump.
+    """Return ``base``, warning when a seed made for the collection is patched from a cart dump.
 
-    An advance_collection seed falls back to ``rom_file`` when no collection is found, and a cart
-    dump there produces a ROM the collection cannot run, so this raises instead.
+    An advance_collection seed falls back to ``rom_file`` when no collection is found. A cart dump
+    there gives a ROM that plays in an emulator but not in the collection. The collection's
+    installer refuses such a ROM by itself, so this only warns.
     """
     if target == TARGET_ADVANCE_COLLECTION and hashlib.md5(base).hexdigest() == USA_ROM_MD5:
-        raise ValueError(
-            "This seed was generated for the Advance Collection, so it must be patched from the "
-            "collection's own ROM, not a cart dump. Install it with the Launcher's \"CVAoS "
-            "Collection ROM Installer\", or set collection_exe in host.yaml to the collection's "
-            "game.exe.")
+        logging.getLogger("Patch").warning(
+            "This seed was generated for the Advance Collection but is being patched from a cart "
+            "dump. The result plays in BizHawk. To play it in the collection, install the .apcvaos "
+            "file with the Launcher's \"CVAoS Collection ROM Installer\" instead.")
     return base
 
 
