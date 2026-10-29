@@ -155,6 +155,33 @@ class LocationSettingsTest(unittest.TestCase):
                 self.assertTrue(state.prog_items[1], "the state should still hold other items")
 
 
+    def test_the_refine_passes_try_only_locations_reachable_without_the_item(self):
+        # With a target at the very end of the run, the nearest candidates are late locations that
+        # need the moved item, so a pass checking against a state that still holds it tries them.
+        from .. import item_smoothing
+        multiworld = generate(5, {})
+        world = multiworld.worlds[1]
+        tried = []
+
+        def record(_multiworld, own_loc, dest):
+            tried.append((own_loc, dest))
+            return False
+
+        with mock.patch.object(item_smoothing, "_swap_if_safe", record):
+            world._soul_targets = {"Malphas": 1.0}
+            item_smoothing.refine_soul_positions(world)
+            with mock.patch.object(world.random, "uniform", lambda low, high: 1.0):
+                item_smoothing.refine_ancient_books(world)
+        self.assertEqual({own.item.name for own, _dest in tried} - {"Malphas"},
+                         set(ANCIENT_BOOK_NAMES), "both passes must have tried moves")
+        for own_loc, dest in tried:
+            without = CollectionState(multiworld)
+            without.sweep_for_advancements(
+                locations=[loc for loc in multiworld.get_filled_locations() if loc is not own_loc])
+            with self.subTest(item=own_loc.item.name, dest=dest.name):
+                self.assertTrue(dest.can_reach(without))
+
+
 class PoolTest(unittest.TestCase):
     """Item smoothing keeps the items it places out of the multiworld pool.
 

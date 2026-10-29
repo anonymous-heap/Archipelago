@@ -53,6 +53,15 @@ class TestBlob(unittest.TestCase):
         self.assertEqual(rib._HOOK_BODY[-len(expected):], expected)
         self.assertEqual(len(rib._HOOK_BODY) - len(expected), 112, "code size changed")
 
+    def test_the_hook_waits_while_a_textbox_request_is_queued(self):
+        # ldrb r1,[r0,#3]; cmp r1,#0; bne: the request kind at 0x02000423 is checked before the
+        # busy bits (tst r0,r1). Queueing over a waiting request would replace its text.
+        code = rib._HOOK_BODY[:-32]
+        wait = code.find(bytes.fromhex("c1780029"))
+        self.assertNotEqual(wait, -1, "the hook must check the queued request kind")
+        self.assertEqual(code[wait + 4 + 1], 0xD1, "and skip the frame while it is nonzero")
+        self.assertLess(wait, code.find(bytes.fromhex("0842")))
+
     def test_literal_pool_bakes_every_target(self):
         for name, addr in (
             ("mailbox", rib.MAILBOX_GBA),

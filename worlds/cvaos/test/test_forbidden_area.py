@@ -109,9 +109,11 @@ def test_the_key_displaces_gold_rather_than_a_unique_item():
 def test_rom_button_becomes_inert_object():
     import os
     from ..rom import forbidden_area_button as fab
-    rom_path = os.environ.get("CVAOS_USA_ROM",
-        "/mnt/c/Users/belmo/Downloads/Castlevania - Aria of Sorrow (USA)/Castlevania - Aria of Sorrow (USA).gba")
-    if not os.path.exists(rom_path):
+    name = "Castlevania - Aria of Sorrow (USA)/Castlevania - Aria of Sorrow (USA).gba"
+    candidates = [os.environ.get("CVAOS_USA_ROM", ""), "/mnt/c/Users/belmo/Downloads/" + name,
+                  os.path.join(os.path.expanduser("~"), "Downloads", name)]
+    rom_path = next((path for path in candidates if path and os.path.exists(path)), None)
+    if rom_path is None:
         import pytest; pytest.skip("USA ROM not available")
     base = open(rom_path, "rb").read()
     off = fab.A01_BUTTON_ENTITY_GBA - 0x08000000
