@@ -182,10 +182,9 @@ def validate_patched_rom(rom_bytes: bytes) -> None:
                                ("replacement graphic", _M2_GRAPHIC)):
         if not any(rom_bytes[start:end]):
             raise InstallError(
-                "ROM was patched from a cart dump, not from the ROM extracted from the "
-                f"collection — M2's {name} is missing, so the collection would break. "
-                "Extract the collection's ROM (cac_archive.py extract), set it as your "
-                "patch base, and re-patch.")
+                "ROM was patched from a cart dump, not from the collection's own ROM: M2's "
+                f"{name} is missing, so the collection would break. Install the .apcvaos patch "
+                "file itself instead, and the installer patches the collection's ROM.")
 
 
 def collection_running() -> bool:
@@ -269,16 +268,18 @@ def restore_backup(exe_path: str, log: Log = print) -> str:
 # Install
 # ---------------------------------------------------------------------------
 
-def _apply_patch_file(patch_path: str, log: Log = print) -> str:
+def _apply_patch_file(patch_path: str, exe_path: str, log: Log = print) -> str:
     """Apply a ``.apcvaos`` with AP's own machinery; returns the produced ``.gba`` path.
 
-    The patch itself decides where the base ROM comes from (``target_platform`` in its
-    rom_config.json): an advance_collection-target patch pulls the base out of the installed
-    collection automatically, so the player only ever handles the patch file.
+    The base ROM is always the stock ROM of the collection at *exe_path*, whatever target the
+    seed was generated for, because that is the only base the collection can run. A gba-target
+    patch applies to it as well as to a cart dump.
     """
     log(f"applying {os.path.basename(patch_path)}...")
     import Patch  # deferred: full AP import chain, only needed for this path
-    _meta, out_path = Patch.create_rom_file(patch_path)
+    from ..rom.patch import base_rom_override
+    with base_rom_override(extract_base_rom_bytes(exe_path)):
+        _meta, out_path = Patch.create_rom_file(patch_path)
     log(f"patched ROM written to {out_path}")
     return out_path
 
@@ -330,7 +331,7 @@ def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
     as the collection's AoS ROM. Returns a user-facing summary."""
     windata = windata_dir_from_exe(exe_path)
     if rom_path.lower().endswith(".apcvaos"):
-        rom_path = _apply_patch_file(rom_path, log)
+        rom_path = _apply_patch_file(rom_path, exe_path, log)
     try:
         with open(rom_path, "rb") as f:
             rom_bytes = f.read()

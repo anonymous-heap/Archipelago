@@ -3,6 +3,7 @@ ROM patching for Castlevania: Aria of Sorrow.
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -132,6 +133,25 @@ def _read_base_rom_source(path: str) -> bytes:
         return head + fh.read()
 
 
+# Set by base_rom_override while the collection installer applies a patch.
+_base_rom_override: bytes | None = None
+
+
+@contextlib.contextmanager
+def base_rom_override(base: bytes):
+    """Patch from ``base`` instead of the configured source while the block runs.
+
+    The collection installer uses this so that every patch it applies starts from the ROM of the
+    collection it installs into. A gba-target patch applies to that ROM as well as to a cart dump.
+    """
+    global _base_rom_override
+    previous, _base_rom_override = _base_rom_override, base
+    try:
+        yield
+    finally:
+        _base_rom_override = previous
+
+
 def get_base_rom_bytes(target: int = TARGET_GBA) -> bytes:
     """The base ROM to patch against, chosen by the seed's declared target platform.
 
@@ -142,6 +162,8 @@ def get_base_rom_bytes(target: int = TARGET_GBA) -> bytes:
     - ``gba``: use ``rom_file``; accessing it opens a file browser when unset. The pick may be a
       GBA ROM *or* the collection's game.exe (``_read_base_rom_source`` extracts from the exe).
     """
+    if _base_rom_override is not None:
+        return _base_rom_override
     opts = get_settings().cvaos_options
     if target == TARGET_ADVANCE_COLLECTION:
         exe = str(opts.collection_exe)
@@ -269,7 +291,22 @@ class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
                                                                           TARGET_GBA))
         except (KeyError, ValueError, json.JSONDecodeError):
             target = TARGET_GBA
-        return self._checked_base(get_base_rom_bytes(target))
+        return check_base_for_target(self._checked_base(get_base_rom_bytes(target)), target)
+
+
+def check_base_for_target(base: bytes, target: int) -> bytes:
+    """Return ``base`` unless a seed made for the collection would be patched from a cart dump.
+
+    An advance_collection seed falls back to ``rom_file`` when no collection is found, and a cart
+    dump there produces a ROM the collection cannot run, so this raises instead.
+    """
+    if target == TARGET_ADVANCE_COLLECTION and hashlib.md5(base).hexdigest() == USA_ROM_MD5:
+        raise ValueError(
+            "This seed was generated for the Advance Collection, so it must be patched from the "
+            "collection's own ROM, not a cart dump. Install it with the Launcher's \"CVAoS "
+            "Collection ROM Installer\", or set collection_exe in host.yaml to the collection's "
+            "game.exe.")
+    return base
 
 
 def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[int, bytes]) -> None:

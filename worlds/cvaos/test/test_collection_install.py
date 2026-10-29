@@ -273,8 +273,8 @@ class PatchFileInstallTest(_InstallerCase):
             f.write(b"patch container stand-in")
         produced = os.path.join(self.root, "AP_1_P1_SomaAC.gba")
 
-        def fake_apply(path: str, log=_quiet) -> str:
-            self.assertEqual(path, apc)
+        def fake_apply(path: str, exe_path: str, log=_quiet) -> str:
+            self.assertEqual((path, exe_path), (apc, self.exe_path))
             with open(produced, "wb") as f:
                 f.write(_make_patched_rom())
             return produced
@@ -282,6 +282,23 @@ class PatchFileInstallTest(_InstallerCase):
         with mock.patch.object(install, "_apply_patch_file", side_effect=fake_apply):
             install_rom(apc, self.exe_path, log=_quiet)
         self.assertEqual(self._member(AOS_MEMBER), _make_patched_rom())
+
+    def test_a_patch_is_applied_to_the_collection_it_installs_into(self) -> None:
+        # Whatever target the seed was made for, the base is the collection's own ROM, and
+        # host.yaml's rom_file (often a cart dump for BizHawk players) is not consulted.
+        from ..options import TARGET_GBA
+        from ..rom import patch as patch_module
+        bases = []
+
+        def fake_create_rom_file(path):
+            bases.append(patch_module.get_base_rom_bytes(TARGET_GBA))
+            return {}, self.rom_path
+
+        with mock.patch("Patch.create_rom_file", side_effect=fake_create_rom_file), \
+                mock.patch.object(install, "extract_base_rom_bytes",
+                                  return_value=b"the collection's ROM"):
+            install._apply_patch_file("seed.apcvaos", self.exe_path, _quiet)
+        self.assertEqual(bases, [b"the collection's ROM"])
 
     def test_gba_input_skips_patch_application(self) -> None:
         with mock.patch.object(install, "_apply_patch_file") as apply_stub:

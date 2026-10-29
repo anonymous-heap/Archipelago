@@ -34,5 +34,26 @@ class BaseRomCheckTest(unittest.TestCase):
                     patch.get_source_data_with_cache()
 
 
+class TargetBaseTest(unittest.TestCase):
+    """A seed made for the collection is never patched from a cart dump."""
+
+    def test_a_collection_seed_refuses_a_cart_dump(self) -> None:
+        from ..options import TARGET_ADVANCE_COLLECTION
+        from ..constants import USA_ROM_MD5
+        from ..rom.patch import check_base_for_target
+        with mock.patch("hashlib.md5") as md5:
+            md5.return_value.hexdigest.return_value = USA_ROM_MD5
+            with self.assertRaisesRegex(ValueError, "collection's own ROM"):
+                check_base_for_target(b"cart", TARGET_ADVANCE_COLLECTION)
+
+    def test_a_gba_seed_accepts_a_cart_dump(self) -> None:
+        from ..options import TARGET_GBA
+        from ..constants import USA_ROM_MD5
+        from ..rom.patch import check_base_for_target
+        with mock.patch("hashlib.md5") as md5:
+            md5.return_value.hexdigest.return_value = USA_ROM_MD5
+            self.assertEqual(check_base_for_target(b"cart", TARGET_GBA), b"cart")
+
+
 if __name__ == "__main__":
     unittest.main()
