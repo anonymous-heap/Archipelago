@@ -313,7 +313,8 @@ class AoSRAM:
         its cap, so a received-counter advance passed here still happens when the copy is dropped.
 
         A soul also adds one to the game's souls-collected statistic, which is what the vanilla
-        collect path does after its own add.
+        collect path does after its own add. The first copy of an ability soul also switches the
+        ability on, as the game's pickup does, since the player cannot use it until it is on.
         """
         array = addr.INVENTORY[category]
         self._check_index(category, array, index)
@@ -329,11 +330,14 @@ class AoSRAM:
             old_byte = slot.pack(pair)
             which = "odd" if index % 2 else "even"
             current: int = getattr(pair, which)
-            at_cap = current + await self._second_count(array, index) >= cap
+            total = current + await self._second_count(array, index)
+            at_cap = total >= cap
             if not at_cap:
                 setattr(pair, which, current + 1)
-            if not await self.guarded_write_many(
-                    [self._guarded(slot, slot.pack(pair), old_byte), *together_with]):
+            writes = [self._guarded(slot, slot.pack(pair), old_byte), *together_with]
+            if category == "ability_soul" and total == 0:
+                writes.append(await self._ability_switched_on(index))
+            if not await self.guarded_write_many(writes):
                 return False
             if at_cap:
                 self._report_at_cap(category, index, cap)
@@ -353,6 +357,12 @@ class AoSRAM:
         if new == current:
             self._report_at_cap(category, index, cap)
         return True
+
+    async def _ability_switched_on(self, index: int) -> GuardedWrite:
+        """Build the guarded write that switches ability soul ``index`` on in the Ability menu."""
+        flags = addr.ABILITY_ENABLED.item(index // 8)
+        current: int = await self._fetch(flags)
+        return self._guarded(flags, flags.pack(current | 1 << index % 8), flags.pack(current))
 
     async def _count_soul_collected(self) -> None:
         """Add one to the game's souls-collected statistic, the way a real pickup does.

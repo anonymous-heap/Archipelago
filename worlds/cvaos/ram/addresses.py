@@ -172,6 +172,11 @@ INVENTORY: dict[str, InventoryArray] = {
 }
 # Money (subtype 1) is not an inventory array; it adds to CURRENT_GOLD.
 
+# The Ability menu's On/Off switch for each ability soul: bit i of byte i // 8 is soul i. The player
+# code checks a soul's bit before using its ability (sub_08032AB8), and the game's pickup sets the bit
+# when it adds a soul's first copy (sub_08032ADC).
+ABILITY_ENABLED = ewram.entry(0x02013396, u8, count(2), name="ability_enabled")
+
 # Index within the "consumable" array of the Skull Key -- the placeholder AoS grants Soma whenever he
 # collects a pickup that belongs to another world (rom/patch.py ``_AP_PLACEHOLDER``). Its owned-count
 # is meaningless to AP (the location check rides the pickup save flag, not the grant), but it shares

@@ -30,6 +30,7 @@ DOCUMENTED = {
     "EQUIPPED_YELLOW_SOUL": (0x1326B, 1), "EQUIPPED_ARMOR": (0x1326C, 1), "EQUIPPED_ACCESSORY": (0x1326D, 1),
     "CURRENT_HP": (0x1327A, 2), "CURRENT_MP": (0x1327C, 2), "MAX_HP": (0x1327E, 2), "MAX_MP": (0x13280, 2),
     "CURRENT_GOLD": (0x13290, 4), "AP_RECEIVED_COUNT": (0x1328A, 2), "KILL_REQUEST": (0x1324C, 1),
+    "ABILITY_ENABLED": (0x13396, 2),
 }
 
 # category -> (EWRAM-domain base, item count, nibble-packed)
@@ -139,6 +140,18 @@ class AccessorBehaviourTest(unittest.TestCase):
         self.mem[0x13361] = 0x03                                 # 4 + 3 = 7: room for one
         self.assertTrue(self.run_(self.ram.give_item("blue_soul", 0)))
         self.assertEqual(self.mem[0x13354], 0x05, "the soul goes into the first list")
+
+    def test_the_first_ability_soul_arrives_switched_on(self):
+        self.mem[0x13396] = 0b0000_0001                          # Malphas (0) already on
+        self.assertTrue(self.run_(self.ram.give_item("ability_soul", 3)))
+        self.assertEqual(self.mem[0x13393], 0x10, "ability_soul[3] owned once")
+        self.assertEqual(self.mem[0x13396], 0b0000_1001, "and switched on, keeping Malphas on")
+
+    def test_another_copy_keeps_the_players_switch(self):
+        self.mem[0x13392] = 0x01                                 # ability_soul[0] owned, switched off
+        self.assertTrue(self.run_(self.ram.give_item("ability_soul", 0)))
+        self.assertEqual(self.mem[0x13392], 0x02)
+        self.assertEqual(self.mem[0x13396], 0, "a copy past the first must leave the switch alone")
 
     def test_gold_stops_at_the_games_cap(self):
         self.mem[0x13290:0x13294] = (999_000).to_bytes(4, "little")
