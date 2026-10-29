@@ -47,8 +47,11 @@ class CVAOSClientLogic:
         # Reset per-session state so swapping ROMs/games without restarting the client can't
         # carry anything stale over. Each client calls this on every connect or attach, with
         # same_seed True when it is reconnecting to the seed it was already playing.
-        self.death_causes = []
         self.local_checked_locations = set()
+        # DeathLink: the cause of an incoming death not applied yet. A reconnect to the same seed
+        # keeps it, so a death received while Soma could not be killed (paused, say) still lands.
+        if not same_seed:
+            self.death_causes = []
         # DeathLink: whether we currently consider Soma dead. It guards against re-sending our own
         # death and re-applying an incoming one until HP recovers. A reconnect to the same seed
         # keeps it, so a death sent before the disconnect is not sent again, while one that
@@ -178,10 +181,12 @@ class CVAOSClientLogic:
         # the old HP==0-during-normal-gameplay test only had a ~1-frame window and usually missed it.
         from CommonClient import logger
 
-        # Enable DeathLink once if the seed wants it; update_death_link adds the "DeathLink" tag, so
-        # this won't re-fire on later ticks.
-        if ctx.slot_data.get("death_link") and "DeathLink" not in ctx.tags:
-            await ctx.update_death_link(True)
+        # Follow the seed's DeathLink setting. update_death_link adds or removes the "DeathLink"
+        # tag, so this does nothing on later ticks. Removing it matters when the client moves on to
+        # a seed without DeathLink, which also has no kill hook to run a requested death.
+        wanted = bool(ctx.slot_data.get("death_link"))
+        if wanted != ("DeathLink" in ctx.tags):
+            await ctx.update_death_link(wanted)
 
         # Dead/dying: the in-game death fade (MENU_STATE==DEATH while still INGAME) or the game-over
         # screen. The sub-state is gated on INGAME so we never misread the byte outside gameplay.

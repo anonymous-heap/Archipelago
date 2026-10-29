@@ -42,6 +42,8 @@ class FakeCtx:
     async def update_death_link(self, value: bool) -> None:
         if value:
             self.tags.add("DeathLink")
+        else:
+            self.tags.discard("DeathLink")
 
     async def send_death(self, text: str = "") -> None:
         self.sent_deaths.append(text)
@@ -271,6 +273,29 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
         self.bounce("Someone else died")
         await self.relay(INGAME, NORMAL, hp=100)
         self.assertEqual(self.client.death_causes, [])
+        self.assertEqual(self.ram.kill_calls, 0)
+
+    async def test_a_seed_without_deathlink_drops_the_tag_a_previous_seed_left(self) -> None:
+        self.ctx.tags.add("DeathLink")
+        self.ctx.slot_data["death_link"] = False
+        await self.relay(INGAME, NORMAL)
+        self.assertNotIn("DeathLink", self.ctx.tags)
+        await self.relay(INGAME, DEATH, hp=0)
+        self.assertEqual(self.ctx.sent_deaths, [])
+
+    async def test_a_reconnect_to_the_same_seed_keeps_a_pending_death(self) -> None:
+        await self.relay(INGAME, NORMAL)
+        self.bounce("Someone else died")
+        await self.relay(INGAME, PAUSE)             # paused, so the kill waits
+        self.reconnect()
+        await self.relay(INGAME, NORMAL, hp=100)
+        self.assertEqual(self.ram.kill_calls, 1)
+
+    async def test_a_different_seed_drops_a_pending_death(self) -> None:
+        await self.relay(INGAME, NORMAL)
+        self.bounce("Someone else died")
+        self.connect_fresh()
+        await self.relay(INGAME, NORMAL, hp=100)
         self.assertEqual(self.ram.kill_calls, 0)
 
     async def test_received_death_is_not_rebroadcast(self) -> None:
