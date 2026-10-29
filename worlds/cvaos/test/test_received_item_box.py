@@ -32,7 +32,7 @@ def apply(work: bytearray, writes) -> None:
 
 class TestBlob(unittest.TestCase):
     def test_blob_shape(self):
-        self.assertEqual(len(rib._HOOK_BODY), 136)
+        self.assertEqual(len(rib._HOOK_BODY), 144)
         self.assertLessEqual(len(rib._HOOK_BODY), 0x200, "body overruns its slot")
 
     def test_the_literal_pool_is_exactly_the_eight_expected_words(self):
@@ -41,7 +41,7 @@ class TestBlob(unittest.TestCase):
         # stray pool word still fails somewhere.
         pool = [
             rib.MAILBOX_GBA,
-            0x0200042C,           # the textbox state word
+            0x02000420,           # the textbox request block (kind at +3, state at +0xC)
             0x03000200,           # the busy mask
             0x0800EF98 | 1,       # sub_0800EF98, the "Got <name>" textbox
             0x08045C34 | 1,       # sub_08045C34, the new-soul effect
@@ -51,12 +51,12 @@ class TestBlob(unittest.TestCase):
         ]
         expected = b"".join(struct.pack("<I", w) for w in pool)
         self.assertEqual(rib._HOOK_BODY[-len(expected):], expected)
-        self.assertEqual(len(rib._HOOK_BODY) - len(expected), 104, "code size changed")
+        self.assertEqual(len(rib._HOOK_BODY) - len(expected), 112, "code size changed")
 
     def test_literal_pool_bakes_every_target(self):
         for name, addr in (
             ("mailbox", rib.MAILBOX_GBA),
-            ("textbox state", 0x0200042C),
+            ("textbox request block", 0x02000420),
             ("busy mask", 0x03000200),
             ("sub_0800EF98|1", 0x0800EF98 | 1),
             ("sub_0800E708|1", 0x0800E708 | 1),

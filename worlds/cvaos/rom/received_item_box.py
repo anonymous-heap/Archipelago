@@ -14,9 +14,12 @@ directly would have its box silently dropped whenever a transition or another bo
   to unk_60; reading them relative was a real bug, caught in a playtest by the box being
   dropped mid-cutscene while the sound still played)
   -- and ``sub_0800EFD4`` dispatches request kind 1 to the real textbox ``sub_0800E0E8`` on a
-  later frame. The hook checks that same guard so a request is retried rather than lost.
-* ``PlaySong`` (GBA 0x080D7910) plays the sound. Vanilla pickup ids: 0xB4 money, 0xB5 item,
-  0xB6 soul, 0xB7 item-to-inventory. :data:`SFX_ITEM` is the plain item sound.
+  later frame. The hook checks that same guard so a request is retried rather than lost. It also
+  waits while a request is still queued (``unk_423`` nonzero), because sub_0800EF98 would
+  overwrite that request's text and the soul banner would clear it.
+* ``PlaySong`` (GBA 0x080D7910) plays the sound the mailbox names. Vanilla's collect path plays
+  :data:`SFX_MONEY` for gold, :data:`SFX_ITEM` for a consumable, :data:`SFX_ITEM_TO_INVENTORY`
+  for a weapon or armor (accessories included), and :data:`SFX_SOUL` for a soul.
 * Item name text-ids are the u16 table at 0x08506734 indexed by item global-id, which is the
   same table the vanilla collect path (``sub_080441F8``) reads. :func:`name_text_id` wraps it.
 * Souls use a different renderer, not the textbox. The hook makes the three calls vanilla
@@ -49,14 +52,14 @@ GBA_ROM_BASE = 0x08000000
 HOOK_SLOT = 2
 HOOK_BODY_GBA = xanthus_framework.slot_body_gba(HOOK_SLOT)
 
-# Assembled from received_item_box.s at -Ttext=0x087D0300 (THUMB, ARMv4T). 104 bytes of code
-# plus an 8-word literal pool: the mailbox, the textbox state word, the busy mask, and
-# sub_0800EF98|1 / sub_08045C34|1 / sub_0800E708|1 / sub_08049E64|1 / PlaySong|1.
+# Assembled from received_item_box.s at 0x087D0300 (THUMB, ARMv4T). 110 bytes of code, 2 bytes of
+# padding, and an 8-word literal pool: the mailbox, the textbox request block (0x02000420), the
+# busy mask, and sub_0800EF98|1 / sub_08045C34|1 / sub_0800E708|1 / sub_08049E64|1 / PlaySong|1.
 _HOOK_BODY = bytes.fromhex(
-    "ffb400b5184ce079002828d0174800681749084223d12079002806d120880028"
-    "15d0144b00f01ff811e0a079002803d06079114b00f017f820886179a2790f4b"
-    "00f011f8607921880d4b00f00cf86088002802d00b4b00f006f80020e07102bc"
-    "8e46ffbc7047184700f003022c0400020002000399ef0008355c040809e70008"
+    "ffb400b51a4ce07900282bd01948c178002927d1c0681849084223d12079002806d1"
+    "2088002815d0144b00f01ff811e0a079002803d06079114b00f017f820886179a279"
+    "0f4b00f011f8607921880e4b00f00cf86088002802d00c4b00f006f80020e07102bc"
+    "8e46ffbc70471847000000f00302200400020002000399ef0008355c040809e70008"
     "659e040811790d08"
 )
 
@@ -78,19 +81,19 @@ KIND_SOUL = 1     # sub_0800E708(soulIndex, soulType, isNew): the soul banner
 
 # Vanilla acquisition sounds (PlaySong ids), each read off its branch of sub_080441F8.
 SFX_CATEGORY_0 = 0xB4          # category 0 (sub_08043BB0)
-SFX_ITEM = 0xB5                # categories 2, 3
+SFX_ITEM = 0xB5                # category 2, consumables
 SFX_MONEY = 0xB6               # category 1, the gold branch (caps at 999999)
-SFX_ITEM_TO_INVENTORY = 0xB7   # categories 5..8, via sub_0804AE3C
-SFX_SOUL = 0xBC                # the soul branch
+SFX_ITEM_TO_INVENTORY = 0xB7   # categories 3 and 4, weapons and armor, via sub_0804AE3C
+SFX_SOUL = 0xBC                # categories 5..8, the soul branch
 
 #: u16 table of item NAME text-ids, indexed by item global-id (257 entries).
 ITEM_NAME_TEXT_IDS_GBA = 0x08506734
 
-assert len(_HOOK_BODY) == 136, f"hook body must be 136 bytes, got {len(_HOOK_BODY)}"
+assert len(_HOOK_BODY) == 144, f"hook body must be 144 bytes, got {len(_HOOK_BODY)}"
 assert len(_HOOK_BODY) <= 0x200, "hook body overruns its 0x200-byte slot"
 assert MAILBOX_GBA.to_bytes(4, "little") in _HOOK_BODY, "mailbox addr missing from hook body"
 assert (0x0800EF98 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_0800EF98 missing from hook body"
-assert (0x0200042C).to_bytes(4, "little") in _HOOK_BODY, "busy-guard addr missing from hook body"
+assert (0x02000420).to_bytes(4, "little") in _HOOK_BODY, "busy-guard addr missing from hook body"
 assert (0x0800E708 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_0800E708 missing from hook body"
 assert (0x08049E64 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_08049E64 missing from hook body"
 assert (0x08045C34 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_08045C34 missing from hook body"

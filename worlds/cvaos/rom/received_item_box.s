@@ -11,14 +11,18 @@
 @ sub_080441F8 (0x080441F8) is the pickup collect callback, a switch on the pickup category at
 @ entity[0x36]. Two of its branches matter here.
 @
-@ Items (categories 2, 3, 5..8) queue a textbox and play a sound:
+@ Equipment and consumables (categories 2, 3 and 4) queue a textbox and play a sound:
 @     sub_0800EF98(name_text_id)     @ queue the "Got <name>" textbox
-@     PlaySong(0xB5)                 @ SE_181, the item-pickup sound
+@     PlaySong(0xB5)                 @ consumables (2), SE_181
+@     PlaySong(0xB7)                 @ weapons and armor (3, 4), after sub_0804AE3C
+@ Accessories are armor ids 25 and up, so they take the armor branch. The client picks the sound;
+@ this hook plays whatever the mailbox names.
 @ Name text-ids are the u16 table at 0x08506734 indexed by item global-id. sub_0800EF98 is only
 @ two stores behind a guard:
 @     if (!(gEwramData->unk_60.unk_42C & 0x03000200)) { unk_423 = 1; unk_420 = text_id; }
 @ and sub_0800EFD4 (called per frame from code_0800B700) dispatches request kind 1 to the real
-@ textbox, sub_0800E0E8. So queueing a box is exactly "call sub_0800EF98 when not busy".
+@ textbox, sub_0800E0E8. That textbox sets unk_423 back to 0 once it is drawn. So queueing a box
+@ is "call sub_0800EF98 when not busy and no request is waiting".
 @
 @ Souls use a different renderer entirely -- not the kind-1/2/3 request machinery:
 @     SoulInventory_AddAmountToSoulTotal(soulType, soulIndex, 1)
@@ -105,11 +109,13 @@
     .equ MB_ARG2,      6            @ u8
     .equ MB_PENDING,   7            @ u8
 
-    .equ TEXTBOX_STATE, 0x0200042C  @ gEwramData + 0x42C (the unk_60 field offsets in the
+    .equ TEXTBOX,       0x02000420  @ gEwramData + 0x420 (the unk_60 field offsets in the
                                     @ decomp's ewram.h are ABSOLUTE from gEwramData, not
                                     @ relative to unk_60: currentSaveSlot reads sane at
                                     @ 0x02000428, and the pickup-flag bitfield the RAM map
                                     @ documents at 0x02000360 is unk_60.unk_360.)
+    .equ TB_KIND,       3           @ u8  unk_423: the request kind waiting for display, or 0
+    .equ TB_STATE,      0xC         @ u32 unk_42C: holds the busy bits
     .equ BUSY_MASK,     0x03000200  @ the bits sub_0800EF98 itself refuses to queue over
     .equ GOTITEM,       0x0800EF98  @ sub_0800EF98(text_id): queues the "Got <name>" textbox
     .equ SOULBANNER,    0x0800E708  @ sub_0800E708(soulIndex, soulType, isNew)
@@ -127,12 +133,17 @@ ReceivedItemBox:
     cmp  r0, #0
     beq  .Ldone                     @ nothing requested
 
-    @ Is the game able to take a banner request this frame? sub_0800EF98 drops the request
-    @ silently when these bits are set, so check them here and keep pending set to retry. The
-    @ soul banner is gated on the same bits: sub_0800E708's body is not decompiled, so waiting
-    @ for a quiet frame is the conservative choice rather than firing during a transition.
-    ldr  r0, =TEXTBOX_STATE
-    ldr  r0, [r0]
+    @ Is the game able to take a banner request this frame? Keep pending set and retry later
+    @ while it cannot. A request still waiting for display (the box for an item the player just
+    @ picked up, say) would be replaced: sub_0800EF98 overwrites its text, and the soul banner
+    @ clears it. sub_0800EF98 also drops a request silently while the busy bits are set. The soul
+    @ banner is gated on the same bits: sub_0800E708's body is not decompiled, so waiting for a
+    @ quiet frame is the conservative choice rather than firing during a transition.
+    ldr  r0, =TEXTBOX
+    ldrb r1, [r0, #TB_KIND]
+    cmp  r1, #0
+    bne  .Ldone
+    ldr  r0, [r0, #TB_STATE]
     ldr  r1, =BUSY_MASK
     tst  r0, r1
     bne  .Ldone
