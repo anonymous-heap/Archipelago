@@ -163,9 +163,13 @@ class InstallTest(_InstallerCase):
 
     def test_a_reinstall_rebuilds_from_the_backups_not_the_live_files(self) -> None:
         install_rom(self.rom_path, self.exe_path, log=_quiet)
-        # Damage the live pair the way a half-finished swap would: payload only.
+        # Damage the member every install copies through. The AoS member is replaced anyway, so
+        # damage there would not show which pair the rebuild read.
+        live_psb = os.path.join(self.windata, "alldata.psb.m")
+        offset = cac_archive.load_index(live_psb)["file_info"][_OTHER_MEMBER][0]
         with open(os.path.join(self.windata, "alldata.bin"), "r+b") as f:
-            f.write(b"\xff" * 64)
+            f.seek(offset)
+            f.write(b"\xff" * len(_OTHER_BYTES))
         install_rom(self.rom_path, self.exe_path, log=_quiet)
         self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
         self.assertEqual(self._member(AOS_MEMBER), _make_patched_rom())
