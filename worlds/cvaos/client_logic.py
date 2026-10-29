@@ -28,6 +28,8 @@ from .ram import AoSRAM, addresses as addr
 if TYPE_CHECKING:
     from CommonClient import CommonContext
 
+STARTING_LOCATION = -2  # the location id the server gives starting-inventory items
+
 # Max items to grant per tick, so a large backlog on connect can't stall the watcher
 # (each grant is a few emulator round-trips). Leftovers are picked up on the following ticks.
 MAX_ITEMS_PER_TICK = 10
@@ -146,17 +148,18 @@ class CVAOSClientLogic:
         # the counter changing underneath us) and retry next tick.
         from CommonClient import logger
 
+        items = self._grantable_items(ctx)
         received = await ram.get_received_count()
         # Defensive: a counter ahead of everything the server has ever sent could only come from a
-        # corrupt save; clamp so we never index past items_received (a real grant rewrites it).
-        received = min(received, len(ctx.items_received))
+        # corrupt save; clamp so we never index past the items (a real grant rewrites it).
+        received = min(received, len(items))
         granted_this_tick = 0
-        while received < len(ctx.items_received) and granted_this_tick < MAX_ITEMS_PER_TICK:
-            code = ctx.items_received[received].item
+        while received < len(items) and granted_this_tick < MAX_ITEMS_PER_TICK:
+            code = items[received].item
             action = item_granting.resolve(code)
             if action is None:
-                # Unreachable today (every item is a pickup); log instead of silently dropping a
-                # received item if a non-pickup item is ever added to the pool.
+                # Unreachable today (every item code has a defined category); log instead of
+                # silently dropping a received item if an undefined one is ever added to the pool.
                 logger.warning("CVAoS: received item code %s has no grant mapping; skipping.", code)
                 done = await ram.set_received_count(received + 1, expected=received)
             else:
@@ -167,6 +170,20 @@ class CVAOSClientLogic:
                 break  # lost a guarded write, so the counter was not advanced; retry next tick
             received += 1
             granted_this_tick += 1
+
+    @staticmethod
+    def _grantable_items(ctx: "CommonContext") -> list:
+        """
+        Return the received items that the saved received-counter counts, in server order.
+
+        The server puts the starting inventory at the front of the list. A seed whose slot_data
+        has ``starting_inventory_from_server`` counts those items too. An older seed's saves count
+        only items from other worlds, because its client never asked for the starting inventory,
+        so for it they are left out. Its starting inventory is then not given, as before.
+        """
+        if ctx.slot_data.get("starting_inventory_from_server"):
+            return ctx.items_received
+        return [item for item in ctx.items_received if item.location != STARTING_LOCATION]
 
     async def _relay_deathlink(self, ctx: "CommonContext", ram: AoSRAM,
                                game_state: int, menu_state: int, in_gameplay: bool) -> None:

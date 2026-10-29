@@ -15,7 +15,7 @@ from types import SimpleNamespace
 from NetUtils import NetworkItem
 
 from .. import announce, item_granting
-from ..client_logic import MAX_ITEMS_PER_TICK
+from ..client_logic import MAX_ITEMS_PER_TICK, STARTING_LOCATION
 from ..items import FORBIDDEN_AREA_SWITCH, item_table
 from ..ram import AoSRAM, addresses as addr
 from ..ram.addresses import EWRAM
@@ -204,6 +204,28 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
         reserved = item_granting.pack(item_granting.TransferCategory.EVENT, 0)
         with self.assertLogs("Client", level="WARNING"):
             await self.client._receive_items(self.ctx("Mind Up (A)", codes=(reserved,)), self.ram)
+        self.assertEqual(await self.ram.owned_count("consumable", 5), 1)
+        self.assertEqual(await self.ram.get_received_count(), 2)
+
+    def starting_then_received(self, slot_data: dict) -> SimpleNamespace:
+        # The server sends the starting inventory first, at location -2.
+        items = [NetworkItem(item_table["500 Gold (A)"].code, STARTING_LOCATION, 2),
+                 NetworkItem(item_table["Mind Up (A)"].code, 5, 2)]
+        return SimpleNamespace(items_received=items, slot_data=slot_data)
+
+    async def test_an_older_seeds_save_counts_only_items_from_other_worlds(self) -> None:
+        # Its client already granted Mind Up and counted it, and never received the gold.
+        self.ewram[MIND_UP_OFFSET] = 1
+        await self.ram.set_received_count(1, expected=0)
+        await self.client._receive_items(self.starting_then_received({}), self.ram)
+        self.assertEqual(await self.ram.owned_count("consumable", 5), 1,
+                         "Mind Up must not be granted again")
+        self.assertEqual(self.gold(), 0)
+
+    async def test_a_newer_seeds_save_counts_the_starting_inventory_too(self) -> None:
+        ctx = self.starting_then_received({"starting_inventory_from_server": True})
+        await self.client._receive_items(ctx, self.ram)
+        self.assertEqual(self.gold(), 500)
         self.assertEqual(await self.ram.owned_count("consumable", 5), 1)
         self.assertEqual(await self.ram.get_received_count(), 2)
 

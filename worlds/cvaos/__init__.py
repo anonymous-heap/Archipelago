@@ -215,6 +215,10 @@ class CVAOSWorld(World):
             "skull_key_warp": self.options.skull_key_warp.value,
             "new_soul_pause": self.options.new_soul_pause.value,
             "death_link": self.options.death_link.value,
+            # The client receives the starting inventory and counts it in the saved received
+            # counter.
+            # Seeds without this key were generated for a client that did neither.
+            "starting_inventory_from_server": True,
         }
 
     def modify_multidata(self, multidata: dict) -> None:

@@ -32,6 +32,13 @@ class ItemsHandlingTest(unittest.IsolatedAsyncioTestCase):
         from ..collection_client import CVAOSCollectionContext
         self.assertEqual(CVAOSCollectionContext.items_handling, OTHER_WORLDS | STARTING_INVENTORY)
 
+    def test_slot_data_tells_the_client_its_counter_includes_the_starting_inventory(self):
+        # Without the key, the client treats the seed as one generated before this change.
+        from test.general import setup_multiworld
+        from .. import CVAOSWorld
+        multiworld = setup_multiworld(CVAOSWorld, seed=1)
+        self.assertIs(multiworld.worlds[1].fill_slot_data()["starting_inventory_from_server"], True)
+
 
 if __name__ == "__main__":
     unittest.main()
