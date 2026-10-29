@@ -13,7 +13,8 @@ the game's own map-cell routine (sub_0804F7A4). The pack's map images use that s
 is a location the server has, so the Hard Mode pickups appear only in seeds that have them.
 
 UT also shows Soma on the map. The client keeps his room and position in data storage under
-:data:`POSITION_KEY`, and :func:`position_icon` turns that into an icon on the current map.
+:data:`POSITION_KEY`, and :func:`position_icon` turns that into an icon at the centre of the map
+cell he is in, the cell the in-game map marks.
 
     python -m worlds.cvaos.tracker_map
 """
@@ -66,6 +67,15 @@ def cell_position(room_identifier: str, x: int, y: int) -> tuple[float, float]:
     return int(room.x) + x / ROOM_CELL[0], int(room.y) + y / ROOM_CELL[1]
 
 
+def cell_of(value) -> tuple:
+    """Return Soma's room and the cell within it for a position value, without looking the room up.
+
+    The client compares these to decide whether the icon would move.
+    """
+    room_identifier, x, y = value
+    return room_identifier, x // ROOM_CELL[0], y // ROOM_CELL[1]
+
+
 def shows_room(tracker: TrackerMap, room_identifier: str) -> bool:
     """Whether ``tracker`` draws the room ``room_identifier``."""
     chaotic = rooms_by_identifier[room_identifier].Region == CHAOTIC_REALM
@@ -87,11 +97,14 @@ def position_icon(map_id, value):
     if not isinstance(map_id, int) or not 0 <= map_id < len(MAPS):
         return None
     try:
-        room_identifier, x, y = value
+        room_identifier, cell_x, cell_y = cell_of(value)
         if not shows_room(MAPS[map_id], room_identifier):
             return None
-        return (*pin(MAPS[map_id].origin, cell_position(room_identifier, int(x), int(y))),
-                POSITION_ICON)
+        room = rooms_by_identifier[room_identifier]
+        # The game's map-cell routine (sub_0804F7A4) adds his whole cells within the room to the
+        # room's own cell, and the icon sits at that cell's centre.
+        centre = (int(room.x) + cell_x + 0.5, int(room.y) + cell_y + 0.5)
+        return (*pin(MAPS[map_id].origin, centre), POSITION_ICON)
     except (TypeError, ValueError, KeyError):
         return None
 

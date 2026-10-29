@@ -29,9 +29,7 @@ from .ram import AoSRAM, addresses as addr
 if TYPE_CHECKING:
     from CommonClient import CommonContext
 
-# Soma's position for the tracker's map is sent only after he moves this many pixels or changes
-# room, and at most this often.
-POSITION_STEP = 16
+# Soma's position for the tracker's map is sent when he enters another map cell, at most this often.
 POSITION_INTERVAL = 0.5
 
 # Max items to grant per tick, so a large backlog on connect can't stall the watcher
@@ -61,7 +59,7 @@ class CVAOSClientLogic:
         self.time_of_sent_death = None
         # Goal: latched True once we've reported completion, so we report it only once.
         self.goaled = False
-        # The position last sent for the tracker's map, and when, so a new session sends it afresh.
+        # The map cell last sent for the tracker's map, and when, so a new session sends it afresh.
         self.last_position = None
         self.last_position_time = 0.0
 
@@ -114,16 +112,16 @@ class CVAOSClientLogic:
 
     async def _report_position(self, ctx: "CommonContext", ram: AoSRAM) -> None:
         # Keep Soma's room and position in data storage, where Universal Tracker's map reads it
-        # (tracker_map.position_icon). A small move within a room is not worth a message.
+        # (tracker_map.position_icon). The map marks only the cell he is in, so a move within the
+        # cell is not sent.
         value = tracker_map.position_value(*await ram.get_player_room_position())
-        last = self.last_position
-        if last is not None and last[0] == value[0] and abs(last[1] - value[1]) < POSITION_STEP \
-                and abs(last[2] - value[2]) < POSITION_STEP:
+        cell = tracker_map.cell_of(value)
+        if cell == self.last_position:
             return
         now = time.monotonic()
         if now - self.last_position_time < POSITION_INTERVAL:
             return
-        self.last_position, self.last_position_time = value, now
+        self.last_position, self.last_position_time = cell, now
         key = tracker_map.POSITION_KEY.format(team=ctx.team, player=ctx.slot)
         await ctx.send_msgs([{"cmd": "Set", "key": key, "default": None, "want_reply": False,
                               "operations": [{"operation": "replace", "value": value}]}])

@@ -64,10 +64,14 @@ class TrackerMapTest(unittest.TestCase):
         self.assertEqual((castle["x"], castle["y"]),
                          (86 + round(24 * (0 + 384 / 256)), 49 + round(24 * (19 + 184 / 256))))
 
-    def test_soma_is_drawn_where_his_room_is(self):
+    def test_soma_is_drawn_at_the_centre_of_his_map_cell(self):
+        # 384 by 184 pixels into room 000, whose cell is (0, 19), is in cell (1, 19).
         castle, realm, combined = range(3)
         icon = tracker_map.position_icon(castle, ["000", 384, 184])
-        self.assertEqual(icon, (122, 522, tracker_map.POSITION_ICON))
+        self.assertEqual(icon, (86 + round(24 * 1.5), 49 + round(24 * 19.5),
+                                tracker_map.POSITION_ICON))
+        self.assertEqual(tracker_map.position_icon(castle, ["000", 300, 10]), icon, "same cell")
+        self.assertEqual(tracker_map.position_icon(castle, ["000", 512, 184])[0], icon[0] + 24)
         self.assertEqual(tracker_map.position_icon(combined, ["000", 384, 184]), icon)
         self.assertIsNone(tracker_map.position_icon(realm, ["000", 384, 184]),
                           "the Chaotic Realm map does not show the castle")
@@ -122,12 +126,15 @@ class PositionReportTest(unittest.IsolatedAsyncioTestCase):
             "operations": [{"operation": "replace", "value": ["000", 384, 184]}]}])
         self.assertEqual(tracker_map.POSITION_KEY.format(team=0, player=3), "cvaos_position_0_3")
 
-    async def test_a_small_move_is_not_sent(self):
+    async def test_a_move_within_the_cell_is_not_sent(self):
         await self.client._report_position(self.ctx, self.ram)
         self.now += 5
-        self.ram.position = (0, 0, 384 + client_logic.POSITION_STEP - 1, 184)
+        self.ram.position = (0, 0, 500, 250)
         await self.client._report_position(self.ctx, self.ram)
         self.assertEqual(len(self.sent), 1)
+        self.ram.position = (0, 0, 512, 250)
+        await self.client._report_position(self.ctx, self.ram)
+        self.assertEqual(self.sent[-1]["operations"][0]["value"], ["000", 512, 250])
 
     async def test_a_new_room_is_sent_but_not_twice_in_one_interval(self):
         await self.client._report_position(self.ctx, self.ram)
