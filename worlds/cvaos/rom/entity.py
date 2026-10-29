@@ -20,7 +20,8 @@ class AoSPickupEntity(Struct, endian="little"):
     0x04    1     entity_id   Per-room unique ID
     0x05    1     type        Entity type (4=PICKUP, 5=HARD_PICKUP)
     0x06    1     subtype     Item category (1=money, 2=consumable, 3=weapon,
-                               4=armor, 6=ability soul, 7=guardian soul, 8=enchant soul)
+                               4=armor, 5=red soul, 6=blue soul, 7=yellow soul,
+                               8=ability soul; the game passes subtype - 5 as the soul type)
     0x07    1     unknown     Always 0x00
     0x08    2     var_a       flag_offset — per-location save flag. Unchanged when shuffling items.
     0x0A    2     var_b       item_offset — index of item within its subtype category

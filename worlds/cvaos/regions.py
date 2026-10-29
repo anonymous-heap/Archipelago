@@ -43,10 +43,14 @@ TFORM_ENEMY_TYPES: frozenset[str] = frozenset({"Devil", "Manticore"})
 # of this soul?". Kept deliberately small: only enemies the logic references. Flame Demon
 # and Succubus drop two of the true-ending souls (the third, Giant Bat, is a ground pickup
 # resolved via state.has); Devil and Manticore drop transformation souls (Tform). Graham is
-# intentionally not here: his enemy rows aren't routing-annotated, so "reached Graham" is
-# modeled as can_reach_room("904") instead (see _chaotic_realm_gate and the goal completion
-# in __init__).
+# intentionally not here: "reached Graham" is modeled as can_reach_room("904") instead (see
+# _chaotic_realm_gate and the goal completion in __init__).
 LOGIC_ENEMY_TYPES: frozenset[str] = frozenset({"Flame Demon", "Succubus"}) | TFORM_ENEMY_TYPES
+
+# Instances of those types that never respawn once defeated, so logic cannot expect the player to
+# farm their soul. The room-106 Manticore (#132) is a one-time boss: EnemyManticoreCreate deletes it
+# once its boss-defeated bit is set, which leaves a single roll for its soul.
+ONE_TIME_ENEMY_NUMBERS: frozenset[int] = frozenset({132})
 
 
 def _enemy_region_name(enemy_number: int, enemy_name: str, specifier: str, room: str) -> str:
@@ -278,7 +282,7 @@ def create_regions(world: CVAOSWorld) -> None:
     enemy_regions: dict[int, Region] = {}
     enemy_region_name_by_number: dict[int, str] = {}
     for enemy_number, (enemy_name, specifier, enemy_room) in enemy_meta_by_number.items():
-        if enemy_name not in LOGIC_ENEMY_TYPES:
+        if enemy_name not in LOGIC_ENEMY_TYPES or enemy_number in ONE_TIME_ENEMY_NUMBERS:
             continue
         region_name = _enemy_region_name(enemy_number, enemy_name, specifier, enemy_room)
         region = Region(region_name, player, multiworld)
