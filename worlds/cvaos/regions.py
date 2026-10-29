@@ -205,7 +205,7 @@ def create_regions(world: CVAOSWorld) -> None:
         _room_override = SPECIAL_ROOM_ENTRANCE_RULES.get(
             (room_id, routing_info.from_room, routing_info.to_room))
         if _room_override is not None:
-            _replacement = _room_override(world)
+            _replacement = _room_override(world, access_rule)
             if _replacement is not None:
                 access_rule = _replacement
 
@@ -560,16 +560,16 @@ SPECIAL_TRANSDOOR_DEPS: dict[tuple[str, str], object] = {
 }
 
 
-def _forbidden_area_forward_gate(world: CVAOSWorld):
+def _forbidden_area_forward_gate(world: CVAOSWorld, _csv_rule):
     """
     The within-A01 route 20D -> A02 (the barrier-blocked direction).
-    
+
     With e.g. ForbiddenAreaButton == pickup the unlock is the shuffled "Study Sealswitch"
         (it sets misc #48 on receipt), so we gate the forward direction on holding it.
-    
+
     Otherwise return None to keep the CSV-derived rule.
-    
-    The reverse A02 -> 20D is untouched (the CSV already allows DJump / HJump / Giant Bat).
+
+    The reverse direction is _forbidden_area_reverse_gate.
     """
     use_csv_logic_options = frozenset({ForbiddenAreaButton.option_off})
     if world.options.forbidden_area_button.value in use_csv_logic_options:
@@ -578,12 +578,31 @@ def _forbidden_area_forward_gate(world: CVAOSWorld):
     return lambda state: state.has("Study Sealswitch", player)
 
 
+def _forbidden_area_reverse_gate(world: CVAOSWorld, csv_rule):
+    """
+    The within-A01 route A02 -> 20D, up from the Forbidden Area toward the Study.
+
+    The barrier blocks this direction too. In the vanilla game the button beside the A02 hole opens
+    it, which is why the CSV rule asks only for a way up. With the button turned into a pickup, the
+    barrier opens only once the Study Sealswitch is received, so the route needs the Sealswitch as
+    well as the CSV rule. With the button left in place, return None to keep the CSV rule.
+    """
+    if world.options.forbidden_area_button.value == ForbiddenAreaButton.option_off:
+        return None
+    player = world.player
+    if csv_rule is None:
+        return lambda state: state.has("Study Sealswitch", player)
+    return lambda state: state.has("Study Sealswitch", player) and csv_rule(state)
+
+
 # Bespoke per-direction access rules on specific WITHIN-ROOM crossings, keyed by
 # (room_id, from_room, to_room). Consulted in create_regions' within-room routing loop. A factory
-# takes the world and returns the replacement access-rule callable, or None to keep the CSV rule.
-# (has-item rules need no indirect-condition registration, unlike the can_reach transdoor gates.)
+# takes the world and the CSV-derived rule, and returns the replacement access-rule callable, or
+# None to keep the CSV rule. (has-item rules need no indirect-condition registration, unlike the
+# can_reach transdoor gates.)
 SPECIAL_ROOM_ENTRANCE_RULES: dict[tuple[str, str, str], object] = {
     ("A01", "20D", "A02"): _forbidden_area_forward_gate,
+    ("A01", "A02", "20D"): _forbidden_area_reverse_gate,
 }
 
 

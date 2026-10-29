@@ -4,6 +4,7 @@ from test.bases import WorldTestBase
 
 FORBIDDEN_AREA_SWITCH = "Study Sealswitch"
 _FWD = "A01:20D -> A01:A02"   # the within-A01 forward (20D->A02) connection name prefix
+_REV = "A01:A02 -> A01:20D"   # the within-A01 reverse (A02->20D), up from the Forbidden Area
 
 
 class _Base(WorldTestBase):
@@ -21,6 +22,14 @@ class TestForbiddenAreaOff(_Base):
                    if e.player == self.player and e.name.startswith(_FWD))
         # off keeps the vanilla CSV rule (Impossible) -> never passable in logic
         self.assertFalse(ent.access_rule(self.multiworld.get_all_state(False)))
+
+    def test_reverse_needs_only_a_way_up(self):
+        # The button beside the A02 hole opens the barrier, so climbing out is enough.
+        ent = next(e for e in self.multiworld.get_entrances()
+                   if e.player == self.player and e.name.startswith(_REV))
+        st = CollectionState(self.multiworld)
+        st.collect(self.world.create_item("Hippogryph"), prevent_sweep=True)
+        self.assertTrue(ent.access_rule(st))
 
 
 class TestForbiddenAreaPickup(_Base):
@@ -46,6 +55,19 @@ class TestForbiddenAreaPickup(_Base):
         self.assertFalse(ent.access_rule(st), "forward should be blocked without the Key")
         st.collect(self.world.create_item(FORBIDDEN_AREA_SWITCH), prevent_sweep=True)
         self.assertTrue(ent.access_rule(st), "forward should open with the Key")
+
+    def test_reverse_needs_the_key_and_a_way_up(self):
+        # Without the button, the barrier blocks the way up from the Forbidden Area as well.
+        ent = next(e for e in self.multiworld.get_entrances()
+                   if e.player == self.player and e.name.startswith(_REV))
+        st = CollectionState(self.multiworld)
+        st.collect(self.world.create_item("Hippogryph"), prevent_sweep=True)
+        self.assertFalse(ent.access_rule(st), "a way up is not enough without the Key")
+        st.collect(self.world.create_item(FORBIDDEN_AREA_SWITCH), prevent_sweep=True)
+        self.assertTrue(ent.access_rule(st))
+        key_only = CollectionState(self.multiworld)
+        key_only.collect(self.world.create_item(FORBIDDEN_AREA_SWITCH), prevent_sweep=True)
+        self.assertFalse(ent.access_rule(key_only), "the Key is not enough without a way up")
 
 
 # --- Direct create_itempool checks: the Key displaces exactly one filler (net-zero pool size) ---
