@@ -148,10 +148,9 @@ def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
             if name not in _SYNTHETIC_ITEM_NAMES
             and (include_hard or name not in _HARD_PICKUP_ITEM_NAMES)]
     if world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup:
-        # Shuffle in the Study Sealswitch, displacing one filler so the pool size still equals
-        # the location count.
-        # This is because currently, the A01 button is removed, not turned into a new check).
-        # At some point this will change.
+        # Shuffle in the Study Sealswitch, displacing one gold pickup so the pool size still
+        # equals the location count. The A01 button is removed rather than turned into a check of
+        # its own, so the Sealswitch has no location to add.
         displaced = next(i for i, existing in enumerate(pool)
                          if existing.name == _SEALSWITCH_DISPLACES)
         pool[displaced] = create_item(world, FORBIDDEN_AREA_SWITCH)
