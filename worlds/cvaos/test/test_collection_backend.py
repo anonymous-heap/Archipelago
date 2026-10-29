@@ -308,6 +308,36 @@ class EwramSignatureTest(unittest.TestCase):
 class WatcherResilienceTest(unittest.TestCase):
     """A tick that raises something other than CollectionError must not end the watcher."""
 
+    def test_no_tick_runs_while_a_seed_change_is_pending(self) -> None:
+        # Between noticing a different installed seed and reconnecting for it, the connection
+        # still belongs to the old seed's slot.
+        from types import SimpleNamespace
+        from unittest import mock
+
+        from .. import collection_client
+
+        exit_event = asyncio.Event()
+        loops: list[int] = []
+
+        def count_loop() -> None:
+            loops.append(1)
+            if len(loops) == 3:
+                exit_event.set()
+
+        tick = mock.AsyncMock()
+        ctx = SimpleNamespace(
+            exit_event=exit_event,
+            backend=CollectionBackend(FakeProc(), rom_base=0, ewram_base=0),
+            server=SimpleNamespace(socket=SimpleNamespace(closed=True)),
+            slot=1, auth="x", password_requested=False, _seed_changed=True,
+            brain=SimpleNamespace(_tick=tick),
+            revalidate_anchor=count_loop,
+            _detach=mock.Mock(),
+        )
+        with mock.patch.object(collection_client, "TICK_SECONDS", 0):
+            asyncio.run(asyncio.wait_for(collection_client._watcher(ctx), timeout=5))
+        tick.assert_not_awaited()
+
     def test_watcher_survives_an_unexpected_tick_error(self) -> None:
         from types import SimpleNamespace
         from unittest import mock
@@ -327,7 +357,7 @@ class WatcherResilienceTest(unittest.TestCase):
             exit_event=exit_event,
             backend=CollectionBackend(FakeProc(), rom_base=0, ewram_base=0),
             server=SimpleNamespace(socket=SimpleNamespace(closed=True)),
-            slot=1, auth="x", password_requested=False,
+            slot=1, auth="x", password_requested=False, _seed_changed=False,
             brain=SimpleNamespace(_tick=flaky_tick),
             revalidate_anchor=lambda: None,
             _detach=mock.Mock(),
@@ -345,7 +375,8 @@ class ReattachTest(unittest.IsolatedAsyncioTestCase):
 
     OLD_AUTH, NEW_AUTH = bytes(range(16)), bytes(range(16, 32))
 
-    async def attach_with(self, installed_auth: bytes, currently_dead: bool | None = None):
+    async def attach_with(self, installed_auth: bytes, currently_dead: bool | None = None, *,
+                          finished_game: bool = False, connected: bool = True):
         from unittest import mock
 
         from .. import collection_client
@@ -354,6 +385,9 @@ class ReattachTest(unittest.IsolatedAsyncioTestCase):
         ctx.slot = 1
         ctx.auth = base64.b64encode(self.OLD_AUTH).decode("ascii")
         ctx.on_package("Connected", {"slot_data": {}})
+        ctx.finished_game = finished_game
+        if not connected:
+            ctx.slot = None
         proc = FakeProc()
         proc.close = lambda: None
         rom = RomImage(0x30000020, 0x30000000, 0x30800000)
@@ -379,6 +413,27 @@ class ReattachTest(unittest.IsolatedAsyncioTestCase):
     async def test_the_same_seed_keeps_the_deathlink_latch(self) -> None:
         ctx, _disconnect = await self.attach_with(self.OLD_AUTH, currently_dead=True)
         self.assertIs(ctx.brain.currently_dead, True)
+
+    async def test_a_different_seed_does_not_inherit_the_old_seeds_goal(self) -> None:
+        # CommonClient reports CLIENT_GOAL on Connected while finished_game is set.
+        ctx, _disconnect = await self.attach_with(self.NEW_AUTH, finished_game=True)
+        self.assertFalse(ctx.finished_game)
+
+    async def test_a_different_seed_installed_while_disconnected_does_not_inherit_the_goal(self):
+        ctx, disconnect = await self.attach_with(self.NEW_AUTH, finished_game=True,
+                                                 connected=False)
+        self.assertFalse(ctx.finished_game)
+        disconnect.assert_not_awaited()
+
+    async def test_the_same_seed_keeps_its_goal(self) -> None:
+        ctx, _disconnect = await self.attach_with(self.OLD_AUTH, finished_game=True)
+        self.assertTrue(ctx.finished_game)
+
+    async def test_ticks_wait_for_the_new_seeds_connection(self) -> None:
+        ctx, _disconnect = await self.attach_with(self.NEW_AUTH)
+        self.assertTrue(ctx._seed_changed)
+        ctx.on_package("Connected", {"slot_data": {}})
+        self.assertFalse(ctx._seed_changed)
 
     async def test_a_different_seed_leaves_the_deathlink_latch_unknown(self) -> None:
         ctx, _disconnect = await self.attach_with(self.NEW_AUTH, currently_dead=True)
