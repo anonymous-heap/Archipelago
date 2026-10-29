@@ -142,10 +142,26 @@ class AccessorBehaviourTest(unittest.TestCase):
         self.assertEqual(self.mem[0x13354], 0x05, "the soul goes into the first list")
 
     def test_the_first_ability_soul_arrives_switched_on(self):
-        self.mem[0x13396] = 0b0000_0001                          # Malphas (0) already on
+        self.mem[0x13396] = 0b0000_0001                          # Grave Keeper (0) already on
         self.assertTrue(self.run_(self.ram.give_item("ability_soul", 3)))
         self.assertEqual(self.mem[0x13393], 0x10, "ability_soul[3] owned once")
-        self.assertEqual(self.mem[0x13396], 0b0000_1001, "and switched on, keeping Malphas on")
+        self.assertEqual(self.mem[0x13396], 0b0000_1001, "and switched on, keeping Grave Keeper on")
+
+    def test_the_callers_writes_come_last_in_the_batch(self):
+        # A backend that stops partway then has not advanced the counter, so the item is retried.
+        from ..ram.backend import GuardedWrite
+        sentinel = GuardedWrite(0x1328A, b"\x06\x00", b"\x05\x00", EWRAM)
+        batches = []
+        original = self.ram.backend.guarded_write_many
+
+        async def record(writes):
+            batches.append(list(writes))
+            return await original(writes)
+
+        self.ram.backend.guarded_write_many = record
+        self.assertTrue(self.run_(self.ram.give_item("ability_soul", 2, together_with=[sentinel])))
+        self.assertEqual(batches[0][-1], sentinel)
+        self.assertEqual(len(batches[0]), 3, "the soul, its switch, then the caller's write")
 
     def test_another_copy_keeps_the_players_switch(self):
         self.mem[0x13392] = 0x01                                 # ability_soul[0] owned, switched off

@@ -334,9 +334,13 @@ class AoSRAM:
             at_cap = total >= cap
             if not at_cap:
                 setattr(pair, which, current + 1)
-            writes = [self._guarded(slot, slot.pack(pair), old_byte), *together_with]
+            writes = [self._guarded(slot, slot.pack(pair), old_byte)]
             if category == "ability_soul" and total == 0:
                 writes.append(await self._ability_switched_on(index))
+            # The caller's writes go last. A backend that dies partway through a batch then leaves
+            # the item granted without its counter advance, so it is granted again, rather than
+            # counted without being switched on.
+            writes.extend(together_with)
             if not await self.guarded_write_many(writes):
                 return False
             if at_cap:
