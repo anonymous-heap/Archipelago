@@ -112,7 +112,7 @@ class GenerationTest(unittest.TestCase):
                     multiworld = build(True, steps=gen_steps, seed=seed, item_smoothing=smoothing)
                     distribute_items_restrictive(multiworld)
                     call_all(multiworld, "post_fill")
-                    self.assertTrue(multiworld.can_beat_game(multiworld.get_all_state(False)))
+                    self.assertTrue(multiworld.can_beat_game(multiworld.get_all_state()))
                     world = multiworld.worlds[1]
                     locations = [loc for loc in multiworld.get_locations(1) if loc.address is not None]
                     writes = get_location_data(world, locations)
