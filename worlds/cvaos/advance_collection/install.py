@@ -48,6 +48,7 @@ import argparse
 import hashlib
 import os
 import shutil
+import zlib
 from typing import Callable
 
 from . import cac_archive
@@ -129,7 +130,7 @@ def extract_base_rom_bytes(exe_path: str) -> bytes:
     psb_m, bin_path = _stock_archive_pair(windata)
     try:
         rom = cac_archive.extract_member(psb_m, bin_path, AOS_MEMBER, index_key_name=INDEX_KEY_NAME)
-    except (OSError, ValueError, KeyError) as exc:
+    except (OSError, ValueError, KeyError, zlib.error) as exc:
         raise InstallError(f"Could not extract the AoS ROM from {windata!r}: {exc}") from exc
     if len(rom) != ROM_SIZE:
         raise InstallError(
@@ -356,7 +357,7 @@ def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
             raise InstallError(_swap_failed_message(windata, exc, log)) from exc
     except InstallError:
         raise
-    except (OSError, ValueError, KeyError) as exc:
+    except (OSError, ValueError, KeyError, zlib.error) as exc:
         raise InstallError(f"Install failed ({exc}). The live files were not changed. If this "
                            "is a permissions problem, run as administrator.") from exc
     finally:

@@ -191,6 +191,14 @@ class InstallTest(_InstallerCase):
         self.assertEqual(self._member(AOS_MEMBER), _STOCK_AOS_BYTES)
         self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
 
+    def test_a_damaged_archive_is_reported_as_an_install_error(self) -> None:
+        live_psb = os.path.join(self.windata, "alldata.psb.m")
+        with open(live_psb, "r+b") as f:
+            f.seek(32)
+            f.write(b"\x00" * 64)
+        with self.assertRaises(InstallError):
+            install_rom(self.rom_path, self.exe_path, log=_quiet)
+
     def test_inconsistent_backup_state_aborts(self) -> None:
         install_rom(self.rom_path, self.exe_path, log=_quiet)
         os.remove(os.path.join(self.windata, "alldata.psb.m" + BACKUP_SUFFIX))
