@@ -274,15 +274,24 @@ class AoSRAM:
         """How many of one item the player owns, from the same arrays :meth:`give_item` writes.
 
         ``category``/``index`` are an item_info category and its within-category id. Soul arrays
-        pack two counts per byte, which this unpacks.
+        pack two counts per byte, which this unpacks. A soul's count is the sum of both of its
+        lists, as the game counts it.
         """
         array = addr.INVENTORY[category]
         self._check_index(category, array, index)
         if array.nibble_packed:
             slot = array.entry.item(index // 2)
             pair: SoulPair = await self._fetch(slot)
-            return getattr(pair, "odd" if index % 2 else "even")
+            return getattr(pair, "odd" if index % 2 else "even") + await self._second_count(
+                array, index)
         return await self._fetch(array.entry.item(index))
+
+    async def _second_count(self, array: addr.InventoryArray, index: int) -> int:
+        """The count of soul ``index`` in the array's second list, or 0 when it has none."""
+        if array.second is None:
+            return 0
+        pair: SoulPair = await self._fetch(array.second.item(index // 2))
+        return getattr(pair, "odd" if index % 2 else "even")
 
     async def give_item(self, category: str, index: int, *, cap: int = 9,
                         together_with: Sequence[GuardedWrite] = ()) -> bool:
@@ -313,17 +322,20 @@ class AoSRAM:
             # Two counts share the byte: read the pair, bump one nibble, and guard on the whole
             # byte so the neighbour's count rides along untouched. At the cap the byte is written
             # back unchanged, as in the byte-array case below.
+            # The cap applies to the soul's total over both lists, and the soul goes into the
+            # first list, as the game's own add does.
             slot = array.entry.item(index // 2)
             pair: SoulPair = await self._fetch(slot)
             old_byte = slot.pack(pair)
             which = "odd" if index % 2 else "even"
             current: int = getattr(pair, which)
-            new = min(current + 1, cap)
-            setattr(pair, which, new)
+            at_cap = current + await self._second_count(array, index) >= cap
+            if not at_cap:
+                setattr(pair, which, current + 1)
             if not await self.guarded_write_many(
                     [self._guarded(slot, slot.pack(pair), old_byte), *together_with]):
                 return False
-            if new == current:
+            if at_cap:
                 self._report_at_cap(category, index, cap)
             # Only souls reach here, and vanilla's collect path bumps the souls-collected
             # statistic after its add, so a granted soul counts the same way.
@@ -376,7 +388,7 @@ class AoSRAM:
         """
         entry = addr.CURRENT_GOLD
         current: int = await self._fetch(entry)
-        new = min(current + amount, 0xFFFFFFFF)
+        new = max(current, min(current + amount, addr.GOLD_CAP))
         gold = self._guarded(entry, entry.pack(new), entry.pack(current))
         return await self.guarded_write_many([gold, *together_with])
 

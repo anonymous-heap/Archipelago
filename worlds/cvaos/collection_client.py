@@ -90,7 +90,7 @@ _ROM_GAMECODE = b"A2CE"
 # In-game EWRAM signature bounds. Loose enough never to reject a real save, tight enough to
 # exclude essentially all random memory (verified against the live process).
 _MAX_VITAL = 2000      # AoS HP/MP never approach this
-_MAX_GOLD = 500_000
+_MAX_GOLD = 999_999   # the game's own gold cap (ram/addresses.py GOLD_CAP)
 _MAX_AREA = 0x2F
 
 

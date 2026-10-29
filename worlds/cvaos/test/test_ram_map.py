@@ -123,6 +123,28 @@ class AccessorBehaviourTest(unittest.TestCase):
     def run_(self, coro):
         return asyncio.run(coro)
 
+    def test_a_souls_count_includes_its_second_list(self):
+        # A copied save file keeps its souls in the second list; the game sums both.
+        self.mem[0x13361] = 0x01                                 # blue_soul[0] second list = 1
+        self.assertEqual(self.run_(self.ram.owned_count("blue_soul", 0)), 1)
+        self.mem[0x13354] = 0x02                                 # first list = 2
+        self.assertEqual(self.run_(self.ram.owned_count("blue_soul", 0)), 3)
+
+    def test_the_soul_cap_applies_to_both_lists_together(self):
+        self.mem[0x13354] = 0x04                                 # blue_soul[0]: 4 + 5 = 9
+        self.mem[0x13361] = 0x05
+        with self.assertLogs("Client", level="WARNING"):
+            self.assertTrue(self.run_(self.ram.give_item("blue_soul", 0)))
+        self.assertEqual(self.mem[0x13354], 0x04, "a soul at the cap must not be added")
+        self.mem[0x13361] = 0x03                                 # 4 + 3 = 7: room for one
+        self.assertTrue(self.run_(self.ram.give_item("blue_soul", 0)))
+        self.assertEqual(self.mem[0x13354], 0x05, "the soul goes into the first list")
+
+    def test_gold_stops_at_the_games_cap(self):
+        self.mem[0x13290:0x13294] = (999_000).to_bytes(4, "little")
+        self.assertTrue(self.run_(self.ram.add_gold(2000)))
+        self.assertEqual(int.from_bytes(self.mem[0x13290:0x13294], "little"), 999_999)
+
     def souls_collected(self) -> int:
         return int.from_bytes(self.mem[0x13264:0x13266], "little")
 

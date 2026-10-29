@@ -107,6 +107,8 @@ CURRENT_MP = VITALS.field("current_mp")            # 0x0201327C s16
 MAX_HP = VITALS.field("max_hp")                    # 0x0201327E u16
 MAX_MP = VITALS.field("max_mp")                    # 0x02013280 u16
 CURRENT_GOLD = ewram.entry(0x02013290, u32, name="current_gold")
+# The game clamps gold to 999,999 wherever it adds some (sub_08044F80 and the money-pickup path).
+GOLD_CAP = 999_999
 
 # totalNbrSoulsCollected: the running count the file-select and status screens show. The game
 # counts souls ABSORBED, not distinct souls owned, and clamps at SOULS_COLLECTED_CAP.
@@ -129,23 +131,31 @@ class InventoryArray:
 
     Byte arrays hold one count per byte. Soul arrays nibble-pack two souls per byte, one
     ``SoulPair`` record each (low nibble = even index, high nibble = odd). ``entry.item(i)``
-    does the base + index arithmetic either way. Souls also have an unused secondary list,
-    which we ignore.
+    does the base + index arithmetic either way.
+
+    Red, blue and yellow souls also have a second list, ``second``, laid out the same way. The
+    file-select Copy moves a file's souls into it, and the game's total for a soul is the sum of
+    both lists (SoulInventory_GetSoulTotal). Ability souls have no second list.
     """
 
     name: str
     entry: Entry
     length: int          # number of items the array can address
     nibble_packed: bool
+    second: Entry | None = None
 
 
 def _byte_array(name: str, gba_addr: int, items: int) -> InventoryArray:
     return InventoryArray(name, ewram.entry(gba_addr, u8, count(items), name=name), items, False)
 
 
-def _soul_array(name: str, gba_addr: int, items: int) -> InventoryArray:
+def _soul_array(name: str, gba_addr: int, items: int,
+                second_addr: int | None = None) -> InventoryArray:
     pairs = (items + 1) // 2
-    return InventoryArray(name, ewram.entry(gba_addr, SoulPair, count(pairs), name=name), items, True)
+    second = (None if second_addr is None
+              else ewram.entry(second_addr, SoulPair, count(pairs), name=f"{name}_second"))
+    return InventoryArray(name, ewram.entry(gba_addr, SoulPair, count(pairs), name=name), items,
+                          True, second)
 
 
 # Keyed by item_info category string (worlds/cvaos/data/item_info) so callers can route a
@@ -155,9 +165,9 @@ INVENTORY: dict[str, InventoryArray] = {
     "weapon":       _byte_array("weapon",       0x020132B4, 0x3B),
     "armor":        _byte_array("armor",        0x020132EF, 0x19),
     "accessory":    _byte_array("accessory",    0x02013308, 0x14),
-    "red_soul":     _soul_array("red_soul",     0x0201331C, 56),
-    "blue_soul":    _soul_array("blue_soul",    0x02013354, 26),
-    "yellow_soul":  _soul_array("yellow_soul",  0x0201336E, 36),
+    "red_soul":     _soul_array("red_soul",     0x0201331C, 56, second_addr=0x02013338),
+    "blue_soul":    _soul_array("blue_soul",    0x02013354, 26, second_addr=0x02013361),
+    "yellow_soul":  _soul_array("yellow_soul",  0x0201336E, 36, second_addr=0x02013380),
     "ability_soul": _soul_array("ability_soul", 0x02013392, 6),
 }
 # Money (subtype 1) is not an inventory array; it adds to CURRENT_GOLD.
