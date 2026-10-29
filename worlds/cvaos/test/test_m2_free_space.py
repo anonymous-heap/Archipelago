@@ -19,7 +19,8 @@ from ..rom import inventory_menu as im
 from ..rom import patch
 from ..rom import skull_key_warp as skw
 from ..rom import soul_guarantee_hook as sgh
-from ..rom.address_space import M2_AUDIO_BRIDGE, M2_GRAPHIC, gba_space, m2_region_hit
+from ..rom import received_item_box as rib
+from ..rom.address_space import M2_AUDIO_BRIDGE, M2_EWRAM, M2_GRAPHIC, gba_space, m2_region_hit
 from ..rom.entity import GBA_ROM_BASE
 
 
@@ -28,6 +29,20 @@ class M2RegionsTest(unittest.TestCase):
         geometry = gba_space()
         self.assertEqual(tuple(M2_GRAPHIC.bind(geometry).request()), (0x660000, 0x10BD))
         self.assertEqual(tuple(M2_AUDIO_BRIDGE.bind(geometry).request()), (0x700000, 0xE4))
+
+    def test_ap_scratch_ewram_avoids_m2s(self):
+        # The free high-EWRAM tail is free only on a cart: M2's code writes into it on the
+        # collection. Every AP scratch area there has to stay clear of those writes.
+        scratch = {
+            "item-use shadow inventory": range(cp.SHADOW_INVENTORY_GBA,
+                                               cp.SHADOW_INVENTORY_GBA + cp.MAX_SHADOW_SLOT + 1),
+            "announcement mailbox": range(rib.MAILBOX_GBA, rib.MAILBOX_GBA + rib.MAILBOX_SIZE),
+            "classicvania movement scratch": range(0x0203E000, 0x0203E004),
+        }
+        for name, area in scratch.items():
+            for m2 in M2_EWRAM:
+                with self.subTest(scratch=name, m2=hex(m2.start)):
+                    self.assertFalse(area.start < m2.stop and m2.start < area.stop)
 
     def test_hit_detection_covers_edges(self):
         self.assertIs(m2_region_hit(0x660000, 1), M2_GRAPHIC)
