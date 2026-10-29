@@ -18,12 +18,12 @@ How it works:
   handler; then -- set or not -- it reproduces _0801B9D0's stolen prologue and resumes the tail,
   which plays the death animation the handler selected. So a received DeathLink kills Soma through
   the canonical routine, immediately and regen-proof, and normal play is untouched.
+* Before that call it clears status bits 0x820, as the damage path does before its own call. The
+  handler skips the death animation while bit 0x800 is set, and the Sky Fish soul sets it.
 
-The trampoline bytes below are assembled from ``deathlink_hook.s`` at DEV time (arm-none-eabi +
-``-Ttext=0x08670040``) and verified with capstone, so AP generation needs no toolchain. Regenerate
-with the commands in that .s file if you edit it. (Relocated 0x0866xxxx -> 0x0867xxxx for Advance
-Collection compatibility by shifting the one internal literal, .Lresume+1 -- byte-equivalent to
-relinking at the new -Ttext.)
+The trampoline bytes below are assembled from ``deathlink_hook.s`` at DEV time with
+``thumb_assembler.py`` and verified with capstone, so AP generation needs no toolchain. Regenerate
+with the command in that .s file if you edit it; test_thumb_assembler checks that the two agree.
 
 Placement is declared as two ``Entry`` objects. The hook site is bounded to the 8 stolen bytes and
 the trampoline to its free-ROM reservation, so a blob that outgrows its slot refuses to build
@@ -50,20 +50,21 @@ KILL_REQUEST_EWRAM = 0x0201324C  # client->hook flag; see ram.addresses.KILL_REQ
 HOOK_SITE_GBA = HOOK_SITE.addr
 TRAMPOLINE_GBA = DEATHLINK_TRAMPOLINE.addr
 
-# Trampoline assembled from deathlink_hook.s at -Ttext=0x08670040 (THUMB, ARMv4T). 68 bytes:
-# 18 instructions + a 6-word literal pool (KILL_REQUEST, sub_0801AF20, .Lresume+1, gEwramData ptr,
-# 0x131B8, _0801B9D0+8). Verified byte-for-byte with capstone. Position-DEPENDENT: the pool bakes
-# absolute addresses, so the blob only runs at DEATHLINK_TRAMPOLINE.addr.
+# Trampoline assembled from deathlink_hook.s at 0x08670040 (THUMB, ARMv4T). 88 bytes: 31
+# instructions, 2 bytes of padding, and a 6-word literal pool (KILL_REQUEST, gEwramData ptr,
+# 0x131B8, sub_0801AF20, .Lresume+1, _0801B9D0+8). Verified with capstone. Position-DEPENDENT: the
+# pool bakes absolute addresses, so the blob only runs at DEATHLINK_TRAMPOLINE.addr.
 _TRAMPOLINE = bytes.fromhex(
-    "0a490b78002b0bd0331c6d331b78332b06d000230b70301c054b06498e461847"
-    "054d2868054c0019054908474c32010221af010861006708140b4f08b8310100d9b90108"
+    "0f490b78002b14d0331c6d331b78332b0fd000230b700b4b1b680b4a9b181a68"
+    "8220000182431a60301c084b08498e461847044d2868044c0019064908470000"
+    "4c320102140b4f08b831010021af010873006708d9b90108"
 )
 _POOL = tuple(int.from_bytes(_TRAMPOLINE[i:i + 4], "little")
               for i in range(len(_TRAMPOLINE) - 24, len(_TRAMPOLINE), 4))
 
 # Literal-pool invariants, stated against the entries: the blob's baked words must agree with the
 # declarations it lives in, so an edit to either side fails here before it reaches a ROM.
-assert len(_TRAMPOLINE) == 68, f"trampoline must be 68 bytes, got {len(_TRAMPOLINE)}"
+assert len(_TRAMPOLINE) == 88, f"trampoline must be 88 bytes, got {len(_TRAMPOLINE)}"
 assert KILL_REQUEST_EWRAM in _POOL, "kill-request addr missing from literal pool"
 assert ((HOOK_SITE.addr + 8) | 1) in _POOL, "blob does not resume at the hook site's 9th byte -- hook site moved?"
 assert any(DEATHLINK_TRAMPOLINE.addr <= (word & ~1) < DEATHLINK_TRAMPOLINE.addr + len(_TRAMPOLINE)

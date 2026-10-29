@@ -43,6 +43,17 @@ deathlink_tramp:                    @ r6 = player entity; entered every frame at
         beq     .Lresume
         movs    r3, #0
         strb    r3, [r1]            @ one-shot: clear the request
+        @ Clear status bits 0x820 first, as the damage path does before its own call (0x0801B3EA).
+        @ The handler skips the death animation while bit 0x800 (set by the Sky Fish soul) is on.
+        ldr     r3, =GEWRAMDATA
+        ldr     r3, [r3]
+        ldr     r2, =STATUS_OFF
+        adds    r3, r3, r2
+        ldr     r2, [r3]
+        movs    r0, #0x82
+        lsls    r0, r0, #4          @ r0 = 0x820
+        bics    r2, r0
+        str     r2, [r3]
         adds    r0, r6, #0          @ r0 = player entity (death-handler arg)
         ldr     r3, =DEATH_HANDLER
         ldr     r1, =(.Lresume + 1) @ THUMB return addr after the call

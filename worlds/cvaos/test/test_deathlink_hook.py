@@ -28,7 +28,7 @@ class DeathlinkHookBytesTest(unittest.TestCase):
     def test_two_writes_with_expected_lengths(self) -> None:
         self.assertEqual(set(self.writes), {self.hook_off, self.tramp_off})
         self.assertEqual(len(self.writes[self.hook_off]), 8)    # exactly the 8 stolen bytes
-        self.assertEqual(len(self.writes[self.tramp_off]), 68)  # assembled trampoline
+        self.assertEqual(len(self.writes[self.tramp_off]), 88)  # assembled trampoline
 
     def test_veneer_jumps_to_thumb_trampoline(self) -> None:
         veneer = self.writes[self.hook_off]
@@ -39,6 +39,14 @@ class DeathlinkHookBytesTest(unittest.TestCase):
 
     def test_trampoline_references_kill_flag(self) -> None:
         self.assertIn(dh.KILL_REQUEST_EWRAM.to_bytes(4, "little"), self.writes[self.tramp_off])
+
+    def test_trampoline_clears_the_sky_fish_bit_before_the_kill(self) -> None:
+        # movs r0,#0x82; lsls r0,r0,#4; bics r2,r0: the damage path clears status bits 0x820
+        # before calling the death handler, which skips the death animation while 0x800 is set.
+        blob = self.writes[self.tramp_off]
+        clear = bytes.fromhex("8220" "0001" "8243")
+        handler_call = blob.index(bytes.fromhex("8e461847"))   # mov lr, r1; bx r3
+        self.assertIn(clear, blob[:handler_call])
 
     def test_writes_do_not_overlap(self) -> None:
         spans = sorted((off, off + len(data)) for off, data in self.writes.items())
