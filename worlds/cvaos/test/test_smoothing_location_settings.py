@@ -22,7 +22,7 @@ from worlds.AutoWorld import call_all
 from worlds.generic.Rules import exclusion_rules
 
 from .. import CVAOSWorld
-from ..item_smoothing import ANCIENT_BOOK_NAMES, BIASED_SOULS, BLACK_PANTHER
+from ..item_smoothing import ANCIENT_BOOK_NAMES, BIASED_SOULS, BLACK_PANTHER, _state_without
 from ..locations import location_name_to_id
 
 BEFORE_FILL = ("generate_early", "create_regions", "create_items", "set_rules",
@@ -98,6 +98,18 @@ class LocationSettingsTest(unittest.TestCase):
                 stranded = [loc.item.name for loc in multiworld.get_locations(1)
                             if loc.item.name in SMOOTHED and not loc.can_reach(everything)]
                 self.assertEqual(stranded, [])
+
+    def test_the_state_a_moved_item_is_checked_against_never_holds_that_item(self):
+        # The refine passes only move an item to a location reachable in this state, which is what
+        # keeps the item from landing behind itself.
+        multiworld = generate(5, {})
+        for name in ("Malphas", "Hippogryph", "Giant Bat", "Ancient Book 1"):
+            location = next(loc for loc in multiworld.get_filled_locations(1)
+                            if loc.item.name == name)
+            with self.subTest(item=name):
+                state = _state_without(multiworld, location)
+                self.assertFalse(state.has(name, 1))
+                self.assertTrue(state.prog_items[1], "the state should still hold other items")
 
 
 class PoolTest(unittest.TestCase):
