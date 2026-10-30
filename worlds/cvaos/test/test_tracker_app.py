@@ -237,6 +237,20 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
             await self.fetch("/")
             await asyncio.sleep(0.2)  # the library logs after the response has gone
 
+    async def test_a_page_that_vanishes_logs_no_errors(self):
+        from websockets.asyncio.client import connect
+        with self.assertNoLogs("websockets", level="ERROR"):
+            # A connection opened and dropped before any request, as browsers open them ahead.
+            _, writer = await asyncio.open_connection("127.0.0.1", self.port)
+            writer.close()
+            await writer.wait_closed()
+            # A page whose connection ends with no closing handshake, as a killed browser's does.
+            socket = await connect(f"ws://127.0.0.1:{self.port}/ws")
+            await socket.recv()
+            socket.transport.abort()
+            await asyncio.sleep(0.3)
+        self.assertEqual(self.server.sockets, set())
+
     async def test_the_page_gets_a_snapshot_and_its_requests_reach_the_tracker(self):
         async with websockets.connect(f"ws://127.0.0.1:{self.port}/ws") as socket:
             message = json.loads(await socket.recv())

@@ -23,7 +23,7 @@ from http import HTTPStatus
 
 from websockets.asyncio.server import Server, ServerConnection, serve
 from websockets.datastructures import Headers
-from websockets.exceptions import InvalidMessage, InvalidStatus
+from websockets.exceptions import ConnectionClosed, InvalidMessage, InvalidStatus
 from websockets.http11 import Request, Response
 
 from .context import TrackerContext
@@ -41,7 +41,7 @@ class QuietHttp(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         if record.exc_info and record.getMessage() == "opening handshake failed":
-            return not isinstance(record.exc_info[1], (InvalidStatus, InvalidMessage))
+            return not isinstance(record.exc_info[1], (InvalidStatus, InvalidMessage, EOFError))
         return True
 
 
@@ -106,6 +106,8 @@ class TrackerServer:
             await socket.send(self.snapshot_message())
             async for message in socket:
                 await self.on_message(message)
+        except ConnectionClosed:
+            pass  # a page closed without saying goodbye, as a closed tab or browser can
         finally:
             self.sockets.discard(socket)
 
