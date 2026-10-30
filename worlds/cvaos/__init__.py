@@ -22,6 +22,11 @@ def launch_collection_client(*args: str) -> None:
     launch_component(launch, name="CVAoSCollectionClient", args=args)
 
 
+def launch_tracker(*args: str) -> None:
+    from .tracker_app import launch
+    launch_component(launch, name="CVAoSTracker", args=args)
+
+
 def launch_collection_installer(*args: str) -> None:
     # Runs in the Launcher process (Messenger-style tool component): prompts for the
     # patched .gba, resolves game.exe from settings, swaps the ROM into windata/.
@@ -36,6 +41,14 @@ components.append(Component(
     func=launch_collection_client,
     component_type=Type.CLIENT,
     description="Play a CVAoS seed inside the Steam Castlevania Advance Collection.",
+))
+
+components.append(Component(
+    "Aria of Sorrow Tracker",
+    func=launch_tracker,
+    component_type=Type.CLIENT,
+    description="A map of the castle in your browser: what is in logic, where Soma is, and the "
+                "way to any location.",
 ))
 
 components.append(Component(

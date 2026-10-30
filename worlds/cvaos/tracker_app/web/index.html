@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aria of Sorrow Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2 4 7v10l8 5 8-5V7z" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M12 7v10M8 9.5l4 2.5 4-2.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      </svg>
+      <span>Aria of Sorrow Tracker</span>
+    </div>
+    <button id="connection" class="connection" type="button" title="Connection">
+      <span class="dot"></span><span id="status-text">Not connected</span>
+    </button>
+    <div class="stats" id="stats" hidden>
+      <div class="stat"><span class="stat-value" id="stat-checked">0</span><span class="stat-label">checked</span></div>
+      <div class="stat in-logic"><span class="stat-value" id="stat-logic">0</span><span class="stat-label">in logic</span></div>
+      <div class="stat tricks"><span class="stat-value" id="stat-tricks">0</span><span class="stat-label">with tricks</span></div>
+      <div class="stat"><span class="stat-value" id="stat-goal">—</span><span class="stat-label">goal</span></div>
+    </div>
+    <div class="toggles">
+      <label class="switch"><input type="checkbox" id="reveal"><span>Reveal full map</span></label>
+      <label class="switch"><input type="checkbox" id="follow" checked><span>Follow Soma</span></label>
+      <label class="switch"><input type="checkbox" id="show-checked"><span>Checked</span></label>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar left">
+      <section>
+        <h2>Areas</h2>
+        <ul class="areas" id="areas"></ul>
+      </section>
+      <section>
+        <h2>Items</h2>
+        <div class="items" id="items"><p class="muted">Connect to see what you have.</p></div>
+      </section>
+    </aside>
+
+    <section class="map-pane">
+      <svg id="map" class="map" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+        <g id="layer-cells"></g>
+        <g id="layer-edges"></g>
+        <g id="layer-route"></g>
+        <g id="layer-pins"></g>
+        <g id="layer-soma"></g>
+      </svg>
+      <div class="map-controls">
+        <button type="button" id="zoom-in" title="Zoom in">+</button>
+        <button type="button" id="zoom-out" title="Zoom out">−</button>
+        <button type="button" id="zoom-fit" title="Fit the area (F)">⤢</button>
+      </div>
+      <div class="legend">
+        <span><i class="swatch in_logic"></i>In logic</span>
+        <span><i class="swatch tricks"></i>With tricks</span>
+        <span><i class="swatch out_of_logic"></i>Out of logic</span>
+        <span><i class="swatch soma"></i>Soma</span>
+        <span id="fog-note" class="muted" hidden>Unexplored areas appear once the client sends them</span>
+      </div>
+    </section>
+
+    <aside class="sidebar right">
+      <div class="route-actions">
+        <button type="button" class="primary" id="find-route" disabled>Find route</button>
+        <button type="button" id="clear-route" hidden>Clear route</button>
+      </div>
+      <section id="selection" hidden>
+        <div class="card">
+          <div class="card-title" id="sel-title"></div>
+          <div class="card-subtitle" id="sel-subtitle"></div>
+          <span class="chip" id="sel-status"></span>
+        </div>
+      </section>
+      <section id="route" hidden>
+        <h2 id="route-heading">Route</h2>
+        <ol class="route-steps" id="route-steps"></ol>
+      </section>
+      <section>
+        <h2 id="list-heading">In logic</h2>
+        <ul class="locations" id="locations"></ul>
+      </section>
+    </aside>
+  </main>
+
+  <dialog id="connect-dialog">
+    <form method="dialog" id="connect-form">
+      <h2>Connect</h2>
+      <label>Server <input name="server" placeholder="archipelago.gg:38281" required></label>
+      <label>Slot name <input name="slot" placeholder="Soma" required></label>
+      <label>Password <input name="password" type="password" placeholder="If the room has one"></label>
+      <p class="muted" id="dialog-status"></p>
+      <div class="dialog-actions">
+        <button type="button" id="disconnect">Disconnect</button>
+        <button type="button" id="show-log">Log</button>
+        <span class="spacer"></span>
+        <button type="button" id="cancel">Close</button>
+        <button type="submit" class="primary">Connect</button>
+      </div>
+      <pre class="log" id="log" hidden></pre>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
