@@ -7,48 +7,78 @@ loads it.
 from __future__ import annotations
 
 import json
+import os
 import pkgutil
 import unittest
 from collections import Counter
 from types import SimpleNamespace
 from unittest import mock
 
-from .. import CVAOSSettings, CVAOSWorld, client_logic, tracker_map
+from .. import CVAOSWorld, client_logic, tracker_map, tracker_png
 from ..client_logic import CVAOSClientLogic
+from ..data import map_info
+from ..data.room_info import by_identifier as rooms_by_identifier
 from ..locations import location_name_to_id
 
 
-def ut_load(name: str):
-    """Read a file in tracker/ as UT does: through pkgutil, relative to the World class's module,
-    then as strict JSON."""
+def ut_bytes(name: str) -> bytes:
+    """Read a file in tracker/ as UT does: through pkgutil, relative to the World class's module."""
     path = f"/{CVAOSWorld.tracker_world['map_page_folder']}/{name}"
-    return json.loads(pkgutil.get_data(CVAOSWorld.__module__, path).decode("utf-8-sig"))
+    return pkgutil.get_data(CVAOSWorld.__module__, path)
+
+
+def ut_load(name: str):
+    """Read a JSON file in tracker/ as UT does, as strict JSON."""
+    return json.loads(ut_bytes(name).decode("utf-8-sig"))
+
+
+def find_rom() -> str | None:
+    name = "Castlevania - Aria of Sorrow (USA)/Castlevania - Aria of Sorrow (USA).gba"
+    candidates = [os.environ.get("CVAOS_USA_ROM", ""), "/mnt/c/Users/belmo/Downloads/" + name,
+                  os.path.join(os.path.expanduser("~"), "Downloads", name)]
+    return next((path for path in candidates if path and os.path.exists(path)), None)
 
 
 class TrackerMapTest(unittest.TestCase):
     def setUp(self) -> None:
         self.maps = ut_load(tracker_map.MAPS_FILE)
         self.locations = ut_load(tracker_map.LOCATIONS_FILE)
+        self.index = {m.name: index for index, m in enumerate(tracker_map.MAPS)}
 
     def test_the_shipped_files_match_the_world_data(self):
-        maps, locations = tracker_map.build()
-        self.assertEqual(self.maps, maps)
-        self.assertEqual(self.locations, locations,
-                         "rewrite them with: python -m worlds.cvaos.tracker_map")
+        for name, data in tracker_map.files().items():
+            shipped = ut_bytes(name)
+            with self.subTest(file=name):
+                if name.endswith(".png"):
+                    # Pixels, not bytes: another zlib may compress the same pixels differently.
+                    self.assertEqual(tracker_png.decode(shipped), tracker_png.decode(data))
+                else:
+                    self.assertEqual(json.loads(shipped), json.loads(data),
+                                     "rewrite them with: python -m worlds.cvaos.tracker_map")
 
     def test_every_location_is_a_section_once(self):
         # UT matches a section to a location by its name alone.
         names = [section["name"] for node in self.locations for section in node["sections"]]
         self.assertEqual(sorted(names), sorted(location_name_to_id))
 
-    def test_every_pin_is_on_a_known_map_and_inside_its_image(self):
-        sizes = {m.name: m.size for m in tracker_map.MAPS}
-        self.assertEqual([m["name"] for m in self.maps], list(sizes))
+    def test_every_location_is_on_its_overview_and_its_area(self):
+        for node in self.locations:
+            area = node["name"][0]
+            expected = (["Chaotic Realm"] if area == tracker_map.REALM_AREA
+                        else ["Castle", tracker_map.AREA_NAMES[area]])
+            with self.subTest(location=node["sections"][0]["name"]):
+                self.assertEqual([pin["map"] for pin in node["map_locations"]], expected)
+
+    def test_every_pin_lands_on_a_drawn_room(self):
+        images = {m["name"]: tracker_png.decode(ut_bytes(m["img"])) for m in self.maps}
+        background = bytes(tracker_map.BACKGROUND)
         for node in self.locations:
             for pin in node["map_locations"]:
+                width, height, pixels = images[pin["map"]]
                 with self.subTest(location=node["sections"][0]["name"], map=pin["map"]):
-                    width, height = sizes[pin["map"]]
                     self.assertTrue(0 <= pin["x"] < width and 0 <= pin["y"] < height)
+                    at = (pin["y"] * width + pin["x"]) * 3
+                    self.assertNotEqual(pixels[at:at + 3], background)
 
     def test_no_two_pins_share_a_spot(self):
         # UT keys a map's pins by their position, so a second pin there would replace the first.
@@ -60,37 +90,65 @@ class TrackerMapTest(unittest.TestCase):
         # Entrance Parapet's pickup is 384 by 184 pixels into room 000, at map cell (0, 19).
         node = next(node for node in self.locations
                     if node["sections"][0]["name"] == "Entrance Parapet [000 Lucky Charm]")
-        castle = next(pin for pin in node["map_locations"] if pin["map"] == "Dracula's Castle")
-        self.assertEqual((castle["x"], castle["y"]),
-                         (86 + round(24 * (0 + 384 / 256)), 49 + round(24 * (19 + 184 / 256))))
+        castle = next(pin for pin in node["map_locations"] if pin["map"] == "Castle")
+        origin_x, origin_y = tracker_map.MAPS[0].origin
+        self.assertEqual((castle["x"], castle["y"]), (origin_x + round(24 * (0 + 384 / 256)),
+                                                      origin_y + round(24 * (19 + 184 / 256))))
 
-    def test_soma_is_drawn_at_the_centre_of_his_map_cell(self):
+    def test_soma_is_marked_at_the_centre_of_his_map_cell(self):
         # 384 by 184 pixels into room 000, whose cell is (0, 19), is in cell (1, 19).
-        castle, realm, combined = range(3)
+        castle, realm = 0, 1
+        origin_x, origin_y = tracker_map.MAPS[castle].origin
         icon = tracker_map.position_icon(castle, ["000", 384, 184])
-        self.assertEqual(icon, (86 + round(24 * 1.5), 49 + round(24 * 19.5),
-                                tracker_map.POSITION_ICON))
+        self.assertEqual(icon, (origin_x + 36, origin_y + 468, tracker_map.MARKER_FILE))
         self.assertEqual(tracker_map.position_icon(castle, ["000", 300, 10]), icon, "same cell")
         self.assertEqual(tracker_map.position_icon(castle, ["000", 512, 184])[0], icon[0] + 24)
-        self.assertEqual(tracker_map.position_icon(combined, ["000", 384, 184]), icon)
-        self.assertIsNone(tracker_map.position_icon(realm, ["000", 384, 184]),
-                          "the Chaotic Realm map does not show the castle")
+        self.assertIsNotNone(tracker_map.position_icon(self.index["Castle Corridor"],
+                                                       ["000", 384, 184]))
+        self.assertIsNone(tracker_map.position_icon(self.index["Chapel"], ["000", 384, 184]))
+        self.assertIsNone(tracker_map.position_icon(realm, ["000", 384, 184]))
         self.assertIsNotNone(tracker_map.position_icon(realm, ["B14", 100, 100]))
 
-    def test_soma_has_no_icon_until_ut_can_place_him(self):
+    def test_soma_has_no_marker_until_ut_can_place_him(self):
         # UT passes "" or None before the client writes, and None before a map loads. Any
         # exception would disconnect UT.
-        for map_id, value in ((0, ""), (0, None), (None, ["000", 0, 0]), (3, ["000", 0, 0]),
+        beyond = len(tracker_map.MAPS)
+        for map_id, value in ((0, ""), (0, None), (None, ["000", 0, 0]), (beyond, ["000", 0, 0]),
                               (-1, ["000", 0, 0]), (0, ["ZZZ", 0, 0]), (0, ["000", "x", 0]),
                               (0, {"room": "000"}), (0, ["000", 0])):
             with self.subTest(map_id=map_id, value=value):
                 self.assertIsNone(tracker_map.position_icon(map_id, value))
 
-    def test_the_pack_path_is_an_optional_setting(self):
-        key = CVAOSWorld.tracker_world["external_pack_key"]
-        self.assertIn(key, CVAOSSettings.__annotations__)
-        self.assertFalse(CVAOSSettings.UTPoptrackerPath.required)
+    def test_the_map_follows_soma_to_his_area(self):
+        self.assertEqual(tracker_map.map_page_index(["000", 0, 0]), self.index["Castle Corridor"])
+        self.assertEqual(tracker_map.map_page_index(["721", 0, 0]),
+                         self.index["Underground Reservoir"])
+        self.assertEqual(tracker_map.map_page_index(["B14", 0, 0]), self.index["Chaotic Realm"])
+        for value in ("", None, ["ZZZ", 0, 0], ["000"]):
+            with self.subTest(value=value):
+                self.assertEqual(tracker_map.map_page_index(value), -1, "keep the current map")
 
+    def test_the_dropdown_lists_every_map_once(self):
+        listed = [node for node in tracker_map.MAP_GROUPS if isinstance(node, str)]
+        listed += [name for node in tracker_map.MAP_GROUPS if not isinstance(node, str)
+                   for name in node[1]]
+        self.assertEqual(sorted(listed), sorted(m["name"] for m in self.maps))
+
+    def test_the_grid_holds_every_room_where_room_info_puts_it(self):
+        on_grid = {map_info.room_at(x, y) for y in range(map_info.ROWS)
+                   for x in range(map_info.COLUMNS)} - {None}
+        self.assertEqual(on_grid, set(rooms_by_identifier))
+        # Room 901's first cell is drawn as part of room 900, as in the game.
+        moved = [room for room, info in rooms_by_identifier.items()
+                 if map_info.room_at(int(info.x), int(info.y)) != room]
+        self.assertEqual(moved, ["901"])
+
+    def test_the_grid_matches_the_rom(self):
+        rom_path = find_rom()
+        if rom_path is None:
+            self.skipTest("USA ROM not available")
+        with open(rom_path, "rb") as f:
+            self.assertEqual(map_info.extract(f.read()), map_info.grid)
 
 
 class FakeRam:

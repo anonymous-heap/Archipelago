@@ -74,16 +74,8 @@ class CVAOSSettings(settings.Group):
         required = False
         md5s = [AC_GAME_EXE_MD5]
 
-    class UTPoptrackerPath(settings.FilePath):
-        """The CVAoSPT PopTracker pack's zip, which Universal Tracker's map tab takes its map images
-        from. Optional: Universal Tracker asks for it the first time it connects."""
-        description = "CVAoSPT PopTracker pack zip"
-        required = False
-        ut_dialog_name = "Select the CVAoSPT PopTracker pack zip"
-
     rom_file: RomFile = RomFile("Castlevania - Aria of Sorrow (USA).gba")
     collection_exe: CollectionExePath = CollectionExePath(AC_DEFAULT_EXE_PATH)
-    ut_poptracker_path: UTPoptrackerPath | str = UTPoptrackerPath()
 
 
 class CVAOSWebWorld(WebWorld):
@@ -139,15 +131,17 @@ class CVAOSWorld(World):
     # the whole world, so it applies to older seeds too (see interpret_slot_data).
     ut_can_gen_without_yaml = True
 
-    # Universal Tracker's map tab. The maps and the pin for each location come from this world's
-    # data (tracker_map.py builds them into tracker/), so they follow its locations. Only the map
-    # images come from the player's CVAoSPT pack zip, saved as ut_poptracker_path in host.yaml.
-    # Soma's icon follows the position the client keeps in data storage.
+    # Universal Tracker's map tab. The maps, their images and the pin for each location are all
+    # generated from this world's data (tracker_map.py builds them into tracker/), so no game art
+    # ships and nothing else needs installing. Soma's marker and the choice of map follow the
+    # position the client keeps in data storage.
     tracker_world: ClassVar[dict] = {
         "map_page_folder": tracker_map.FOLDER,
         "map_page_maps": [tracker_map.MAPS_FILE],
         "map_page_locations": [tracker_map.LOCATIONS_FILE],
-        "external_pack_key": "ut_poptracker_path",
+        "map_page_groups": tracker_map.MAP_GROUPS,
+        "map_page_setting_key": tracker_map.POSITION_KEY,
+        "map_page_index": tracker_map.map_page_index,
         "location_setting_key": tracker_map.POSITION_KEY,
         "location_icon_coords": tracker_map.position_icon,
     }
