@@ -309,6 +309,13 @@ function drawnInFull(cellKey, visited) {
   return !visited || page.reveal || (rect && rect.dataset.area === REALM) || visited.has(cellKey);
 }
 
+// Whether a location's check shows: only in a shown room drawn in full. A greyed-out room is one
+// Soma hasn't visited, so its checks stay hidden even when a Castle Map shows the room.
+function checkShown(location, visible, visited) {
+  const cell = key(Math.floor(location.x), Math.floor(location.y));
+  return (!visible || visible.has(cell)) && drawnInFull(cell, visited);
+}
+
 function renderMap() {
   const visible = visibleCells();
   const explored = page.snapshot.exploration;
@@ -349,11 +356,12 @@ function renderEdges(visible = visibleCells()) {
 function renderPins(visible = visibleCells()) {
   const statuses = page.snapshot.locations || {};
   const hinted = new Set(page.snapshot.hinted || []);
+  const visited = visitedCells();
   for (const [id, pin] of els.pins) {
     const status = statuses[id];
     const location = locationsById.get(id);
-    const cellShown = !visible || visible.has(key(Math.floor(location.x), Math.floor(location.y)));
-    const shown = status !== undefined && cellShown && (status !== "checked" || page.showChecked);
+    const shown = status !== undefined && checkShown(location, visible, visited)
+                  && (status !== "checked" || page.showChecked);
     pin.style.display = shown ? "" : "none";
     const focus = inFocus(location.area) ? "" : " unfocused";
     pin.setAttribute("class", `pin ${status || ""}${hinted.has(id) ? " hinted" : ""}${focus}`);
@@ -435,8 +443,9 @@ function renderSelectionRing() {
 // --- The panels -----------------------------------------------------------------------------
 
 // Count an area's locations in logic and with tricks. While unexplored cells are hidden, only the
-// locations the map shows count, so the numbers don't give away what lies in unexplored rooms.
-function counts(area, visible) {
+// checks the map shows count, so the numbers don't give away what lies in rooms Soma hasn't
+// visited.
+function counts(area, visible, visited) {
   const statuses = page.snapshot.locations || {};
   let inLogic = 0;
   let tricks = 0;
@@ -444,8 +453,7 @@ function counts(area, visible) {
     const location = locationsById.get(Number(id));
     if (!location) continue;
     const inArea = area === CASTLE ? location.area !== REALM : location.area === area;
-    if (!inArea) continue;
-    if (visible && !visible.has(key(Math.floor(location.x), Math.floor(location.y)))) continue;
+    if (!inArea || !checkShown(location, visible, visited)) continue;
     if (status === "in_logic") inLogic += 1;
     if (status === "tricks") tricks += 1;
   }
@@ -458,6 +466,7 @@ function renderAreas() {
   const entries = [{ id: CASTLE, name: "Whole castle" }, ...page.map.areas];
   const somaArea = page.snapshot.position ? page.snapshot.position[0][0] : null;
   const visible = visibleCells();
+  const visited = visitedCells();
   const known = knownAreas();
   for (const area of entries) {
     const item = document.createElement("li");
@@ -475,7 +484,7 @@ function renderAreas() {
       button.appendChild(here);
     }
     if (page.snapshot.tracking) {
-      const { inLogic, tricks } = counts(area.id, visible);
+      const { inLogic, tricks } = counts(area.id, visible, visited);
       const count = document.createElement("span");
       count.className = `count${inLogic ? "" : tricks ? " tricks" : " zero"}`;
       count.textContent = inLogic || tricks || "0";
@@ -616,11 +625,11 @@ function renderLocationList() {
   const focusName = page.focus === CASTLE ? "Whole castle" : areaName(page.focus);
   $("list-heading").textContent = `In logic · ${focusName}`;
   const visible = visibleCells();
+  const visited = visitedCells();
   const shown = page.map.locations.filter((location) => {
     const status = statuses[location.id];
     if (status !== "in_logic" && status !== "tricks") return false;
-    if (!inFocus(location.area)) return false;
-    return !visible || visible.has(key(Math.floor(location.x), Math.floor(location.y)));
+    return inFocus(location.area) && checkShown(location, visible, visited);
   });
   shown.sort((a, b) => (statuses[a.id] === statuses[b.id] ? a.name.localeCompare(b.name) : statuses[a.id] === "in_logic" ? -1 : 1));
   if (!shown.length) {
