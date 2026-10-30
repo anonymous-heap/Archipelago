@@ -565,8 +565,20 @@ function renderHeader() {
   const statuses = Object.values(snapshot.locations || {});
   const checked = statuses.filter((status) => status === "checked").length;
   $("stat-checked").textContent = `${checked}/${statuses.length}`;
-  $("stat-logic").textContent = statuses.filter((status) => status === "in_logic").length;
-  $("stat-tricks").textContent = statuses.filter((status) => status === "tricks").length;
+  // The checked count is the slot's progress, so it counts every location. In logic and with
+  // tricks count only the checks the page lists, like the area counts.
+  const visible = visibleCells();
+  const visited = visitedCells();
+  let inLogic = 0;
+  let tricks = 0;
+  for (const [id, status] of Object.entries(snapshot.locations || {})) {
+    const location = locationsById.get(Number(id));
+    if (!location || !checkListed(location, visible, visited)) continue;
+    if (status === "in_logic") inLogic += 1;
+    if (status === "tricks") tricks += 1;
+  }
+  $("stat-logic").textContent = inLogic;
+  $("stat-tricks").textContent = tricks;
   $("stat-goal").textContent = { yes: "in logic", tricks: "with tricks", no: "not yet" }[snapshot.goal] || "—";
 }
 
@@ -755,7 +767,8 @@ function setUpControls() {
       fitWhenTheShownMapChanges();  // "Reveal full map" switches between the two fits
       keepFocusOnAKnownArea();
       renderRoute();
-      // The area counts, and which areas are named, follow what is shown.
+      // The counts, and which areas are named, follow what is shown.
+      renderHeader();
       renderAreas();
       renderSelection();
       renderRouteSteps();
