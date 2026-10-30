@@ -172,7 +172,7 @@ h2 {
 .cell.remembered { fill: var(--room-dim); }
 .cell.save.remembered { fill: color-mix(in srgb, var(--save) 45%, var(--map-bg)); }
 .cell.warp.remembered { fill: color-mix(in srgb, var(--warp) 45%, var(--map-bg)); }
-.unfocused { opacity: 0.6; }
+.unfocused { opacity: 0.4; }
 
 .edge { stroke-width: 0.12; stroke-linecap: square; }
 .edge.wall { stroke: var(--wall); }

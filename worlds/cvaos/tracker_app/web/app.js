@@ -131,41 +131,24 @@ function applyView() {
   $("map").setAttribute("viewBox", `${x} ${y} ${w} ${h}`);
 }
 
-function focusBounds(focus) {
-  const areas = focus === CASTLE ? page.map.areas.filter((area) => !area.realm) : [areasById.get(focus)];
-  return [
-    Math.min(...areas.map((a) => a.bounds[0])), Math.min(...areas.map((a) => a.bounds[1])),
-    Math.max(...areas.map((a) => a.bounds[2])), Math.max(...areas.map((a) => a.bounds[3])),
-  ];
-}
-
-const MIN_VIEW = { w: 18, h: 12 }; // cells, so a few explored rooms don't fill the screen
-
 function inFocus(area) {
   return page.focus === CASTLE ? area !== REALM : area === page.focus;
 }
 
-// Fit the focused area. While unexplored cells are hidden, fit the part of it that is shown.
+// Show the whole map, the Chaotic Realm's space included, so picking any area never has to move
+// the view.
 function fitView() {
-  let [x0, y0, x1, y1] = focusBounds(page.focus);
-  const visible = visibleCells();
-  if (visible) {
-    const shown = page.map.cells.filter((cell) => inFocus(cell.area) && visible.has(key(cell.x, cell.y)));
-    if (shown.length) {
-      [x0, y0] = [Math.min(...shown.map((c) => c.x)), Math.min(...shown.map((c) => c.y))];
-      [x1, y1] = [Math.max(...shown.map((c) => c.x)) + 1, Math.max(...shown.map((c) => c.y)) + 1];
-      const grow = { w: Math.max(0, MIN_VIEW.w - (x1 - x0)) / 2, h: Math.max(0, MIN_VIEW.h - (y1 - y0)) / 2 };
-      [x0, x1, y0, y1] = [x0 - grow.w, x1 + grow.w, y0 - grow.h, y1 + grow.h];
-    }
-  }
+  const areas = page.map.areas;
+  const [x0, y0] = [Math.min(...areas.map((a) => a.bounds[0])), Math.min(...areas.map((a) => a.bounds[1]))];
+  const [x1, y1] = [Math.max(...areas.map((a) => a.bounds[2])), Math.max(...areas.map((a) => a.bounds[3]))];
   page.view = { x: x0 - 1, y: y0 - 1, w: x1 - x0 + 2, h: y1 - y0 + 2 };
   applyView();
 }
 
+// Focus an area: highlight it and list what is in logic there. The view stays where it is.
 function setFocus(focus) {
   page.focus = focus;
-  renderMap();  // first, since the Chaotic Realm shows only while it is in focus
-  fitView();
+  renderMap();  // the Chaotic Realm shows only while it is in focus
   renderFocus();
   renderAreas();
   renderLocationList();
@@ -296,13 +279,21 @@ function renderPins(visible = visibleCells()) {
     const cellShown = !visible || visible.has(key(Math.floor(location.x), Math.floor(location.y)));
     const shown = status !== undefined && cellShown && (status !== "checked" || page.showChecked);
     pin.style.display = shown ? "" : "none";
-    pin.setAttribute("class", `pin ${status || ""}${hinted.has(id) ? " hinted" : ""}`);
+    const focus = inFocus(location.area) ? "" : " unfocused";
+    pin.setAttribute("class", `pin ${status || ""}${hinted.has(id) ? " hinted" : ""}${focus}`);
   }
   renderSelectionRing();
 }
 
+// Dim everything outside the focused area: rooms, then walls and doors that touch no focused room.
+// The pins dim in renderPins.
 function renderFocus() {
   for (const rect of els.cells.values()) rect.classList.toggle("unfocused", !inFocus(rect.dataset.area));
+  for (const edge of els.edges) {
+    const focused = edge.cells.some((cell) => els.cells.has(cell) && inFocus(els.cells.get(cell).dataset.area));
+    edge.line.classList.toggle("unfocused", !focused);
+    if (edge.door) edge.door.classList.toggle("unfocused", !focused);
+  }
 }
 
 function somaPoint() {
