@@ -208,6 +208,7 @@ class TrackerMapTest(unittest.TestCase):
         self.assertEqual(map_info.extract(rom), map_info.grid)
         self.assertEqual(map_info.extract_edges(rom), map_info.edges)
         self.assertEqual(map_info.extract_hidden_doors(rom), map_info.hidden_doors)
+        self.assertEqual(map_info.extract_castle_map_skips(rom), map_info.CASTLE_MAP_SKIPS)
 
     def test_the_hidden_door_list_holds_every_hidden_door_edge(self):
         on_edges = set()

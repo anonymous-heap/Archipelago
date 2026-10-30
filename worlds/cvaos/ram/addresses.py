@@ -85,6 +85,9 @@ EVENT_FLAGS = ewram.entry(0x0200033C, u32, name="event_flags")
 # is two u32 bitmasks over columns half*32 to half*32 + 31, bit 0 the leftmost: the cells visited,
 # which the map draws in full, then the cells remembered, which it draws dimmed. See exploration.py.
 EXPLORED_MAP = ewram.entry(0x020000B4, Buffer.of(nbytes=0x280), name="explored_map")
+# How many of each Castle Map Soma holds: consumables 29 to 31 (the decomp's itemInventory[0x1D]
+# to [0x1F]), one byte each. Each one held reveals areas on the map (exploration.CASTLE_MAP_AREAS).
+CASTLE_MAPS = ewram.entry(0x020132B1, Buffer.of(nbytes=3), name="castle_maps")
 BOSS_FLAGS = ewram.entry(0x0200037E, u16, name="boss_flags")
 GLOBAL_FLAGS = ewram.entry(0x0200042C, u32, name="global_flags")
 CURRENT_AREA = ewram.entry(0x0200009E, u8, name="current_area")          # Phase 6 (area-aware DeathLink)

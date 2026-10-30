@@ -278,7 +278,7 @@ class TrackerContext(CommonContext):
             goal = "tricks"
         else:
             goal = "no"
-        # The pool's progression items, and any Soma has from elsewhere, such as his start inventory.
+        # The pool's progression items, and any Soma has from elsewhere, such as a start inventory.
         in_pool = {item.name for item in world.multiworld.itempool
                    if item.player == world.player and item.advancement}
         progression = sorted((in_pool | set(self.result.prog_items)) - {UT_TRICKS_ITEM})
@@ -301,7 +301,10 @@ class TrackerContext(CommonContext):
         if explored is None:
             return None
         return {"visited": sorted(explored.visited), "remembered": sorted(explored.remembered),
-                "hidden_doors": sorted(explored.hidden_doors)}
+                "hidden_doors": sorted(explored.hidden_doors),
+                "castle_maps": sorted(explored.castle_maps),
+                # the cells the Castle Maps held show, which the page draws like remembered ones
+                "revealed": sorted(exploration.revealed_by_castle_maps(explored.castle_maps))}
 
     def route_snapshot(self) -> dict | None:
         route = self.route

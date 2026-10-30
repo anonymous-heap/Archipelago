@@ -248,15 +248,17 @@ function setUpPanAndZoom() {
 
 // --- What is shown --------------------------------------------------------------------------
 
-// The cells to draw, or null for all of them. Unexplored cells stay hidden unless the full map is
-// revealed. The game never marks the Chaotic Realm as explored, so it is drawn whole, but only
-// while it is in focus or Soma is in it.
+// The cells to draw, or null for all of them. Cells Soma hasn't explored, and that no Castle Map
+// he holds shows, stay hidden unless the full map is revealed. The game never marks the Chaotic
+// Realm as explored, so it is drawn whole, but only while it is in focus or Soma is in it.
 function visibleCells() {
   const explored = page.snapshot.exploration;
   if (page.reveal || !explored) return null;
   const visible = new Set();
   for (const [x, y] of explored.visited) visible.add(key(x, y));
   for (const [x, y] of explored.remembered) visible.add(key(x, y));
+  // The areas a Castle Map shows. Not visited yet, they are drawn dimmed, as the game does.
+  for (const [x, y] of explored.revealed || []) visible.add(key(x, y));
   const soma = somaPoint();
   if (soma) visible.add(key(Math.floor(soma.x), Math.floor(soma.y)));
   if (page.focus === REALM || (soma && soma.room[0] === REALM)) {

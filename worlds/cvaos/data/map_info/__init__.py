@@ -33,6 +33,12 @@ from typing import NamedTuple
 GRID_ADDRESS = 0x08116650
 EDGES_ADDRESS = 0x08117DD0
 HIDDEN_DOORS_ADDRESS = 0x081183B0
+CASTLE_MAP_SKIPS_ADDRESS = 0x084F1054
+
+# The cells a Castle Map leaves out when it reveals its areas: secret rooms in Dance Hall (301,
+# 310), Castle Corridor (00B) and Chapel (109). The ROM lists them as (x, y) byte pairs, ending at
+# a 0, 0 pair.
+CASTLE_MAP_SKIPS: tuple[tuple[int, int], ...] = ((4, 13), (12, 13), (13, 13), (15, 22), (47, 20))
 COLUMNS = 64
 ROWS = 47
 EMPTY = 0xFFFF
@@ -144,6 +150,16 @@ def extract_hidden_doors(rom: bytes) -> tuple[HiddenDoor, ...]:
         doors.append(_hidden_door(x, struct.unpack_from("<b", rom, at + 1)[0]))
         at += 2
     return tuple(doors)
+
+
+def extract_castle_map_skips(rom: bytes) -> tuple[tuple[int, int], ...]:
+    """Return the cells the Castle Maps leave out, as read from a US ROM."""
+    at = CASTLE_MAP_SKIPS_ADDRESS - 0x08000000
+    cells = []
+    while rom[at]:
+        cells.append((rom[at], rom[at + 1]))
+        at += 2
+    return tuple(cells)
 
 
 def write(rom_path: str) -> None:

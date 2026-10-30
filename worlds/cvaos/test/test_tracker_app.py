@@ -163,8 +163,17 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(snapshot["position"], ["003", 100, 50])
         self.assertEqual(snapshot["exploration"],
                          {"visited": [(0, 19), (1, 19)], "remembered": [(0, 19), (1, 19)],
-                          "hidden_doors": [2]})
+                          "hidden_doors": [2], "castle_maps": [], "revealed": []})
         self.assertGreater(self.changes, 0)
+
+    async def test_a_castle_map_reveals_its_areas(self):
+        explored = Exploration(frozenset(), frozenset(), frozenset(), frozenset({3}))
+        self.store(self.ctx.exploration_key, exploration.encode(explored))
+        snapshot = self.ctx.snapshot()["exploration"]
+        self.assertEqual(snapshot["castle_maps"], [3])
+        revealed = {tuple(cell) for cell in snapshot["revealed"]}
+        self.assertEqual(revealed, exploration.revealed_by_castle_maps(frozenset({3})))
+        self.assertTrue(revealed)
 
     async def test_a_route_starts_where_soma_is_and_ends_once_he_gets_there(self):
         self.receive("Malphas", "Hippogryph")
