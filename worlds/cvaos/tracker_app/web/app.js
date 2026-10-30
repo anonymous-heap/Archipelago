@@ -267,15 +267,26 @@ function visibleCells() {
   return visible;
 }
 
+function visitedCells() {
+  const explored = page.snapshot.exploration;
+  return explored ? new Set(explored.visited.map(([x, y]) => key(x, y))) : null;
+}
+
+// Whether a cell is drawn in full rather than greyed out. While unexplored cells are hidden, the
+// cells Soma hasn't visited are greyed out, walls too, as on the game's map: those he only
+// remembers, and those a Castle Map shows. The Chaotic Realm, which the game never marks, is not.
+function drawnInFull(cellKey, visited) {
+  const rect = els.cells.get(cellKey);
+  return !visited || page.reveal || (rect && rect.dataset.area === REALM) || visited.has(cellKey);
+}
+
 function renderMap() {
   const visible = visibleCells();
   const explored = page.snapshot.exploration;
-  const visited = explored ? new Set(explored.visited.map(([x, y]) => key(x, y))) : null;
+  const visited = visitedCells();
   for (const [cellKey, rect] of els.cells) {
     rect.style.display = !visible || visible.has(cellKey) ? "" : "none";
-    // Remembered but not visited: the game draws these dimmed.
-    rect.classList.toggle("remembered", Boolean(visited) && !page.reveal && rect.dataset.area !== REALM
-                          && !visited.has(cellKey));
+    rect.classList.toggle("remembered", !drawnInFull(cellKey, visited));
   }
   renderEdges(visible);
   $("fog-note").hidden = Boolean(explored) || page.reveal || !page.snapshot.tracking;
@@ -286,12 +297,16 @@ function renderMap() {
 // filled as one shape, so where two segments overlap at a cell corner nothing is drawn twice.
 function renderEdges(visible = visibleCells()) {
   const explored = page.snapshot.exploration;
+  const visited = visitedCells();
   const passed = new Set(explored ? explored.hidden_doors : []);
   const paths = Object.fromEntries(EDGE_LOOKS.map((look) => [look, []]));
   for (const edge of els.edges) {
     if (visible && !edge.cells.some((cell) => visible.has(cell))) continue;
-    const focused = edge.cells.some((cell) => els.cells.has(cell) && inFocus(els.cells.get(cell).dataset.area));
-    const dim = focused ? "" : " unfocused";
+    // A wall is lit where it borders a room of the highlighted area that is drawn in full, so the
+    // walls of greyed-out rooms stay grey with them.
+    const lit = edge.cells.some((cell) => els.cells.has(cell) && inFocus(els.cells.get(cell).dataset.area)
+                                          && drawnInFull(cell, visited));
+    const dim = lit ? "" : " unfocused";
     const { x, y } = edge;
     paths[`wall${dim}`].push(edge.top ? `M${x} ${y}h1` : `M${x} ${y}v1`);
     // A door is the middle of its edge, as on the game's own map. A hidden door looks like a wall
