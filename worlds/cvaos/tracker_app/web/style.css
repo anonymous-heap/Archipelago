@@ -25,7 +25,7 @@
   --save: #c8323c;
   --warp: #c9b02a;
   --wall: #dfe4f2;
-  --door: #40c8e0;
+  --door: #00cdcd;  /* the game's map draws doors in this cyan (its palette at 0x081183D0) */
   --wall-dim: color-mix(in srgb, var(--wall) 40%, var(--map-bg));
   --door-dim: color-mix(in srgb, var(--door) 40%, var(--map-bg));
 
@@ -178,7 +178,7 @@ h2 {
 
 .edge { fill: none; stroke-width: 0.12; stroke-linecap: square; }
 .edge.wall { stroke: var(--wall); }
-.edge.door { stroke: var(--door); stroke-width: 0.16; stroke-linecap: butt; }
+.edge.door { stroke: var(--door); stroke-linecap: butt; }  /* as thick as the wall, as in the game */
 /* Walls and doors outside the highlighted area dim to solid darker colours. */
 .edge.wall.unfocused { stroke: var(--wall-dim); }
 .edge.door.unfocused { stroke: var(--door-dim); }

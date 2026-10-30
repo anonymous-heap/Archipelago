@@ -61,6 +61,9 @@ const els = {
 
 // The looks walls and doors can have, in drawing order, so doors sit on top of walls.
 const EDGE_LOOKS = ["wall unfocused", "wall", "door unfocused", "door"];
+// The game's map draws a cell edge as 4 pixels: a corner in the wall colour, then a door's 3. So a
+// door covers the middle three quarters of its edge.
+const DOOR_INSET = 0.125;
 
 const locationsById = new Map();
 const areasById = new Map();
@@ -365,10 +368,13 @@ function renderEdges(visible = visibleCells()) {
     const dim = lit ? "" : " unfocused";
     const { x, y } = edge;
     paths[`wall${dim}`].push(edge.top ? `M${x} ${y}h1` : `M${x} ${y}v1`);
-    // A door is the middle of its edge, as on the game's own map. A hidden door looks like a wall
-    // until Soma has gone through it.
+    // A door is its edge in the door colour, all but the wall at each corner, as on the game's own
+    // map. A hidden door looks like a wall until Soma has gone through it.
     const open = edge.hidden === null || page.reveal || !explored || passed.has(edge.hidden);
-    if (edge.door && open) paths[`door${dim}`].push(edge.top ? `M${x + 0.2} ${y}h0.6` : `M${x} ${y + 0.2}v0.6`);
+    if (edge.door && open) {
+      paths[`door${dim}`].push(edge.top ? `M${x + DOOR_INSET} ${y}h${1 - 2 * DOOR_INSET}`
+                                        : `M${x} ${y + DOOR_INSET}v${1 - 2 * DOOR_INSET}`);
+    }
   }
   for (const look of EDGE_LOOKS) els.edgePaths.get(look).setAttribute("d", paths[look].join(""));
 }
