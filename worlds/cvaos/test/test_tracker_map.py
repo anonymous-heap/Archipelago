@@ -207,6 +207,16 @@ class TrackerMapTest(unittest.TestCase):
             rom = f.read()
         self.assertEqual(map_info.extract(rom), map_info.grid)
         self.assertEqual(map_info.extract_edges(rom), map_info.edges)
+        self.assertEqual(map_info.extract_hidden_doors(rom), map_info.hidden_doors)
+
+    def test_the_hidden_door_list_holds_every_hidden_door_edge(self):
+        on_edges = set()
+        for (a, b), kind in table_edges():
+            if kind == map_info.HIDDEN_DOOR:
+                side = "top" if a[0] == b[0] else "left"
+                on_edges.add(map_info.HiddenDoor(side, *b))
+        self.assertEqual(set(map_info.hidden_doors), on_edges)
+        self.assertEqual(len(map_info.hidden_doors), len(on_edges), "each door is listed once")
 
 
 class FakeRam:

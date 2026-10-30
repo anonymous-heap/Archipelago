@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
 
-from .._bytemaker_compat import Buffer, Entry, Space, count, s16, u8, u16, u32, unknown
+from .._bytemaker_compat import Buffer, Entry, Space, count, s16, u8, u16, u32
 from .structures import EquippedGear, PlayerVitals, SoulPair
 
 # --- Memory/BizHawk address-section names ---
@@ -78,7 +78,13 @@ PICKUP_FLAGS_LEN = PICKUP_FLAGS.size
 
 
 # --- Progress / goal flags ---
-EVENT_FLAGS = ewram.entry(0x0200033C, u8, unknown("event flags; Phase 6 autotracking"), name="event_flags")
+# The first 32 of the game's event flags (the decomp's unk_60.unk_33C), one bit each, LSB first.
+# Flags 0 to 12 record the hidden doors Soma has gone through, in map_info.hidden_doors order.
+EVENT_FLAGS = ewram.entry(0x0200033C, u32, name="event_flags")
+# The map's record of where Soma has been (the decomp's unk_60.unk_B4[2][40]). Entry [half][row]
+# is two u32 bitmasks over columns half*32 to half*32 + 31, bit 0 the leftmost: the cells visited,
+# which the map draws in full, then the cells remembered, which it draws dimmed. See exploration.py.
+EXPLORED_MAP = ewram.entry(0x020000B4, Buffer.of(nbytes=0x280), name="explored_map")
 BOSS_FLAGS = ewram.entry(0x0200037E, u16, name="boss_flags")
 GLOBAL_FLAGS = ewram.entry(0x0200042C, u32, name="global_flags")
 CURRENT_AREA = ewram.entry(0x0200009E, u8, name="current_area")          # Phase 6 (area-aware DeathLink)

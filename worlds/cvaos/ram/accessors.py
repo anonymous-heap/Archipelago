@@ -127,6 +127,11 @@ class AoSRAM:
     async def read_pickup_flags(self) -> bytes:
         return await self._fetch(addr.PICKUP_FLAGS)
 
+    async def read_exploration(self) -> tuple[bytes, int]:
+        """Return the map's explored-cell bitmasks and the first 32 event flags, in one read."""
+        cells, event_flags = await self.read_group(addr.EXPLORED_MAP, addr.EVENT_FLAGS)
+        return cells, event_flags
+
     @staticmethod
     def _flag_id(byte_index: int, bit: int) -> int:
         """

@@ -12,9 +12,14 @@ kind of edge along the cell's top and bits 0-1 the kind along its left, so every
 cells is stored once. The game's map routine (sub_08010C4C) draws a cell's top and left edges, then
 the top edge of the cell below it and the left edge of the cell to its right.
 
+The hidden-door list (0x081183B0) gives each hidden door's edge as a pair of signed bytes. A
+positive y names the top edge of cell (x, y), and a negative y the left edge of cell (x, -y). The
+list ends at a negative x. A door's place in the list is its bit in the RAM flags that record the
+hidden doors Soma has gone through.
+
 ``map_grid.txt`` holds the grid's first 47 rows, one per line, as 64 hex words. ``map_edges.txt``
-holds the edge table's 47 rows, one per line, with one hex digit per cell. Rewrite both from a US
-ROM with:
+holds the edge table's 47 rows, one per line, with one hex digit per cell. ``hidden_doors.txt``
+holds the hidden-door list, one pair per line. Rewrite all three from a US ROM with:
 
     python -m worlds.cvaos.data.map_info "Castlevania - Aria of Sorrow (USA).gba"
 """
@@ -23,9 +28,11 @@ from __future__ import annotations
 import os
 import pkgutil
 import struct
+from typing import NamedTuple
 
 GRID_ADDRESS = 0x08116650
 EDGES_ADDRESS = 0x08117DD0
+HIDDEN_DOORS_ADDRESS = 0x081183B0
 COLUMNS = 64
 ROWS = 47
 EMPTY = 0xFFFF
@@ -38,6 +45,12 @@ OPEN = 0
 HIDDEN_DOOR = 1
 DOOR = 2
 WALL = 3
+
+
+class HiddenDoor(NamedTuple):
+    side: str  # "top" or "left": which edge of the cell at x, y the door is on
+    x: int
+    y: int
 
 
 def _rows(file_name: str) -> list[str]:
@@ -59,8 +72,17 @@ def _load_edges() -> tuple[tuple[int, ...], ...]:
     return rows
 
 
+def _hidden_door(x: int, y: int) -> HiddenDoor:
+    return HiddenDoor("left", x, -y) if y < 0 else HiddenDoor("top", x, y)
+
+
+def _load_hidden_doors() -> tuple[HiddenDoor, ...]:
+    return tuple(_hidden_door(*map(int, line.split())) for line in _rows("hidden_doors.txt"))
+
+
 grid: tuple[tuple[int, ...], ...] = _load_grid()
 edges: tuple[tuple[int, ...], ...] = _load_edges()
+hidden_doors: tuple[HiddenDoor, ...] = _load_hidden_doors()  # in the game's order
 
 
 def cell(x: int, y: int) -> int:
@@ -114,8 +136,18 @@ def extract_edges(rom: bytes) -> tuple[tuple[int, ...], ...]:
                  for row in range(ROWS))
 
 
+def extract_hidden_doors(rom: bytes) -> tuple[HiddenDoor, ...]:
+    """Return the hidden-door list as read from a US ROM."""
+    at = HIDDEN_DOORS_ADDRESS - 0x08000000
+    doors = []
+    while (x := struct.unpack_from("<b", rom, at)[0]) >= 0:
+        doors.append(_hidden_door(x, struct.unpack_from("<b", rom, at + 1)[0]))
+        at += 2
+    return tuple(doors)
+
+
 def write(rom_path: str) -> None:
-    """Rewrite map_grid.txt and map_edges.txt from the ROM at ``rom_path``."""
+    """Rewrite map_grid.txt, map_edges.txt and hidden_doors.txt from the ROM at ``rom_path``."""
     with open(rom_path, "rb") as f:
         rom = f.read()
     folder = os.path.dirname(os.path.abspath(__file__))
@@ -127,3 +159,7 @@ def write(rom_path: str) -> None:
         f.write("# The castle map's edge table (ROM 0x08117DD0). See __init__.py.\n")
         for row in extract_edges(rom):
             f.write("".join(f"{value:X}" for value in row) + "\n")
+    with open(os.path.join(folder, "hidden_doors.txt"), "w", encoding="ascii", newline="\n") as f:
+        f.write("# The castle map's hidden-door list (ROM 0x081183B0). See __init__.py.\n")
+        for door in extract_hidden_doors(rom):
+            f.write(f"{door.x} {-door.y if door.side == 'left' else door.y}\n")

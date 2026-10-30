@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 from NetUtils import ClientStatus
 
-from . import item_granting, tracker_map
+from . import exploration, item_granting, tracker_map
 from .locations import flag_offset_to_location_id
 from .options import Goal
 from .ram import AoSRAM, addresses as addr
@@ -31,6 +31,8 @@ if TYPE_CHECKING:
 
 # Soma's position for the tracker's map is sent when he enters another map cell, at most this often.
 POSITION_INTERVAL = 0.5
+# The explored map is read this often, and sent when it has changed.
+EXPLORATION_INTERVAL = 2.0
 
 # Max items to grant per tick, so a large backlog on connect can't stall the watcher
 # (each grant is a few emulator round-trips). Leftovers are picked up on the following ticks.
@@ -62,6 +64,9 @@ class CVAOSClientLogic:
         # The map cell last sent for the tracker's map, and when, so a new session sends it afresh.
         self.last_position = None
         self.last_position_time = 0.0
+        # The explored map last sent, and when it was last read.
+        self.last_exploration = None
+        self.last_exploration_time = 0.0
 
     def queue_deathlink_from_bounce(self, ctx: "CommonContext", cmd: str, args: dict) -> None:
         # Queue an incoming DeathLink's cause; _relay_deathlink applies the kill. Skip the echo of
@@ -107,6 +112,7 @@ class CVAOSClientLogic:
         if in_gameplay and await ram.get_max_hp() > 0:
             await self._send_location_checks(ctx, ram)
             await self._report_position(ctx, ram)
+            await self._report_exploration(ctx, ram)
             await self._receive_items(ctx, ram)
             await self._report_goal(ctx, ram)
 
@@ -123,6 +129,22 @@ class CVAOSClientLogic:
             return
         self.last_position, self.last_position_time = cell, now
         key = tracker_map.POSITION_KEY.format(team=ctx.team, player=ctx.slot)
+        await ctx.send_msgs([{"cmd": "Set", "key": key, "default": None, "want_reply": False,
+                              "operations": [{"operation": "replace", "value": value}]}])
+
+    async def _report_exploration(self, ctx: "CommonContext", ram: AoSRAM) -> None:
+        # Keep the explored map in data storage, where the tracker reads which parts of the castle
+        # to show (exploration.py). It changes only as Soma walks into new cells, so it is read
+        # every few seconds rather than every tick.
+        now = time.monotonic()
+        if now - self.last_exploration_time < EXPLORATION_INTERVAL:
+            return
+        self.last_exploration_time = now
+        value = exploration.value(*await ram.read_exploration())
+        if value == self.last_exploration:
+            return
+        self.last_exploration = value
+        key = exploration.EXPLORATION_KEY.format(team=ctx.team, player=ctx.slot)
         await ctx.send_msgs([{"cmd": "Set", "key": key, "default": None, "want_reply": False,
                               "operations": [{"operation": "replace", "value": value}]}])
 
