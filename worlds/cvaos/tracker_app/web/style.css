@@ -26,6 +26,8 @@
   --warp: #c9b02a;
   --wall: #dfe4f2;
   --door: #40c8e0;
+  --wall-dim: color-mix(in srgb, var(--wall) 40%, var(--map-bg));
+  --door-dim: color-mix(in srgb, var(--door) 40%, var(--map-bg));
 
   --radius: 10px;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -172,7 +174,11 @@ h2 {
 .cell.remembered { fill: var(--room-dim); }
 .cell.save.remembered { fill: color-mix(in srgb, var(--save) 45%, var(--map-bg)); }
 .cell.warp.remembered { fill: color-mix(in srgb, var(--warp) 45%, var(--map-bg)); }
-.unfocused { opacity: 0.4; }
+.cell.unfocused, .pin.unfocused { opacity: 0.4; }
+/* Wall segments overlap where they meet, so they dim to a solid colour. A translucent one would
+   draw each overlap twice, leaving a brighter dot at every cell corner. */
+.edge.wall.unfocused { stroke: var(--wall-dim); }
+.edge.door.unfocused { stroke: var(--door-dim); }
 
 .edge { stroke-width: 0.12; stroke-linecap: square; }
 .edge.wall { stroke: var(--wall); }
