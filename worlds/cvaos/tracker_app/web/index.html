@@ -29,6 +29,7 @@
       <label class="switch" title="List the seed's progression items Soma doesn't have yet, as well as the ones he does"><input type="checkbox" id="reveal-items"><span>Reveal useful items</span></label>
       <label class="switch"><input type="checkbox" id="follow" checked><span>Follow Soma</span></label>
       <label class="switch" title="Mark the middle of Soma's map cell, as the in-game map does, instead of where he stands"><input type="checkbox" id="center-marker"><span>Center Soma's indicator</span></label>
+      <label class="switch" title="Draw the map in the game's own colours, with walls as thick as the game draws them"><input type="checkbox" id="game-look"><span>In-game look</span></label>
       <label class="switch"><input type="checkbox" id="show-checked"><span>Checked</span></label>
     </div>
   </header>
@@ -45,7 +46,7 @@
       </section>
     </aside>
 
-    <section class="map-pane">
+    <section class="map-pane" id="map-pane">
       <svg id="map" class="map" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
         <g id="layer-cells"></g>
         <g id="layer-soma-cell"></g>

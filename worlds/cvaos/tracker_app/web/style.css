@@ -28,6 +28,7 @@
   --door: #00cdcd;  /* the game's map draws doors in this cyan (its palette at 0x081183D0) */
   --wall-dim: color-mix(in srgb, var(--wall) 40%, var(--map-bg));
   --door-dim: color-mix(in srgb, var(--door) 40%, var(--map-bg));
+  --wall-width: 0.12;  /* in cells; app.js reads it to inset doors and Soma's cell outline */
 
   --radius: 10px;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -165,6 +166,23 @@ h2 {
 /* --- the map ------------------------------------------------------------------------------ */
 
 .map-pane { position: relative; min-width: 0; min-height: 0; background: var(--map-bg); }
+
+/* The "In-game look": the game map's palette (at 0x081183D0 in the ROM), and walls 1 pixel thick
+   in a cell 4 pixels across. The game draws every room it shows but Soma hasn't visited in one grey,
+   with grey walls. */
+.map-pane.game-look {
+  --map-bg: #29007b;
+  --room: #0000e6;
+  --room-dim: #414141;
+  --save: #ff0000;
+  --warp: #ffff00;
+  --wall: #ffffff;
+  --wall-dim: #8b8b8b;
+  --door: #00cdcd;
+  --door-dim: color-mix(in srgb, var(--door) 40%, var(--map-bg));
+  --wall-width: 0.25;
+}
+.game-look .cell.save.remembered, .game-look .cell.warp.remembered { fill: var(--room-dim); }
 .map { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
 .map.dragging { cursor: grabbing; }
 
@@ -176,8 +194,7 @@ h2 {
 .cell.warp.remembered { fill: color-mix(in srgb, var(--warp) 45%, var(--map-bg)); }
 .cell.unfocused, .pin.unfocused { opacity: 0.4; }
 
-/* app.js insets doors by half of this width. */
-.edge { fill: none; stroke-width: 0.12; stroke-linecap: square; }
+.edge { fill: none; stroke-width: var(--wall-width); stroke-linecap: square; }
 .edge.wall { stroke: var(--wall); }
 .edge.door { stroke: var(--door); stroke-linecap: butt; }
 /* Walls and doors outside the highlighted area dim to solid darker colours. */

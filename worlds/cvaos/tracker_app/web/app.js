@@ -50,6 +50,7 @@ const page = {
   follow: prefs.get("follow", true),
   centerMarker: prefs.get("centerMarker", false),  // draw Soma's dot in the middle of his cell
   showChecked: prefs.get("showChecked", false),
+  gameLook: prefs.get("gameLook", false),  // draw the map in the game's colours and wall width
 };
 
 const els = {
@@ -61,9 +62,10 @@ const els = {
 
 // The looks walls and doors can have, in drawing order, so doors sit on top of walls.
 const EDGE_LOOKS = ["wall unfocused", "wall", "door unfocused", "door"];
-// As on the game's map, a door fills its edge between the two corners, which stay in the wall
-// colour. So it stops half a wall's thickness (the stroke width in style.css) short of each end.
-const DOOR_INSET = 0.06;
+// How thick walls and doors are drawn, in cells. It depends on the look, so style.css sets it.
+function wallWidth() {
+  return parseFloat(getComputedStyle($("map")).getPropertyValue("--wall-width"));
+}
 
 const locationsById = new Map();
 const areasById = new Map();
@@ -350,6 +352,9 @@ function renderEdges(visible = visibleCells()) {
   const visited = visitedCells();
   const passed = new Set(explored ? explored.hidden_doors : []);
   const paths = Object.fromEntries(EDGE_LOOKS.map((look) => [look, []]));
+  // As on the game's map, a door fills its edge between the two corners, which stay in the wall
+  // colour. So it stops half a wall's width short of each end.
+  const inset = wallWidth() / 2;
   for (const edge of els.edges) {
     if (visible && !edge.cells.some((cell) => visible.has(cell))) continue;
     // A wall is lit where it borders a room of the highlighted area that is drawn in full, so the
@@ -363,8 +368,8 @@ function renderEdges(visible = visibleCells()) {
     // map. A hidden door looks like a wall until Soma has gone through it.
     const open = edge.hidden === null || page.reveal || !explored || passed.has(edge.hidden);
     if (edge.door && open) {
-      paths[`door${dim}`].push(edge.top ? `M${x + DOOR_INSET} ${y}h${1 - 2 * DOOR_INSET}`
-                                        : `M${x} ${y + DOOR_INSET}v${1 - 2 * DOOR_INSET}`);
+      paths[`door${dim}`].push(edge.top ? `M${x + inset} ${y}h${1 - 2 * inset}`
+                                        : `M${x} ${y + inset}v${1 - 2 * inset}`);
     }
   }
   for (const look of EDGE_LOOKS) els.edgePaths.get(look).setAttribute("d", paths[look].join(""));
@@ -408,7 +413,9 @@ function somaMarker(soma) {
   return { x: Math.floor(soma.x) + 0.5, y: Math.floor(soma.y) + 0.5 };
 }
 
-const SOMA_INSET = 0.14; // keeps the cell's outline inside it, clear of the walls on its edges
+// How far the outline of Soma's cell sits inside it, past the walls on its edges and then its own
+// stroke's half width and a small gap.
+const SOMA_GAP = 0.08;
 
 function renderSoma() {
   // The cell he is in sits under the walls and doors, so they stay visible. The dot marking where
@@ -421,8 +428,9 @@ function renderSoma() {
   if (!soma) return;
   const [x, y] = [Math.floor(soma.x), Math.floor(soma.y)];
   svg("rect", { x, y, width: 1, height: 1, class: "soma-cell" }, cellLayer);
-  svg("rect", { x: x + SOMA_INSET, y: y + SOMA_INSET, width: 1 - 2 * SOMA_INSET,
-                height: 1 - 2 * SOMA_INSET, class: "soma-cell-outline" }, cellLayer);
+  const inset = wallWidth() / 2 + SOMA_GAP;
+  svg("rect", { x: x + inset, y: y + inset, width: 1 - 2 * inset, height: 1 - 2 * inset,
+                class: "soma-cell-outline" }, cellLayer);
   const marker = somaMarker(soma);
   svg("circle", { cx: marker.x, cy: marker.y, r: 0.22, class: "soma-dot" }, layer);
   const area = soma.room[0];
@@ -759,15 +767,22 @@ function openConnectDialog() {
   $("connect-dialog").showModal();
 }
 
+// Switch the map between the tracker's own colours and the game's colours and wall width.
+function applyLook() {
+  $("map-pane").classList.toggle("game-look", page.gameLook);
+}
+
 function setUpControls() {
   const toggles = [["reveal", "reveal"], ["reveal-items", "revealItems"], ["follow", "follow"],
-                   ["center-marker", "centerMarker"], ["show-checked", "showChecked"]];
+                   ["center-marker", "centerMarker"], ["game-look", "gameLook"],
+                   ["show-checked", "showChecked"]];
   for (const [id, name] of toggles) {
     const box = $(id);
     box.checked = page[name];
     box.addEventListener("change", () => {
       page[name] = box.checked;
       prefs.set(name, box.checked);
+      applyLook();  // first, since the walls and Soma's cell are drawn to fit it
       renderMap();
       renderSoma();
       fitWhenTheShownMapChanges();  // "Reveal full map" switches between the two fits
@@ -818,6 +833,7 @@ function setUpControls() {
 
 async function start() {
   page.map = await (await fetch("map.json")).json();
+  applyLook();
   buildMap();
   setUpPanAndZoom();
   setUpControls();
