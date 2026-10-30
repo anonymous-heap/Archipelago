@@ -123,9 +123,18 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         before = in_logic()
         self.receive("Malphas", "Hippogryph")
         self.assertGreater(in_logic(), before)
+
+    async def test_the_item_list_counts_what_soma_has(self):
+        # The list holds the seed's progression items, which depend on its options (Progressive
+        # Movement replaces the movement souls), so the test takes whatever the seed has.
+        names = [item["name"] for item in self.ctx.snapshot()["items"]]
+        self.assertTrue(names)
+        self.receive(names[0], names[0])
         items = {item["name"]: item for item in self.ctx.snapshot()["items"]}
-        self.assertEqual((items["Malphas"]["count"], items["Malphas"]["group"]), (1, "Souls"))
-        self.assertEqual(items["Skula"]["count"], 0)
+        self.assertEqual(items[names[0]]["count"], 2)
+        self.assertEqual({items[name]["count"] for name in names[1:]}, {0})
+        self.assertLessEqual({item["group"] for item in items.values()},
+                             {"Souls", "Key items", "Weapons"})
 
     async def test_a_check_shows_as_checked(self):
         self.receive("Malphas")
