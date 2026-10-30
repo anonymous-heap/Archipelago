@@ -3,8 +3,9 @@ Map data for Universal Tracker's map tab.
 
 UT shows the maps in ``tracker/``, with a pin for every location and a marker for Soma. All of it is
 generated from this world's own data by :func:`write`. The images are schematics drawn from the
-castle's cell grid (``data/map_info``), and each pin comes from its pickup's room and position, so
-no game art is shipped. Running this module rewrites the files, and a test checks that they match.
+castle's cell grid and edge table (``data/map_info``), and each pin comes from its pickup's room and
+position, so no game art is shipped. Running this module rewrites the files, and a test checks that
+they match.
 
 There is a map of the castle, one of the Chaotic Realm, and one for each of the game's areas that
 shows the rest of the castle dimmed around it. A room's area is the first digit of its identifier.
@@ -27,13 +28,13 @@ from typing import NamedTuple
 from . import tracker_png
 from .data import map_info, pickup_info_collection
 from .data._csv_resources import open_csv
-from .data.entrance_info import rows as entrance_rows
 from .data.room_info import by_identifier as rooms_by_identifier
 
 CELL_PIXELS = 24                 # image pixels per map cell
 ROOM_CELL = (256, 256)           # room pixels per map cell, horizontally and vertically
 MARGIN = 1                       # cells of background around each map
-WALL_PIXELS = 3
+WALL_PIXELS = 4                  # a wall's thickness, centred on the line between two cells
+MARKER_PIXELS = 3                # the thickness of Soma's marker
 REALM_AREA = "B"                 # the area digit of the Chaotic Realm's rooms
 
 FOLDER = "tracker"
@@ -119,40 +120,18 @@ def _make_maps() -> tuple[TrackerMap, ...]:
 MAPS: tuple[TrackerMap, ...] = _make_maps()
 
 
-def _signed_byte(value: int) -> int:
-    value &= 0xFF
-    return value - 0x100 if value & 0x80 else value
-
-
-def _door_cells() -> frozenset[tuple[tuple[int, int], tuple[int, int]]]:
-    """Return each door as the pair of map cells it joins, one in each room.
-
-    A door's position is the cell just outside its room, relative to the room's own cell, and it
-    lands in a cell of the room it leads to. A door whose destination the map draws elsewhere joins
-    no pair of cells, so it is not drawn.
-    """
-    doors = set()
-    for door in entrance_rows:
-        room = rooms_by_identifier[door.room_identifier]
-        outside = (int(room.x) + _signed_byte(door.x_pos_door),
-                   int(room.y) + _signed_byte(door.y_pos_door))
-        if map_info.room_at(*outside) != door.dest_room_identifier:
-            continue
-        for step_x, step_y in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            inside = (outside[0] + step_x, outside[1] + step_y)
-            if map_info.room_at(*inside) == door.room_identifier:
-                doors.add(tuple(sorted((inside, outside))))
-                break
-    return frozenset(doors)
-
-
-DOORS = _door_cells()
 AREA_MAPS = range(2, len(MAPS))
 MAP_GROUPS = [MAPS[0].name, MAPS[1].name, ("Areas", [MAPS[index].name for index in AREA_MAPS])]
 
 
 def render(tracker: TrackerMap) -> bytes:
-    """Return the PNG image of ``tracker``."""
+    """Return the PNG image of ``tracker``.
+
+    Each cell is filled in its room's colour. The walls and doors come from the game's edge table,
+    and each is centred on the line between two cells, so a wall that two rooms share is drawn
+    once. A hidden door is drawn as a door, which is how the game's map shows it once Soma has gone
+    through it.
+    """
     width, height = tracker.size
     canvas = bytearray(bytes(BACKGROUND) * (width * height))
 
@@ -164,6 +143,22 @@ def render(tracker: TrackerMap) -> bytes:
 
     origin_x, origin_y = tracker.origin
     first_x, first_y, last_x, last_y = tracker.bounds
+
+    def edge_palette(kind: int, *cells: tuple[int, int]) -> Palette | None:
+        """Return the palette for an edge of this kind between ``cells``, or None to leave it out.
+
+        An open edge is not drawn, and neither is one with no drawn room on either side.
+        """
+        if kind == map_info.OPEN:
+            return None
+        rooms = {map_info.room_at(x, y) for x, y in cells
+                 if first_x <= x <= last_x and first_y <= y <= last_y}
+        if rooms & tracker.rooms:
+            return BRIGHT
+        if rooms & tracker.context:
+            return DIM
+        return None
+
     for y in range(first_y, last_y + 1):
         for x in range(first_x, last_x + 1):
             room = map_info.room_at(x, y)
@@ -174,39 +169,38 @@ def render(tracker: TrackerMap) -> bytes:
             colour = (palette.save if value & map_info.SAVE_ROOM else
                       palette.warp if value & map_info.WARP_ROOM else palette.room)
             left, top = origin_x + x * CELL_PIXELS, origin_y + y * CELL_PIXELS
-            right, bottom = left + CELL_PIXELS, top + CELL_PIXELS
-            fill(left, top, right, bottom, colour)
-            # A wall wherever the neighbouring cell is not part of the same room.
-            if map_info.room_at(x - 1, y) != room:
-                fill(left, top, left + WALL_PIXELS, bottom, palette.wall)
-            if map_info.room_at(x + 1, y) != room:
-                fill(right - WALL_PIXELS, top, right, bottom, palette.wall)
-            if map_info.room_at(x, y - 1) != room:
-                fill(left, top, right, top + WALL_PIXELS, palette.wall)
-            if map_info.room_at(x, y + 1) != room:
-                fill(left, bottom - WALL_PIXELS, right, bottom, palette.wall)
-    for (x1, y1), (x2, y2) in DOORS:
-        rooms = {map_info.room_at(x1, y1), map_info.room_at(x2, y2)}
-        if not all(first_x <= x <= last_x and first_y <= y <= last_y
-                   for x, y in ((x1, y1), (x2, y2))):
-            continue
-        if rooms & tracker.rooms:
-            palette = BRIGHT
-        elif rooms & tracker.context:
-            palette = DIM
-        else:
-            continue
-        # The two cells are neighbours, and the door sits across the wall between them.
-        if x1 != x2:
-            wall_x = origin_x + x2 * CELL_PIXELS
-            middle = origin_y + y1 * CELL_PIXELS + CELL_PIXELS // 2
-            fill(wall_x - WALL_PIXELS, middle - DOOR_PIXELS // 2,
-                 wall_x + WALL_PIXELS, middle + DOOR_PIXELS // 2, palette.door)
-        else:
-            wall_y = origin_y + y2 * CELL_PIXELS
-            middle = origin_x + x1 * CELL_PIXELS + CELL_PIXELS // 2
-            fill(middle - DOOR_PIXELS // 2, wall_y - WALL_PIXELS,
-                 middle + DOOR_PIXELS // 2, wall_y + WALL_PIXELS, palette.door)
+            fill(left, top, left + CELL_PIXELS, top + CELL_PIXELS, colour)
+
+    # Point (x, y) is the top-left corner of cell (x, y). The edge to its right is that cell's top,
+    # and the edge below it is that cell's left.
+    half = WALL_PIXELS // 2
+    door_start = (CELL_PIXELS - DOOR_PIXELS) // 2
+    for y in range(first_y, last_y + 2):
+        for x in range(first_x, last_x + 2):
+            line_x, line_y = origin_x + x * CELL_PIXELS, origin_y + y * CELL_PIXELS
+            top = map_info.top_edge(x, y)
+            top_palette = edge_palette(top, (x, y - 1), (x, y))
+            if top_palette is not None:
+                fill(line_x, line_y - half, line_x + CELL_PIXELS, line_y + half, top_palette.wall)
+                if top != map_info.WALL:
+                    fill(line_x + door_start, line_y - half,
+                         line_x + door_start + DOOR_PIXELS, line_y + half, top_palette.door)
+            left = map_info.left_edge(x, y)
+            left_palette = edge_palette(left, (x - 1, y), (x, y))
+            if left_palette is not None:
+                fill(line_x - half, line_y, line_x + half, line_y + CELL_PIXELS, left_palette.wall)
+                if left != map_info.WALL:
+                    fill(line_x - half, line_y + door_start,
+                         line_x + half, line_y + door_start + DOOR_PIXELS, left_palette.door)
+            # Fill the square where the point's four edges meet, so a wall that turns there has no
+            # notch in its corner.
+            corner = {top_palette, left_palette,
+                      edge_palette(map_info.top_edge(x - 1, y), (x - 1, y - 1), (x - 1, y)),
+                      edge_palette(map_info.left_edge(x, y - 1), (x - 1, y - 1), (x, y - 1))}
+            corner.discard(None)
+            if corner:
+                colour = BRIGHT.wall if BRIGHT in corner else DIM.wall
+                fill(line_x - half, line_y - half, line_x + half, line_y + half, colour)
     return tracker_png.encode(width, height, bytes(canvas))
 
 
@@ -214,7 +208,7 @@ def render_marker() -> bytes:
     """Return Soma's marker: an outline the size of one map cell."""
     clear = (0, 0, 0, 0)
     edge = CELL_PIXELS - 1
-    pixels = b"".join(bytes(MARKER if min(x, y, edge - x, edge - y) < WALL_PIXELS else clear)
+    pixels = b"".join(bytes(MARKER if min(x, y, edge - x, edge - y) < MARKER_PIXELS else clear)
                       for y in range(CELL_PIXELS) for x in range(CELL_PIXELS))
     return tracker_png.encode(CELL_PIXELS, CELL_PIXELS, pixels, alpha=True)
 

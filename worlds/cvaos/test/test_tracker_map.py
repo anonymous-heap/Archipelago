@@ -19,6 +19,7 @@ from ..client_logic import CVAOSClientLogic
 from ..data import map_info
 from ..data.room_info import by_identifier as rooms_by_identifier
 from ..locations import location_name_to_id
+from ..tracker_map import BRIGHT
 
 
 def ut_bytes(name: str) -> bytes:
@@ -30,6 +31,20 @@ def ut_bytes(name: str) -> bytes:
 def ut_load(name: str):
     """Read a JSON file in tracker/ as UT does, as strict JSON."""
     return json.loads(ut_bytes(name).decode("utf-8-sig"))
+
+
+def table_edges():
+    """Yield every edge in the map's edge table, as the two cells it lies between and its kind."""
+    for y in range(map_info.ROWS):
+        for x in range(map_info.COLUMNS):
+            yield ((x, y - 1), (x, y)), map_info.top_edge(x, y)
+            yield ((x - 1, y), (x, y)), map_info.left_edge(x, y)
+
+
+def plain_room(x: int, y: int) -> bool:
+    """Whether a map cell holds a room that is neither a save room nor a warp room."""
+    value = map_info.cell(x, y)
+    return value != map_info.EMPTY and not value & (map_info.SAVE_ROOM | map_info.WARP_ROOM)
 
 
 def find_rom() -> str | None:
@@ -143,23 +158,55 @@ class TrackerMapTest(unittest.TestCase):
                  if map_info.room_at(int(info.x), int(info.y)) != room]
         self.assertEqual(moved, ["901"])
 
-    def test_every_door_joins_two_rooms_the_entrances_connect(self):
+    def test_the_edge_table_closes_off_every_room(self):
+        for (a, b), kind in table_edges():
+            rooms = (map_info.room_at(*a), map_info.room_at(*b))
+            with self.subTest(cells=(a, b), rooms=rooms):
+                if rooms[0] == rooms[1]:
+                    self.assertEqual(kind, map_info.OPEN, "inside a room, or where there is none")
+                else:
+                    self.assertNotEqual(kind, map_info.OPEN)
+
+    def test_every_door_between_two_rooms_is_an_entrance(self):
         from ..data.entrance_info import rows as entrances
         connected = {frozenset((door.room_identifier, door.dest_room_identifier))
                      for door in entrances}
-        self.assertGreater(len(tracker_map.DOORS), 300)
-        for (x1, y1), (x2, y2) in tracker_map.DOORS:
-            with self.subTest(door=((x1, y1), (x2, y2))):
-                self.assertEqual(abs(x1 - x2) + abs(y1 - y2), 1, "the cells are neighbours")
-                rooms = frozenset((map_info.room_at(x1, y1), map_info.room_at(x2, y2)))
+        doors = [frozenset(map_info.room_at(*cell) for cell in cells)
+                 for cells, kind in table_edges() if kind in (map_info.DOOR, map_info.HIDDEN_DOOR)]
+        # A door with no room on one side leads to a room the map draws elsewhere.
+        between_rooms = [rooms for rooms in doors if None not in rooms]
+        self.assertGreater(len(between_rooms), 300)
+        for rooms in between_rooms:
+            with self.subTest(rooms=sorted(rooms)):
                 self.assertIn(rooms, connected)
 
-    def test_the_grid_matches_the_rom(self):
+    def test_a_wall_two_rooms_share_is_drawn_once_on_the_line_between_them(self):
+        castle = tracker_map.MAPS[0]
+        width, _, pixels = tracker_png.decode(ut_bytes(castle.img))
+        origin_x, origin_y = castle.origin
+        half = tracker_map.WALL_PIXELS // 2
+        for kind, colour in ((map_info.WALL, BRIGHT.wall), (map_info.DOOR, BRIGHT.door)):
+            # Two plain cells of different rooms, side by side, with this kind of edge between them.
+            x, y = next((x, y) for y in range(map_info.ROWS) for x in range(map_info.COLUMNS)
+                        if map_info.left_edge(x, y) == kind
+                        and plain_room(x - 1, y) and plain_room(x, y)
+                        and map_info.room_at(x - 1, y) != map_info.room_at(x, y))
+            line_x = origin_x + x * tracker_map.CELL_PIXELS
+            row = origin_y + y * tracker_map.CELL_PIXELS + tracker_map.CELL_PIXELS // 2
+            across = [bytes(pixels[(row * width + px) * 3:(row * width + px) * 3 + 3])
+                      for px in range(line_x - half - 1, line_x + half + 1)]
+            with self.subTest(kind=kind, cell=(x, y)):
+                self.assertEqual(across, [bytes(BRIGHT.room)]
+                                 + [bytes(colour)] * tracker_map.WALL_PIXELS + [bytes(BRIGHT.room)])
+
+    def test_the_map_data_matches_the_rom(self):
         rom_path = find_rom()
         if rom_path is None:
             self.skipTest("USA ROM not available")
         with open(rom_path, "rb") as f:
-            self.assertEqual(map_info.extract(f.read()), map_info.grid)
+            rom = f.read()
+        self.assertEqual(map_info.extract(rom), map_info.grid)
+        self.assertEqual(map_info.extract_edges(rom), map_info.edges)
 
 
 class FakeRam:
