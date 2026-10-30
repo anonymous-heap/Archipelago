@@ -44,6 +44,7 @@ const page = {
   view: { x: 0, y: 0, w: 64, h: 47 },
   somaArea: null,      // the area Soma was last seen in, to follow him when it changes
   askedToConnect: false,
+  fittedTo: null,      // "whole" or "explored": the map the view was last fitted to
   reveal: prefs.get("reveal", false),
   follow: prefs.get("follow", true),
   centerMarker: prefs.get("centerMarker", false),  // draw Soma's dot in the middle of his cell
@@ -135,14 +136,35 @@ function inFocus(area) {
   return page.focus === CASTLE ? area !== REALM : area === page.focus;
 }
 
-// Show the whole map, the Chaotic Realm's space included, so picking any area never has to move
-// the view.
+const MIN_VIEW = { w: 18, h: 12 }; // cells, so a few explored rooms don't fill the screen
+
+function cellBounds(cells) {
+  return [Math.min(...cells.map((c) => c.x)), Math.min(...cells.map((c) => c.y)),
+          Math.max(...cells.map((c) => c.x)) + 1, Math.max(...cells.map((c) => c.y)) + 1];
+}
+
+// Fit the whole map, the Chaotic Realm's space included. While unexplored cells are hidden, fit the
+// part of the map that is shown instead, at least MIN_VIEW across.
 function fitView() {
-  const areas = page.map.areas;
-  const [x0, y0] = [Math.min(...areas.map((a) => a.bounds[0])), Math.min(...areas.map((a) => a.bounds[1]))];
-  const [x1, y1] = [Math.max(...areas.map((a) => a.bounds[2])), Math.max(...areas.map((a) => a.bounds[3]))];
+  const visible = visibleCells();
+  const shown = visible ? page.map.cells.filter((cell) => visible.has(key(cell.x, cell.y))) : [];
+  let [x0, y0, x1, y1] = cellBounds(shown.length ? shown : page.map.cells);
+  if (shown.length) {
+    const grow = { w: Math.max(0, MIN_VIEW.w - (x1 - x0)) / 2, h: Math.max(0, MIN_VIEW.h - (y1 - y0)) / 2 };
+    [x0, x1, y0, y1] = [x0 - grow.w, x1 + grow.w, y0 - grow.h, y1 + grow.h];
+  }
   page.view = { x: x0 - 1, y: y0 - 1, w: x1 - x0 + 2, h: y1 - y0 + 2 };
   applyView();
+}
+
+// Fit the view again only when what kind of map is shown changes: the whole map, or the explored
+// part once the client has sent it. Exploring further, or picking an area, leaves the view alone.
+function fitWhenTheShownMapChanges() {
+  const shown = page.reveal ? "whole" : page.snapshot.exploration ? "explored" : "whole";
+  if (shown !== page.fittedTo) {
+    page.fittedTo = shown;
+    fitView();
+  }
 }
 
 // Focus an area: highlight it and list what is in logic there. The view stays where it is.
@@ -591,6 +613,7 @@ function onSnapshot(snapshot) {
   renderHeader();
   renderMap();
   renderSoma();
+  fitWhenTheShownMapChanges();
   renderRoute();
   renderAreas();
   renderItems();
@@ -638,6 +661,7 @@ function setUpControls() {
       prefs.set(name, box.checked);
       renderMap();
       renderSoma();
+      fitWhenTheShownMapChanges();  // "Reveal full map" switches between the two fits
       renderRoute();
       renderLocationList();
       if (name === "follow" && box.checked && page.somaArea) setFocus(page.somaArea);
@@ -681,7 +705,7 @@ async function start() {
   buildMap();
   setUpPanAndZoom();
   setUpControls();
-  fitView();
+  fitWhenTheShownMapChanges();
   renderFocus();
   renderAreas();
   openSocket();
