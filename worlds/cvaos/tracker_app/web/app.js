@@ -313,15 +313,22 @@ function somaPoint() {
   return { x: origin[0] + x / page.map.room_cell[0], y: origin[1] + y / page.map.room_cell[1], room };
 }
 
+const SOMA_INSET = 0.14; // keeps the cell's outline inside it, clear of the walls on its edges
+
 function renderSoma() {
+  // The cell he is in sits under the walls and doors, so they stay visible. The dot marking where
+  // he stands is drawn over everything.
+  const cellLayer = $("layer-soma-cell");
   const layer = $("layer-soma");
+  cellLayer.replaceChildren();
   layer.replaceChildren();
   const soma = somaPoint();
   if (!soma) return;
-  const cell = { x: Math.floor(soma.x), y: Math.floor(soma.y), width: 1, height: 1 };
-  svg("rect", { ...cell, class: "soma-cell-casing" }, layer);
-  svg("rect", { ...cell, class: "soma-cell" }, layer);
-  svg("circle", { cx: soma.x, cy: soma.y, r: 0.26, class: "soma-dot" }, layer);
+  const [x, y] = [Math.floor(soma.x), Math.floor(soma.y)];
+  svg("rect", { x, y, width: 1, height: 1, class: "soma-cell" }, cellLayer);
+  svg("rect", { x: x + SOMA_INSET, y: y + SOMA_INSET, width: 1 - 2 * SOMA_INSET,
+                height: 1 - 2 * SOMA_INSET, class: "soma-cell-outline" }, cellLayer);
+  svg("circle", { cx: soma.x, cy: soma.y, r: 0.22, class: "soma-dot" }, layer);
   const area = soma.room[0];
   if (page.follow && area !== page.somaArea && page.somaArea !== null) setFocus(area);
   if (page.somaArea === null && page.focus === CASTLE && page.follow) setFocus(area);

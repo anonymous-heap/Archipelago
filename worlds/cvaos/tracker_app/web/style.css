@@ -187,9 +187,9 @@ h2 {
 .pin:hover { stroke: #fff; stroke-width: 0.08; }
 .selection-ring { fill: none; stroke: #fff; stroke-width: 0.08; pointer-events: none; }
 
-.soma-cell-casing { fill: none; stroke: #05060a; stroke-width: 0.3; pointer-events: none; }
-.soma-cell { fill: none; stroke: var(--soma); stroke-width: 0.14; pointer-events: none; }
-.soma-dot { fill: var(--soma); stroke: #fff; stroke-width: 0.08; pointer-events: none; }
+.soma-cell { fill: var(--soma); fill-opacity: 0.4; pointer-events: none; }
+.soma-cell-outline { fill: none; stroke: var(--soma); stroke-width: 0.1; pointer-events: none; }
+.soma-dot { fill: var(--soma); stroke: #fff; stroke-width: 0.07; pointer-events: none; }
 
 .route-line { fill: none; stroke: var(--route); stroke-width: 0.16; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
 .route-casing { fill: none; stroke: #05060a; stroke-width: 0.32; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
