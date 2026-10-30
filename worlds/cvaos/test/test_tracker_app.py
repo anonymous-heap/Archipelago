@@ -231,6 +231,12 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.fetch("/style.css"))[0], 200)
         self.assertEqual((await self.fetch("/secret.txt"))[0], 404)
 
+    async def test_serving_the_page_logs_no_errors(self):
+        # websockets 13 logs each HTTP answer as a failed handshake unless the server quiets it.
+        with self.assertNoLogs("websockets", level="ERROR"):
+            await self.fetch("/")
+            await asyncio.sleep(0.2)  # the library logs after the response has gone
+
     async def test_the_page_gets_a_snapshot_and_its_requests_reach_the_tracker(self):
         async with websockets.connect(f"ws://127.0.0.1:{self.port}/ws") as socket:
             message = json.loads(await socket.recv())

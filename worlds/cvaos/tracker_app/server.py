@@ -23,12 +23,31 @@ from http import HTTPStatus
 
 from websockets.asyncio.server import Server, ServerConnection, serve
 from websockets.datastructures import Headers
+from websockets.exceptions import InvalidMessage, InvalidStatus
 from websockets.http11 import Request, Response
 
 from .context import TrackerContext
 from .mapdata import map_data
 
 logger = logging.getLogger("Client")
+
+
+class QuietHttp(logging.Filter):
+    """Drop what websockets 13 logs for plain HTTP, which this server answers on purpose.
+
+    It logs every page request it answers as a failed websocket handshake, with a traceback, and
+    the same for each connection a browser opens ahead of time and then drops.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.exc_info and record.getMessage() == "opening handshake failed":
+            return not isinstance(record.exc_info[1], (InvalidStatus, InvalidMessage))
+        return True
+
+
+socket_logger = logging.getLogger("websockets.server.cvaos_tracker")
+socket_logger.setLevel(logging.WARNING)  # each HTTP answer is also logged as a rejection, at INFO
+socket_logger.addFilter(QuietHttp())
 
 PAGE_FILES = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js",
               "/style.css": "style.css"}
@@ -53,7 +72,8 @@ class TrackerServer:
 
     async def start(self, host: str, port: int) -> int:
         """Start serving on ``host`` and ``port``, and return the port, which 0 lets the OS pick."""
-        self.server = await serve(self.on_socket, host, port, process_request=self.on_request)
+        self.server = await serve(self.on_socket, host, port, process_request=self.on_request,
+                                  logger=socket_logger)
         return self.server.sockets[0].getsockname()[1]
 
     async def stop(self) -> None:
