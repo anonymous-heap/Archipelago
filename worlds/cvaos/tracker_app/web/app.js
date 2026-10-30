@@ -46,6 +46,7 @@ const page = {
   askedToConnect: false,
   fittedTo: null,      // "whole" or "explored": the map the view was last fitted to
   reveal: prefs.get("reveal", false),
+  revealChecks: prefs.get("revealChecks", false),  // show checks in logic even where unexplored
   follow: prefs.get("follow", true),
   centerMarker: prefs.get("centerMarker", false),  // draw Soma's dot in the middle of his cell
   showChecked: prefs.get("showChecked", false),
@@ -318,9 +319,13 @@ function drawnInFull(cellKey, visited) {
   return !visited || page.reveal || (rect && rect.dataset.area === REALM) || visited.has(cellKey);
 }
 
+const USEFUL = new Set(["in_logic", "tricks"]); // the checks Soma can get now
+
 // Whether a location's check shows: only in a shown room drawn in full. A greyed-out room is one
-// Soma hasn't visited, so its checks stay hidden even when a Castle Map shows the room.
+// Soma hasn't visited, so its checks stay hidden even when a Castle Map shows the room. With
+// "Reveal useful checks" on, a check he can get now shows wherever it is, its room still hidden.
 function checkShown(location, visible, visited) {
+  if (page.revealChecks && USEFUL.has((page.snapshot.locations || {})[location.id])) return true;
   const cell = key(Math.floor(location.x), Math.floor(location.y));
   return (!visible || visible.has(cell)) && drawnInFull(cell, visited);
 }
@@ -646,7 +651,9 @@ function renderLocationList() {
   if (!shown.length) {
     const item = document.createElement("li");
     item.className = "muted";
-    item.textContent = page.snapshot.tracking ? "Nothing in logic here that you have explored." : "Not tracking yet.";
+    const everywhere = page.reveal || page.revealChecks;
+    item.textContent = !page.snapshot.tracking ? "Not tracking yet."
+      : everywhere ? "Nothing in logic here." : "Nothing in logic here that you have explored.";
     list.appendChild(item);
     return;
   }
@@ -729,8 +736,8 @@ function openConnectDialog() {
 }
 
 function setUpControls() {
-  const toggles = [["reveal", "reveal"], ["follow", "follow"], ["center-marker", "centerMarker"],
-                   ["show-checked", "showChecked"]];
+  const toggles = [["reveal", "reveal"], ["reveal-checks", "revealChecks"], ["follow", "follow"],
+                   ["center-marker", "centerMarker"], ["show-checked", "showChecked"]];
   for (const [id, name] of toggles) {
     const box = $(id);
     box.checked = page[name];
