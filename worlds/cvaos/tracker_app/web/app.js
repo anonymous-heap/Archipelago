@@ -138,17 +138,34 @@ function focusBounds(focus) {
   ];
 }
 
+const MIN_VIEW = { w: 18, h: 12 }; // cells, so a few explored rooms don't fill the screen
+
+function inFocus(area) {
+  return page.focus === CASTLE ? area !== REALM : area === page.focus;
+}
+
+// Fit the focused area. While unexplored cells are hidden, fit the part of it that is shown.
 function fitView() {
-  const [x0, y0, x1, y1] = focusBounds(page.focus);
+  let [x0, y0, x1, y1] = focusBounds(page.focus);
+  const visible = visibleCells();
+  if (visible) {
+    const shown = page.map.cells.filter((cell) => inFocus(cell.area) && visible.has(key(cell.x, cell.y)));
+    if (shown.length) {
+      [x0, y0] = [Math.min(...shown.map((c) => c.x)), Math.min(...shown.map((c) => c.y))];
+      [x1, y1] = [Math.max(...shown.map((c) => c.x)) + 1, Math.max(...shown.map((c) => c.y)) + 1];
+      const grow = { w: Math.max(0, MIN_VIEW.w - (x1 - x0)) / 2, h: Math.max(0, MIN_VIEW.h - (y1 - y0)) / 2 };
+      [x0, x1, y0, y1] = [x0 - grow.w, x1 + grow.w, y0 - grow.h, y1 + grow.h];
+    }
+  }
   page.view = { x: x0 - 1, y: y0 - 1, w: x1 - x0 + 2, h: y1 - y0 + 2 };
   applyView();
 }
 
 function setFocus(focus) {
   page.focus = focus;
+  renderMap();  // first, since the Chaotic Realm shows only while it is in focus
   fitView();
   renderFocus();
-  renderMap();  // the Chaotic Realm shows only while it is in focus
   renderAreas();
   renderLocationList();
 }
@@ -284,11 +301,7 @@ function renderPins(visible = visibleCells()) {
 }
 
 function renderFocus() {
-  for (const rect of els.cells.values()) {
-    const area = rect.dataset.area;
-    const focused = page.focus === CASTLE ? area !== REALM : area === page.focus;
-    rect.classList.toggle("unfocused", !focused);
-  }
+  for (const rect of els.cells.values()) rect.classList.toggle("unfocused", !inFocus(rect.dataset.area));
 }
 
 function somaPoint() {
@@ -518,7 +531,7 @@ function renderLocationList() {
   const shown = page.map.locations.filter((location) => {
     const status = statuses[location.id];
     if (status !== "in_logic" && status !== "tricks") return false;
-    if (page.focus === CASTLE ? location.area === REALM : location.area !== page.focus) return false;
+    if (!inFocus(location.area)) return false;
     return !visible || visible.has(key(Math.floor(location.x), Math.floor(location.y)));
   });
   shown.sort((a, b) => (statuses[a.id] === statuses[b.id] ? a.name.localeCompare(b.name) : statuses[a.id] === "in_logic" ? -1 : 1));
