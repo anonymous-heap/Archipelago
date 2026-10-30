@@ -175,14 +175,13 @@ h2 {
 .cell.save.remembered { fill: color-mix(in srgb, var(--save) 45%, var(--map-bg)); }
 .cell.warp.remembered { fill: color-mix(in srgb, var(--warp) 45%, var(--map-bg)); }
 .cell.unfocused, .pin.unfocused { opacity: 0.4; }
-/* Wall segments overlap where they meet, so they dim to a solid colour. A translucent one would
-   draw each overlap twice, leaving a brighter dot at every cell corner. */
-.edge.wall.unfocused { stroke: var(--wall-dim); }
-.edge.door.unfocused { stroke: var(--door-dim); }
 
-.edge { stroke-width: 0.12; stroke-linecap: square; }
+.edge { fill: none; stroke-width: 0.12; stroke-linecap: square; }
 .edge.wall { stroke: var(--wall); }
 .edge.door { stroke: var(--door); stroke-width: 0.16; stroke-linecap: butt; }
+/* Walls and doors outside the highlighted area dim to solid darker colours. */
+.edge.wall.unfocused { stroke: var(--wall-dim); }
+.edge.door.unfocused { stroke: var(--door-dim); }
 
 .pin { cursor: pointer; stroke: #05060a; stroke-width: 0.06; }
 .pin.in_logic { fill: var(--in-logic); }

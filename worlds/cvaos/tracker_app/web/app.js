@@ -52,10 +52,14 @@ const page = {
 };
 
 const els = {
-  cells: new Map(),    // "x,y" -> rect
-  edges: [],           // {line, door, cells, hidden}
-  pins: new Map(),     // location id -> circle
+  cells: new Map(),     // "x,y" -> rect
+  edges: [],            // {x, y, top, door, cells, hidden}: drawn by renderEdges
+  edgePaths: new Map(), // look -> the path that draws every wall or door with that look
+  pins: new Map(),      // location id -> circle
 };
+
+// The looks walls and doors can have, in drawing order, so doors sit on top of walls.
+const EDGE_LOOKS = ["wall unfocused", "wall", "door unfocused", "door"];
 
 const locationsById = new Map();
 const areasById = new Map();
@@ -96,22 +100,15 @@ function buildMap() {
   }
 
   const hiddenIndex = new Map(map.hidden_doors.map((door, index) => [`${door.side},${door.x},${door.y}`, index]));
-  const edgeLayer = $("layer-edges");
   for (const edge of map.edges) {
     const { x, y } = edge;
     const top = edge.side === "top";
-    const [x2, y2] = top ? [x + 1, y] : [x, y + 1];
-    const line = svg("line", { x1: x, y1: y, x2, y2, class: "edge wall" }, edgeLayer);
-    let door = null;
-    if (edge.kind !== "wall") {
-      // A door is the middle of its edge, as on the game's own map.
-      const [dx, dy] = top ? [0.2, 0] : [0, 0.2];
-      door = svg("line", { x1: x + dx, y1: y + dy, x2: x2 - dx, y2: y2 - dy, class: "edge door" }, edgeLayer);
-    }
     const cells = top ? [key(x, y - 1), key(x, y)] : [key(x - 1, y), key(x, y)];
     const hidden = edge.kind === "hidden" ? hiddenIndex.get(`${edge.side},${x},${y}`) : null;
-    els.edges.push({ line, door, cells, hidden });
+    els.edges.push({ x, y, top, door: edge.kind !== "wall", cells, hidden });
   }
+  const edgeLayer = $("layer-edges");
+  for (const look of EDGE_LOOKS) els.edgePaths.set(look, svg("path", { class: `edge ${look}` }, edgeLayer));
 
   const pinLayer = $("layer-pins");
   for (const location of map.locations) {
@@ -278,18 +275,29 @@ function renderMap() {
     rect.classList.toggle("remembered", Boolean(visited) && !page.reveal && rect.dataset.area !== REALM
                           && !visited.has(cellKey));
   }
-  const passed = new Set(explored ? explored.hidden_doors : []);
-  for (const edge of els.edges) {
-    const shown = !visible || edge.cells.some((cell) => visible.has(cell));
-    edge.line.style.display = shown ? "" : "none";
-    if (edge.door) {
-      // A hidden door looks like a wall until Soma has gone through it.
-      const open = edge.hidden === null || page.reveal || !explored || passed.has(edge.hidden);
-      edge.door.style.display = shown && open ? "" : "none";
-    }
-  }
+  renderEdges(visible);
   $("fog-note").hidden = Boolean(explored) || page.reveal || !page.snapshot.tracking;
   renderPins(visible);
+}
+
+// Draw the walls and doors that touch a shown cell, one path for each look. A path's stroke is
+// filled as one shape, so where two segments overlap at a cell corner nothing is drawn twice.
+function renderEdges(visible = visibleCells()) {
+  const explored = page.snapshot.exploration;
+  const passed = new Set(explored ? explored.hidden_doors : []);
+  const paths = Object.fromEntries(EDGE_LOOKS.map((look) => [look, []]));
+  for (const edge of els.edges) {
+    if (visible && !edge.cells.some((cell) => visible.has(cell))) continue;
+    const focused = edge.cells.some((cell) => els.cells.has(cell) && inFocus(els.cells.get(cell).dataset.area));
+    const dim = focused ? "" : " unfocused";
+    const { x, y } = edge;
+    paths[`wall${dim}`].push(edge.top ? `M${x} ${y}h1` : `M${x} ${y}v1`);
+    // A door is the middle of its edge, as on the game's own map. A hidden door looks like a wall
+    // until Soma has gone through it.
+    const open = edge.hidden === null || page.reveal || !explored || passed.has(edge.hidden);
+    if (edge.door && open) paths[`door${dim}`].push(edge.top ? `M${x + 0.2} ${y}h0.6` : `M${x} ${y + 0.2}v0.6`);
+  }
+  for (const look of EDGE_LOOKS) els.edgePaths.get(look).setAttribute("d", paths[look].join(""));
 }
 
 function renderPins(visible = visibleCells()) {
@@ -307,15 +315,11 @@ function renderPins(visible = visibleCells()) {
   renderSelectionRing();
 }
 
-// Dim everything outside the focused area: rooms, then walls and doors that touch no focused room.
-// The pins dim in renderPins.
+// Dim everything outside the focused area: its rooms here, and its walls, doors and pins in
+// renderEdges and renderPins.
 function renderFocus() {
   for (const rect of els.cells.values()) rect.classList.toggle("unfocused", !inFocus(rect.dataset.area));
-  for (const edge of els.edges) {
-    const focused = edge.cells.some((cell) => els.cells.has(cell) && inFocus(els.cells.get(cell).dataset.area));
-    edge.line.classList.toggle("unfocused", !focused);
-    if (edge.door) edge.door.classList.toggle("unfocused", !focused);
-  }
+  renderEdges();
 }
 
 function somaPoint() {
