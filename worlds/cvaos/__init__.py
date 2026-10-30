@@ -3,7 +3,7 @@ import logging
 import os
 from typing import ClassVar
 
-from BaseClasses import MultiWorld, Tutorial
+from BaseClasses import ItemClassification, MultiWorld, Tutorial
 from worlds.AutoWorld import WebWorld, World
 from worlds.LauncherComponents import Component, Type, components, launch as launch_component
 import settings
@@ -12,7 +12,7 @@ from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA
 from .items import CVAOSItem, item_name_to_id, create_item, create_itempool
 from .locations import location_name_to_id
 from .options import LOGIC_OPTION_NAMES, CVAOSOptions, Goal, cvaos_option_groups
-from .regions import create_regions, can_reach_room
+from .regions import UT_TRICKS_ITEM, create_regions, can_reach_room
 from . import tracker_map
 from .client import CVAOSClient  # noqa: F401  (imported for its registration side effect)
 
@@ -131,6 +131,10 @@ class CVAOSWorld(World):
     # the whole world, so it applies to older seeds too (see interpret_slot_data).
     ut_can_gen_without_yaml = True
 
+    # Universal Tracker shows the locations that open up once it collects this item as reachable
+    # with tricks, and only the tracker's rebuild of the world has rules that use it.
+    glitches_item_name = UT_TRICKS_ITEM
+
     # Universal Tracker's map tab. The maps, their images and the pin for each location are all
     # generated from this world's data (tracker_map.py builds them into tracker/), so no game art
     # ships and nothing else needs installing. Soma's marker and the choice of map follow the
@@ -199,6 +203,8 @@ class CVAOSWorld(World):
         self.multiworld.itempool += itempool
 
     def create_item(self, name: str) -> CVAOSItem:
+        if name == UT_TRICKS_ITEM:
+            return CVAOSItem(name, ItemClassification.progression, None, self.player)
         return create_item(self, name)
 
     def pre_fill(self) -> None:

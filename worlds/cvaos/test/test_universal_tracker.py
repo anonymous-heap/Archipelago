@@ -20,6 +20,7 @@ from worlds.AutoWorld import call_all
 
 from .. import CVAOSWorld
 from ..options import LOGIC_OPTION_NAMES, resolve_allowed_techniques
+from ..regions import UT_TRICKS_ITEM
 
 UT_STEPS = ("generate_early", "create_regions", "create_items", "set_rules", "connect_entrances",
             "generate_basic")
@@ -148,6 +149,34 @@ class RoundTripTest(unittest.TestCase):
         slot_data = generate({}).worlds[1].fill_slot_data()
         with self.assertNoLogs("Client", level="WARNING"):
             CVAOSWorld.interpret_slot_data(slot_data)
+
+
+class TricksTierTest(unittest.TestCase):
+    """UT shows the locations that only out-of-logic tricks reach in its second colour."""
+
+    ITEM_SETS = ([], ["Malphas"], ["Malphas", "Hippogryph"], ["Malphas", "Skula"])
+
+    def gained(self, multiworld: MultiWorld) -> list[frozenset[str]]:
+        return [reachable(multiworld, items + [UT_TRICKS_ITEM]) - reachable(multiworld, items)
+                for items in self.ITEM_SETS]
+
+    def test_the_tricks_item_opens_trick_routes_while_tracking(self):
+        self.assertEqual(CVAOSWorld.glitches_item_name, UT_TRICKS_ITEM)
+        rebuilt = regenerate_from(generate({}).worlds[1].fill_slot_data())  # every trick out
+        gained = self.gained(rebuilt)
+        self.assertTrue(any(gained), "out-of-logic tricks reach no extra location")
+        for items in self.ITEM_SETS:
+            with self.subTest(items=items):
+                self.assertLessEqual(reachable(rebuilt, items),
+                                     reachable(rebuilt, items + [UT_TRICKS_ITEM]))
+
+    def test_a_real_generation_has_no_trick_routes(self):
+        self.assertFalse(any(self.gained(generate({}))))
+
+    def test_tricks_already_in_logic_add_nothing(self):
+        every_trick = {"logic_difficulty_preset": "expert", "quick_save_reset_logic": "in_logic"}
+        rebuilt = regenerate_from(generate(every_trick).worlds[1].fill_slot_data())
+        self.assertFalse(any(self.gained(rebuilt)))
 
 
 if __name__ == "__main__":

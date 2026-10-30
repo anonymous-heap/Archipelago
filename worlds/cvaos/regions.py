@@ -19,7 +19,7 @@ from .data import (
     transdoor_connection_collection,
 )
 from .locations import CVAOSLocation, location_name_to_id
-from .options import ForbiddenAreaButton, resolve_allowed_techniques
+from .options import TECHNIQUES, ForbiddenAreaButton, resolve_allowed_techniques
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -376,6 +376,19 @@ _BREAK_BITS: int = int(AbilityCombo.Ceil | AbilityCombo.Floor)
 # TODO: implement Vert's real requirement, then move it out of here.
 _ROOM_TECHNIQUE_BITS: int = 0  # would be int(AbilityCombo.Vert) once it has a requirement
 
+# Universal Tracker marks a location as "glitched" when it becomes reachable once the item named by
+# the world's glitches_item_name is collected. While UT rebuilds the world, a way through that needs
+# only tricks the seed leaves out of logic is kept behind this item, so UT shows those locations in
+# its second colour. A normal generation never builds these ways.
+UT_TRICKS_ITEM = "Out-of-Logic Tricks"
+_TRICK_BITS: int = int(functools.reduce(operator.or_, (technique.bit for technique in TECHNIQUES)))
+
+
+def _tracker_shows_tricks(world: CVAOSWorld) -> bool:
+    """Whether Universal Tracker is rebuilding ``world``, which is when the tricks tier is built."""
+    passthrough = getattr(getattr(world, "multiworld", None), "re_gen_passthrough", {})
+    return bool(passthrough.get(getattr(world, "game", None)))
+
 # Tform (transformation) is satisfied when the
 # player can farm a transformation soul, i.e. reach any TFORM_ENEMY_TYPES enemy region
 _TFORM_BIT: int = int(AbilityCombo.Tform)
@@ -413,33 +426,44 @@ def _create_access_rule_from_routing(
         return None
 
     in_logic_bits = int(resolve_allowed_techniques(world.options)) | _ROOM_TECHNIQUE_BITS
+    tricks_tier = _tracker_shows_tricks(world)
 
     needs: list[tuple[tuple[str, ...], bool, bool, bool]] = []
+    trick_needs: list[tuple[tuple[str, ...], bool, bool, bool]] = []
     for mask in map(int, requirement_masks):
-        if mask & ~_SOUL_BITS & ~in_logic_bits & ~_TFORM_BIT & ~_BREAK_BITS:
-            continue  # demands Impossible or an out-of-logic technique; try next mask
         items = tuple(item for bit, item in _ABILITY_TO_ITEM.items() if mask & bit)
-        needs_tform = bool(mask & _TFORM_BIT)
-        needs_ceiling = bool(mask & int(AbilityCombo.Ceil))
-        needs_floor = bool(mask & int(AbilityCombo.Floor))
-        if not items and not needs_tform and not needs_ceiling and not needs_floor:
+        need = (items, bool(mask & _TFORM_BIT), bool(mask & int(AbilityCombo.Ceil)),
+                bool(mask & int(AbilityCombo.Floor)))
+        out_of_logic = mask & ~_SOUL_BITS & ~in_logic_bits & ~_TFORM_BIT & ~_BREAK_BITS
+        if out_of_logic:
+            # Demands Impossible or an out-of-logic technique. For the tracker's tricks tier, a
+            # way that needs only out-of-logic tricks is kept behind the tricks item.
+            if tricks_tier and not out_of_logic & ~_TRICK_BITS:
+                trick_needs.append(need)
+            continue
+        if not items and not any(need[1:]):
             return None  # needs nothing gateable: always open
-        needs.append((items, needs_tform, needs_ceiling, needs_floor))
+        needs.append(need)
 
-    if not needs:
+    if not needs and not trick_needs:
         return lambda state: False  # every way through is out of logic at these options
 
     # Masks that differed only in now-resolved technique bits collapse together.
     resolved_needs = tuple(dict.fromkeys(needs))
+    resolved_trick_needs = tuple(dict.fromkeys(trick_needs))
     player = world.player
 
+    def satisfied(state: CollectionState, need: tuple[tuple[str, ...], bool, bool, bool]) -> bool:
+        items, needs_tform, needs_ceiling, needs_floor = need
+        return (state.has_all(items, player)
+                and (not needs_tform or _tform_available(state, world))
+                and (not needs_ceiling or state.has_any(_CEILING_BREAKERS, player))
+                and (not needs_floor or state.has_any(_FLOOR_BREAKERS, player)))
+
     def access_rule(state: CollectionState) -> bool:
-        return any(
-            state.has_all(items, player)
-            and (not needs_tform or _tform_available(state, world))
-            and (not needs_ceiling or state.has_any(_CEILING_BREAKERS, player))
-            and (not needs_floor or state.has_any(_FLOOR_BREAKERS, player))
-            for items, needs_tform, needs_ceiling, needs_floor in resolved_needs)
+        return (any(satisfied(state, need) for need in resolved_needs)
+                or (bool(resolved_trick_needs) and state.has(UT_TRICKS_ITEM, player)
+                    and any(satisfied(state, need) for need in resolved_trick_needs)))
 
     return access_rule
 
