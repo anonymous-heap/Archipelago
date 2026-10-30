@@ -27,6 +27,7 @@ from typing import NamedTuple
 from . import tracker_png
 from .data import map_info, pickup_info_collection
 from .data._csv_resources import open_csv
+from .data.entrance_info import rows as entrance_rows
 from .data.room_info import by_identifier as rooms_by_identifier
 
 CELL_PIXELS = 24                 # image pixels per map cell
@@ -52,10 +53,12 @@ class Palette(NamedTuple):
     save: tuple[int, int, int]
     warp: tuple[int, int, int]
     wall: tuple[int, int, int]
+    door: tuple[int, int, int]
 
 
-BRIGHT = Palette((0, 0, 230), (230, 30, 30), (240, 230, 30), (255, 255, 255))
-DIM = Palette((20, 20, 110), (100, 30, 80), (110, 105, 60), (100, 100, 150))
+BRIGHT = Palette((0, 0, 230), (230, 30, 30), (240, 230, 30), (255, 255, 255), (0, 200, 220))
+DIM = Palette((20, 20, 110), (100, 30, 80), (110, 105, 60), (100, 100, 150), (40, 90, 110))
+DOOR_PIXELS = CELL_PIXELS // 2   # a door's length along the wall
 MARKER = (255, 140, 0, 255)
 
 
@@ -114,6 +117,36 @@ def _make_maps() -> tuple[TrackerMap, ...]:
 
 
 MAPS: tuple[TrackerMap, ...] = _make_maps()
+
+
+def _signed_byte(value: int) -> int:
+    value &= 0xFF
+    return value - 0x100 if value & 0x80 else value
+
+
+def _door_cells() -> frozenset[tuple[tuple[int, int], tuple[int, int]]]:
+    """Return each door as the pair of map cells it joins, one in each room.
+
+    A door's position is the cell just outside its room, relative to the room's own cell, and it
+    lands in a cell of the room it leads to. A door whose destination the map draws elsewhere joins
+    no pair of cells, so it is not drawn.
+    """
+    doors = set()
+    for door in entrance_rows:
+        room = rooms_by_identifier[door.room_identifier]
+        outside = (int(room.x) + _signed_byte(door.x_pos_door),
+                   int(room.y) + _signed_byte(door.y_pos_door))
+        if map_info.room_at(*outside) != door.dest_room_identifier:
+            continue
+        for step_x, step_y in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            inside = (outside[0] + step_x, outside[1] + step_y)
+            if map_info.room_at(*inside) == door.room_identifier:
+                doors.add(tuple(sorted((inside, outside))))
+                break
+    return frozenset(doors)
+
+
+DOORS = _door_cells()
 AREA_MAPS = range(2, len(MAPS))
 MAP_GROUPS = [MAPS[0].name, MAPS[1].name, ("Areas", [MAPS[index].name for index in AREA_MAPS])]
 
@@ -152,6 +185,28 @@ def render(tracker: TrackerMap) -> bytes:
                 fill(left, top, right, top + WALL_PIXELS, palette.wall)
             if map_info.room_at(x, y + 1) != room:
                 fill(left, bottom - WALL_PIXELS, right, bottom, palette.wall)
+    for (x1, y1), (x2, y2) in DOORS:
+        rooms = {map_info.room_at(x1, y1), map_info.room_at(x2, y2)}
+        if not all(first_x <= x <= last_x and first_y <= y <= last_y
+                   for x, y in ((x1, y1), (x2, y2))):
+            continue
+        if rooms & tracker.rooms:
+            palette = BRIGHT
+        elif rooms & tracker.context:
+            palette = DIM
+        else:
+            continue
+        # The two cells are neighbours, and the door sits across the wall between them.
+        if x1 != x2:
+            wall_x = origin_x + x2 * CELL_PIXELS
+            middle = origin_y + y1 * CELL_PIXELS + CELL_PIXELS // 2
+            fill(wall_x - WALL_PIXELS, middle - DOOR_PIXELS // 2,
+                 wall_x + WALL_PIXELS, middle + DOOR_PIXELS // 2, palette.door)
+        else:
+            wall_y = origin_y + y2 * CELL_PIXELS
+            middle = origin_x + x1 * CELL_PIXELS + CELL_PIXELS // 2
+            fill(middle - DOOR_PIXELS // 2, wall_y - WALL_PIXELS,
+                 middle + DOOR_PIXELS // 2, wall_y + WALL_PIXELS, palette.door)
     return tracker_png.encode(width, height, bytes(canvas))
 
 

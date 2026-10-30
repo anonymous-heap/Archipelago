@@ -143,6 +143,17 @@ class TrackerMapTest(unittest.TestCase):
                  if map_info.room_at(int(info.x), int(info.y)) != room]
         self.assertEqual(moved, ["901"])
 
+    def test_every_door_joins_two_rooms_the_entrances_connect(self):
+        from ..data.entrance_info import rows as entrances
+        connected = {frozenset((door.room_identifier, door.dest_room_identifier))
+                     for door in entrances}
+        self.assertGreater(len(tracker_map.DOORS), 300)
+        for (x1, y1), (x2, y2) in tracker_map.DOORS:
+            with self.subTest(door=((x1, y1), (x2, y2))):
+                self.assertEqual(abs(x1 - x2) + abs(y1 - y2), 1, "the cells are neighbours")
+                rooms = frozenset((map_info.room_at(x1, y1), map_info.room_at(x2, y2)))
+                self.assertIn(rooms, connected)
+
     def test_the_grid_matches_the_rom(self):
         rom_path = find_rom()
         if rom_path is None:
