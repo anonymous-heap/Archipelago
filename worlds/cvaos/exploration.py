@@ -49,7 +49,8 @@ def decode(stored) -> Exploration | None:
     visited, remembered = set(), set()
     for half in range(2):
         for row in range(ROWS):
-            visited_bits, remembered_bits = struct.unpack_from("<II", cells, (half * ROWS + row) * 8)
+            at = (half * ROWS + row) * 8
+            visited_bits, remembered_bits = struct.unpack_from("<II", cells, at)
             for bit in range(32):
                 if visited_bits >> bit & 1:
                     visited.add((half * 32 + bit, row))
@@ -68,6 +69,7 @@ def encode(exploration: Exploration, event_flags: int = 0) -> dict:
     for word, marked in ((0, exploration.visited), (4, exploration.remembered)):
         for x, y in marked:
             at = ((x >> 5) * ROWS + y) * 8 + word
-            struct.pack_into("<I", cells, at, struct.unpack_from("<I", cells, at)[0] | 1 << (x & 31))
+            bits = struct.unpack_from("<I", cells, at)[0]
+            struct.pack_into("<I", cells, at, bits | 1 << (x & 31))
     doors = sum(1 << index for index in exploration.hidden_doors)
     return value(bytes(cells), event_flags & ~HIDDEN_DOOR_FLAGS | doors)

@@ -39,8 +39,9 @@ class DecodeTest(unittest.TestCase):
                          frozenset(range(len(map_info.hidden_doors))))
 
     def test_encode_is_the_inverse_of_decode(self):
-        explored = Exploration(frozenset({(5, 13), (40, 24)}), frozenset({(5, 13), (40, 24), (6, 13)}),
-                               frozenset({0, 12}))
+        explored = Exploration(visited=frozenset({(5, 13), (40, 24)}),
+                               remembered=frozenset({(5, 13), (40, 24), (6, 13)}),
+                               hidden_doors=frozenset({0, 12}))
         self.assertEqual(exploration.decode(exploration.encode(explored)), explored)
 
     def test_anything_else_decodes_to_none(self):
