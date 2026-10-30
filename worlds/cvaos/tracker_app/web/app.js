@@ -388,7 +388,9 @@ function renderSelectionRing() {
 
 // --- The panels -----------------------------------------------------------------------------
 
-function counts(area) {
+// Count an area's locations in logic and with tricks. While unexplored cells are hidden, only the
+// locations the map shows count, so the numbers don't give away what lies in unexplored rooms.
+function counts(area, visible) {
   const statuses = page.snapshot.locations || {};
   let inLogic = 0;
   let tricks = 0;
@@ -397,6 +399,7 @@ function counts(area) {
     if (!location) continue;
     const inArea = area === CASTLE ? location.area !== REALM : location.area === area;
     if (!inArea) continue;
+    if (visible && !visible.has(key(Math.floor(location.x), Math.floor(location.y)))) continue;
     if (status === "in_logic") inLogic += 1;
     if (status === "tricks") tricks += 1;
   }
@@ -408,6 +411,7 @@ function renderAreas() {
   list.replaceChildren();
   const entries = [{ id: CASTLE, name: "Whole castle" }, ...page.map.areas];
   const somaArea = page.snapshot.position ? page.snapshot.position[0][0] : null;
+  const visible = visibleCells();
   for (const area of entries) {
     const item = document.createElement("li");
     const button = document.createElement("button");
@@ -424,7 +428,7 @@ function renderAreas() {
       button.appendChild(here);
     }
     if (page.snapshot.tracking) {
-      const { inLogic, tricks } = counts(area.id);
+      const { inLogic, tricks } = counts(area.id, visible);
       const count = document.createElement("span");
       count.className = `count${inLogic ? "" : tricks ? " tricks" : " zero"}`;
       count.textContent = inLogic || tricks || "0";
@@ -667,6 +671,7 @@ function setUpControls() {
       renderSoma();
       fitWhenTheShownMapChanges();  // "Reveal full map" switches between the two fits
       renderRoute();
+      renderAreas();  // the area counts follow what is shown
       renderLocationList();
       if (name === "follow" && box.checked && page.somaArea) setFocus(page.somaArea);
     });
