@@ -465,7 +465,41 @@ def _create_access_rule_from_routing(
                 or (bool(resolved_trick_needs) and state.has(UT_TRICKS_ITEM, player)
                     and any(satisfied(state, need) for need in resolved_trick_needs)))
 
+    def uses(state: CollectionState) -> tuple[str, ...]:
+        """Return what the simplest way through that ``state`` allows needs, as a route names it.
+
+        A way without a trick counts as simpler than any way with one.
+        """
+        ways = [(False, need) for need in resolved_needs if satisfied(state, need)]
+        if state.has(UT_TRICKS_ITEM, player):
+            ways += [(True, need) for need in resolved_trick_needs if satisfied(state, need)]
+        if not ways:
+            return ()
+
+        def cost(way: tuple[bool, tuple[tuple[str, ...], bool, bool, bool]]) -> tuple[bool, int]:
+            trick, (items, *flags) = way
+            return trick, len(items) + sum(flags)
+
+        trick, need = min(ways, key=cost)
+        items, needs_tform, needs_ceiling, needs_floor = need
+        used = list(items)
+        if needs_tform:
+            used.append("a transformation soul")
+        if needs_ceiling:
+            used.append(f"{_first_held(state, _CEILING_BREAKERS, player)} to break the ceiling")
+        if needs_floor:
+            used.append(f"{_first_held(state, _FLOOR_BREAKERS, player)} to break the floor")
+        if trick:
+            used.append("a trick")
+        return tuple(used)
+
+    access_rule.uses = uses  # Universal Tracker's routes name what each step needs (tracker_route)
     return access_rule
+
+
+def _first_held(state: CollectionState, names: frozenset[str], player: int) -> str:
+    """Return the first of ``names``, alphabetically, that ``state`` holds."""
+    return min(name for name in names if state.has(name, player))
 
 
 def _requires_tform(routing_info) -> bool:

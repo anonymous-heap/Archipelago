@@ -3,7 +3,7 @@ import logging
 import os
 from typing import ClassVar
 
-from BaseClasses import ItemClassification, MultiWorld, Tutorial
+from BaseClasses import CollectionState, ItemClassification, MultiWorld, Tutorial
 from worlds.AutoWorld import WebWorld, World
 from worlds.LauncherComponents import Component, Type, components, launch as launch_component
 import settings
@@ -13,7 +13,7 @@ from .items import CVAOSItem, item_name_to_id, create_item, create_itempool
 from .locations import location_name_to_id
 from .options import LOGIC_OPTION_NAMES, CVAOSOptions, Goal, cvaos_option_groups
 from .regions import UT_TRICKS_ITEM, create_regions, can_reach_room
-from . import tracker_map
+from . import tracker_map, tracker_route
 from .client import CVAOSClient  # noqa: F401  (imported for its registration side effect)
 
 
@@ -149,6 +149,11 @@ class CVAOSWorld(World):
         "location_setting_key": tracker_map.POSITION_KEY,
         "location_icon_coords": tracker_map.position_icon,
     }
+
+    def get_logical_path(self, dest_name: str, state: CollectionState):
+        """Routes list the rooms on the way, area by area, with the souls or weapons each room
+        needs. They lead to locations; for a region or an entrance, UT shows its own route."""
+        return tracker_route.describe_route(self, dest_name, state)
 
     @staticmethod
     def interpret_slot_data(slot_data: dict) -> dict:
