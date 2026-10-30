@@ -136,6 +136,18 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual({item["group"] for item in items.values()},
                              {"Souls", "Key items", "Weapons"})
 
+    async def test_progression_from_outside_the_pool_is_listed_too(self):
+        # A start inventory takes its items out of the pool, but Soma still has them.
+        world = self.ctx.core.get_current_world()
+        listed = {item["name"] for item in self.ctx.snapshot()["items"]}
+        outside = [name for name in sorted(CVAOSWorld.item_name_to_id)
+                   if name not in listed and world.create_item(name).advancement]
+        if not outside:
+            self.skipTest("this seed's pool holds every progression item")
+        self.receive(outside[0])
+        items = {item["name"]: item["count"] for item in self.ctx.snapshot()["items"]}
+        self.assertEqual(items.get(outside[0]), 1)
+
     async def test_a_check_shows_as_checked(self):
         self.receive("Malphas")
         self.check(LUCKY_CHARM)

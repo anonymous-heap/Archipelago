@@ -278,9 +278,10 @@ class TrackerContext(CommonContext):
             goal = "tricks"
         else:
             goal = "no"
-        progression = sorted({item.name for item in world.multiworld.itempool
-                              if item.player == world.player and item.advancement}
-                             - {UT_TRICKS_ITEM})
+        # The pool's progression items, and any Soma has from elsewhere, such as his start inventory.
+        in_pool = {item.name for item in world.multiworld.itempool
+                   if item.player == world.player and item.advancement}
+        progression = sorted((in_pool | set(self.result.prog_items)) - {UT_TRICKS_ITEM})
         snapshot.update({
             "locations": {str(location_id): status for location_id, status in locations.items()},
             "hinted": sorted(location_id for location_id in hinted if location_id in locations),

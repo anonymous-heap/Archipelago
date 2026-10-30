@@ -148,6 +148,7 @@ function setFocus(focus) {
   page.focus = focus;
   fitView();
   renderFocus();
+  renderMap();  // the Chaotic Realm shows only while it is in focus
   renderAreas();
   renderLocationList();
 }
@@ -228,16 +229,19 @@ function setUpPanAndZoom() {
 // --- What is shown --------------------------------------------------------------------------
 
 // The cells to draw, or null for all of them. Unexplored cells stay hidden unless the full map is
-// revealed. The Chaotic Realm is always drawn, because the game never marks it as explored.
+// revealed. The game never marks the Chaotic Realm as explored, so it is drawn whole, but only
+// while it is in focus or Soma is in it.
 function visibleCells() {
   const explored = page.snapshot.exploration;
   if (page.reveal || !explored) return null;
   const visible = new Set();
   for (const [x, y] of explored.visited) visible.add(key(x, y));
   for (const [x, y] of explored.remembered) visible.add(key(x, y));
-  for (const cell of page.map.cells) if (cell.area === REALM) visible.add(key(cell.x, cell.y));
   const soma = somaPoint();
   if (soma) visible.add(key(Math.floor(soma.x), Math.floor(soma.y)));
+  if (page.focus === REALM || (soma && soma.room[0] === REALM)) {
+    for (const cell of page.map.cells) if (cell.area === REALM) visible.add(key(cell.x, cell.y));
+  }
   return visible;
 }
 
