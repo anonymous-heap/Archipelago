@@ -17,13 +17,14 @@ from typing import Any, NamedTuple, Optional
 
 from BaseClasses import CollectionState, Entrance
 
-# Where TrackerCore.py comes from. test/test_tracker_app.py checks the file against sha256.
+# Where TrackerCore.py comes from. test/test_tracker_app.py checks the file against sha256, taken
+# with LF line endings as git stores it upstream.
 UPSTREAM = {
     "repository": "https://github.com/FarisTheAncient/Archipelago",
     "path": "worlds/tracker/TrackerCore.py",
     "version": "Tracker_v0.3.8",
     "commit": "38e4c00126d06141ccc0cd4ba64ea0c0616c5e3f",
-    "sha256": "544a918929e26e2b8e729b8e62a5a482632cc46355fe8f3b7c2749bc04d17131",
+    "sha256": "5391853ab58c3032580278e505128cade010c63ac164c8f74b212682c01ababa",
 }
 
 UT_VERSION = "v0.3.8"

@@ -36,7 +36,9 @@ LUCKY_CHARM = "Entrance Parapet [000 Lucky Charm]"
 
 class UpstreamCopyTest(unittest.TestCase):
     def test_trackercore_is_ut_s_file_unchanged(self):
+        # A Windows checkout may have CRLF line endings, so the hash is taken with LF.
         data = pkgutil.get_data("worlds.cvaos.tracker_app.ut", "TrackerCore.py")
+        data = data.replace(b"\r\n", b"\n")
         self.assertEqual(hashlib.sha256(data).hexdigest(), UPSTREAM["sha256"],
                          "copy TrackerCore.py from UT again, or record the new version in UPSTREAM")
 
