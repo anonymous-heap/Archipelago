@@ -136,6 +136,7 @@ h2 {
 .areas button.active { background: var(--panel-raised); box-shadow: inset 2px 0 0 var(--accent); }
 .areas .name, .locations .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .areas .here { color: var(--soma); font-size: 11px; }
+.areas .name.unknown { color: var(--muted); letter-spacing: 0.1em; }
 .count {
   min-width: 22px;
   padding: 0 6px;

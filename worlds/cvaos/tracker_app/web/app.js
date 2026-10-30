@@ -73,16 +73,45 @@ function svg(tag, attributes, parent) {
   return element;
 }
 
-// --- Location names -------------------------------------------------------------------------
+// --- Names ----------------------------------------------------------------------------------
+
+const UNKNOWN_AREA = "???";
+
+// The areas Soma has been to, or null to treat them all as known. While unexplored cells are
+// hidden, he has been to an area once he has visited or remembers a cell in it, is in it, or has
+// checked a location in it. The last is the only sign of the Chaotic Realm, which the game never
+// marks as explored.
+function knownAreas() {
+  const explored = page.snapshot.exploration;
+  if (page.reveal || !explored) return null;
+  const known = new Set();
+  for (const [x, y] of [...explored.visited, ...explored.remembered]) {
+    const rect = els.cells.get(key(x, y));
+    if (rect) known.add(rect.dataset.area);
+  }
+  if (page.snapshot.position) known.add(page.snapshot.position[0][0]);
+  for (const [id, status] of Object.entries(page.snapshot.locations || {})) {
+    const location = locationsById.get(Number(id));
+    if (status === "checked" && location) known.add(location.area);
+  }
+  return known;
+}
+
+// An area's name, or "???" for one Soma hasn't been to while unexplored areas are hidden.
+function areaName(areaId, known = knownAreas()) {
+  const area = areasById.get(areaId);
+  if (!area) return "";
+  return !known || known.has(areaId) ? area.name : UNKNOWN_AREA;
+}
 
 // "Terrace [503 CASTLE MAP 3]" is a place, then the room and the item the game put there.
 function describeLocation(location) {
   const match = /^(.*?) \[(\S+) (.*)\]$/.exec(location.name);
-  const area = areasById.get(location.area);
-  if (!match) return { title: location.name, subtitle: area ? area.name : "" };
+  const area = areaName(location.area);
+  if (!match) return { title: location.name, subtitle: area };
   return {
     title: match[1],
-    subtitle: `${area ? area.name : ""} · room ${match[2]} · originally ${match[3]}`,
+    subtitle: `${area} · room ${match[2]} · originally ${match[3]}`,
   };
 }
 
@@ -429,14 +458,15 @@ function renderAreas() {
   const entries = [{ id: CASTLE, name: "Whole castle" }, ...page.map.areas];
   const somaArea = page.snapshot.position ? page.snapshot.position[0][0] : null;
   const visible = visibleCells();
+  const known = knownAreas();
   for (const area of entries) {
     const item = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
     button.classList.toggle("active", page.focus === area.id);
     const name = document.createElement("span");
-    name.className = "name";
-    name.textContent = area.name;
+    name.textContent = area.id === CASTLE ? area.name : areaName(area.id, known);
+    name.className = name.textContent === UNKNOWN_AREA ? "name unknown" : "name";
     button.appendChild(name);
     if (area.id === somaArea) {
       const here = document.createElement("span");
@@ -552,17 +582,19 @@ function renderRouteSteps() {
     + (route.tricks ? ", using tricks" : "");
   list.appendChild(from);
   let current = null;
+  const known = knownAreas();
   for (const step of route.steps) {
-    if (!current || current.area !== step.area) {
+    const area = step.room[0];  // grouped by id, since two areas can both be "???"
+    if (!current || current.area !== area) {
       const item = document.createElement("li");
       const heading = document.createElement("div");
       heading.className = "area-name";
-      heading.textContent = step.area;
+      heading.textContent = areaName(area, known);
       const rooms = document.createElement("div");
       rooms.className = "rooms";
       item.append(heading, rooms);
       list.appendChild(item);
-      current = { area: step.area, rooms };
+      current = { area, rooms };
     }
     const room = document.createElement("span");
     room.className = `room${step.needs.length ? " needs" : ""}`;
@@ -581,8 +613,8 @@ function renderLocationList() {
   const list = $("locations");
   list.replaceChildren();
   const statuses = page.snapshot.locations || {};
-  const area = areasById.get(page.focus);
-  $("list-heading").textContent = `In logic · ${area ? area.name : "Whole castle"}`;
+  const focusName = page.focus === CASTLE ? "Whole castle" : areaName(page.focus);
+  $("list-heading").textContent = `In logic · ${focusName}`;
   const visible = visibleCells();
   const shown = page.map.locations.filter((location) => {
     const status = statuses[location.id];
@@ -688,7 +720,10 @@ function setUpControls() {
       renderSoma();
       fitWhenTheShownMapChanges();  // "Reveal full map" switches between the two fits
       renderRoute();
-      renderAreas();  // the area counts follow what is shown
+      // The area counts, and which areas are named, follow what is shown.
+      renderAreas();
+      renderSelection();
+      renderRouteSteps();
       renderLocationList();
       if (name === "follow" && box.checked && page.somaArea) setFocus(page.somaArea);
     });
