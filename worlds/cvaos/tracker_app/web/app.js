@@ -104,6 +104,15 @@ function areaName(areaId, known = knownAreas()) {
   return !known || known.has(areaId) ? area.name : UNKNOWN_AREA;
 }
 
+// An area Soma hasn't been to isn't listed while unexplored areas are hidden, so it can't stay in
+// focus either. The focus moves to his area, or to the whole castle.
+function keepFocusOnAKnownArea() {
+  const known = knownAreas();
+  if (!known || page.focus === CASTLE || known.has(page.focus)) return;
+  const somaArea = page.snapshot.position ? page.snapshot.position[0][0] : null;
+  setFocus(somaArea && known.has(somaArea) ? somaArea : CASTLE);
+}
+
 // "Terrace [503 CASTLE MAP 3]" is a place, then the room and the item the game put there.
 function describeLocation(location) {
   const match = /^(.*?) \[(\S+) (.*)\]$/.exec(location.name);
@@ -469,13 +478,15 @@ function renderAreas() {
   const visited = visitedCells();
   const known = knownAreas();
   for (const area of entries) {
+    // An area Soma hasn't been to isn't listed while unexplored areas are hidden.
+    if (area.id !== CASTLE && known && !known.has(area.id)) continue;
     const item = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
     button.classList.toggle("active", page.focus === area.id);
     const name = document.createElement("span");
-    name.textContent = area.id === CASTLE ? area.name : areaName(area.id, known);
-    name.className = name.textContent === UNKNOWN_AREA ? "name unknown" : "name";
+    name.className = "name";
+    name.textContent = area.name;
     button.appendChild(name);
     if (area.id === somaArea) {
       const here = document.createElement("span");
@@ -680,6 +691,7 @@ function onSnapshot(snapshot) {
   renderMap();
   renderSoma();
   fitWhenTheShownMapChanges();
+  keepFocusOnAKnownArea();
   renderRoute();
   renderAreas();
   renderItems();
@@ -728,6 +740,7 @@ function setUpControls() {
       renderMap();
       renderSoma();
       fitWhenTheShownMapChanges();  // "Reveal full map" switches between the two fits
+      keepFocusOnAKnownArea();
       renderRoute();
       // The area counts, and which areas are named, follow what is shown.
       renderAreas();
