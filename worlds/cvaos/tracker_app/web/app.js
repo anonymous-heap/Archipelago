@@ -61,8 +61,9 @@ const els = {
 
 // The looks walls and doors can have, in drawing order, so doors sit on top of walls.
 const EDGE_LOOKS = ["wall unfocused", "wall", "door unfocused", "door"];
-// The game's map draws a cell edge as 4 pixels: a corner in the wall colour, then a door's 3. So a
-// door covers the middle three quarters of its edge.
+// The game's map gives a cell 4 pixels a side, and a wall is 1 pixel thick, so the walls here are a
+// quarter of a cell thick (the stroke width in style.css). A door fills its edge between the two
+// corners, which stay in the wall colour, so it stops half a wall's thickness short of each end.
 const DOOR_INSET = 0.125;
 
 const locationsById = new Map();
@@ -408,7 +409,7 @@ function somaMarker(soma) {
   return { x: Math.floor(soma.x) + 0.5, y: Math.floor(soma.y) + 0.5 };
 }
 
-const SOMA_INSET = 0.14; // keeps the cell's outline inside it, clear of the walls on its edges
+const SOMA_INSET = 0.2; // keeps the cell's outline inside it, clear of the walls on its edges
 
 function renderSoma() {
   // The cell he is in sits under the walls and doors, so they stay visible. The dot marking where

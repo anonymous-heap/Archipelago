@@ -176,9 +176,10 @@ h2 {
 .cell.warp.remembered { fill: color-mix(in srgb, var(--warp) 45%, var(--map-bg)); }
 .cell.unfocused, .pin.unfocused { opacity: 0.4; }
 
-.edge { fill: none; stroke-width: 0.12; stroke-linecap: square; }
+/* A quarter of a cell thick, as on the game's map. app.js insets doors by half of this. */
+.edge { fill: none; stroke-width: 0.25; stroke-linecap: square; }
 .edge.wall { stroke: var(--wall); }
-.edge.door { stroke: var(--door); stroke-linecap: butt; }  /* as thick as the wall, as in the game */
+.edge.door { stroke: var(--door); stroke-linecap: butt; }
 /* Walls and doors outside the highlighted area dim to solid darker colours. */
 .edge.wall.unfocused { stroke: var(--wall-dim); }
 .edge.door.unfocused { stroke: var(--door-dim); }
