@@ -321,13 +321,19 @@ function drawnInFull(cellKey, visited) {
 
 const USEFUL = new Set(["in_logic", "tricks"]); // the checks Soma can get now
 
-// Whether a location's check shows: only in a shown room drawn in full. A greyed-out room is one
-// Soma hasn't visited, so its checks stay hidden even when a Castle Map shows the room. With
-// "Reveal useful checks" on, a check he can get now shows wherever it is, its room still hidden.
+// Whether a location's pin shows on the map: only in a shown room drawn in full. A greyed-out room
+// is one Soma hasn't visited, so its checks stay hidden even when a Castle Map shows the room.
 function checkShown(location, visible, visited) {
-  if (page.revealChecks && USEFUL.has((page.snapshot.locations || {})[location.id])) return true;
   const cell = key(Math.floor(location.x), Math.floor(location.y));
   return (!visible || visible.has(cell)) && drawnInFull(cell, visited);
+}
+
+// Whether a location is listed in the sidebar and counted in the area list: wherever its pin
+// shows, and with "Reveal useful checks" on, also wherever Soma can get it now, though the map
+// still hides its pin.
+function checkListed(location, visible, visited) {
+  if (page.revealChecks && USEFUL.has((page.snapshot.locations || {})[location.id])) return true;
+  return checkShown(location, visible, visited);
 }
 
 function renderMap() {
@@ -456,9 +462,9 @@ function renderSelectionRing() {
 
 // --- The panels -----------------------------------------------------------------------------
 
-// Count an area's locations in logic and with tricks. While unexplored cells are hidden, only the
-// checks the map shows count, so the numbers don't give away what lies in rooms Soma hasn't
-// visited.
+// Count an area's locations in logic and with tricks: the ones the sidebar lists (checkListed). So
+// while unexplored cells are hidden, the numbers don't give away what lies in rooms Soma hasn't
+// visited unless "Reveal useful checks" is on.
 function counts(area, visible, visited) {
   const statuses = page.snapshot.locations || {};
   let inLogic = 0;
@@ -467,7 +473,7 @@ function counts(area, visible, visited) {
     const location = locationsById.get(Number(id));
     if (!location) continue;
     const inArea = area === CASTLE ? location.area !== REALM : location.area === area;
-    if (!inArea || !checkShown(location, visible, visited)) continue;
+    if (!inArea || !checkListed(location, visible, visited)) continue;
     if (status === "in_logic") inLogic += 1;
     if (status === "tricks") tricks += 1;
   }
@@ -645,7 +651,7 @@ function renderLocationList() {
   const shown = page.map.locations.filter((location) => {
     const status = statuses[location.id];
     if (status !== "in_logic" && status !== "tricks") return false;
-    return inFocus(location.area) && checkShown(location, visible, visited);
+    return inFocus(location.area) && checkListed(location, visible, visited);
   });
   shown.sort((a, b) => (statuses[a.id] === statuses[b.id] ? a.name.localeCompare(b.name) : statuses[a.id] === "in_logic" ? -1 : 1));
   if (!shown.length) {
