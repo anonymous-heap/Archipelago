@@ -46,6 +46,7 @@ const page = {
   askedToConnect: false,
   reveal: prefs.get("reveal", false),
   follow: prefs.get("follow", true),
+  centerMarker: prefs.get("centerMarker", false),  // draw Soma's dot in the middle of his cell
   showChecked: prefs.get("showChecked", false),
 };
 
@@ -313,6 +314,12 @@ function somaPoint() {
   return { x: origin[0] + x / page.map.room_cell[0], y: origin[1] + y / page.map.room_cell[1], room };
 }
 
+// Where Soma's dot goes: where he stands, or the middle of his cell, as the in-game map marks him.
+function somaMarker(soma) {
+  if (!page.centerMarker) return { x: soma.x, y: soma.y };
+  return { x: Math.floor(soma.x) + 0.5, y: Math.floor(soma.y) + 0.5 };
+}
+
 const SOMA_INSET = 0.14; // keeps the cell's outline inside it, clear of the walls on its edges
 
 function renderSoma() {
@@ -328,7 +335,8 @@ function renderSoma() {
   svg("rect", { x, y, width: 1, height: 1, class: "soma-cell" }, cellLayer);
   svg("rect", { x: x + SOMA_INSET, y: y + SOMA_INSET, width: 1 - 2 * SOMA_INSET,
                 height: 1 - 2 * SOMA_INSET, class: "soma-cell-outline" }, cellLayer);
-  svg("circle", { cx: soma.x, cy: soma.y, r: 0.22, class: "soma-dot" }, layer);
+  const marker = somaMarker(soma);
+  svg("circle", { cx: marker.x, cy: marker.y, r: 0.22, class: "soma-dot" }, layer);
   const area = soma.room[0];
   if (page.follow && area !== page.somaArea && page.somaArea !== null) setFocus(area);
   if (page.somaArea === null && page.focus === CASTLE && page.follow) setFocus(area);
@@ -342,7 +350,10 @@ function renderRoute() {
   if (!route) return;
   const points = route.points.map(([x, y]) => [x, y]);
   const soma = somaPoint();
-  if (route.start_room && soma) points.unshift([soma.x, soma.y]);
+  if (route.start_room && soma) {
+    const marker = somaMarker(soma);
+    points.unshift([marker.x, marker.y]);  // the line starts at his dot, wherever that is drawn
+  }
   const target = locationsById.get(route.target);
   if (target) points.push([target.x, target.y]);
   const coordinates = points.map(([x, y]) => `${x},${y}`).join(" ");
@@ -626,7 +637,8 @@ function openConnectDialog() {
 }
 
 function setUpControls() {
-  const toggles = [["reveal", "reveal"], ["follow", "follow"], ["show-checked", "showChecked"]];
+  const toggles = [["reveal", "reveal"], ["follow", "follow"], ["center-marker", "centerMarker"],
+                   ["show-checked", "showChecked"]];
   for (const [id, name] of toggles) {
     const box = $(id);
     box.checked = page[name];
@@ -634,6 +646,8 @@ function setUpControls() {
       page[name] = box.checked;
       prefs.set(name, box.checked);
       renderMap();
+      renderSoma();
+      renderRoute();
       renderLocationList();
       if (name === "follow" && box.checked && page.somaArea) setFocus(page.somaArea);
     });
