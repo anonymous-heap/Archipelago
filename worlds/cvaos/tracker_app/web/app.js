@@ -46,7 +46,7 @@ const page = {
   askedToConnect: false,
   fittedTo: null,      // "whole" or "explored": the map the view was last fitted to
   reveal: prefs.get("reveal", false),
-  revealChecks: prefs.get("revealChecks", false),  // show checks in logic even where unexplored
+  revealItems: prefs.get("revealItems", false),  // list the progression items Soma doesn't have
   follow: prefs.get("follow", true),
   centerMarker: prefs.get("centerMarker", false),  // draw Soma's dot in the middle of his cell
   showChecked: prefs.get("showChecked", false),
@@ -322,21 +322,12 @@ function drawnInFull(cellKey, visited) {
   return !visited || page.reveal || (rect && rect.dataset.area === REALM) || visited.has(cellKey);
 }
 
-const USEFUL = new Set(["in_logic", "tricks"]); // the checks Soma can get now
-
-// Whether a location's pin shows on the map: only in a shown room drawn in full. A greyed-out room
-// is one Soma hasn't visited, so its checks stay hidden even when a Castle Map shows the room.
+// Whether a location's check shows, on the map, in the sidebar and in the counts: only in a shown
+// room drawn in full. A greyed-out room is one Soma hasn't visited, so its checks stay hidden even
+// when a Castle Map shows the room.
 function checkShown(location, visible, visited) {
   const cell = key(Math.floor(location.x), Math.floor(location.y));
   return (!visible || visible.has(cell)) && drawnInFull(cell, visited);
-}
-
-// Whether a location is listed in the sidebar and counted in the area list: wherever its pin
-// shows, and with "Reveal useful checks" on, also wherever Soma can get it now, though the map
-// still hides its pin.
-function checkListed(location, visible, visited) {
-  if (page.revealChecks && USEFUL.has((page.snapshot.locations || {})[location.id])) return true;
-  return checkShown(location, visible, visited);
 }
 
 function renderMap() {
@@ -468,9 +459,9 @@ function renderSelectionRing() {
 
 // --- The panels -----------------------------------------------------------------------------
 
-// Count an area's locations in logic and with tricks: the ones the sidebar lists (checkListed). So
+// Count an area's locations in logic and with tricks: the ones whose checks show (checkShown). So
 // while unexplored cells are hidden, the numbers don't give away what lies in rooms Soma hasn't
-// visited unless "Reveal useful checks" is on.
+// visited.
 function counts(area, visible, visited) {
   const statuses = page.snapshot.locations || {};
   let inLogic = 0;
@@ -479,7 +470,7 @@ function counts(area, visible, visited) {
     const location = locationsById.get(Number(id));
     if (!location) continue;
     const inArea = area === CASTLE ? location.area !== REALM : location.area === area;
-    if (!inArea || !checkListed(location, visible, visited)) continue;
+    if (!inArea || !checkShown(location, visible, visited)) continue;
     if (status === "in_logic") inLogic += 1;
     if (status === "tricks") tricks += 1;
   }
@@ -536,8 +527,18 @@ function renderItems() {
     container.appendChild(note);
     return;
   }
+  // The items Soma doesn't have yet are the seed's own list of what is left to find, so they show
+  // only with "Reveal useful items" on.
+  const listed = page.revealItems ? items : items.filter((item) => item.count);
+  if (!listed.length) {
+    const note = document.createElement("p");
+    note.className = "muted";
+    note.textContent = "Nothing collected yet.";
+    container.appendChild(note);
+    return;
+  }
   for (const group of ["Souls", "Key items", "Weapons"]) {
-    const members = items.filter((item) => item.group === group);
+    const members = listed.filter((item) => item.group === group);
     if (!members.length) continue;
     const heading = document.createElement("div");
     heading.className = "item-group";
@@ -579,7 +580,7 @@ function renderHeader() {
   let tricks = 0;
   for (const [id, status] of Object.entries(snapshot.locations || {})) {
     const location = locationsById.get(Number(id));
-    if (!location || !checkListed(location, visible, visited)) continue;
+    if (!location || !checkShown(location, visible, visited)) continue;
     if (status === "in_logic") inLogic += 1;
     if (status === "tricks") tricks += 1;
   }
@@ -669,15 +670,14 @@ function renderLocationList() {
   const shown = page.map.locations.filter((location) => {
     const status = statuses[location.id];
     if (status !== "in_logic" && status !== "tricks") return false;
-    return inFocus(location.area) && checkListed(location, visible, visited);
+    return inFocus(location.area) && checkShown(location, visible, visited);
   });
   shown.sort((a, b) => (statuses[a.id] === statuses[b.id] ? a.name.localeCompare(b.name) : statuses[a.id] === "in_logic" ? -1 : 1));
   if (!shown.length) {
     const item = document.createElement("li");
     item.className = "muted";
-    const everywhere = page.reveal || page.revealChecks;
     item.textContent = !page.snapshot.tracking ? "Not tracking yet."
-      : everywhere ? "Nothing in logic here." : "Nothing in logic here that you have explored.";
+      : page.reveal ? "Nothing in logic here." : "Nothing in logic here that you have explored.";
     list.appendChild(item);
     return;
   }
@@ -760,7 +760,7 @@ function openConnectDialog() {
 }
 
 function setUpControls() {
-  const toggles = [["reveal", "reveal"], ["reveal-checks", "revealChecks"], ["follow", "follow"],
+  const toggles = [["reveal", "reveal"], ["reveal-items", "revealItems"], ["follow", "follow"],
                    ["center-marker", "centerMarker"], ["show-checked", "showChecked"]];
   for (const [id, name] of toggles) {
     const box = $(id);
@@ -776,6 +776,7 @@ function setUpControls() {
       // The counts, and which areas are named, follow what is shown.
       renderHeader();
       renderAreas();
+      renderItems();
       renderSelection();
       renderRouteSteps();
       renderLocationList();
