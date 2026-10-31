@@ -299,8 +299,10 @@ function setUpPanAndZoom() {
 
 // The cells to draw, or null for all of them. Cells Soma hasn't explored, and that no Castle Map
 // he holds shows, stay hidden unless the full map is revealed. The game never marks the Chaotic
-// Realm as explored, so it is drawn whole, but only while it is in focus or Soma is in it.
-function visibleCells() {
+// Realm as explored, so it is drawn whole, but only while it is in focus or Soma is in it. The
+// panels count the Realm's checks once Soma has been there (countRealm), so that their numbers
+// don't change with the focus.
+function visibleCells({ countRealm = false } = {}) {
   const explored = page.snapshot.exploration;
   if (page.reveal || !explored) return null;
   const visible = new Set();
@@ -310,7 +312,8 @@ function visibleCells() {
   for (const [x, y] of explored.revealed || []) visible.add(key(x, y));
   const soma = somaPoint();
   if (soma) visible.add(key(Math.floor(soma.x), Math.floor(soma.y)));
-  if (page.focus === REALM || (soma && soma.room[0] === REALM)) {
+  const known = countRealm ? knownAreas() : null;
+  if (page.focus === REALM || (soma && soma.room[0] === REALM) || (known && known.has(REALM))) {
     for (const cell of page.map.cells) if (cell.area === REALM) visible.add(key(cell.x, cell.y));
   }
   return visible;
@@ -495,7 +498,7 @@ function renderAreas() {
   list.replaceChildren();
   const entries = [{ id: CASTLE, name: "Whole castle" }, ...page.map.areas];
   const somaArea = page.snapshot.position ? page.snapshot.position[0][0] : null;
-  const visible = visibleCells();
+  const visible = visibleCells({ countRealm: true });
   const visited = visitedCells();
   const known = knownAreas();
   for (const area of entries) {
@@ -587,7 +590,7 @@ function renderHeader() {
   $("stat-checked").textContent = `${checked}/${statuses.length}`;
   // The checked count is the slot's progress, so it counts every location. In logic and with
   // tricks count only the checks the page lists, like the area counts.
-  const visible = visibleCells();
+  const visible = visibleCells({ countRealm: true });
   const visited = visitedCells();
   let inLogic = 0;
   let tricks = 0;
@@ -680,7 +683,7 @@ function renderLocationList() {
   const statuses = page.snapshot.locations || {};
   const focusName = page.focus === CASTLE ? "Whole castle" : areaName(page.focus);
   $("list-heading").textContent = `In logic · ${focusName}`;
-  const visible = visibleCells();
+  const visible = visibleCells({ countRealm: true });
   const visited = visitedCells();
   const shown = page.map.locations.filter((location) => {
     const status = statuses[location.id];
