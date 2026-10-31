@@ -66,6 +66,7 @@ class TrackerContext(CommonContext):
                  slot_name: str | None = None) -> None:
         super().__init__(server_address, password)
         self.slot_name = slot_name  # kept here, because a lost connection clears auth
+        self.room_address = server_address  # the address asked for, as given
         self.core = TrackerCore(logger, False, False)
         self.result: CurrentTrackerState | None = None
         self.listeners: list[Callable[[], None]] = []
@@ -95,26 +96,36 @@ class TrackerContext(CommonContext):
     async def connect_to(self, address: str, slot_name: str, password: str | None) -> None:
         """Connect to the server at ``address`` and track ``slot_name``."""
         self.slot_name = slot_name
+        self.room_address = address
         self.username = slot_name  # CommonContext reconnects on its own only when this is set
         self.password = password or None
-        self.set_status(f"Connecting to {address}")
         await self.connect(address)
+        # After connect(), since ending the last connection sets the status to "Not connected".
+        self.set_status(f"Connecting to {address}")
 
     async def hand_over(self, address: str, slot_name: str, password: str | None) -> str:
         """Take a new launch's room and slot, unless this tracker is busy with another.
 
-        Returns "opened" when the launch only needs to open this tracker's page, and "busy" when
-        this tracker is connected to another room or tracks another slot. A tracker that isn't
-        connected takes the launch's room and slot, which covers a room that came back on a new
-        port after the old one closed.
+        Returns "opened" when the launch only needs to open this tracker's page. Returns "busy"
+        when this tracker follows another room or slot, or is connecting to one, and "closing" when
+        it is shutting down, so that the launch serves on the port itself once it comes free.
+
+        A tracker that follows nothing takes the launch's room and slot. That covers a room that
+        came back on a new port, a connection that failed, and a slot that this tracker couldn't
+        follow, because it plays another game or its seed couldn't be rebuilt.
         """
+        if self.exit_event.is_set():
+            return "closing"
         if not address or not slot_name:
             return "opened"  # the launch asked for nothing but the page
-        if self.slot is None:
-            await self.connect_to(address, slot_name, password)
-            return "opened"
-        same_room = same_address(address, self.server_address or "")
-        return "opened" if same_room and slot_name == self.slot_name else "busy"
+        same = (slot_name == self.slot_name
+                and same_address(address, self.room_address or self.server_address or ""))
+        connecting = (self.slot is None and self.server_task is not None
+                      and not self.server_task.done())
+        if self.tracking or connecting:
+            return "opened" if same else "busy"
+        await self.connect_to(address, slot_name, password)
+        return "opened"
 
     def handle_connection_loss(self, msg: str) -> None:
         super().handle_connection_loss(msg)

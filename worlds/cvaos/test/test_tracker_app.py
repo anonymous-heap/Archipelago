@@ -368,6 +368,12 @@ class RefusedConnectionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.log_in(None, False), "Enter a slot name to connect")
 
 
+def following():
+    """Make ``tracking`` true, as for a tracker that has rebuilt its slot's seed."""
+    return mock.patch.object(TrackerContext, "tracking", new_callable=mock.PropertyMock,
+                             return_value=True)
+
+
 class HandOverTest(unittest.IsolatedAsyncioTestCase):
     """What a running tracker does with the room and slot a new launch brings it."""
 
@@ -377,7 +383,7 @@ class HandOverTest(unittest.IsolatedAsyncioTestCase):
         self.ctx.connect_to = mock.AsyncMock()
 
     def connect_as(self, slot_name: str, address: str) -> None:
-        self.ctx.slot, self.ctx.slot_name, self.ctx.server_address = 1, slot_name, address
+        self.ctx.slot, self.ctx.slot_name, self.ctx.room_address = 1, slot_name, address
 
     async def test_an_idle_tracker_takes_the_slot(self):
         self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", "pw"), "opened")
@@ -390,13 +396,36 @@ class HandOverTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_the_same_room_and_slot_just_open_the_page(self):
         self.connect_as("Soma", "localhost:38281")
-        self.assertEqual(await self.ctx.hand_over("ws://LOCALHOST:38281", "Soma", None), "opened")
+        with following():
+            self.assertEqual(await self.ctx.hand_over("ws://LOCALHOST:38281", "Soma", None),
+                             "opened")
         self.ctx.connect_to.assert_not_awaited()
 
     async def test_another_room_or_slot_finds_it_busy(self):
         self.connect_as("Soma", "localhost:38281")
-        self.assertEqual(await self.ctx.hand_over("localhost:38282", "Soma", None), "busy")
-        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Link", None), "busy")
+        with following():
+            self.assertEqual(await self.ctx.hand_over("localhost:38282", "Soma", None), "busy")
+            self.assertEqual(await self.ctx.hand_over("localhost:38281", "Link", None), "busy")
+        self.ctx.connect_to.assert_not_awaited()
+
+    async def test_a_tracker_still_connecting_keeps_its_room(self):
+        # Before the server's Connected, the slot isn't known yet, but the room is spoken for.
+        self.ctx.slot_name, self.ctx.room_address = "Soma", "localhost:38281"
+        self.ctx.server_task = asyncio.get_running_loop().create_future()
+        self.addCleanup(self.ctx.server_task.cancel)
+        self.assertEqual(await self.ctx.hand_over("localhost:38282", "Link", None), "busy")
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "opened")
+        self.ctx.connect_to.assert_not_awaited()
+
+    async def test_a_tracker_that_can_t_follow_its_slot_takes_another(self):
+        # Connected to a slot of another game, or one whose seed couldn't be rebuilt.
+        self.connect_as("Link", "localhost:38281")
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "opened")
+        self.ctx.connect_to.assert_awaited_once_with("localhost:38281", "Soma", None)
+
+    async def test_a_tracker_that_is_stopping_says_so(self):
+        self.ctx.exit_event.set()
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "closing")
         self.ctx.connect_to.assert_not_awaited()
 
 
@@ -433,12 +462,35 @@ class SecondLaunchTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_a_tracker_busy_with_another_slot_keeps_its_port(self):
         ctx, _, port = await self.run_tracker()
-        ctx.slot, ctx.slot_name, ctx.server_address = 1, "Link", "localhost:38281"
+        ctx.slot, ctx.slot_name, ctx.room_address = 1, "Link", "localhost:38281"
         spare = free_port()
         with mock.patch.object(tracker_app, "DEFAULT_PORT", port), \
-                mock.patch.object(tracker_app, "SPARE_PORTS", [spare]):
+                mock.patch.object(tracker_app, "SPARE_PORTS", [spare]), following():
             self.assertEqual(await self.launch("--connect", "localhost:38281", "--name", "Soma"),
                              spare)
+        ctx.connect_to.assert_not_awaited()
+
+    async def test_the_slot_s_tracker_is_found_past_a_free_port(self):
+        # The default port came free when another room's tracker stopped, but this slot's
+        # tracker still serves on a spare one, and the launch opens it.
+        ctx, _, port = await self.run_tracker()
+        ctx.slot, ctx.slot_name, ctx.room_address = 1, "Soma", "localhost:38281"
+        with mock.patch.object(tracker_app, "DEFAULT_PORT", free_port()), \
+                mock.patch.object(tracker_app, "SPARE_PORTS", [port]), following():
+            self.assertIsNone(await self.launch("--connect", "localhost:38281", "--name", "Soma"))
+
+    async def test_a_tracker_that_is_stopping_leaves_its_port_to_the_launch(self):
+        ctx, server, port = await self.run_tracker()
+        ctx.exit_event.set()
+
+        async def stop_soon() -> None:
+            await asyncio.sleep(0.3)
+            await server.stop()
+
+        stopping = asyncio.create_task(stop_soon())
+        self.assertEqual(await self.launch("--port", str(port), "--connect", "localhost:38281",
+                                           "--name", "Soma"), port)
+        await stopping
         ctx.connect_to.assert_not_awaited()
 
     async def test_a_tracker_from_another_version_is_replaced(self):
@@ -465,6 +517,11 @@ class SecondLaunchTest(unittest.IsolatedAsyncioTestCase):
         with mock.patch.object(tracker_app, "DEFAULT_PORT", port), \
                 mock.patch.object(tracker_app, "SPARE_PORTS", [spare]):
             self.assertEqual(await self.launch(), spare)
+
+        # With no spare port to move to, it serves on whatever port the system gives it.
+        with mock.patch.object(tracker_app, "DEFAULT_PORT", port), \
+                mock.patch.object(tracker_app, "SPARE_PORTS", []):
+            self.assertNotIn(await self.launch(), (port, None))
 
 
 class OpenFromClientTest(unittest.TestCase):
