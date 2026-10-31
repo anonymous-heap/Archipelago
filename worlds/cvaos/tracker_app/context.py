@@ -26,6 +26,9 @@ from .ut.TrackerCore import TrackerCore
 logger = logging.getLogger("Client")
 
 LOG_LINES = 100  # how many of the client log's lines the page can show
+# The server's flag for a race room, which every client asks for once it has connected. Universal
+# Tracker turns its routes and explanations off in a race, so this tracker turns its routes off.
+RACE_MODE_KEY = "_read_race_mode"
 
 # The page lists the progression items in these groups. Anything else is a key item.
 ITEM_CATEGORIES = {info.name: info.item_category for info in item_info_collection}
@@ -154,6 +157,9 @@ class TrackerContext(CommonContext):
             self.update()
         elif cmd in ("SetReply", "Retrieved"):
             keys = {args["key"]} if cmd == "SetReply" else set(args.get("keys", ()))
+            if RACE_MODE_KEY in keys:
+                self.plan_route()  # which drops any route in a race
+                self.changed()
             if self.hints_key in keys:
                 self.update()
             elif keys & {self.position_key, self.exploration_key}:
@@ -252,15 +258,28 @@ class TrackerContext(CommonContext):
         if position[0] != self.route_room:
             self.plan_route()
 
+    @property
+    def race_mode(self) -> bool:
+        """Whether the room is a race, where the tracker plans no routes."""
+        return bool(self.stored_data.get(RACE_MODE_KEY))
+
     def set_route(self, location_id: int | None) -> None:
         """Show a route to the location with ``location_id``, or none."""
+        if location_id is not None and self.race_mode:
+            return
         self.route_target = location_id
         self.plan_route()
         self.changed()
 
     def plan_route(self) -> None:
-        """Plan the route to the route's target from Soma's room, or drop it once it is checked."""
+        """Plan the route to the route's target from Soma's room, or drop it once it is checked.
+
+        A race room drops it too.
+        """
         self.route = None
+        if self.race_mode:
+            self.route_target = None
+            return
         if self.route_target in self.checked_locations:
             self.route_target = None  # Soma got there
         if self.route_target is None or not self.tracking or self.result is None:
@@ -286,6 +305,7 @@ class TrackerContext(CommonContext):
             "server": self.server_address or "",
             "slot": self.slot_name or "",
             "log": list(self.log_tail.lines),
+            "race_mode": self.race_mode,
         }
         if not self.tracking or self.result is None:
             return snapshot

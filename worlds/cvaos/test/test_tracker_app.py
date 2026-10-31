@@ -197,6 +197,23 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.ctx.snapshot()["route"])
         self.assertIsNone(self.ctx.snapshot()["route_target"])
 
+    async def test_a_race_room_turns_routes_off(self):
+        self.receive("Malphas", "Hippogryph")
+        terrace = location_name_to_id[TERRACE]
+        self.ctx.set_route(terrace)
+        self.assertIsNotNone(self.ctx.snapshot()["route"])
+        self.assertFalse(self.ctx.snapshot()["race_mode"])
+
+        # The flag comes after connecting, as the reply to the client's request for it.
+        self.ctx.stored_data["_read_race_mode"] = True
+        self.ctx.on_package("Retrieved", {"keys": {"_read_race_mode": True}})
+        snapshot = self.ctx.snapshot()
+        self.assertTrue(snapshot["race_mode"])
+        self.assertIsNone(snapshot["route"])
+        self.assertIsNone(snapshot["route_target"])
+        self.ctx.set_route(terrace)
+        self.assertIsNone(self.ctx.snapshot()["route_target"])
+
     async def test_there_is_no_route_out_of_reach(self):
         self.ctx.set_route(location_name_to_id[TERRACE])
         snapshot = self.ctx.snapshot()

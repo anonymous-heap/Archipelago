@@ -605,7 +605,9 @@ function renderSelection() {
   const location = locationsById.get(page.selected);
   const status = location ? (page.snapshot.locations || {})[location.id] : undefined;
   $("selection").hidden = !location;
-  $("find-route").disabled = !location || !page.snapshot.tracking || status === undefined || status === "checked";
+  const race = Boolean(page.snapshot.race_mode);
+  $("find-route").disabled = race || !location || !page.snapshot.tracking || status === undefined || status === "checked";
+  $("find-route").title = race ? "Routes are off in a race room, as in Universal Tracker" : "";
   if (location) {
     const { title, subtitle } = describeLocation(location);
     $("sel-title").textContent = title;
