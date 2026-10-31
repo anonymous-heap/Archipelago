@@ -41,6 +41,7 @@ const page = {
   socket: null,
   build: null,         // the version of the tracker that served this page
   quit: false,         // whether the player stopped the tracker from this page
+  retry: null,         // the timer that opens the socket again after it closes
   focus: CASTLE,       // CASTLE or an area id
   selected: null,      // the selected location's id
   view: { x: 0, y: 0, w: 64, h: 47 },
@@ -764,11 +765,20 @@ function openSocket() {
   });
   socket.addEventListener("close", () => {
     $("status-text").textContent = page.quit ? "The tracker has stopped. You can close this tab."
-                                             : "The tracker isn't running";
+                                             : "Tracker not running. Type /map in your client.";
     $("connection").classList.remove("tracking", "connecting");
-    setTimeout(openSocket, 2000);
+    page.retry = setTimeout(openSocket, 2000);
   });
 }
+
+// A browser can hold back a background tab's timers for minutes, so a tab brought back into view
+// tries again at once rather than waiting for its next retry.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible" || !page.socket) return;
+  if (page.socket.readyState !== WebSocket.CLOSED) return;
+  clearTimeout(page.retry);
+  openSocket();
+});
 
 function openConnectDialog() {
   const form = $("connect-form");

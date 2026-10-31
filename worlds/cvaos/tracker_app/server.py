@@ -78,8 +78,10 @@ PAGE_FILES = {
 SOCKET_PATH = "/ws"
 PUSH_DELAY = 0.05  # seconds to gather changes into one snapshot
 # The tracker has no window of its own, so it stops once no page has been open this long, rather
-# than run unseen after the player closes the tab. Opening it again starts a new one.
-IDLE_STOP = 600.0
+# than run unseen after the player closes the tab. Opening it again starts a new one. The wait is
+# long because a browser can hold back a background tab's reconnection, or put the tab to sleep,
+# while the player is busy in the game.
+IDLE_STOP = 1800.0
 IDLE_CHECK = 15.0  # seconds between looks at whether a page is open
 
 APP = "cvaos-tracker"
