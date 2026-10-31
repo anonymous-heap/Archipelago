@@ -18,11 +18,12 @@ asks for, each as a JSON object with a "type":
     {"type": "clear_route"}
     {"type": "quit"}                        stop the tracker
 
-A new launch sends the room and slot it was given, and hears back whether this tracker took them
-("opened") or tracks another room or slot ("busy"):
+A new launch sends the room and slot it was given, and whether this tracker may take them if it
+follows nothing. It hears back "opened", "idle", "busy" or "closing" (see TrackerContext.hand_over):
 
-    {"type": "handover", "server": "localhost:38281", "slot": "Soma", "password": null}
-    {"type": "handover", "result": "opened"}
+    {"type": "handover", "server": "localhost:38281", "slot": "Soma", "password": null,
+     "take": false}
+    {"type": "handover", "result": "idle"}
 
 The server answers only its own page. Any web site open in the browser could otherwise reach it,
 read the slot and the room's chat, and point the tracker at another server or stop it. So every
@@ -115,6 +116,7 @@ class TrackerServer:
     def __init__(self, ctx: TrackerContext) -> None:
         self.ctx = ctx
         self.sockets: set[ServerConnection] = set()
+        self.launches: set[ServerConnection] = set()  # the sockets of launches asking, not pages
         self.server: Server | None = None
         self.port: int | None = None
         self.idle_since: float | None = time.monotonic()  # since the last page closed, or None
@@ -132,8 +134,16 @@ class TrackerServer:
         return self.port
 
     async def stop(self) -> None:
+        self.close()
+        await self.wait_closed()
+
+    def close(self) -> None:
+        """Stop listening and close the pages' connections, without waiting for them to end."""
         if self.server is not None:
             self.server.close()
+
+    async def wait_closed(self) -> None:
+        if self.server is not None:
             await self.server.wait_closed()
 
     async def stop_when_idle(self, limit: float = IDLE_STOP, check: float = IDLE_CHECK) -> None:
@@ -171,6 +181,7 @@ class TrackerServer:
     # --- websocket -----------------------------------------------------------------------------
 
     async def on_socket(self, socket: ServerConnection) -> None:
+        idle_since = self.idle_since  # kept in case this is a launch asking, not a page
         self.sockets.add(socket)
         self.idle_since = None
         try:
@@ -182,7 +193,11 @@ class TrackerServer:
         finally:
             self.sockets.discard(socket)
             if not self.sockets:
-                self.idle_since = time.monotonic()
+                # A launch's question doesn't restart the wait, or a tracker whose tab is closed
+                # would never stop while launches for other slots keep asking it.
+                launch = socket in self.launches and idle_since is not None
+                self.idle_since = idle_since if launch else time.monotonic()
+            self.launches.discard(socket)
 
     async def on_message(self, socket: ServerConnection, message: str | bytes) -> None:
         try:
@@ -209,9 +224,10 @@ class TrackerServer:
         elif kind == "quit":
             ctx.exit_event.set()
         elif kind == "handover":
+            self.launches.add(socket)
             result = await ctx.hand_over(str(request.get("server") or "").strip(),
                                          str(request.get("slot") or "").strip(),
-                                         request.get("password"))
+                                         request.get("password"), bool(request.get("take", True)))
             await socket.send(json.dumps({"type": "handover", "result": result}))
 
     def snapshot_message(self) -> str:

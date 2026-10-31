@@ -94,19 +94,43 @@ def _search(state: CollectionState, starts: list[Region], goal: Region) -> list[
     return path[::-1]
 
 
+def nearest_door(world: CVAOSWorld, room: str, point: tuple[float, float]) -> Region | None:
+    """Return the door node of ``room`` nearest ``point``, in map cells.
+
+    Returns None when none of the room's doors has a place on the map.
+    """
+    distances = []
+    for name in world.entrance_region_names_by_room.get(room, []):
+        door = DOOR_POINTS.get(name[len(DOOR_NODE_PREFIX):])
+        if door is not None:
+            distances.append(((door[0] - point[0]) ** 2 + (door[1] - point[1]) ** 2, name))
+    return world.get_region(min(distances)[1]) if distances else None
+
+
 def plan_route(world: CVAOSWorld, location: Location, state: CollectionState,
-               start_room: str | None = None) -> Route | None:
+               start_room: str | None = None,
+               start_point: tuple[float, float] | None = None) -> Route | None:
     """Return the route at ``state`` to ``location`` through the fewest doors and rooms.
 
     The route starts in ``start_room`` when one is given and the location can be reached from
     there, and at the start of the game otherwise. Returns None when ``state`` can't reach it.
+
+    Within the room, the route starts at the door nearest ``start_point``, Soma's position in map
+    cells, when that is given. Another door of the room may be one he can't get to from where he
+    is, such as across a gap he can't yet cross. Only when no route leads from the nearest door
+    does it start from any door of the room.
     """
     if not location.can_reach(state):
         return None
     path = None
     if start_room is not None:
-        names = world.entrance_region_names_by_room.get(start_room, [])
-        path = _search(state, [world.get_region(name) for name in names], location.parent_region)
+        door = nearest_door(world, start_room, start_point) if start_point is not None else None
+        if door is not None:
+            path = _search(state, [door], location.parent_region)
+        if path is None:
+            names = world.entrance_region_names_by_room.get(start_room, [])
+            path = _search(state, [world.get_region(name) for name in names],
+                           location.parent_region)
     if path is None:
         start_room = None
         path = _search(state, [world.get_region(world.origin_region_name)], location.parent_region)

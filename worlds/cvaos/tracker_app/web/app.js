@@ -43,6 +43,7 @@ const page = {
   quit: false,         // whether the player stopped the tracker from this page
   retry: null,         // the timer that opens the socket again after it closes
   reloading: false,    // set once the page has started loading a newer tracker's page
+  gone: false,         // whether the page has shown that its tracker is gone
   focus: CASTLE,       // CASTLE or an area id
   selected: null,      // the selected location's id
   view: { x: 0, y: 0, w: 64, h: 47 },
@@ -236,7 +237,11 @@ function svgPoint(clientX, clientY) {
   return point.matrixTransform(map.getScreenCTM().inverse());
 }
 
+const ZOOM_LIMITS = { min: 3, max: 200 };  // how many cells the view can be across
+
 function zoom(factor, clientX, clientY) {
+  const width = Math.min(ZOOM_LIMITS.max, Math.max(ZOOM_LIMITS.min, page.view.w * factor));
+  factor = width / page.view.w;
   const box = $("map").getBoundingClientRect();
   const at = svgPoint(clientX ?? box.left + box.width / 2, clientY ?? box.top + box.height / 2);
   const view = page.view;
@@ -287,7 +292,12 @@ function setUpPanAndZoom() {
   });
   map.addEventListener("wheel", (event) => {
     event.preventDefault();
-    zoom(event.deltaY < 0 ? 1 / ZOOM_STEP : ZOOM_STEP, event.clientX, event.clientY);
+    if (!event.deltaY) return;  // a sideways scroll isn't a zoom
+    // A mouse wheel notch is about 100 pixels or 3 lines, and a touchpad sends many small steps,
+    // so the zoom follows how far the wheel turned, up to one notch's step for each event.
+    const lines = event.deltaMode === WheelEvent.DOM_DELTA_LINE;
+    const notches = lines ? event.deltaY / 3 : event.deltaY / 100;
+    zoom(ZOOM_STEP ** Math.max(-1, Math.min(1, notches)), event.clientX, event.clientY);
   }, { passive: false });
 
   $("zoom-in").addEventListener("click", () => zoom(1 / ZOOM_STEP));
@@ -299,8 +309,10 @@ function setUpPanAndZoom() {
 
 // The cells to draw, or null for all of them. Cells Soma hasn't explored, and that no Castle Map
 // he holds shows, stay hidden unless the full map is revealed. The game never marks the Chaotic
-// Realm as explored, so it is drawn whole, but only while it is in focus or Soma is in it.
-function visibleCells() {
+// Realm as explored, so it is drawn whole, but only while it is in focus or Soma is in it. The
+// panels count the Realm's checks once Soma has been there (countRealm), so that their numbers
+// don't change with the focus.
+function visibleCells({ countRealm = false } = {}) {
   const explored = page.snapshot.exploration;
   if (page.reveal || !explored) return null;
   const visible = new Set();
@@ -310,7 +322,8 @@ function visibleCells() {
   for (const [x, y] of explored.revealed || []) visible.add(key(x, y));
   const soma = somaPoint();
   if (soma) visible.add(key(Math.floor(soma.x), Math.floor(soma.y)));
-  if (page.focus === REALM || (soma && soma.room[0] === REALM)) {
+  const known = countRealm ? knownAreas() : null;
+  if (page.focus === REALM || (soma && soma.room[0] === REALM) || (known && known.has(REALM))) {
     for (const cell of page.map.cells) if (cell.area === REALM) visible.add(key(cell.x, cell.y));
   }
   return visible;
@@ -466,7 +479,8 @@ function renderRoute() {
 function renderSelectionRing() {
   for (const ring of document.querySelectorAll(".selection-ring")) ring.remove();
   const location = locationsById.get(page.selected);
-  if (!location) return;
+  const pin = els.pins.get(page.selected);
+  if (!location || !pin || pin.style.display === "none") return;  // no ring around a hidden pin
   svg("circle", { cx: location.x, cy: location.y, r: 0.4, class: "selection-ring" }, $("layer-pins"));
 }
 
@@ -495,7 +509,7 @@ function renderAreas() {
   list.replaceChildren();
   const entries = [{ id: CASTLE, name: "Whole castle" }, ...page.map.areas];
   const somaArea = page.snapshot.position ? page.snapshot.position[0][0] : null;
-  const visible = visibleCells();
+  const visible = visibleCells({ countRealm: true });
   const visited = visitedCells();
   const known = knownAreas();
   for (const area of entries) {
@@ -587,7 +601,7 @@ function renderHeader() {
   $("stat-checked").textContent = `${checked}/${statuses.length}`;
   // The checked count is the slot's progress, so it counts every location. In logic and with
   // tricks count only the checks the page lists, like the area counts.
-  const visible = visibleCells();
+  const visible = visibleCells({ countRealm: true });
   const visited = visitedCells();
   let inLogic = 0;
   let tricks = 0;
@@ -680,7 +694,7 @@ function renderLocationList() {
   const statuses = page.snapshot.locations || {};
   const focusName = page.focus === CASTLE ? "Whole castle" : areaName(page.focus);
   $("list-heading").textContent = `In logic · ${focusName}`;
-  const visible = visibleCells();
+  const visible = visibleCells({ countRealm: true });
   const visited = visitedCells();
   const shown = page.map.locations.filter((location) => {
     const status = statuses[location.id];
@@ -758,6 +772,7 @@ function onSnapshot(snapshot) {
   renderRouteSteps();
   renderLocationList();
   $("log").textContent = (snapshot.log || []).join("\n");
+  if ($("connect-dialog").open) renderDialog();
   if (!snapshot.connected && snapshot.status === "Not connected" && !page.askedToConnect) {
     page.askedToConnect = true;
     openConnectDialog();
@@ -783,12 +798,24 @@ function openSocket() {
       location.reload();
       return;
     }
-    onSnapshot(message.snapshot);
+    // While the tracker reconnects or rebuilds the seed, its snapshots carry no explored map or
+    // position. The page keeps the last ones it had for the same slot, rather than show the whole
+    // castle, with every area's name and secret door, until the next arrive.
+    const snapshot = message.snapshot;
+    if (!snapshot.exploration && page.snapshot.exploration && snapshot.slot === page.snapshot.slot) {
+      snapshot.exploration = page.snapshot.exploration;
+      snapshot.position = snapshot.position ?? page.snapshot.position;
+    }
+    page.gone = false;
+    onSnapshot(snapshot);
   });
   socket.addEventListener("close", () => {
     // A socket already replaced by a newer one, or closed for a reload, has nothing to report.
     if (socket !== page.socket || page.reloading) return;
-    showTrackerGone();
+    if (!page.gone) {
+      page.gone = true;  // drawn once, rather than again on every retry while it is away
+      showTrackerGone();
+    }
     page.retry = setTimeout(openSocket, 2000);
   });
 }
@@ -801,12 +828,20 @@ document.addEventListener("visibilitychange", () => {
 });
 
 function openConnectDialog() {
+  if ($("connect-dialog").open) return;  // the player may be typing in it
   const form = $("connect-form");
   form.server.value = page.snapshot.server || prefs.get("server", "");
   form.slot.value = page.snapshot.slot || prefs.get("slot", "");
-  $("dialog-status").textContent = page.snapshot.status || "";
-  $("disconnect").disabled = !page.snapshot.connected;
+  renderDialog();
   $("connect-dialog").showModal();
+}
+
+// The dialog's status line and buttons follow the tracker, while the fields are left to the player.
+function renderDialog() {
+  const live = Boolean(page.socket && page.socket.readyState === WebSocket.OPEN);
+  $("dialog-status").textContent = page.snapshot.status || "";
+  $("disconnect").disabled = !live || !page.snapshot.connected;
+  $("quit").disabled = !live;
 }
 
 // Switch the map between the tracker's own colours and the game's colours and wall width.
@@ -844,11 +879,18 @@ function setUpControls() {
   $("connection").addEventListener("click", openConnectDialog);
   $("cancel").addEventListener("click", () => $("connect-dialog").close());
   $("disconnect").addEventListener("click", () => {
-    send({ type: "disconnect" });
+    if (!send({ type: "disconnect" })) {
+      $("dialog-status").textContent = NOT_RUNNING;
+      return;
+    }
     $("connect-dialog").close();
   });
   $("quit").addEventListener("click", () => {
     page.quit = send({ type: "quit" });
+    if (!page.quit) {
+      $("dialog-status").textContent = NOT_RUNNING;
+      return;
+    }
     $("connect-dialog").close();
   });
   $("show-log").addEventListener("click", () => {
@@ -875,6 +917,7 @@ function setUpControls() {
 
   document.addEventListener("keydown", (event) => {
     if (event.target instanceof HTMLInputElement || $("connect-dialog").open) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;  // the browser's own shortcuts
     if (event.key === "Escape") select(null);
     if (event.key === "f" || event.key === "F") fitView();
   });
@@ -883,10 +926,18 @@ function setUpControls() {
 async function start() {
   // The page has nothing to draw without the map. If the tracker went away while the page was
   // loading, it waits for one to come back rather than staying blank.
+  let failed = false;
   while (!page.map) {
     try {
-      page.map = await (await fetch("map.json")).json();
+      const map = await (await fetch("map.json")).json();
+      // The page itself came from the tracker that went away, so it loads again from this one.
+      if (failed) {
+        location.reload();
+        return;
+      }
+      page.map = map;
     } catch {
+      failed = true;
       $("status-text").textContent = NOT_RUNNING;
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }

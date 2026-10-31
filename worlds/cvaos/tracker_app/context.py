@@ -9,7 +9,10 @@ shows, and listeners hear when it may have changed.
 """
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
+import urllib.parse
 from collections import deque
 from typing import Callable
 
@@ -37,15 +40,27 @@ ITEM_GROUPS = {"ability_soul": "Souls", "red_soul": "Souls", "blue_soul": "Souls
                "yellow_soul": "Souls", "weapon": "Weapons"}
 
 
+DEFAULT_SERVER_PORT = 38281  # the port Archipelago assumes when an address leaves it out
+LOOPBACK_NAMES = {"127.0.0.1", "::1"}  # the names of this computer that "localhost" also means
+
+
 def same_address(first: str, second: str) -> bool:
     """Whether two server addresses name the same server.
 
-    Either can be written with or without a scheme, and with or without a slot name and password.
+    Either can be written with or without a scheme, a slot name and password, or the default port,
+    and "localhost" names the same server as 127.0.0.1.
     """
-    def bare(address: str) -> str:
+    def server(address: str) -> tuple[str, int | str]:
         address = without_login(address.strip().lower())
-        return address.removeprefix("wss://").removeprefix("ws://").rstrip("/")
-    return bare(first) == bare(second)
+        address = address.removeprefix("wss://").removeprefix("ws://").rstrip("/")
+        parts = urllib.parse.urlsplit(f"//{address}")
+        try:
+            port = parts.port or DEFAULT_SERVER_PORT
+        except ValueError:
+            return address, ""  # not an address urlsplit can read, so compared as written
+        host = parts.hostname or ""
+        return ("localhost" if host in LOOPBACK_NAMES else host), port
+    return server(first) == server(second)
 
 
 class LogTail(logging.Handler):
@@ -99,7 +114,9 @@ class TrackerContext(CommonContext):
         await self.send_connect(game="")
 
     async def connect_to(self, address: str, slot_name: str, password: str | None) -> None:
-        """Connect to the server at ``address`` and track ``slot_name``."""
+        """Connect to the server at ``address`` and track ``slot_name``, unless stopping."""
+        if self.exit_event.is_set():
+            return
         self.slot_name = slot_name
         self.room_address = address
         self.username = slot_name  # CommonContext reconnects on its own only when this is set
@@ -108,16 +125,28 @@ class TrackerContext(CommonContext):
         # After connect(), since ending the last connection sets the status to "Not connected".
         self.set_status(f"Connecting to {address}")
 
-    async def hand_over(self, address: str, slot_name: str, password: str | None) -> str:
-        """Take a new launch's room and slot, unless this tracker is busy with another.
+    @property
+    def following(self) -> bool:
+        """Whether this tracker follows a room and slot, is connecting to one, or will reconnect."""
+        connecting = (self.slot is None and self.server_task is not None
+                      and not self.server_task.done())
+        reconnecting = self.autoreconnect_task is not None and not self.autoreconnect_task.done()
+        return self.tracking or connecting or reconnecting
 
-        Returns "opened" when the launch only needs to open this tracker's page. Returns "busy"
-        when this tracker follows another room or slot, or is connecting to one, and "closing" when
-        it is shutting down, so that the launch serves on the port itself once it comes free.
+    async def hand_over(self, address: str, slot_name: str, password: str | None,
+                        take: bool = True) -> str:
+        """Answer a new launch that asks for a room and slot.
 
-        A tracker that follows nothing takes the launch's room and slot. That covers a room that
-        came back on a new port, a connection that failed, and a slot that this tracker couldn't
-        follow, because it plays another game or its seed couldn't be rebuilt.
+        Returns "opened" when the launch only needs to open this tracker's page, because the
+        tracker follows that room and slot or has just taken them. Returns "busy" when it follows
+        another, and "closing" when it is shutting down, so that the launch serves on the port
+        itself once it comes free.
+
+        A tracker that follows nothing takes the request when ``take`` is true, and otherwise
+        answers "idle". A launch asks every tracker without ``take`` first, so that a tracker that
+        already follows its slot opens rather than an idle one being given the slot twice. A
+        tracker follows nothing after a connection that was refused, or when its slot plays
+        another game or its seed couldn't be rebuilt.
         """
         if self.exit_event.is_set():
             return "closing"
@@ -125,10 +154,11 @@ class TrackerContext(CommonContext):
             return "opened"  # the launch asked for nothing but the page
         same = (slot_name == self.slot_name
                 and same_address(address, self.room_address or self.server_address or ""))
-        connecting = (self.slot is None and self.server_task is not None
-                      and not self.server_task.done())
-        if self.tracking or connecting:
+        if self.following:
             return "opened" if same else "busy"
+        if not same and not take:
+            return "idle"
+        # Its own room and slot again, perhaps now with the password, or a request it may take.
         await self.connect_to(address, slot_name, password)
         return "opened"
 
@@ -146,6 +176,14 @@ class TrackerContext(CommonContext):
         async_start(self.disconnect())
 
     async def shutdown(self) -> None:
+        # CommonContext waits for the connection's task, which goes on while a connection is still
+        # opening, and logs in if that succeeds. So a connection still opening is cancelled first.
+        task = self.server_task
+        if task is not None and not task.done() and self.server is None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+            self.server_task = None
         await super().shutdown()
         self.close()
 
@@ -310,9 +348,16 @@ class TrackerContext(CommonContext):
         location = world.get_location(world.location_id_to_name[self.route_target])
         position = self.position()
         self.route_room = position[0] if position is not None else None
+        # The route is planned again only when Soma enters another room, so at the door he came in
+        # by, which is where it starts.
+        try:
+            start_point = tracker_map.cell_position(*position) if position is not None else None
+        except KeyError:
+            start_point = None  # a room this world has no place for
         for state in (self.result.state, self.result.glitches_state):
             if state is not None:
-                self.route = tracker_route.plan_route(world, location, state, self.route_room)
+                self.route = tracker_route.plan_route(world, location, state, self.route_room,
+                                                      start_point)
                 if self.route is not None:
                     return
 

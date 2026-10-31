@@ -363,14 +363,17 @@ dialog input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 /* --- narrow windows ----------------------------------------------------------------------- */
 
+/* Half a screen beside the emulator: narrower sidebars, so the areas, items and credits stay. */
 @media (max-width: 1000px) {
-  .layout { grid-template-columns: minmax(0, 1fr) 270px; }
-  .sidebar.left { display: none; }
-  .stats { display: none; }
+  .layout { grid-template-columns: 180px minmax(0, 1fr) 230px; }
+  .sidebar { padding: 10px; }
 }
+/* A phone: the map first, then the right sidebar, then the left one. */
 @media (max-width: 680px) {
   body { overflow: auto; }
-  .layout { grid-template-columns: 1fr; grid-template-rows: 60vh auto; }
-  .sidebar.right { border-left: 0; border-top: 1px solid var(--border); }
+  .layout { grid-template-columns: 1fr; grid-template-rows: 60vh auto auto; }
+  .map-pane { order: -2; }
+  .sidebar.right { order: -1; border-left: 0; border-top: 1px solid var(--border); }
+  .sidebar.left { border-right: 0; border-top: 1px solid var(--border); }
   .toggles { margin-left: 0; }
 }

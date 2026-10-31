@@ -316,6 +316,20 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(self.ctx.exit_event.wait(), 2)
         await watch
 
+    async def test_a_launch_asking_doesn_t_restart_the_idle_wait(self):
+        idle_since = self.server.idle_since
+        async with self.open_socket() as launch:
+            await launch.recv()
+            await launch.send(json.dumps({"type": "handover", "server": "", "slot": ""}))
+            await launch.recv()
+        await asyncio.sleep(0.1)
+        self.assertEqual(self.server.idle_since, idle_since)
+        # A page does restart it, since someone looked at the tracker.
+        async with self.open_socket() as page:
+            await page.recv()
+        await asyncio.sleep(0.1)
+        self.assertGreater(self.server.idle_since, idle_since)
+
     async def test_another_site_can_t_reach_the_tracker(self):
         # A page from any other origin, even one on this computer, is turned away.
         for origin in ("https://example.com", f"http://127.0.0.1:{self.port + 1}", "null"):
@@ -389,6 +403,25 @@ def following():
                              return_value=True)
 
 
+class ShutdownTest(unittest.IsolatedAsyncioTestCase):
+    async def test_a_connection_still_opening_doesn_t_hold_up_the_shutdown(self):
+        ctx = TrackerContext(None, None, "Soma")
+        self.addCleanup(ctx.close)
+        unanswered = asyncio.Event()  # a server that hasn't answered the connection yet
+        ctx.server_task = asyncio.create_task(unanswered.wait())
+        opening = ctx.server_task
+        await asyncio.wait_for(ctx.shutdown(), 2)
+        self.assertTrue(opening.cancelled())
+
+    async def test_a_stopping_tracker_opens_no_new_connection(self):
+        ctx = TrackerContext(None, None, None)
+        self.addCleanup(ctx.close)
+        ctx.connect = mock.AsyncMock()
+        ctx.exit_event.set()
+        await ctx.connect_to("localhost:38281", "Soma", None)
+        ctx.connect.assert_not_awaited()
+
+
 class HandOverTest(unittest.IsolatedAsyncioTestCase):
     """What a running tracker does with the room and slot a new launch brings it."""
 
@@ -438,6 +471,26 @@ class HandOverTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "opened")
         self.ctx.connect_to.assert_awaited_once_with("localhost:38281", "Soma", None)
 
+    async def test_an_idle_tracker_waits_until_the_launch_lets_it_take_the_slot(self):
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None, take=False),
+                         "idle")
+        self.ctx.connect_to.assert_not_awaited()
+
+    async def test_a_tracker_waiting_to_reconnect_keeps_its_room(self):
+        # An archipelago.gg room that went to sleep: the tracker retries until it wakes.
+        self.ctx.slot_name, self.ctx.room_address = "Alucard", "archipelago.gg:38281"
+        self.ctx.autoreconnect_task = asyncio.get_running_loop().create_future()
+        self.addCleanup(self.ctx.autoreconnect_task.cancel)
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "busy")
+        self.ctx.connect_to.assert_not_awaited()
+
+    async def test_its_own_slot_again_reconnects_even_untaken(self):
+        # A room that refused it for a missing password, asked for again with the password.
+        self.ctx.slot_name, self.ctx.room_address = "Soma", "localhost:38281"
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", "pw", take=False),
+                         "opened")
+        self.ctx.connect_to.assert_awaited_once_with("localhost:38281", "Soma", "pw")
+
     async def test_a_tracker_that_is_stopping_says_so(self):
         self.ctx.exit_event.set()
         self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "closing")
@@ -449,6 +502,23 @@ class OldTrackerServer(TrackerServer):
         message = json.loads(super().snapshot_message())
         message["build"] = "0/2020.1.1"
         return json.dumps(message)
+
+
+class PortProbeTest(unittest.IsolatedAsyncioTestCase):
+    async def test_a_port_reads_free_once_its_tracker_stops_and_taken_while_it_runs(self):
+        from websockets.asyncio.client import connect
+        ctx = TrackerContext(None, None, None)
+        self.addCleanup(ctx.close)
+        server = TrackerServer(ctx)
+        port = await server.start("127.0.0.1", 0)
+        self.assertFalse(tracker_app.port_is_free(port))
+        # A page connected when the server stops leaves the server's end in TIME_WAIT, which on
+        # Linux and macOS a plain bind refuses for a minute.
+        page = await connect(f"ws://127.0.0.1:{port}/ws", origin=f"http://127.0.0.1:{port}")
+        await page.recv()
+        await server.stop()
+        await page.close()
+        self.assertTrue(tracker_app.port_is_free(port))
 
 
 class SecondLaunchTest(unittest.IsolatedAsyncioTestCase):
@@ -493,6 +563,29 @@ class SecondLaunchTest(unittest.IsolatedAsyncioTestCase):
         with mock.patch.object(tracker_app, "DEFAULT_PORT", free_port()), \
                 mock.patch.object(tracker_app, "SPARE_PORTS", [port]), following():
             self.assertIsNone(await self.launch("--connect", "localhost:38281", "--name", "Soma"))
+
+    async def test_the_slot_s_tracker_is_found_before_an_idle_one_is_given_the_slot(self):
+        idle, _, idle_port = await self.run_tracker()
+        follower, _, follower_port = await self.run_tracker()
+        follower.slot, follower.slot_name, follower.room_address = 1, "Soma", "localhost:38281"
+
+        def follows(ctx: TrackerContext) -> bool:
+            return ctx is follower
+
+        # The idle tracker holds the earlier port, but the launch opens the follower's page.
+        with mock.patch.object(tracker_app, "DEFAULT_PORT", idle_port), \
+                mock.patch.object(tracker_app, "SPARE_PORTS", [follower_port]), \
+                mock.patch.object(TrackerContext, "following", property(follows)):
+            self.assertIsNone(await self.launch("--connect", "localhost:38281", "--name", "Soma"))
+        idle.connect_to.assert_not_awaited()
+        follower.connect_to.assert_not_awaited()
+
+    async def test_an_idle_tracker_is_given_the_slot_before_a_port_is_taken(self):
+        idle, _, idle_port = await self.run_tracker()
+        with mock.patch.object(tracker_app, "DEFAULT_PORT", free_port()), \
+                mock.patch.object(tracker_app, "SPARE_PORTS", [idle_port]):
+            self.assertIsNone(await self.launch("--connect", "localhost:38281", "--name", "Soma"))
+        idle.connect_to.assert_awaited_once_with("localhost:38281", "Soma", None)
 
     async def test_a_tracker_that_is_stopping_leaves_its_port_to_the_launch(self):
         ctx, server, port = await self.run_tracker()
@@ -583,6 +676,14 @@ class OpenFromClientTest(unittest.TestCase):
         self.assertTrue(same_address("ws://Soma:pw@localhost:38281", "localhost:38281"))
         self.assertTrue(same_address("wss://archipelago.gg:38281", "archipelago.gg:38281"))
         self.assertFalse(same_address("localhost:38281", "localhost:38282"))
+        # "/connect localhost" leaves the port out, and this computer has several names.
+        self.assertTrue(same_address("ws://localhost", "localhost:38281"))
+        self.assertTrue(same_address("127.0.0.1:38281", "localhost:38281"))
+        self.assertTrue(same_address("[::1]:38281", "localhost"))
+        self.assertFalse(same_address("archipelago.gg", "localhost"))
+
+    def test_a_room_link_to_an_ipv6_address_keeps_its_brackets(self):
+        self.assertEqual(parse_args(["archipelago://Soma:@[::1]:38281"]).connect, "[::1]:38281")
 
     def test_a_slot_of_another_game_gets_no_tracker(self):
         # After another game's ROM is loaded, /map and the button can still be there.
