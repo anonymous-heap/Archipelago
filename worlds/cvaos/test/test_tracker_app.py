@@ -451,6 +451,15 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual((options.connect, options.name, options.password),
                          ("localhost:38281", "Soma", "secret"))
 
+    def test_a_room_link_offers_the_tracker(self):
+        # The room page's link, which names the game, as WebHostLib's macros.html writes it.
+        from Launcher import handle_uri
+        link = "archipelago://Soma:None@archipelago.gg:38281?game=Castlevania - Aria of Sorrow"
+        offered, _ = handle_uri(link)
+        self.assertIn("Aria of Sorrow Tracker", [component.display_name for component in offered])
+        options = parse_args([link])
+        self.assertEqual((options.connect, options.name), ("archipelago.gg:38281", "Soma"))
+
 
 if __name__ == "__main__":
     unittest.main()

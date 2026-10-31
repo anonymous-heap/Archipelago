@@ -43,10 +43,13 @@ components.append(Component(
     description="Play a CVAoS seed inside the Steam Castlevania Advance Collection.",
 ))
 
+# A room's archipelago:// link offers the tracker too, already filled in with the room and slot.
 components.append(Component(
     "Aria of Sorrow Tracker",
     func=launch_tracker,
     component_type=Type.CLIENT,
+    game_name="Castlevania - Aria of Sorrow",
+    supports_uri=True,
     description="A map of the castle in your browser: what is in logic, where Soma is, and the "
                 "way to any location.",
 ))
