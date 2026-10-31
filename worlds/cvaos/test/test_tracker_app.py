@@ -437,6 +437,26 @@ class HandOverTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "opened")
         self.ctx.connect_to.assert_awaited_once_with("localhost:38281", "Soma", None)
 
+    async def test_an_idle_tracker_waits_until_the_launch_lets_it_take_the_slot(self):
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None, take=False),
+                         "idle")
+        self.ctx.connect_to.assert_not_awaited()
+
+    async def test_a_tracker_waiting_to_reconnect_keeps_its_room(self):
+        # An archipelago.gg room that went to sleep: the tracker retries until it wakes.
+        self.ctx.slot_name, self.ctx.room_address = "Alucard", "archipelago.gg:38281"
+        self.ctx.autoreconnect_task = asyncio.get_running_loop().create_future()
+        self.addCleanup(self.ctx.autoreconnect_task.cancel)
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "busy")
+        self.ctx.connect_to.assert_not_awaited()
+
+    async def test_its_own_slot_again_reconnects_even_untaken(self):
+        # A room that refused it for a missing password, asked for again with the password.
+        self.ctx.slot_name, self.ctx.room_address = "Soma", "localhost:38281"
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", "pw", take=False),
+                         "opened")
+        self.ctx.connect_to.assert_awaited_once_with("localhost:38281", "Soma", "pw")
+
     async def test_a_tracker_that_is_stopping_says_so(self):
         self.ctx.exit_event.set()
         self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "closing")
@@ -509,6 +529,29 @@ class SecondLaunchTest(unittest.IsolatedAsyncioTestCase):
         with mock.patch.object(tracker_app, "DEFAULT_PORT", free_port()), \
                 mock.patch.object(tracker_app, "SPARE_PORTS", [port]), following():
             self.assertIsNone(await self.launch("--connect", "localhost:38281", "--name", "Soma"))
+
+    async def test_the_slot_s_tracker_is_found_before_an_idle_one_is_given_the_slot(self):
+        idle, _, idle_port = await self.run_tracker()
+        follower, _, follower_port = await self.run_tracker()
+        follower.slot, follower.slot_name, follower.room_address = 1, "Soma", "localhost:38281"
+
+        def follows(ctx: TrackerContext) -> bool:
+            return ctx is follower
+
+        # The idle tracker holds the earlier port, but the launch opens the follower's page.
+        with mock.patch.object(tracker_app, "DEFAULT_PORT", idle_port), \
+                mock.patch.object(tracker_app, "SPARE_PORTS", [follower_port]), \
+                mock.patch.object(TrackerContext, "following", property(follows)):
+            self.assertIsNone(await self.launch("--connect", "localhost:38281", "--name", "Soma"))
+        idle.connect_to.assert_not_awaited()
+        follower.connect_to.assert_not_awaited()
+
+    async def test_an_idle_tracker_is_given_the_slot_before_a_port_is_taken(self):
+        idle, _, idle_port = await self.run_tracker()
+        with mock.patch.object(tracker_app, "DEFAULT_PORT", free_port()), \
+                mock.patch.object(tracker_app, "SPARE_PORTS", [idle_port]):
+            self.assertIsNone(await self.launch("--connect", "localhost:38281", "--name", "Soma"))
+        idle.connect_to.assert_awaited_once_with("localhost:38281", "Soma", None)
 
     async def test_a_tracker_that_is_stopping_leaves_its_port_to_the_launch(self):
         ctx, server, port = await self.run_tracker()

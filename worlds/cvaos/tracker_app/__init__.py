@@ -114,14 +114,15 @@ async def wait_until_free(port: int, seconds: float = ASK_TIMEOUT) -> bool:
     return port_is_free(port)
 
 
-async def ask_running_tracker(port: int, options: argparse.Namespace) -> str:
-    """Ask whatever holds ``port`` to take this launch's request, and return what happened.
+async def ask_running_tracker(port: int, options: argparse.Namespace, take: bool) -> str:
+    """Ask whatever holds ``port`` about this launch's request, and return its answer.
 
-    The answer is "opened" when a tracker took the request, so only its page needs opening, and
-    "busy" when it follows another room or slot. It is "closing" when the tracker is shutting
-    down, and "outdated" when it comes from another version of this world, which is then asked
-    to quit. Either way the port comes free shortly. The answer is "other" when the port belongs
-    to some other program.
+    The answer is "opened" when the tracker there follows the request's room and slot, or took
+    them, so only its page needs opening. It is "idle" when the tracker follows nothing and
+    ``take`` was false, and "busy" when it follows another room or slot. It is "closing" when the
+    tracker is shutting down, and "outdated" when it comes from another version of this world,
+    which is then asked to quit. Either way the port comes free shortly. The answer is "other"
+    when the port belongs to some other program.
     """
     from websockets.asyncio.client import connect
     from websockets.exceptions import WebSocketException
@@ -140,7 +141,7 @@ async def ask_running_tracker(port: int, options: argparse.Namespace) -> str:
                     return "outdated"
                 await tracker.send(json.dumps({"type": "handover", "server": options.connect,
                                                "slot": options.name,
-                                               "password": options.password}))
+                                               "password": options.password, "take": take}))
                 while True:
                     reply = json.loads(await tracker.recv())
                     if reply.get("type") == "handover":
@@ -150,35 +151,43 @@ async def ask_running_tracker(port: int, options: argparse.Namespace) -> str:
 
 
 async def serve_or_hand_over(server: TrackerServer, options: argparse.Namespace) -> int | None:
-    """Hand the request to a running tracker that takes it, or else serve on the first free port.
+    """Hand the request to a running tracker, or else serve on the first free port.
 
-    Every running tracker is asked before any port is taken, because the tracker for this room and
-    slot can hold a later port than one that has since come free. Returns the port this tracker
-    serves on, or None when a running tracker took the request.
+    Every running tracker is asked first, without letting it take the request, because the
+    tracker that already follows this room and slot can hold a later port than an idle tracker
+    or a port that has since come free. Only then is an idle tracker given the request, and only
+    after that is a port taken. Returns the port this tracker serves on, or None when a running
+    tracker has the request.
     """
     def opened(port: int) -> None:
         if not options.no_browser:
             webbrowser.open(page_address(port))
 
     ports = [options.port, *SPARE_PORTS] if options.port == DEFAULT_PORT else [options.port]
-    free = []
+    free, idle = [], []
     for port in ports:
         if port_is_free(port):
             free.append(port)
             continue
-        answer = await ask_running_tracker(port, options)
+        answer = await ask_running_tracker(port, options, take=False)
         if answer == "opened":
             opened(port)
             return None
-        if answer in ("closing", "outdated") and await wait_until_free(port):
+        if answer == "idle":
+            idle.append(port)
+        elif answer in ("closing", "outdated") and await wait_until_free(port):
             free.append(port)
+    for port in idle:
+        if await ask_running_tracker(port, options, take=True) == "opened":
+            opened(port)
+            return None
     for port in sorted(free, key=ports.index):
         try:
             return await server.start("127.0.0.1", port)
         except OSError:
             pass
         # Another launch took the port a moment ago, and it may be for this room and slot too.
-        if await ask_running_tracker(port, options) == "opened":
+        if await ask_running_tracker(port, options, take=True) == "opened":
             opened(port)
             return None
     # Other programs hold every port of ours, or Windows keeps them back, so any free port has to

@@ -108,16 +108,28 @@ class TrackerContext(CommonContext):
         # After connect(), since ending the last connection sets the status to "Not connected".
         self.set_status(f"Connecting to {address}")
 
-    async def hand_over(self, address: str, slot_name: str, password: str | None) -> str:
-        """Take a new launch's room and slot, unless this tracker is busy with another.
+    @property
+    def following(self) -> bool:
+        """Whether this tracker follows a room and slot, is connecting to one, or will reconnect."""
+        connecting = (self.slot is None and self.server_task is not None
+                      and not self.server_task.done())
+        reconnecting = self.autoreconnect_task is not None and not self.autoreconnect_task.done()
+        return self.tracking or connecting or reconnecting
 
-        Returns "opened" when the launch only needs to open this tracker's page. Returns "busy"
-        when this tracker follows another room or slot, or is connecting to one, and "closing" when
-        it is shutting down, so that the launch serves on the port itself once it comes free.
+    async def hand_over(self, address: str, slot_name: str, password: str | None,
+                        take: bool = True) -> str:
+        """Answer a new launch that asks for a room and slot.
 
-        A tracker that follows nothing takes the launch's room and slot. That covers a room that
-        came back on a new port, a connection that failed, and a slot that this tracker couldn't
-        follow, because it plays another game or its seed couldn't be rebuilt.
+        Returns "opened" when the launch only needs to open this tracker's page, because the
+        tracker follows that room and slot or has just taken them. Returns "busy" when it follows
+        another, and "closing" when it is shutting down, so that the launch serves on the port
+        itself once it comes free.
+
+        A tracker that follows nothing takes the request when ``take`` is true, and otherwise
+        answers "idle". A launch asks every tracker without ``take`` first, so that a tracker that
+        already follows its slot opens rather than an idle one being given the slot twice. A
+        tracker follows nothing after a connection that was refused, or when its slot plays
+        another game or its seed couldn't be rebuilt.
         """
         if self.exit_event.is_set():
             return "closing"
@@ -125,10 +137,11 @@ class TrackerContext(CommonContext):
             return "opened"  # the launch asked for nothing but the page
         same = (slot_name == self.slot_name
                 and same_address(address, self.room_address or self.server_address or ""))
-        connecting = (self.slot is None and self.server_task is not None
-                      and not self.server_task.done())
-        if self.tracking or connecting:
+        if self.following:
             return "opened" if same else "busy"
+        if not same and not take:
+            return "idle"
+        # Its own room and slot again, perhaps now with the password, or a request it may take.
         await self.connect_to(address, slot_name, password)
         return "opened"
 

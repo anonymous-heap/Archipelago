@@ -18,11 +18,12 @@ asks for, each as a JSON object with a "type":
     {"type": "clear_route"}
     {"type": "quit"}                        stop the tracker
 
-A new launch sends the room and slot it was given, and hears back whether this tracker took them
-("opened") or tracks another room or slot ("busy"):
+A new launch sends the room and slot it was given, and whether this tracker may take them if it
+follows nothing. It hears back "opened", "idle", "busy" or "closing" (see TrackerContext.hand_over):
 
-    {"type": "handover", "server": "localhost:38281", "slot": "Soma", "password": null}
-    {"type": "handover", "result": "opened"}
+    {"type": "handover", "server": "localhost:38281", "slot": "Soma", "password": null,
+     "take": false}
+    {"type": "handover", "result": "idle"}
 
 The server answers only its own page. Any web site open in the browser could otherwise reach it,
 read the slot and the room's chat, and point the tracker at another server or stop it. So every
@@ -211,7 +212,7 @@ class TrackerServer:
         elif kind == "handover":
             result = await ctx.hand_over(str(request.get("server") or "").strip(),
                                          str(request.get("slot") or "").strip(),
-                                         request.get("password"))
+                                         request.get("password"), bool(request.get("take", True)))
             await socket.send(json.dumps({"type": "handover", "result": result}))
 
     def snapshot_message(self) -> str:
