@@ -163,6 +163,11 @@ h2 {
 .item.have { color: var(--text); background: var(--panel-raised); border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
 .item .times { color: var(--accent-strong); margin-left: 4px; }
 
+/* At the foot of the sidebar, or after its last section once the sidebar scrolls. */
+.credits { margin-top: auto; font-size: 12px; color: var(--muted); }
+.credits p { margin: 0 0 6px; }
+.credits a { color: var(--accent-strong); }
+
 /* --- the map ------------------------------------------------------------------------------ */
 
 .map-pane { position: relative; min-width: 0; min-height: 0; background: var(--map-bg); }
