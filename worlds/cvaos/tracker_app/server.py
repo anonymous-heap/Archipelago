@@ -116,6 +116,7 @@ class TrackerServer:
     def __init__(self, ctx: TrackerContext) -> None:
         self.ctx = ctx
         self.sockets: set[ServerConnection] = set()
+        self.launches: set[ServerConnection] = set()  # the sockets of launches asking, not pages
         self.server: Server | None = None
         self.port: int | None = None
         self.idle_since: float | None = time.monotonic()  # since the last page closed, or None
@@ -180,6 +181,7 @@ class TrackerServer:
     # --- websocket -----------------------------------------------------------------------------
 
     async def on_socket(self, socket: ServerConnection) -> None:
+        idle_since = self.idle_since  # kept in case this is a launch asking, not a page
         self.sockets.add(socket)
         self.idle_since = None
         try:
@@ -191,7 +193,11 @@ class TrackerServer:
         finally:
             self.sockets.discard(socket)
             if not self.sockets:
-                self.idle_since = time.monotonic()
+                # A launch's question doesn't restart the wait, or a tracker whose tab is closed
+                # would never stop while launches for other slots keep asking it.
+                launch = socket in self.launches and idle_since is not None
+                self.idle_since = idle_since if launch else time.monotonic()
+            self.launches.discard(socket)
 
     async def on_message(self, socket: ServerConnection, message: str | bytes) -> None:
         try:
@@ -218,6 +224,7 @@ class TrackerServer:
         elif kind == "quit":
             ctx.exit_event.set()
         elif kind == "handover":
+            self.launches.add(socket)
             result = await ctx.hand_over(str(request.get("server") or "").strip(),
                                          str(request.get("slot") or "").strip(),
                                          request.get("password"), bool(request.get("take", True)))

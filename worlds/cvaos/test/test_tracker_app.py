@@ -315,6 +315,20 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(self.ctx.exit_event.wait(), 2)
         await watch
 
+    async def test_a_launch_asking_doesn_t_restart_the_idle_wait(self):
+        idle_since = self.server.idle_since
+        async with self.open_socket() as launch:
+            await launch.recv()
+            await launch.send(json.dumps({"type": "handover", "server": "", "slot": ""}))
+            await launch.recv()
+        await asyncio.sleep(0.1)
+        self.assertEqual(self.server.idle_since, idle_since)
+        # A page does restart it, since someone looked at the tracker.
+        async with self.open_socket() as page:
+            await page.recv()
+        await asyncio.sleep(0.1)
+        self.assertGreater(self.server.idle_since, idle_since)
+
     async def test_another_site_can_t_reach_the_tracker(self):
         # A page from any other origin, even one on this computer, is turned away.
         for origin in ("https://example.com", f"http://127.0.0.1:{self.port + 1}", "null"):
