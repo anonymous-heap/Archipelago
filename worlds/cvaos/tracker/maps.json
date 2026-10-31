@@ -1,0 +1,93 @@
+[
+ {
+  "name": "Castle",
+  "img": "castle.png",
+  "location_size": 12,
+  "location_border_thickness": 2,
+  "location_icon_size": 24
+ },
+ {
+  "name": "Chaotic Realm",
+  "img": "chaotic_realm.png",
+  "location_size": 12,
+  "location_border_thickness": 2,
+  "location_icon_size": 24
+ },
+ {
+  "name": "Castle Corridor",
+  "img": "castle_corridor.png",
+  "location_size": 12,
+  "location_border_thickness": 2,
+  "location_icon_size": 24
+ },
+ {
+  "name": "Chapel",
+  "img": "chapel.png",
+  "location_size": 12,
+  "location_border_thickness": 2,
+  "location_icon_size": 24
+ },
+ {
+  "name": "Study",
+  "img": "study.png",
+  "location_size": 12,
+  "location_border_thickness": 2,
+  "location_icon_size": 24
+ },
+ {
+  "name": "Dance Hall",
+  "img": "dance_hall.png",
+  "location_size": 12,
+  "location_border_thickness": 2,
+  "location_icon_size": 24
+ },
+ {
+  "name": "Inner Quarters",
+  "img": "inner_quarters.png",
+  "location_size": 12,
+  "location_border_thickness": 2,
+  "location_icon_size": 24
+ },
+ {
+  "name": "Floating Garden",
+  "img": "floating_garden.png",
+  "location_size": 12,
+  "location_border_thickness": 2,
+  "location_icon_size": 24
+ },
+ {
+  "name": "Clock Tower",
+  "img": "clock_tower.png",
+  "location_size": 12,
+  "location_border_thickness": 2,
+  "location_icon_size": 24
+ },
+ {
+  "name": "Underground Reservoir",
+  "img": "underground_reservoir.png",
+  "location_size": 12,
+  "location_border_thickness": 2,
+  "location_icon_size": 24
+ },
+ {
+  "name": "The Arena",
+  "img": "arena.png",
+  "location_size": 12,
+  "location_border_thickness": 2,
+  "location_icon_size": 24
+ },
+ {
+  "name": "Top Floor",
+  "img": "top_floor.png",
+  "location_size": 12,
+  "location_border_thickness": 2,
+  "location_icon_size": 24
+ },
+ {
+  "name": "Forbidden Area",
+  "img": "forbidden_area.png",
+  "location_size": 12,
+  "location_border_thickness": 2,
+  "location_icon_size": 24
+ }
+]

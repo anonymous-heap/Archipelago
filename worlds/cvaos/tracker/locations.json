@@ -1,0 +1,2387 @@
+[
+ {
+  "name": "000",
+  "sections": [
+   {
+    "name": "Entrance Parapet [000 Lucky Charm]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 60,
+    "y": 497
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 60,
+    "y": 209
+   }
+  ]
+ },
+ {
+  "name": "002",
+  "sections": [
+   {
+    "name": "Outside Warp Suspended Platform [002 Vjaya]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 120,
+    "y": 476
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 120,
+    "y": 188
+   }
+  ]
+ },
+ {
+  "name": "002",
+  "sections": [
+   {
+    "name": "Outside Warp Alcove [002 Cestus]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 139,
+    "y": 487
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 139,
+    "y": 199
+   }
+  ]
+ },
+ {
+  "name": "005",
+  "sections": [
+   {
+    "name": "Fountain Room Left Stairs [005 Short Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 212,
+    "y": 551
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 212,
+    "y": 263
+   }
+  ]
+ },
+ {
+  "name": "005",
+  "sections": [
+   {
+    "name": "Fountain Room Top Staircase [005 Cape]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 216,
+    "y": 536
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 216,
+    "y": 248
+   }
+  ]
+ },
+ {
+  "name": "005",
+  "sections": [
+   {
+    "name": "Fountain Room in Front of Fountain [005 Grave Keeper]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 216,
+    "y": 563
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 216,
+    "y": 275
+   }
+  ]
+ },
+ {
+  "name": "009",
+  "sections": [
+   {
+    "name": "Tallest Ascent [009 Lance]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 316,
+    "y": 511
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 316,
+    "y": 223
+   }
+  ]
+ },
+ {
+  "name": "00B",
+  "sections": [
+   {
+    "name": "Secret Room behind Peeping Eye [00B Mind Up (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 388,
+    "y": 566
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 388,
+    "y": 278
+   }
+  ]
+ },
+ {
+  "name": "00D",
+  "sections": [
+   {
+    "name": "White Dragon Hallway [00D Potion (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 444,
+    "y": 424
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 444,
+    "y": 136
+   }
+  ]
+ },
+ {
+  "name": "00F",
+  "sections": [
+   {
+    "name": "Marble Staircase Pyramid Left Ledge [00F Potion (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 460,
+    "y": 412
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 460,
+    "y": 124
+   }
+  ]
+ },
+ {
+  "name": "00F",
+  "sections": [
+   {
+    "name": "Marble Staircase Pyramid Right Ledge [00F Leather Plate]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 524,
+    "y": 412
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 524,
+    "y": 124
+   }
+  ]
+ },
+ {
+  "name": "010",
+  "sections": [
+   {
+    "name": "Reservoir Entrance [010 Flying Armor]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 538,
+    "y": 562
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 538,
+    "y": 274
+   }
+  ]
+ },
+ {
+  "name": "019",
+  "sections": [
+   {
+    "name": "Tiny Alcove [019 Yasutsuna]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 963,
+    "y": 416
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 963,
+    "y": 128
+   }
+  ]
+ },
+ {
+  "name": "023",
+  "sections": [
+   {
+    "name": "Post-Creaking Skull Room [023 CASTLE MAP 1]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 428,
+    "y": 542
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 428,
+    "y": 254
+   }
+  ]
+ },
+ {
+  "name": "026",
+  "sections": [
+   {
+    "name": "Marble Staircase Underhang Left Ledge [026 Armor of Fire]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 608,
+    "y": 374
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 608,
+    "y": 86
+   }
+  ]
+ },
+ {
+  "name": "026",
+  "sections": [
+   {
+    "name": "Marble Staircase Underhang Right Ledge [026 Potion (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 616,
+    "y": 373
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 616,
+    "y": 85
+   }
+  ]
+ },
+ {
+  "name": "027",
+  "sections": [
+   {
+    "name": "Catoblepas Ledge [027 Copper Plate]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 688,
+    "y": 370
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 688,
+    "y": 82
+   }
+  ]
+ },
+ {
+  "name": "028",
+  "sections": [
+   {
+    "name": "White Dragon Ledge [028 Scarf]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 688,
+    "y": 397
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 688,
+    "y": 109
+   }
+  ]
+ },
+ {
+  "name": "029",
+  "sections": [
+   {
+    "name": "Right Reservoir: Left Annex [029 500 Gold (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 820,
+    "y": 470
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 820,
+    "y": 182
+   }
+  ]
+ },
+ {
+  "name": "02C",
+  "sections": [
+   {
+    "name": "Right Reservoir: Right Annex [02C Potion (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 978,
+    "y": 470
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 978,
+    "y": 182
+   }
+  ]
+ },
+ {
+  "name": "101",
+  "sections": [
+   {
+    "name": "Cathedral Cache [101 Anti-Venom]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1036,
+    "y": 491
+   },
+   {
+    "map": "Chapel",
+    "x": 100,
+    "y": 203
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Top-Left Corner Left Ledge [103 High Mind Up (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1068,
+    "y": 350
+   },
+   {
+    "map": "Chapel",
+    "x": 132,
+    "y": 62
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Bottom Left [103 100 Gold (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1068,
+    "y": 416
+   },
+   {
+    "map": "Chapel",
+    "x": 132,
+    "y": 128
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Center Left [103 Bamboo Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1085,
+    "y": 395
+   },
+   {
+    "map": "Chapel",
+    "x": 149,
+    "y": 107
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Top-Left Corner Right Ledge [103 High Potion (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1086,
+    "y": 350
+   },
+   {
+    "map": "Chapel",
+    "x": 150,
+    "y": 62
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Top Right [103 Mind Up (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1130,
+    "y": 350
+   },
+   {
+    "map": "Chapel",
+    "x": 194,
+    "y": 62
+   }
+  ]
+ },
+ {
+  "name": "105",
+  "sections": [
+   {
+    "name": "Cathedral [105 100 Gold (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1094,
+    "y": 473
+   },
+   {
+    "map": "Chapel",
+    "x": 158,
+    "y": 185
+   }
+  ]
+ },
+ {
+  "name": "106",
+  "sections": [
+   {
+    "name": "Manticore Arena Alcove [106 Tallhammer]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1146,
+    "y": 467
+   },
+   {
+    "map": "Chapel",
+    "x": 210,
+    "y": 179
+   }
+  ]
+ },
+ {
+  "name": "107",
+  "sections": [
+   {
+    "name": "Attic [107 Rapier]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1210,
+    "y": 404
+   },
+   {
+    "map": "Chapel",
+    "x": 274,
+    "y": 116
+   }
+  ]
+ },
+ {
+  "name": "108",
+  "sections": [
+   {
+    "name": "Grand Staircase Secret Cache [108 1000 Gold (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1172,
+    "y": 494
+   },
+   {
+    "map": "Chapel",
+    "x": 236,
+    "y": 206
+   }
+  ]
+ },
+ {
+  "name": "108",
+  "sections": [
+   {
+    "name": "Grand Staircase Right Nook [108 100 Gold (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1215,
+    "y": 446
+   },
+   {
+    "map": "Chapel",
+    "x": 279,
+    "y": 158
+   }
+  ]
+ },
+ {
+  "name": "109",
+  "sections": [
+   {
+    "name": "Underneath Grand Staircase [109 Silk Robe]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1171,
+    "y": 515
+   },
+   {
+    "map": "Chapel",
+    "x": 235,
+    "y": 227
+   }
+  ]
+ },
+ {
+  "name": "200",
+  "sections": [
+   {
+    "name": "Secret Room atop Stairs [200 Melon]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 962,
+    "y": 611
+   },
+   {
+    "map": "Study",
+    "x": 50,
+    "y": 107
+   }
+  ]
+ },
+ {
+  "name": "200",
+  "sections": [
+   {
+    "name": "Secret Room Hard Mode Item [200 Kaiser Knuckle]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 972,
+    "y": 617
+   },
+   {
+    "map": "Study",
+    "x": 60,
+    "y": 113
+   }
+  ]
+ },
+ {
+  "name": "201",
+  "sections": [
+   {
+    "name": "Ectoplasm Room [201 100 Gold (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1026,
+    "y": 612
+   },
+   {
+    "map": "Study",
+    "x": 114,
+    "y": 108
+   }
+  ]
+ },
+ {
+  "name": "202",
+  "sections": [
+   {
+    "name": "Evil Butcher Hallway [202 Uncurse Potion]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1044,
+    "y": 617
+   },
+   {
+    "map": "Study",
+    "x": 132,
+    "y": 113
+   }
+  ]
+ },
+ {
+  "name": "205",
+  "sections": [
+   {
+    "name": "Hammer's Room Malphas [205 Malphas]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1034,
+    "y": 682
+   },
+   {
+    "map": "Study",
+    "x": 122,
+    "y": 178
+   }
+  ]
+ },
+ {
+  "name": "208",
+  "sections": [
+   {
+    "name": "Top Cache [208 Hammer]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1163,
+    "y": 569
+   },
+   {
+    "map": "Study",
+    "x": 251,
+    "y": 65
+   }
+  ]
+ },
+ {
+  "name": "209",
+  "sections": [
+   {
+    "name": "Box Room Ceiling [209 Heart Pendant]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1156,
+    "y": 588
+   },
+   {
+    "map": "Study",
+    "x": 244,
+    "y": 84
+   }
+  ]
+ },
+ {
+  "name": "20A",
+  "sections": [
+   {
+    "name": "Box Room [20A Broadsword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1191,
+    "y": 626
+   },
+   {
+    "map": "Study",
+    "x": 279,
+    "y": 122
+   }
+  ]
+ },
+ {
+  "name": "20B",
+  "sections": [
+   {
+    "name": "After Demon Door [20B Whip Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1156,
+    "y": 670
+   },
+   {
+    "map": "Study",
+    "x": 244,
+    "y": 166
+   }
+  ]
+ },
+ {
+  "name": "20E",
+  "sections": [
+   {
+    "name": "Behind Tunnel [20E Ancient Book 1]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1001,
+    "y": 689
+   },
+   {
+    "map": "Study",
+    "x": 89,
+    "y": 185
+   }
+  ]
+ },
+ {
+  "name": "211",
+  "sections": [
+   {
+    "name": "Bottom Cache [211 100 Gold (E)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1140,
+    "y": 666
+   },
+   {
+    "map": "Study",
+    "x": 228,
+    "y": 162
+   }
+  ]
+ },
+ {
+  "name": "215",
+  "sections": [
+   {
+    "name": "Student Witch Library [215 Bastard Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1084,
+    "y": 590
+   },
+   {
+    "map": "Study",
+    "x": 172,
+    "y": 86
+   }
+  ]
+ },
+ {
+  "name": "301",
+  "sections": [
+   {
+    "name": "Secret Room behind Minotaur [301 Samurai Armor]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 131,
+    "y": 353
+   },
+   {
+    "map": "Dance Hall",
+    "x": 83,
+    "y": 137
+   }
+  ]
+ },
+ {
+  "name": "303",
+  "sections": [
+   {
+    "name": "Big Window Room Left Annex [303 100 Gold (F)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 148,
+    "y": 305
+   },
+   {
+    "map": "Dance Hall",
+    "x": 100,
+    "y": 89
+   }
+  ]
+ },
+ {
+  "name": "306",
+  "sections": [
+   {
+    "name": "Grand Ballroom [306 Cutall]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 172,
+    "y": 392
+   },
+   {
+    "map": "Dance Hall",
+    "x": 124,
+    "y": 176
+   }
+  ]
+ },
+ {
+  "name": "307",
+  "sections": [
+   {
+    "name": "Big Window Room [307 Mana Prism (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 189,
+    "y": 274
+   },
+   {
+    "map": "Dance Hall",
+    "x": 141,
+    "y": 58
+   }
+  ]
+ },
+ {
+  "name": "308",
+  "sections": [
+   {
+    "name": "Wine Cellar underneath Killer Doll [308 High Potion (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 187,
+    "y": 450
+   },
+   {
+    "map": "Dance Hall",
+    "x": 139,
+    "y": 234
+   }
+  ]
+ },
+ {
+  "name": "30A",
+  "sections": [
+   {
+    "name": "Wine Cellar Basement [30A Skeleton Blaze]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 179,
+    "y": 496
+   },
+   {
+    "map": "Dance Hall",
+    "x": 131,
+    "y": 280
+   }
+  ]
+ },
+ {
+  "name": "30C",
+  "sections": [
+   {
+    "name": "Big Window Room Right Annex [30C 100 Gold (G)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 234,
+    "y": 305
+   },
+   {
+    "map": "Dance Hall",
+    "x": 186,
+    "y": 89
+   }
+  ]
+ },
+ {
+  "name": "310",
+  "sections": [
+   {
+    "name": "Secret Ceiling Room [310 Sherman Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 316,
+    "y": 353
+   },
+   {
+    "map": "Dance Hall",
+    "x": 268,
+    "y": 137
+   }
+  ]
+ },
+ {
+  "name": "400",
+  "sections": [
+   {
+    "name": "Left Wing Atrium: Left Item [400 Dainslef]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 336,
+    "y": 257
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 72,
+    "y": 161
+   }
+  ]
+ },
+ {
+  "name": "400",
+  "sections": [
+   {
+    "name": "Left Wing Atrium: Right Item [400 Ancient Book 2]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 346,
+    "y": 255
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 82,
+    "y": 159
+   }
+  ]
+ },
+ {
+  "name": "403",
+  "sections": [
+   {
+    "name": "Left Exit [403 High Mind Up (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 390,
+    "y": 344
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 126,
+    "y": 248
+   }
+  ]
+ },
+ {
+  "name": "405",
+  "sections": [
+   {
+    "name": "Secret Room [405 High Potion (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 412,
+    "y": 374
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 148,
+    "y": 278
+   }
+  ]
+ },
+ {
+  "name": "409",
+  "sections": [
+   {
+    "name": "Secret-er Room [409 Ninja Suit]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 450,
+    "y": 378
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 186,
+    "y": 282
+   }
+  ]
+ },
+ {
+  "name": "40A",
+  "sections": [
+   {
+    "name": "Stormy Tower Left Parapet [40A Hrunting]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 466,
+    "y": 161
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 202,
+    "y": 65
+   }
+  ]
+ },
+ {
+  "name": "40A",
+  "sections": [
+   {
+    "name": "Stormy Tower Right Parapet [40A Undine]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 518,
+    "y": 161
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 254,
+    "y": 65
+   }
+  ]
+ },
+ {
+  "name": "412",
+  "sections": [
+   {
+    "name": "Lower Quarters Lobby [412 Mind Up (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 564,
+    "y": 377
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 300,
+    "y": 281
+   }
+  ]
+ },
+ {
+  "name": "503",
+  "sections": [
+   {
+    "name": "Terrace [503 CASTLE MAP 3]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 665,
+    "y": 500
+   },
+   {
+    "map": "Floating Garden",
+    "x": 569,
+    "y": 500
+   }
+  ]
+ },
+ {
+  "name": "504",
+  "sections": [
+   {
+    "name": "1st Island Left Ledge [504 1000 Gold (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 162,
+    "y": 151
+   },
+   {
+    "map": "Floating Garden",
+    "x": 66,
+    "y": 151
+   }
+  ]
+ },
+ {
+  "name": "504",
+  "sections": [
+   {
+    "name": "1st Island Right Ledge [504 1000 Gold (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 222,
+    "y": 151
+   },
+   {
+    "map": "Floating Garden",
+    "x": 126,
+    "y": 151
+   }
+  ]
+ },
+ {
+  "name": "509",
+  "sections": [
+   {
+    "name": "6th Island [509 500 Gold (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1165,
+    "y": 254
+   },
+   {
+    "map": "Floating Garden",
+    "x": 1069,
+    "y": 254
+   }
+  ]
+ },
+ {
+  "name": "50A",
+  "sections": [
+   {
+    "name": "5th Island [50A 500 Gold (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1045,
+    "y": 182
+   },
+   {
+    "map": "Floating Garden",
+    "x": 949,
+    "y": 182
+   }
+  ]
+ },
+ {
+  "name": "50D",
+  "sections": [
+   {
+    "name": "2nd Island [50D 500 Gold (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 349,
+    "y": 86
+   },
+   {
+    "map": "Floating Garden",
+    "x": 253,
+    "y": 86
+   }
+  ]
+ },
+ {
+  "name": "603",
+  "sections": [
+   {
+    "name": "Basement [603 Pitch Black Suit]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 823,
+    "y": 401
+   },
+   {
+    "map": "Clock Tower",
+    "x": 55,
+    "y": 305
+   }
+  ]
+ },
+ {
+  "name": "609",
+  "sections": [
+   {
+    "name": "Pendulum Parkour [609 Burtgang]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 932,
+    "y": 347
+   },
+   {
+    "map": "Clock Tower",
+    "x": 164,
+    "y": 251
+   }
+  ]
+ },
+ {
+  "name": "611",
+  "sections": [
+   {
+    "name": "Clock Cache [611 Skula]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 851,
+    "y": 160
+   },
+   {
+    "map": "Clock Tower",
+    "x": 83,
+    "y": 64
+   }
+  ]
+ },
+ {
+  "name": "613",
+  "sections": [
+   {
+    "name": "Death's Door Hard Mode Item [613 Death's Sickle]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 931,
+    "y": 151
+   },
+   {
+    "map": "Clock Tower",
+    "x": 163,
+    "y": 55
+   }
+  ]
+ },
+ {
+  "name": "615",
+  "sections": [
+   {
+    "name": "Gearworks Floor [615 2000 Gold (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 908,
+    "y": 233
+   },
+   {
+    "map": "Clock Tower",
+    "x": 140,
+    "y": 137
+   }
+  ]
+ },
+ {
+  "name": "617",
+  "sections": [
+   {
+    "name": "Gearworks Crevice Hard Mode Item [617 Death's Robe]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 884,
+    "y": 245
+   },
+   {
+    "map": "Clock Tower",
+    "x": 116,
+    "y": 149
+   }
+  ]
+ },
+ {
+  "name": "61B",
+  "sections": [
+   {
+    "name": "Secret Room [61B Mystletain]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 827,
+    "y": 299
+   },
+   {
+    "map": "Clock Tower",
+    "x": 59,
+    "y": 203
+   }
+  ]
+ },
+ {
+  "name": "700",
+  "sections": [
+   {
+    "name": "Canal Entrance [700 Pendant]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 150,
+    "y": 593
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 54,
+    "y": 137
+   }
+  ]
+ },
+ {
+  "name": "701",
+  "sections": [
+   {
+    "name": "Canal [701 Tasty Meat]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 392,
+    "y": 587
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 296,
+    "y": 131
+   }
+  ]
+ },
+ {
+  "name": "702",
+  "sections": [
+   {
+    "name": "Canal Ceiling [702 Elfin Robe]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 316,
+    "y": 566
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 220,
+    "y": 110
+   }
+  ]
+ },
+ {
+  "name": "703",
+  "sections": [
+   {
+    "name": "Reservoir Air Bell [703 Rahab's Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 370,
+    "y": 632
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 274,
+    "y": 176
+   }
+  ]
+ },
+ {
+  "name": "708",
+  "sections": [
+   {
+    "name": "Cavern Air Bell [708 High Mind Up (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 404,
+    "y": 800
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 308,
+    "y": 344
+   }
+  ]
+ },
+ {
+  "name": "709",
+  "sections": [
+   {
+    "name": "Secret Storage Cavern [709 Pudding]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 388,
+    "y": 851
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 292,
+    "y": 395
+   }
+  ]
+ },
+ {
+  "name": "70C",
+  "sections": [
+   {
+    "name": "Cavern Attic [70C Mana Prism (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 478,
+    "y": 775
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 382,
+    "y": 319
+   }
+  ]
+ },
+ {
+  "name": "70E",
+  "sections": [
+   {
+    "name": "Aqueducts [70E Super Potion (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 501,
+    "y": 641
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 405,
+    "y": 185
+   }
+  ]
+ },
+ {
+  "name": "70F",
+  "sections": [
+   {
+    "name": "Behind the Waterfall [70F Super Potion (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 810,
+    "y": 686
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 714,
+    "y": 230
+   }
+  ]
+ },
+ {
+  "name": "711",
+  "sections": [
+   {
+    "name": "Boating Course [711 Milican's Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 639,
+    "y": 563
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 543,
+    "y": 107
+   }
+  ]
+ },
+ {
+  "name": "715",
+  "sections": [
+   {
+    "name": "Watering Holes [715 Armor of Water]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 736,
+    "y": 782
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 640,
+    "y": 326
+   }
+  ]
+ },
+ {
+  "name": "716",
+  "sections": [
+   {
+    "name": "Cemetery: Right Crypt [716 Galamoth]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 834,
+    "y": 853
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 738,
+    "y": 397
+   }
+  ]
+ },
+ {
+  "name": "718",
+  "sections": [
+   {
+    "name": "Waterfall Aerie [718 Ronginus' Spear]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 724,
+    "y": 635
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 628,
+    "y": 179
+   }
+  ]
+ },
+ {
+  "name": "719",
+  "sections": [
+   {
+    "name": "Boat Jump Alcove [719 1000 Gold (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 766,
+    "y": 596
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 670,
+    "y": 140
+   }
+  ]
+ },
+ {
+  "name": "719",
+  "sections": [
+   {
+    "name": "Boat Jump Cache [719 Handgun]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 768,
+    "y": 617
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 672,
+    "y": 161
+   }
+  ]
+ },
+ {
+  "name": "71C",
+  "sections": [
+   {
+    "name": "Right Reservoir: Vertical Cavern [71C Ancient Book 3]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 855,
+    "y": 524
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 759,
+    "y": 68
+   }
+  ]
+ },
+ {
+  "name": "71D",
+  "sections": [
+   {
+    "name": "Right Reservoir [71D 2000 Gold (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 820,
+    "y": 572
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 724,
+    "y": 116
+   }
+  ]
+ },
+ {
+  "name": "71F",
+  "sections": [
+   {
+    "name": "Right Reservoir: Right Cavern [71F Rune Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 926,
+    "y": 560
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 830,
+    "y": 104
+   }
+  ]
+ },
+ {
+  "name": "720",
+  "sections": [
+   {
+    "name": "Right Reservoir: Secret Room [720 Osafune]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 904,
+    "y": 659
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 808,
+    "y": 203
+   }
+  ]
+ },
+ {
+  "name": "721",
+  "sections": [
+   {
+    "name": "Waterfall Crest [721 Super Potion (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 788,
+    "y": 638
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 692,
+    "y": 182
+   }
+  ]
+ },
+ {
+  "name": "721",
+  "sections": [
+   {
+    "name": "Waterfall Basin [721 Eversing]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 783,
+    "y": 734
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 687,
+    "y": 278
+   }
+  ]
+ },
+ {
+  "name": "722",
+  "sections": [
+   {
+    "name": "Cemetery: Left Ambulatory [722 2000 Gold (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 484,
+    "y": 829
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 388,
+    "y": 373
+   }
+  ]
+ },
+ {
+  "name": "733",
+  "sections": [
+   {
+    "name": "Cemetery: Central Crypt [733 High Potion (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 676,
+    "y": 829
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 580,
+    "y": 373
+   }
+  ]
+ },
+ {
+  "name": "736",
+  "sections": [
+   {
+    "name": "Cemetery: Right Ambulatory [736 Gold Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 812,
+    "y": 829
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 716,
+    "y": 373
+   }
+  ]
+ },
+ {
+  "name": "800",
+  "sections": [
+   {
+    "name": "Catacomb Depths [800 Giant Bat]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 56,
+    "y": 780
+   },
+   {
+    "map": "The Arena",
+    "x": 56,
+    "y": 204
+   }
+  ]
+ },
+ {
+  "name": "802",
+  "sections": [
+   {
+    "name": "Giant Armory [802 Laevatain]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 140,
+    "y": 662
+   },
+   {
+    "map": "The Arena",
+    "x": 140,
+    "y": 86
+   }
+  ]
+ },
+ {
+  "name": "808",
+  "sections": [
+   {
+    "name": "Lavatory [808 Black Cloak]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 161,
+    "y": 686
+   },
+   {
+    "map": "The Arena",
+    "x": 161,
+    "y": 110
+   }
+  ]
+ },
+ {
+  "name": "80F",
+  "sections": [
+   {
+    "name": "Wrecking Ball Trial Reward [80F Olrox's Suit]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 259,
+    "y": 733
+   },
+   {
+    "map": "The Arena",
+    "x": 259,
+    "y": 157
+   }
+  ]
+ },
+ {
+  "name": "810",
+  "sections": [
+   {
+    "name": "Conveyor Belt Trial Reward Hard Mode Item [810 Silver Gun]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 254,
+    "y": 758
+   },
+   {
+    "map": "The Arena",
+    "x": 254,
+    "y": 182
+   }
+  ]
+ },
+ {
+  "name": "810",
+  "sections": [
+   {
+    "name": "Conveyor Belt Trial Reward on Altar [810 Balmung]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 259,
+    "y": 757
+   },
+   {
+    "map": "The Arena",
+    "x": 259,
+    "y": 181
+   }
+  ]
+ },
+ {
+  "name": "811",
+  "sections": [
+   {
+    "name": "Simon Says Trial Reward [811 Rare Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 259,
+    "y": 781
+   },
+   {
+    "map": "The Arena",
+    "x": 259,
+    "y": 205
+   }
+  ]
+ },
+ {
+  "name": "812",
+  "sections": [
+   {
+    "name": "Iron Maiden Altar [812 High Potion (E)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 283,
+    "y": 636
+   },
+   {
+    "map": "The Arena",
+    "x": 283,
+    "y": 60
+   }
+  ]
+ },
+ {
+  "name": "900",
+  "sections": [
+   {
+    "name": "Balcony Item by Railing [900 Dracula's Tunic]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 606,
+    "y": 112
+   },
+   {
+    "map": "Top Floor",
+    "x": 54,
+    "y": 64
+   }
+  ]
+ },
+ {
+  "name": "900",
+  "sections": [
+   {
+    "name": "Balcony Center Item [900 Black Panther]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 611,
+    "y": 112
+   },
+   {
+    "map": "Top Floor",
+    "x": 59,
+    "y": 64
+   }
+  ]
+ },
+ {
+  "name": "901",
+  "sections": [
+   {
+    "name": "Final Staircase under the Stairs [901 Mana Prism (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 608,
+    "y": 136
+   },
+   {
+    "map": "Top Floor",
+    "x": 56,
+    "y": 88
+   }
+  ]
+ },
+ {
+  "name": "901",
+  "sections": [
+   {
+    "name": "Final Staircase Hard Mode Item [901 Tear of Blood]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 692,
+    "y": 104
+   },
+   {
+    "map": "Top Floor",
+    "x": 140,
+    "y": 56
+   }
+  ]
+ },
+ {
+  "name": "902",
+  "sections": [
+   {
+    "name": "Secret Ceiling Room [902 Gungner]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 612,
+    "y": 250
+   },
+   {
+    "map": "Top Floor",
+    "x": 60,
+    "y": 202
+   }
+  ]
+ },
+ {
+  "name": "906",
+  "sections": [
+   {
+    "name": "Secret Grave [906 Hippogryph]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 686,
+    "y": 254
+   },
+   {
+    "map": "Top Floor",
+    "x": 134,
+    "y": 206
+   }
+  ]
+ },
+ {
+  "name": "908",
+  "sections": [
+   {
+    "name": "Flaming Hall [908 Satan's Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 692,
+    "y": 302
+   },
+   {
+    "map": "Top Floor",
+    "x": 140,
+    "y": 254
+   }
+  ]
+ },
+ {
+  "name": "910",
+  "sections": [
+   {
+    "name": "Outlook [910 Mana Prism (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 736,
+    "y": 134
+   },
+   {
+    "map": "Top Floor",
+    "x": 184,
+    "y": 86
+   }
+  ]
+ },
+ {
+  "name": "915",
+  "sections": [
+   {
+    "name": "Dragon Statue [915 Super Potion (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 782,
+    "y": 326
+   },
+   {
+    "map": "Top Floor",
+    "x": 230,
+    "y": 278
+   }
+  ]
+ },
+ {
+  "name": "917",
+  "sections": [
+   {
+    "name": "Courtyard [917 Kaladbolg]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 608,
+    "y": 155
+   },
+   {
+    "map": "Top Floor",
+    "x": 56,
+    "y": 107
+   }
+  ]
+ },
+ {
+  "name": "A04",
+  "sections": [
+   {
+    "name": "Secret Room by the Inferno [A04 Claimh Solais]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1036,
+    "y": 776
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 268,
+    "y": 152
+   }
+  ]
+ },
+ {
+  "name": "A06",
+  "sections": [
+   {
+    "name": "Treasure Chamber [A06 Joyeuse]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 956,
+    "y": 800
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 188,
+    "y": 176
+   }
+  ]
+ },
+ {
+  "name": "B18",
+  "sections": [
+   {
+    "name": "Marble Annex [B18 Super Potion (E)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Chaotic Realm",
+    "x": 172,
+    "y": 161
+   }
+  ]
+ },
+ {
+  "name": "B1C",
+  "sections": [
+   {
+    "name": "Chair Room [B1C High Mind Up (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Chaotic Realm",
+    "x": 232,
+    "y": 89
+   }
+  ]
+ },
+ {
+  "name": "B1D",
+  "sections": [
+   {
+    "name": "Hammer's Room [B1D Mana Prism (E)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Chaotic Realm",
+    "x": 218,
+    "y": 155
+   }
+  ]
+ }
+]

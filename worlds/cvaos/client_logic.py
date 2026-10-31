@@ -16,17 +16,21 @@ directly) and held as a component by the collection client's context.
 """
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 from NetUtils import ClientStatus
 
-from . import item_granting
+from . import item_granting, tracker_map
 from .locations import flag_offset_to_location_id
 from .options import Goal
 from .ram import AoSRAM, addresses as addr
 
 if TYPE_CHECKING:
     from CommonClient import CommonContext
+
+# Soma's position for the tracker's map is sent when he enters another map cell, at most this often.
+POSITION_INTERVAL = 0.5
 
 # Max items to grant per tick, so a large backlog on connect can't stall the watcher
 # (each grant is a few emulator round-trips). Leftovers are picked up on the following ticks.
@@ -55,6 +59,9 @@ class CVAOSClientLogic:
         self.time_of_sent_death = None
         # Goal: latched True once we've reported completion, so we report it only once.
         self.goaled = False
+        # The map cell last sent for the tracker's map, and when, so a new session sends it afresh.
+        self.last_position = None
+        self.last_position_time = 0.0
 
     def queue_deathlink_from_bounce(self, ctx: "CommonContext", cmd: str, args: dict) -> None:
         # Queue an incoming DeathLink's cause; _relay_deathlink applies the kill. Skip the echo of
@@ -99,8 +106,25 @@ class CVAOSClientLogic:
         # Max HP sits in the same block and is never 0 for a loaded file, so it tells the two apart.
         if in_gameplay and await ram.get_max_hp() > 0:
             await self._send_location_checks(ctx, ram)
+            await self._report_position(ctx, ram)
             await self._receive_items(ctx, ram)
             await self._report_goal(ctx, ram)
+
+    async def _report_position(self, ctx: "CommonContext", ram: AoSRAM) -> None:
+        # Keep Soma's room and position in data storage, where Universal Tracker's map reads it
+        # (tracker_map.position_icon). The map marks only the cell he is in, so a move within the
+        # cell is not sent.
+        value = tracker_map.position_value(*await ram.get_player_room_position())
+        cell = tracker_map.cell_of(value)
+        if cell == self.last_position:
+            return
+        now = time.monotonic()
+        if now - self.last_position_time < POSITION_INTERVAL:
+            return
+        self.last_position, self.last_position_time = cell, now
+        key = tracker_map.POSITION_KEY.format(team=ctx.team, player=ctx.slot)
+        await ctx.send_msgs([{"cmd": "Set", "key": key, "default": None, "want_reply": False,
+                              "operations": [{"operation": "replace", "value": value}]}])
 
     async def _send_location_checks(self, ctx: "CommonContext", ram: AoSRAM) -> None:
         # Collected-pickup save flags -> AP location checks. Each set bit's index is a pickup's
