@@ -569,6 +569,16 @@ class OpenFromClientTest(unittest.TestCase):
         self.assertTrue(same_address("wss://archipelago.gg:38281", "archipelago.gg:38281"))
         self.assertFalse(same_address("localhost:38281", "localhost:38282"))
 
+    def test_a_slot_of_another_game_gets_no_tracker(self):
+        # After another game's ROM is loaded, /map and the button can still be there.
+        client = self.client()
+        client.slot_info = {1: NetworkSlot("Link", "A Link to the Past", SlotType.player)}
+        with mock.patch.object(tracker_app.subprocess, "Popen") as popen, \
+                self.assertLogs("Client", level="INFO") as logs:
+            tracker_app.open_for_client(client)
+        popen.assert_not_called()
+        self.assertIn("A Link to the Past", logs.output[0])
+
     def test_before_connecting_it_says_to_connect_first(self):
         with mock.patch.object(tracker_app.subprocess, "Popen") as popen, \
                 self.assertLogs("Client", level="INFO") as logs:

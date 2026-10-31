@@ -249,7 +249,15 @@ def open_for_client(ctx: CommonContext) -> None:
     if ctx.slot is None:
         logger.info("Connect to the room first. Then /map opens the tracker for your slot.")
         return
-    command = tracker_command(ctx.server_address or "", ctx.slot_info[ctx.slot].name)
+    # The BizHawk client keeps /map and the button after another game's ROM is loaded, since it
+    # only asks this world about ROMs of the same system, so the slot's game is checked here.
+    from .. import CVAOSWorld
+    slot = ctx.slot_info[ctx.slot]
+    if slot.game != CVAOSWorld.game:
+        logger.info("This slot plays %s, so the Aria of Sorrow map tracker can't follow it.",
+                    slot.game)
+        return
+    command = tracker_command(ctx.server_address or "", slot.name)
     env = dict(os.environ)
     env.pop(PASSWORD_ENV, None)
     if ctx.password:
