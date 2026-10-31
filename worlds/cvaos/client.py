@@ -42,15 +42,18 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
 
     async def validate_rom(self, ctx: "BizHawkClientContext") -> bool:
         valid = await self._validate_rom(ctx)
-        # /map means something only while an Aria of Sorrow ROM is loaded, as other games' commands
-        # come and go with theirs. A context with no command processor, such as a test's stand-in,
-        # just gets no /map.
+        # /map and the Open map button mean something only while an Aria of Sorrow ROM is loaded,
+        # as other games' commands come and go with theirs. A context with no command processor,
+        # such as a test's stand-in, just gets no /map.
         commands = getattr(getattr(ctx, "command_processor", None), "commands", None)
         if commands is not None:
             if valid:
                 commands["map"] = cmd_map
             else:
                 commands.pop("map", None)
+        if not valid:
+            from .tracker_app import remove_map_button
+            remove_map_button(ctx)
         return valid
 
     async def _validate_rom(self, ctx: "BizHawkClientContext") -> bool:
@@ -91,10 +94,12 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
     def on_package(self, ctx: "BizHawkClientContext", cmd: str, args: dict) -> None:
         if cmd == "Connected":
             from CommonClient import logger
+
+            from .tracker_app import add_map_button
+            add_map_button(ctx)  # once, though Connected comes again on every reconnect
             logger.info("Type /map to open the map tracker for this slot in your browser.")
             target = (args.get("slot_data") or {}).get("target_platform")
             if target is not None and int(target) == TARGET_ADVANCE_COLLECTION:
-                from CommonClient import logger
                 logger.info(
                     "This seed's target platform is the Steam Advance Collection. You can play it "
                     "in BizHawk, but the intended client is the CVAoS Collection Client.")

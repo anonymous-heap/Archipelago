@@ -578,21 +578,8 @@ class CVAOSCollectionContext(CommonContext):
 
             def build(self):
                 layout = super().build()
-                # An "Open map" button after Connect. The window is still usable without it, so
-                # a kvui that builds its buttons differently only loses the button.
-                try:
-                    from kivy.metrics import dp
-                    from kivymd.uix.button import MDButton, MDButtonText
-
-                    from .tracker_app import open_for_client
-                    button = MDButton(MDButtonText(text="Open map"), style="outlined",
-                                      size=(dp(110), self.server_connect_bar.height),
-                                      size_hint_x=None, size_hint_y=None, radius=5,
-                                      pos_hint={"center_y": 0.55})
-                    button.bind(on_press=lambda _button: open_for_client(self.ctx))
-                    self.connect_layout.add_widget(button)
-                except Exception:
-                    logger.exception("Couldn't add the Open map button; /map still works")
+                from .tracker_app import add_map_button
+                add_map_button(self.ctx)
                 return layout
 
         self.ui = CVAOSCollectionManager(self)

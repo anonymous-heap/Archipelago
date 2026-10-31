@@ -16,6 +16,7 @@ import socket
 import unittest
 import urllib.error
 import urllib.request
+from types import SimpleNamespace
 from unittest import mock
 
 from NetUtils import NetworkItem, NetworkSlot, SlotType
@@ -479,14 +480,61 @@ class OpenFromClientTest(unittest.TestCase):
         ctx.command_processor.commands = {}
         client = CVAOSClient()
         for valid in (True, False):
+            checked = mock.AsyncMock(return_value=valid)
             with self.subTest(valid=valid), \
-                    mock.patch.object(CVAOSClient, "_validate_rom", mock.AsyncMock(return_value=valid)):
+                    mock.patch.object(CVAOSClient, "_validate_rom", checked):
                 self.assertEqual(asyncio.run(client.validate_rom(ctx)), valid)
-                self.assertEqual(ctx.command_processor.commands.get("map"), cmd_map if valid else None)
+                self.assertEqual(ctx.command_processor.commands.get("map"),
+                                 cmd_map if valid else None)
 
     def test_the_collection_client_offers_map(self):
         from ..collection_client import CVAOSCollectionContext
         self.assertIn("map", CVAOSCollectionContext.command_processor.commands)
+
+
+class MapButtonTest(unittest.TestCase):
+    """The "Open map" button the game clients put after Connect in their windows."""
+
+    def window(self) -> SimpleNamespace:
+        return SimpleNamespace(connect_layout=mock.Mock(),
+                               server_connect_bar=SimpleNamespace(height=30))
+
+    def setUp(self) -> None:
+        # KivyMD widgets need a running app, so the button itself is a stand-in.
+        patcher = mock.patch.object(tracker_app, "map_button",
+                                    side_effect=lambda ctx, height: object())
+        self.map_button = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_it_is_added_once(self):
+        ctx = SimpleNamespace(ui=self.window())
+        tracker_app.add_map_button(ctx)
+        tracker_app.add_map_button(ctx)  # Connected comes again on every reconnect
+        ctx.ui.connect_layout.add_widget.assert_called_once_with(ctx.ui.cvaos_map_button)
+
+    def test_a_client_without_a_window_gets_none(self):
+        tracker_app.add_map_button(SimpleNamespace(ui=None))
+        tracker_app.add_map_button(SimpleNamespace())
+        self.map_button.assert_not_called()
+
+    def test_a_window_it_can_t_build_in_only_loses_the_button(self):
+        ctx = SimpleNamespace(ui=self.window())
+        self.map_button.side_effect = TypeError("a kvui with other buttons")
+        with self.assertLogs("Client", level="ERROR"):
+            tracker_app.add_map_button(ctx)
+        self.assertIsNone(getattr(ctx.ui, "cvaos_map_button", None))
+
+    def test_bizhawk_adds_it_on_connecting_and_drops_it_for_another_rom(self):
+        from ..client import CVAOSClient
+        ctx = SimpleNamespace(ui=self.window(), command_processor=SimpleNamespace(commands={}))
+        client = CVAOSClient()
+        client.on_package(ctx, "Connected", {"slot_data": {}})
+        button = ctx.ui.cvaos_map_button
+        ctx.ui.connect_layout.add_widget.assert_called_once_with(button)
+        with mock.patch.object(CVAOSClient, "_validate_rom", mock.AsyncMock(return_value=False)):
+            asyncio.run(client.validate_rom(ctx))
+        ctx.ui.connect_layout.remove_widget.assert_called_once_with(button)
+        self.assertIsNone(ctx.ui.cvaos_map_button)
 
 
 class LaunchTest(unittest.TestCase):

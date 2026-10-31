@@ -201,3 +201,47 @@ def open_for_client(ctx: CommonContext) -> None:
     subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL, close_fds=True, **detach)
     logger.info("Opening the map tracker in your browser")
+
+
+def map_button(ctx: CommonContext, height: float):
+    """Make an "Open map" button for a game client's window, shaped like its Connect button."""
+    from kivy.metrics import dp
+    from kivymd.uix.button import MDButton, MDButtonText
+
+    button = MDButton(MDButtonText(text="Open map"), style="outlined", size=(dp(110), height),
+                      size_hint_x=None, size_hint_y=None, radius=5, pos_hint={"center_y": 0.55})
+    button.bind(on_press=lambda _button: open_for_client(ctx))
+    return button
+
+
+def add_map_button(ctx: CommonContext) -> None:
+    """Put an "Open map" button after Connect in a game client's window, unless it has one.
+
+    A client running without a window gets no button, and so does one whose window is built
+    differently than this expects. /map works the same either way, so a failure here is logged
+    rather than raised, where it would break the client's connection.
+    """
+    ui = getattr(ctx, "ui", None)
+    layout = getattr(ui, "connect_layout", None)
+    if layout is None or getattr(ui, "cvaos_map_button", None) is not None:
+        return
+    try:
+        button = map_button(ctx, ui.server_connect_bar.height)
+        layout.add_widget(button)
+    except Exception:
+        logger.exception("Couldn't add the Open map button, so use /map instead")
+        return
+    ui.cvaos_map_button = button
+
+
+def remove_map_button(ctx: CommonContext) -> None:
+    """Take the "Open map" button out of a game client's window, if it has one."""
+    ui = getattr(ctx, "ui", None)
+    button = getattr(ui, "cvaos_map_button", None)
+    if button is None:
+        return
+    ui.cvaos_map_button = None
+    try:
+        ui.connect_layout.remove_widget(button)
+    except Exception:
+        logger.exception("Couldn't remove the Open map button")
