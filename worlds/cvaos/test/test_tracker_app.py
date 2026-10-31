@@ -344,6 +344,30 @@ def free_port() -> int:
         return probe.getsockname()[1]
 
 
+class RefusedConnectionTest(unittest.IsolatedAsyncioTestCase):
+    """What the page says when the tracker can't log in, which happens inside the connection."""
+
+    async def log_in(self, slot_name: str | None, password_requested: bool) -> str:
+        ctx = TrackerContext(None, None, slot_name)
+        self.addCleanup(ctx.close)
+
+        async def connection() -> None:
+            await ctx.server_auth(password_requested)
+
+        # server_auth runs in the connection's own task, as the server loop runs it.
+        ctx.server_task = asyncio.create_task(connection())
+        await ctx.server_task
+        await asyncio.sleep(0)  # the disconnect that runs beside it
+        return ctx.snapshot()["status"]
+
+    async def test_a_room_that_needs_a_password_says_so(self):
+        # A room link carries no password, so a room that has one refuses the first try.
+        self.assertEqual(await self.log_in("Soma", True), "This room needs a password")
+
+    async def test_a_missing_slot_name_says_so(self):
+        self.assertEqual(await self.log_in(None, False), "Enter a slot name to connect")
+
+
 class HandOverTest(unittest.IsolatedAsyncioTestCase):
     """What a running tracker does with the room and slot a new launch brings it."""
 

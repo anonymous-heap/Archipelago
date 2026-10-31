@@ -79,13 +79,15 @@ class TrackerContext(CommonContext):
     # --- connecting -----------------------------------------------------------------------------
 
     async def server_auth(self, password_requested: bool = False) -> None:
+        # This runs inside the connection's own task, which disconnect() waits for, so the
+        # disconnect runs beside it. Awaiting it here would fail and report a lost connection.
         if password_requested and not self.password:
             self.set_status("This room needs a password")
-            await self.disconnect()
+            async_start(self.disconnect())
             return
         if not self.slot_name:
             self.set_status("Enter a slot name to connect")
-            await self.disconnect()
+            async_start(self.disconnect())
             return
         self.auth = self.slot_name
         await self.send_connect(game="")
