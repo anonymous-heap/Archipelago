@@ -35,6 +35,7 @@ import json
 import logging
 import mimetypes
 import pkgutil
+import time
 from http import HTTPStatus
 
 from websockets.asyncio.server import Server, ServerConnection, serve
@@ -70,6 +71,10 @@ PAGE_FILES = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js
               "/style.css": "style.css"}
 SOCKET_PATH = "/ws"
 PUSH_DELAY = 0.05  # seconds to gather changes into one snapshot
+# The tracker has no window of its own, so it stops once no page has been open this long, rather
+# than run unseen after the player closes the tab. Opening it again starts a new one.
+IDLE_STOP = 600.0
+IDLE_CHECK = 15.0  # seconds between looks at whether a page is open
 
 APP = "cvaos-tracker"
 PROTOCOL = 1  # raise it when the page and the server would no longer understand each other
@@ -92,6 +97,7 @@ class TrackerServer:
         self.sockets: set[ServerConnection] = set()
         self.server: Server | None = None
         self.port: int | None = None
+        self.idle_since: float | None = time.monotonic()  # since the last page closed, or None
         self.map_json = json.dumps(map_data()).encode("utf-8")
         self._push_task: asyncio.Task | None = None
         ctx.listeners.append(self.push)
@@ -107,6 +113,15 @@ class TrackerServer:
         if self.server is not None:
             self.server.close()
             await self.server.wait_closed()
+
+    async def stop_when_idle(self, limit: float = IDLE_STOP, check: float = IDLE_CHECK) -> None:
+        """Stop the tracker once no page has been open for ``limit`` seconds."""
+        while True:
+            await asyncio.sleep(check)
+            if self.idle_since is not None and time.monotonic() - self.idle_since >= limit:
+                logger.info("No tracker page has been open for a while, so the tracker stopped")
+                self.ctx.exit_event.set()
+                return
 
     # --- HTTP ----------------------------------------------------------------------------------
 
@@ -138,6 +153,7 @@ class TrackerServer:
 
     async def on_socket(self, socket: ServerConnection) -> None:
         self.sockets.add(socket)
+        self.idle_since = None
         try:
             await socket.send(self.snapshot_message())
             async for message in socket:
@@ -146,6 +162,8 @@ class TrackerServer:
             pass  # a page closed without saying goodbye, as a closed tab or browser can
         finally:
             self.sockets.discard(socket)
+            if not self.sockets:
+                self.idle_since = time.monotonic()
 
     async def on_message(self, socket: ServerConnection, message: str | bytes) -> None:
         try:

@@ -40,6 +40,7 @@ const page = {
   snapshot: {},        // the tracker's latest snapshot
   socket: null,
   build: null,         // the version of the tracker that served this page
+  quit: false,         // whether the player stopped the tracker from this page
   focus: CASTLE,       // CASTLE or an area id
   selected: null,      // the selected location's id
   view: { x: 0, y: 0, w: 64, h: 47 },
@@ -760,7 +761,8 @@ function openSocket() {
     onSnapshot(message.snapshot);
   });
   socket.addEventListener("close", () => {
-    $("status-text").textContent = "The tracker isn't running";
+    $("status-text").textContent = page.quit ? "The tracker has stopped. You can close this tab."
+                                             : "The tracker isn't running";
     $("connection").classList.remove("tracking", "connecting");
     setTimeout(openSocket, 2000);
   });
@@ -811,6 +813,11 @@ function setUpControls() {
   $("cancel").addEventListener("click", () => $("connect-dialog").close());
   $("disconnect").addEventListener("click", () => {
     send({ type: "disconnect" });
+    $("connect-dialog").close();
+  });
+  $("quit").addEventListener("click", () => {
+    page.quit = true;
+    send({ type: "quit" });
     $("connect-dialog").close();
   });
   $("show-log").addEventListener("click", () => {

@@ -267,6 +267,15 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(0.3)
         self.assertEqual(self.server.sockets, set())
 
+    async def test_it_stops_once_no_page_has_been_open_a_while(self):
+        watch = asyncio.create_task(self.server.stop_when_idle(limit=0.3, check=0.05))
+        async with self.open_socket() as page:
+            await page.recv()
+            await asyncio.sleep(0.5)
+            self.assertFalse(self.ctx.exit_event.is_set(), "it stopped with a page open")
+        await asyncio.wait_for(self.ctx.exit_event.wait(), 2)
+        await watch
+
     async def test_another_site_can_t_reach_the_tracker(self):
         # A page from any other origin, even one on this computer, is turned away.
         for origin in ("https://example.com", f"http://127.0.0.1:{self.port + 1}", "null"):

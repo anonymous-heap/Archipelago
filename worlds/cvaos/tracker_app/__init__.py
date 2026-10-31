@@ -141,13 +141,15 @@ async def main(args: list[str]) -> None:
         webbrowser.open(address)
     if options.connect and options.name:
         await ctx.connect_to(options.connect, options.name, options.password)
+    idle_watch = asyncio.create_task(server.stop_when_idle())
     try:
         await ctx.exit_event.wait()
     finally:
+        idle_watch.cancel()
         await ctx.shutdown()
         await server.stop()
 
 
 def launch(*args: str) -> None:
-    """Run the tracker until the page's Quit button, or the process, stops it."""
+    """Run the tracker until the page's Quit button stops it, or no page has been open a while."""
     asyncio.run(main(list(args)))
