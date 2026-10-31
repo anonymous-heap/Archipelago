@@ -450,6 +450,23 @@ class OldTrackerServer(TrackerServer):
         return json.dumps(message)
 
 
+class PortProbeTest(unittest.IsolatedAsyncioTestCase):
+    async def test_a_port_reads_free_once_its_tracker_stops_and_taken_while_it_runs(self):
+        from websockets.asyncio.client import connect
+        ctx = TrackerContext(None, None, None)
+        self.addCleanup(ctx.close)
+        server = TrackerServer(ctx)
+        port = await server.start("127.0.0.1", 0)
+        self.assertFalse(tracker_app.port_is_free(port))
+        # A page connected when the server stops leaves the server's end in TIME_WAIT, which on
+        # Linux and macOS a plain bind refuses for a minute.
+        page = await connect(f"ws://127.0.0.1:{port}/ws", origin=f"http://127.0.0.1:{port}")
+        await page.recv()
+        await server.stop()
+        await page.close()
+        self.assertTrue(tracker_app.port_is_free(port))
+
+
 class SecondLaunchTest(unittest.IsolatedAsyncioTestCase):
     """A launch while a tracker already serves on its port."""
 

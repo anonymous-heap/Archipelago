@@ -89,8 +89,15 @@ def port_is_free(port: int) -> bool:
 
     Binding answers at once, while connecting to a port nothing listens on can take Windows a
     second or two.
+
+    On Linux and macOS a port that a tracker just stopped serving on stays in TIME_WAIT for about
+    a minute, which refuses a plain bind. asyncio's listener sets SO_REUSEADDR there, so the probe
+    sets it too. A live listener still refuses it. On Windows the same option would let the probe
+    share a port that is in use, so it stays off.
     """
     with socket.socket() as probe:
+        if os.name == "posix":
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             probe.bind(("127.0.0.1", port))
         except OSError:
