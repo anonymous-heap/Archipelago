@@ -479,7 +479,8 @@ function renderRoute() {
 function renderSelectionRing() {
   for (const ring of document.querySelectorAll(".selection-ring")) ring.remove();
   const location = locationsById.get(page.selected);
-  if (!location) return;
+  const pin = els.pins.get(page.selected);
+  if (!location || !pin || pin.style.display === "none") return;  // no ring around a hidden pin
   svg("circle", { cx: location.x, cy: location.y, r: 0.4, class: "selection-ring" }, $("layer-pins"));
 }
 
