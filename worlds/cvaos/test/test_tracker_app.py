@@ -661,6 +661,14 @@ class OpenFromClientTest(unittest.TestCase):
         self.assertTrue(same_address("ws://Soma:pw@localhost:38281", "localhost:38281"))
         self.assertTrue(same_address("wss://archipelago.gg:38281", "archipelago.gg:38281"))
         self.assertFalse(same_address("localhost:38281", "localhost:38282"))
+        # "/connect localhost" leaves the port out, and this computer has several names.
+        self.assertTrue(same_address("ws://localhost", "localhost:38281"))
+        self.assertTrue(same_address("127.0.0.1:38281", "localhost:38281"))
+        self.assertTrue(same_address("[::1]:38281", "localhost"))
+        self.assertFalse(same_address("archipelago.gg", "localhost"))
+
+    def test_a_room_link_to_an_ipv6_address_keeps_its_brackets(self):
+        self.assertEqual(parse_args(["archipelago://Soma:@[::1]:38281"]).connect, "[::1]:38281")
 
     def test_a_slot_of_another_game_gets_no_tracker(self):
         # After another game's ROM is loaded, /map and the button can still be there.

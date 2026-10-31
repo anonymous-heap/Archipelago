@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import urllib.parse
 from collections import deque
 from typing import Callable
 
@@ -39,15 +40,27 @@ ITEM_GROUPS = {"ability_soul": "Souls", "red_soul": "Souls", "blue_soul": "Souls
                "yellow_soul": "Souls", "weapon": "Weapons"}
 
 
+DEFAULT_SERVER_PORT = 38281  # the port Archipelago assumes when an address leaves it out
+LOOPBACK_NAMES = {"127.0.0.1", "::1"}  # the names of this computer that "localhost" also means
+
+
 def same_address(first: str, second: str) -> bool:
     """Whether two server addresses name the same server.
 
-    Either can be written with or without a scheme, and with or without a slot name and password.
+    Either can be written with or without a scheme, a slot name and password, or the default port,
+    and "localhost" names the same server as 127.0.0.1.
     """
-    def bare(address: str) -> str:
+    def server(address: str) -> tuple[str, int | str]:
         address = without_login(address.strip().lower())
-        return address.removeprefix("wss://").removeprefix("ws://").rstrip("/")
-    return bare(first) == bare(second)
+        address = address.removeprefix("wss://").removeprefix("ws://").rstrip("/")
+        parts = urllib.parse.urlsplit(f"//{address}")
+        try:
+            port = parts.port or DEFAULT_SERVER_PORT
+        except ValueError:
+            return address, ""  # not an address urlsplit can read, so compared as written
+        host = parts.hostname or ""
+        return ("localhost" if host in LOOPBACK_NAMES else host), port
+    return server(first) == server(second)
 
 
 class LogTail(logging.Handler):

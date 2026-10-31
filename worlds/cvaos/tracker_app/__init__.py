@@ -72,9 +72,9 @@ def parse_args(args: list[str]) -> argparse.Namespace:
     if parsed.url:
         from CommonClient import handle_url_arg
         parsed = handle_url_arg(parsed, parser)
-        # handle_url_arg keeps the name and password in the address, which the page shows.
-        url = parsed.url
-        parsed.connect = f"{url.hostname}:{url.port}" if url.port else url.hostname
+        # handle_url_arg keeps the name and password in the address, which the page shows. The
+        # rest is kept as written, which keeps the brackets around an IPv6 address.
+        parsed.connect = without_login(parsed.url.netloc)
     elif parsed.connect:
         parsed.connect = without_login(parsed.connect)  # the slot and password come separately
     return parsed
