@@ -43,6 +43,7 @@ const page = {
   quit: false,         // whether the player stopped the tracker from this page
   retry: null,         // the timer that opens the socket again after it closes
   reloading: false,    // set once the page has started loading a newer tracker's page
+  gone: false,         // whether the page has shown that its tracker is gone
   focus: CASTLE,       // CASTLE or an area id
   selected: null,      // the selected location's id
   view: { x: 0, y: 0, w: 64, h: 47 },
@@ -770,6 +771,7 @@ function onSnapshot(snapshot) {
   renderRouteSteps();
   renderLocationList();
   $("log").textContent = (snapshot.log || []).join("\n");
+  if ($("connect-dialog").open) renderDialog();
   if (!snapshot.connected && snapshot.status === "Not connected" && !page.askedToConnect) {
     page.askedToConnect = true;
     openConnectDialog();
@@ -803,12 +805,16 @@ function openSocket() {
       snapshot.exploration = page.snapshot.exploration;
       snapshot.position = snapshot.position ?? page.snapshot.position;
     }
+    page.gone = false;
     onSnapshot(snapshot);
   });
   socket.addEventListener("close", () => {
     // A socket already replaced by a newer one, or closed for a reload, has nothing to report.
     if (socket !== page.socket || page.reloading) return;
-    showTrackerGone();
+    if (!page.gone) {
+      page.gone = true;  // drawn once, rather than again on every retry while it is away
+      showTrackerGone();
+    }
     page.retry = setTimeout(openSocket, 2000);
   });
 }
@@ -821,12 +827,20 @@ document.addEventListener("visibilitychange", () => {
 });
 
 function openConnectDialog() {
+  if ($("connect-dialog").open) return;  // the player may be typing in it
   const form = $("connect-form");
   form.server.value = page.snapshot.server || prefs.get("server", "");
   form.slot.value = page.snapshot.slot || prefs.get("slot", "");
-  $("dialog-status").textContent = page.snapshot.status || "";
-  $("disconnect").disabled = !page.snapshot.connected;
+  renderDialog();
   $("connect-dialog").showModal();
+}
+
+// The dialog's status line and buttons follow the tracker, while the fields are left to the player.
+function renderDialog() {
+  const live = Boolean(page.socket && page.socket.readyState === WebSocket.OPEN);
+  $("dialog-status").textContent = page.snapshot.status || "";
+  $("disconnect").disabled = !live || !page.snapshot.connected;
+  $("quit").disabled = !live;
 }
 
 // Switch the map between the tracker's own colours and the game's colours and wall width.
@@ -864,11 +878,18 @@ function setUpControls() {
   $("connection").addEventListener("click", openConnectDialog);
   $("cancel").addEventListener("click", () => $("connect-dialog").close());
   $("disconnect").addEventListener("click", () => {
-    send({ type: "disconnect" });
+    if (!send({ type: "disconnect" })) {
+      $("dialog-status").textContent = NOT_RUNNING;
+      return;
+    }
     $("connect-dialog").close();
   });
   $("quit").addEventListener("click", () => {
     page.quit = send({ type: "quit" });
+    if (!page.quit) {
+      $("dialog-status").textContent = NOT_RUNNING;
+      return;
+    }
     $("connect-dialog").close();
   });
   $("show-log").addEventListener("click", () => {
@@ -904,10 +925,18 @@ function setUpControls() {
 async function start() {
   // The page has nothing to draw without the map. If the tracker went away while the page was
   // loading, it waits for one to come back rather than staying blank.
+  let failed = false;
   while (!page.map) {
     try {
-      page.map = await (await fetch("map.json")).json();
+      const map = await (await fetch("map.json")).json();
+      // The page itself came from the tracker that went away, so it loads again from this one.
+      if (failed) {
+        location.reload();
+        return;
+      }
+      page.map = map;
     } catch {
+      failed = true;
       $("status-text").textContent = NOT_RUNNING;
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
