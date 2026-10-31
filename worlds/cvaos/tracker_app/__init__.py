@@ -1,8 +1,8 @@
 """
 The Aria of Sorrow tracker: a map of the castle in a web page, kept current from the multiworld.
 
-The Launcher's "Aria of Sorrow Tracker" starts it. It serves the page on this computer only and
-opens it in the browser.
+The Launcher's "Aria of Sorrow Tracker" starts it, and so does a room's archipelago:// link or the
+game client's /map command. It serves the page on this computer only and opens it in the browser.
 The page shows every location as in logic or not, Soma where he is, and only the parts of the
 castle he has explored (a toggle shows the rest). Clicking a location and then Find Route draws
 the way there from where Soma is.
@@ -22,10 +22,15 @@ import argparse
 import asyncio
 import json
 import logging
+import os
+import subprocess
+import sys
 import webbrowser
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from CommonClient import CommonContext
+
     from .server import TrackerServer
 
 DEFAULT_PORT = 38300
@@ -35,6 +40,9 @@ SPARE_PORTS = range(DEFAULT_PORT + 1, DEFAULT_PORT + 10)
 # How long to wait for a running tracker to answer. Rebuilding a seed holds up its event loop for
 # a few seconds, so a short wait would mistake it for some other program on the port.
 ASK_TIMEOUT = 15.0
+# The game client passes the room's password here rather than on the command line, where other
+# programs on the computer could read it.
+PASSWORD_ENV = "CVAOS_TRACKER_PASSWORD"
 
 logger = logging.getLogger("Client")
 
@@ -43,7 +51,7 @@ def parse_args(args: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="A map tracker for Castlevania: Aria of Sorrow.")
     parser.add_argument("--connect", default=None, help="server address, such as localhost:38281")
     parser.add_argument("--name", default=None, help="the slot name to track")
-    parser.add_argument("--password", default=None,
+    parser.add_argument("--password", default=os.environ.get(PASSWORD_ENV) or None,
                         help="the room's password, if it has one")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT,
                         help="the port the page is served on, or 0 for any free port")
@@ -153,3 +161,41 @@ async def main(args: list[str]) -> None:
 def launch(*args: str) -> None:
     """Run the tracker until the page's Quit button stops it, or no page has been open a while."""
     asyncio.run(main(list(args)))
+
+
+def launcher_command() -> list[str]:
+    """Return the command that runs Archipelago's Launcher, frozen or from source."""
+    import Utils
+    if Utils.is_frozen():
+        suffix = ".exe" if Utils.is_windows else ""
+        return [Utils.local_path(f"ArchipelagoLauncher{suffix}")]
+    return [sys.executable, Utils.local_path("Launcher.py")]
+
+
+def tracker_command(address: str, slot_name: str) -> list[str]:
+    """Return the command that starts the tracker for ``slot_name`` in the room at ``address``."""
+    return [*launcher_command(), "Aria of Sorrow Tracker", "--",
+            "--connect", address, "--name", slot_name]
+
+
+def open_for_client(ctx: CommonContext) -> None:
+    """Open the tracker for the slot a game client is connected as.
+
+    It runs in its own process, as the Launcher's button would start it, so the client is never
+    held up by it and keeps running if the tracker stops. A tracker already running for the slot
+    just opens its page.
+    """
+    if ctx.slot is None:
+        logger.info("Connect to the room first. Then /map opens the tracker for your slot.")
+        return
+    command = tracker_command(ctx.server_address or "", ctx.slot_info[ctx.slot].name)
+    env = dict(os.environ)
+    env.pop(PASSWORD_ENV, None)
+    if ctx.password:
+        env[PASSWORD_ENV] = ctx.password
+    detach: dict = ({"creationflags": subprocess.DETACHED_PROCESS
+                     | subprocess.CREATE_NEW_PROCESS_GROUP}
+                    if sys.platform == "win32" else {"start_new_session": True})
+    subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, close_fds=True, **detach)
+    logger.info("Opening the map tracker in your browser")

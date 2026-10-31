@@ -22,11 +22,17 @@ from .ram import AoSRAM, BizHawkBackend
 from .rom import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUMBER_START
 
 if TYPE_CHECKING:
-    from worlds._bizhawk.context import BizHawkClientContext
+    from worlds._bizhawk.context import BizHawkClientCommandProcessor, BizHawkClientContext
 
 # GBA header: 12-byte internal game title at 0xA0.
 ROM_NAME_START = 0xA0
 ROM_NAME = "CASTLEVANIA2"
+
+
+def cmd_map(self: "BizHawkClientCommandProcessor") -> None:
+    """Open the map tracker for this slot in your browser."""
+    from .tracker_app import open_for_client
+    open_for_client(self.ctx)
 
 
 class CVAOSClient(CVAOSClientLogic, BizHawkClient):
@@ -35,6 +41,16 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
     patch_suffix = ".apcvaos"
 
     async def validate_rom(self, ctx: "BizHawkClientContext") -> bool:
+        valid = await self._validate_rom(ctx)
+        # /map means something only while an Aria of Sorrow ROM is loaded, as other games' commands
+        # come and go with theirs.
+        if valid:
+            ctx.command_processor.commands["map"] = cmd_map
+        else:
+            ctx.command_processor.commands.pop("map", None)
+        return valid
+
+    async def _validate_rom(self, ctx: "BizHawkClientContext") -> bool:
         from CommonClient import logger
 
         try:
@@ -71,6 +87,8 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
 
     def on_package(self, ctx: "BizHawkClientContext", cmd: str, args: dict) -> None:
         if cmd == "Connected":
+            from CommonClient import logger
+            logger.info("Type /map to open the map tracker for this slot in your browser.")
             target = (args.get("slot_data") or {}).get("target_platform")
             if target is not None and int(target) == TARGET_ADVANCE_COLLECTION:
                 from CommonClient import logger

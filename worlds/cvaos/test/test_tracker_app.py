@@ -441,6 +441,52 @@ class SecondLaunchTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await self.launch(), spare)
 
 
+class OpenFromClientTest(unittest.TestCase):
+    """/map in the game clients, which start the tracker for the slot they're connected as."""
+
+    def client(self, slot: int | None = 1, password: str | None = None) -> mock.Mock:
+        return mock.Mock(slot=slot, server_address="localhost:38281", password=password,
+                         slot_info={1: NetworkSlot("Soma", CVAOSWorld.game, SlotType.player)})
+
+    def test_it_starts_the_tracker_for_the_client_s_slot(self):
+        with mock.patch.object(tracker_app.subprocess, "Popen") as popen:
+            tracker_app.open_for_client(self.client(password="secret"))
+        command, env = popen.call_args.args[0], popen.call_args.kwargs["env"]
+        self.assertEqual(command[-6:], ["Aria of Sorrow Tracker", "--", "--connect",
+                                        "localhost:38281", "--name", "Soma"])
+        # The password goes to the tracker out of sight of other programs' process lists.
+        self.assertNotIn("secret", command)
+        self.assertEqual(env[tracker_app.PASSWORD_ENV], "secret")
+
+    def test_the_password_reaches_the_tracker(self):
+        with mock.patch.dict(tracker_app.os.environ, {tracker_app.PASSWORD_ENV: "secret"}):
+            self.assertEqual(parse_args(["--name", "Soma"]).password, "secret")
+        with mock.patch.dict(tracker_app.os.environ, {tracker_app.PASSWORD_ENV: ""}):
+            self.assertIsNone(parse_args(["--name", "Soma"]).password)
+
+    def test_before_connecting_it_says_to_connect_first(self):
+        with mock.patch.object(tracker_app.subprocess, "Popen") as popen, \
+                self.assertLogs("Client", level="INFO") as logs:
+            tracker_app.open_for_client(self.client(slot=None))
+        popen.assert_not_called()
+        self.assertIn("Connect to the room first", logs.output[0])
+
+    def test_bizhawk_offers_map_only_while_an_aria_of_sorrow_rom_is_loaded(self):
+        from ..client import CVAOSClient, cmd_map
+        ctx = mock.Mock()
+        ctx.command_processor.commands = {}
+        client = CVAOSClient()
+        for valid in (True, False):
+            with self.subTest(valid=valid), \
+                    mock.patch.object(CVAOSClient, "_validate_rom", mock.AsyncMock(return_value=valid)):
+                self.assertEqual(asyncio.run(client.validate_rom(ctx)), valid)
+                self.assertEqual(ctx.command_processor.commands.get("map"), cmd_map if valid else None)
+
+    def test_the_collection_client_offers_map(self):
+        from ..collection_client import CVAOSCollectionContext
+        self.assertIn("map", CVAOSCollectionContext.command_processor.commands)
+
+
 class LaunchTest(unittest.TestCase):
     def test_the_launcher_offers_the_tracker(self):
         names = [component.display_name for component in components]
