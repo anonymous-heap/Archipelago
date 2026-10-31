@@ -214,6 +214,12 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         self.ctx.set_route(terrace)
         self.assertIsNone(self.ctx.snapshot()["route_target"])
 
+    async def test_a_route_to_a_location_outside_the_seed_is_ignored(self):
+        self.ctx.set_route(999_999_999)
+        self.assertIsNone(self.ctx.snapshot()["route_target"])
+        self.receive("Malphas")  # an update after it still works
+        self.assertTrue(self.ctx.snapshot()["tracking"])
+
     async def test_there_is_no_route_out_of_reach(self):
         self.ctx.set_route(location_name_to_id[TERRACE])
         snapshot = self.ctx.snapshot()
@@ -321,9 +327,12 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(message["type"], "snapshot")
             self.assertEqual((message["app"], message["build"]), ("cvaos-tracker", build_id()))
             self.assertEqual(message["snapshot"]["status"], "Not connected")
-            await socket.send(json.dumps({"type": "quit"}))
+            # Requests it can't use are dropped, and the page stays connected for the next.
             await socket.send(json.dumps({"type": "nonsense"}))
             await socket.send("not json")
+            await socket.send(json.dumps({"type": "route", "location": "the castle"}))
+            await socket.send(json.dumps({"type": "route"}))
+            await socket.send(json.dumps({"type": "quit"}))
             await asyncio.wait_for(self.ctx.exit_event.wait(), 5)
 
 

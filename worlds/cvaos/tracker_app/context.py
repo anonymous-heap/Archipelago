@@ -264,8 +264,12 @@ class TrackerContext(CommonContext):
         return bool(self.stored_data.get(RACE_MODE_KEY))
 
     def set_route(self, location_id: int | None) -> None:
-        """Show a route to the location with ``location_id``, or none."""
-        if location_id is not None and self.race_mode:
+        """Show a route to the location with ``location_id``, or none.
+
+        A location the seed doesn't have is ignored, since planning a route to it would fail on
+        every update after.
+        """
+        if location_id is not None and (self.race_mode or location_id not in self.server_locations):
             return
         self.route_target = location_id
         self.plan_route()

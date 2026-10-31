@@ -179,7 +179,12 @@ class TrackerServer:
         elif kind == "disconnect":
             await ctx.disconnect()
         elif kind == "route":
-            ctx.set_route(int(request["location"]))
+            try:
+                location_id = int(request["location"])
+            except (KeyError, TypeError, ValueError):
+                logger.warning("The tracker page asked for a route to %r", request.get("location"))
+                return
+            ctx.set_route(location_id)
         elif kind == "clear_route":
             ctx.set_route(None)
         elif kind == "quit":
