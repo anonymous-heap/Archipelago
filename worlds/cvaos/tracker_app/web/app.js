@@ -236,7 +236,11 @@ function svgPoint(clientX, clientY) {
   return point.matrixTransform(map.getScreenCTM().inverse());
 }
 
+const ZOOM_LIMITS = { min: 3, max: 200 };  // how many cells the view can be across
+
 function zoom(factor, clientX, clientY) {
+  const width = Math.min(ZOOM_LIMITS.max, Math.max(ZOOM_LIMITS.min, page.view.w * factor));
+  factor = width / page.view.w;
   const box = $("map").getBoundingClientRect();
   const at = svgPoint(clientX ?? box.left + box.width / 2, clientY ?? box.top + box.height / 2);
   const view = page.view;
@@ -287,7 +291,12 @@ function setUpPanAndZoom() {
   });
   map.addEventListener("wheel", (event) => {
     event.preventDefault();
-    zoom(event.deltaY < 0 ? 1 / ZOOM_STEP : ZOOM_STEP, event.clientX, event.clientY);
+    if (!event.deltaY) return;  // a sideways scroll isn't a zoom
+    // A mouse wheel notch is about 100 pixels or 3 lines, and a touchpad sends many small steps,
+    // so the zoom follows how far the wheel turned, up to one notch's step for each event.
+    const lines = event.deltaMode === WheelEvent.DOM_DELTA_LINE;
+    const notches = lines ? event.deltaY / 3 : event.deltaY / 100;
+    zoom(ZOOM_STEP ** Math.max(-1, Math.min(1, notches)), event.clientX, event.clientY);
   }, { passive: false });
 
   $("zoom-in").addEventListener("click", () => zoom(1 / ZOOM_STEP));
@@ -886,6 +895,7 @@ function setUpControls() {
 
   document.addEventListener("keydown", (event) => {
     if (event.target instanceof HTMLInputElement || $("connect-dialog").open) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;  // the browser's own shortcuts
     if (event.key === "Escape") select(null);
     if (event.key === "f" || event.key === "F") fitView();
   });
