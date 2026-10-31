@@ -43,11 +43,14 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
     async def validate_rom(self, ctx: "BizHawkClientContext") -> bool:
         valid = await self._validate_rom(ctx)
         # /map means something only while an Aria of Sorrow ROM is loaded, as other games' commands
-        # come and go with theirs.
-        if valid:
-            ctx.command_processor.commands["map"] = cmd_map
-        else:
-            ctx.command_processor.commands.pop("map", None)
+        # come and go with theirs. A context with no command processor, such as a test's stand-in,
+        # just gets no /map.
+        commands = getattr(getattr(ctx, "command_processor", None), "commands", None)
+        if commands is not None:
+            if valid:
+                commands["map"] = cmd_map
+            else:
+                commands.pop("map", None)
         return valid
 
     async def _validate_rom(self, ctx: "BizHawkClientContext") -> bool:
