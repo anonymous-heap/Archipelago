@@ -273,6 +273,20 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.fetch("/style.css"))[:2], (200, "text/css; charset=utf-8"))
         self.assertEqual((await self.fetch("/secret.txt"))[0], 404)
 
+    async def test_the_map_names_the_build_that_served_the_page(self):
+        # A page learns its build here, before its socket might reach a newer tracker.
+        self.assertEqual(json.loads((await self.fetch("/map.json"))[2])["build"], build_id())
+
+    def test_the_build_changes_with_the_page_s_files(self):
+        from ..tracker_app import server
+        before = build_id()
+        build_id.cache_clear()
+        self.addCleanup(build_id.cache_clear)
+        with mock.patch.object(server.pkgutil, "get_data", return_value=b"another page"):
+            changed = build_id()
+        self.assertNotEqual(changed, before)
+        self.assertEqual(changed.rsplit("/", 1)[0], before.rsplit("/", 1)[0])
+
     async def test_serving_the_page_logs_no_errors(self):
         # websockets 13 logs each HTTP answer as a failed handshake unless the server quiets it.
         with self.assertNoLogs("websockets", level="ERROR"):
@@ -592,10 +606,12 @@ class OpenFromClientTest(unittest.TestCase):
         ctx.command_processor.commands = {}
         client = CVAOSClient()
         for valid in (True, False):
+            checked = mock.AsyncMock(return_value=valid)
             with self.subTest(valid=valid), \
-                    mock.patch.object(CVAOSClient, "_validate_rom", mock.AsyncMock(return_value=valid)):
+                    mock.patch.object(CVAOSClient, "_validate_rom", checked):
                 self.assertEqual(asyncio.run(client.validate_rom(ctx)), valid)
-                self.assertEqual(ctx.command_processor.commands.get("map"), cmd_map if valid else None)
+                self.assertEqual(ctx.command_processor.commands.get("map"),
+                                 cmd_map if valid else None)
 
     def test_the_collection_client_offers_map(self):
         from ..collection_client import CVAOSCollectionContext

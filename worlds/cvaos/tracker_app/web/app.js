@@ -39,7 +39,7 @@ const page = {
   map: null,           // /map.json
   snapshot: {},        // the tracker's latest snapshot
   socket: null,
-  build: null,         // the version of the tracker that served this page
+  build: null,         // the version of the tracker that served this page, from its map
   quit: false,         // whether the player stopped the tracker from this page
   retry: null,         // the timer that opens the socket again after it closes
   reloading: false,    // set once the page has started loading a newer tracker's page
@@ -783,7 +783,6 @@ function openSocket() {
       location.reload();
       return;
     }
-    page.build = message.build;
     onSnapshot(message.snapshot);
   });
   socket.addEventListener("close", () => {
@@ -892,6 +891,7 @@ async function start() {
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
   }
+  page.build = page.map.build;
   applyLook();
   buildMap();
   setUpPanAndZoom();

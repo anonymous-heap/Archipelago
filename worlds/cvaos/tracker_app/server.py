@@ -5,7 +5,8 @@ GET / and the page's own files come from web/ in this package, which pkgutil rea
 world is a folder or a zipped .apworld. GET /map.json is the map (mapdata.py). The page then opens
 /ws, and the server sends it the tracker's snapshot whenever that may have changed:
 
-    {"type": "snapshot", "app": "cvaos-tracker", "build": "1/2026.9.4", "snapshot": {...}}
+    {"type": "snapshot", "app": "cvaos-tracker", "build": "1/2026.10.31/5d1e8c2a",
+     "snapshot": {...}}
 
 "app" and "build" say which tracker this is, so a page can reload when a newer one replaces it,
 and a new launch can tell this tracker from another program. The page sends back what the player
@@ -31,6 +32,8 @@ also needs the page's own Origin, which a browser always sends and a site can't 
 from __future__ import annotations
 
 import asyncio
+import functools
+import hashlib
 import json
 import logging
 import pkgutil
@@ -88,9 +91,18 @@ APP = "cvaos-tracker"
 PROTOCOL = 1  # raise it when the page and the server would no longer understand each other
 
 
+@functools.cache
 def build_id() -> str:
-    """Name this tracker's version: the messages it speaks, then the world it ships with."""
-    return f"{PROTOCOL}/{'.'.join(str(part) for part in CVAOSWorld.world_version)}"
+    """Name this tracker's version: the messages it speaks, the world it ships with, and its page.
+
+    The page's files count as well, so that open pages reload, and an older tracker is replaced,
+    whenever they change, even between world versions.
+    """
+    page = hashlib.sha256()
+    for name, _ in sorted(set(PAGE_FILES.values())):
+        page.update(pkgutil.get_data(__package__, f"web/{name}"))
+    world = ".".join(str(part) for part in CVAOSWorld.world_version)
+    return f"{PROTOCOL}/{world}/{page.hexdigest()[:8]}"
 
 
 def _response(status: HTTPStatus, body: bytes, content_type: str) -> Response:
@@ -106,7 +118,9 @@ class TrackerServer:
         self.server: Server | None = None
         self.port: int | None = None
         self.idle_since: float | None = time.monotonic()  # since the last page closed, or None
-        self.map_json = json.dumps(map_data()).encode("utf-8")
+        # The map carries the build too, so a page knows which tracker served it before its socket
+        # opens, possibly to a newer tracker that has taken over the address.
+        self.map_json = json.dumps({**map_data(), "build": build_id()}).encode("utf-8")
         self._push_task: asyncio.Task | None = None
         ctx.listeners.append(self.push)
 
