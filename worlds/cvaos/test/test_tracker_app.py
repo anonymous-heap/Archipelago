@@ -267,8 +267,10 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
         status, content_type, body = await self.fetch("/map.json")
         self.assertEqual((status, content_type), (200, "application/json"))
         self.assertIn("locations", json.loads(body))
-        self.assertEqual((await self.fetch("/app.js"))[0], 200)
-        self.assertEqual((await self.fetch("/style.css"))[0], 200)
+        # Exact types, whatever the computer's registry says, since a browser drops a stylesheet
+        # of any other type.
+        self.assertEqual((await self.fetch("/app.js"))[:2], (200, "text/javascript; charset=utf-8"))
+        self.assertEqual((await self.fetch("/style.css"))[:2], (200, "text/css; charset=utf-8"))
         self.assertEqual((await self.fetch("/secret.txt"))[0], 404)
 
     async def test_serving_the_page_logs_no_errors(self):

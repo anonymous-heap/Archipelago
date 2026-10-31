@@ -33,7 +33,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import mimetypes
 import pkgutil
 import time
 from http import HTTPStatus
@@ -67,8 +66,15 @@ socket_logger = logging.getLogger("websockets.server.cvaos_tracker")
 socket_logger.setLevel(logging.WARNING)  # each HTTP answer is also logged as a rejection, at INFO
 socket_logger.addFilter(QuietHttp())
 
-PAGE_FILES = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js",
-              "/style.css": "style.css"}
+# Each of the page's files, with its content type. Guessing the type would ask the Windows
+# registry, which another program can have changed, and a browser drops a stylesheet that isn't
+# text/css.
+PAGE_FILES = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/index.html": ("index.html", "text/html; charset=utf-8"),
+    "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+    "/style.css": ("style.css", "text/css; charset=utf-8"),
+}
 SOCKET_PATH = "/ws"
 PUSH_DELAY = 0.05  # seconds to gather changes into one snapshot
 # The tracker has no window of its own, so it stops once no page has been open this long, rather
@@ -141,12 +147,9 @@ class TrackerServer:
         if path == "/map.json":
             return _response(HTTPStatus.OK, self.map_json, "application/json")
         if path in PAGE_FILES:
-            name = PAGE_FILES[path]
-            body = pkgutil.get_data(__package__, f"web/{name}")
-            content_type = mimetypes.guess_type(name)[0] or "application/octet-stream"
-            if content_type.startswith("text/") or content_type.endswith("javascript"):
-                content_type += "; charset=utf-8"
-            return _response(HTTPStatus.OK, body, content_type)
+            name, content_type = PAGE_FILES[path]
+            return _response(HTTPStatus.OK, pkgutil.get_data(__package__, f"web/{name}"),
+                             content_type)
         return _response(HTTPStatus.NOT_FOUND, b"Not found", "text/plain")
 
     # --- websocket -----------------------------------------------------------------------------

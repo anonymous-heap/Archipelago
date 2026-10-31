@@ -160,6 +160,8 @@ async def main(args: list[str]) -> None:
 
 def launch(*args: str) -> None:
     """Run the tracker until the page's Quit button stops it, or no page has been open a while."""
+    import Utils
+    Utils.init_logging("CVAoSTracker", exception_logger="Client")
     asyncio.run(main(list(args)))
 
 
