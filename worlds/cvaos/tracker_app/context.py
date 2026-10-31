@@ -33,6 +33,13 @@ ITEM_GROUPS = {"ability_soul": "Souls", "red_soul": "Souls", "blue_soul": "Souls
                "yellow_soul": "Souls", "weapon": "Weapons"}
 
 
+def same_address(first: str, second: str) -> bool:
+    """Whether two server addresses name the same server, written with or without a scheme."""
+    def bare(address: str) -> str:
+        return address.strip().lower().removeprefix("wss://").removeprefix("ws://").rstrip("/")
+    return bare(first) == bare(second)
+
+
 class LogTail(logging.Handler):
     """Keeps the client log's latest lines, which the page shows under the map."""
 
@@ -87,6 +94,22 @@ class TrackerContext(CommonContext):
         self.password = password or None
         self.set_status(f"Connecting to {address}")
         await self.connect(address)
+
+    async def hand_over(self, address: str, slot_name: str, password: str | None) -> str:
+        """Take a new launch's room and slot, unless this tracker is busy with another.
+
+        Returns "opened" when the launch only needs to open this tracker's page, and "busy" when
+        this tracker is connected to another room or tracks another slot. A tracker that isn't
+        connected takes the launch's room and slot, which covers a room that came back on a new
+        port after the old one closed.
+        """
+        if not address or not slot_name:
+            return "opened"  # the launch asked for nothing but the page
+        if self.slot is None:
+            await self.connect_to(address, slot_name, password)
+            return "opened"
+        same_room = same_address(address, self.server_address or "")
+        return "opened" if same_room and slot_name == self.slot_name else "busy"
 
     def handle_connection_loss(self, msg: str) -> None:
         super().handle_connection_loss(msg)

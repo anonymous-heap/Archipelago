@@ -39,6 +39,7 @@ const page = {
   map: null,           // /map.json
   snapshot: {},        // the tracker's latest snapshot
   socket: null,
+  build: null,         // the version of the tracker that served this page
   focus: CASTLE,       // CASTLE or an area id
   selected: null,      // the selected location's id
   view: { x: 0, y: 0, w: 64, h: 47 },
@@ -749,7 +750,14 @@ function openSocket() {
   page.socket = socket;
   socket.addEventListener("message", (event) => {
     const message = JSON.parse(event.data);
-    if (message.type === "snapshot") onSnapshot(message.snapshot);
+    if (message.type !== "snapshot") return;
+    // A newer tracker that took over this address serves a newer page, so load that instead.
+    if (page.build && message.build !== page.build) {
+      location.reload();
+      return;
+    }
+    page.build = message.build;
+    onSnapshot(message.snapshot);
   });
   socket.addEventListener("close", () => {
     $("status-text").textContent = "The tracker isn't running";

@@ -3,14 +3,25 @@ The tracker's local web server: the page, the map, and a websocket that keeps th
 
 GET / and the page's own files come from web/ in this package, which pkgutil reads whether the
 world is a folder or a zipped .apworld. GET /map.json is the map (mapdata.py). The page then opens
-/ws, and the server sends it the tracker's snapshot whenever that may have changed. The page sends
-back what the player asks for, each as a JSON object with a "type":
+/ws, and the server sends it the tracker's snapshot whenever that may have changed:
+
+    {"type": "snapshot", "app": "cvaos-tracker", "build": "1/2026.9.4", "snapshot": {...}}
+
+"app" and "build" say which tracker this is, so a page can reload when a newer one replaces it,
+and a new launch can tell this tracker from another program. The page sends back what the player
+asks for, each as a JSON object with a "type":
 
     {"type": "connect", "server": "localhost:38281", "slot": "Soma", "password": ""}
     {"type": "disconnect"}
     {"type": "route", "location": 123}      a route to the location with that id
     {"type": "clear_route"}
     {"type": "quit"}                        stop the tracker
+
+A new launch sends the room and slot it was given, and hears back whether this tracker took them
+("opened") or tracks another room or slot ("busy"):
+
+    {"type": "handover", "server": "localhost:38281", "slot": "Soma", "password": null}
+    {"type": "handover", "result": "opened"}
 
 The server answers only its own page. Any web site open in the browser could otherwise reach it,
 read the slot and the room's chat, and point the tracker at another server or stop it. So every
@@ -31,6 +42,7 @@ from websockets.datastructures import Headers
 from websockets.exceptions import ConnectionClosed, InvalidMessage, InvalidStatus
 from websockets.http11 import Request, Response
 
+from .. import CVAOSWorld
 from .context import TrackerContext
 from .mapdata import map_data
 
@@ -58,6 +70,14 @@ PAGE_FILES = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js
               "/style.css": "style.css"}
 SOCKET_PATH = "/ws"
 PUSH_DELAY = 0.05  # seconds to gather changes into one snapshot
+
+APP = "cvaos-tracker"
+PROTOCOL = 1  # raise it when the page and the server would no longer understand each other
+
+
+def build_id() -> str:
+    """Name this tracker's version: the messages it speaks, then the world it ships with."""
+    return f"{PROTOCOL}/{'.'.join(str(part) for part in CVAOSWorld.world_version)}"
 
 
 def _response(status: HTTPStatus, body: bytes, content_type: str) -> Response:
@@ -121,13 +141,13 @@ class TrackerServer:
         try:
             await socket.send(self.snapshot_message())
             async for message in socket:
-                await self.on_message(message)
+                await self.on_message(socket, message)
         except ConnectionClosed:
             pass  # a page closed without saying goodbye, as a closed tab or browser can
         finally:
             self.sockets.discard(socket)
 
-    async def on_message(self, message: str | bytes) -> None:
+    async def on_message(self, socket: ServerConnection, message: str | bytes) -> None:
         try:
             request = json.loads(message)
             kind = request["type"]
@@ -146,9 +166,15 @@ class TrackerServer:
             ctx.set_route(None)
         elif kind == "quit":
             ctx.exit_event.set()
+        elif kind == "handover":
+            result = await ctx.hand_over(str(request.get("server") or "").strip(),
+                                         str(request.get("slot") or "").strip(),
+                                         request.get("password"))
+            await socket.send(json.dumps({"type": "handover", "result": result}))
 
     def snapshot_message(self) -> str:
-        return json.dumps({"type": "snapshot", "snapshot": self.ctx.snapshot()})
+        return json.dumps({"type": "snapshot", "app": APP, "build": build_id(),
+                           "snapshot": self.ctx.snapshot()})
 
     def push(self) -> None:
         """Send the page a new snapshot soon, once for any number of changes before then."""

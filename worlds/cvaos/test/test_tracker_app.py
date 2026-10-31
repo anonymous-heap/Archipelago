@@ -12,21 +12,23 @@ import asyncio
 import hashlib
 import json
 import pkgutil
+import socket
 import unittest
 import urllib.error
 import urllib.request
+from unittest import mock
 
 from NetUtils import NetworkItem, NetworkSlot, SlotType
 from websockets.exceptions import InvalidStatus
 from worlds.LauncherComponents import components
 
-from .. import CVAOSWorld, exploration
+from .. import CVAOSWorld, exploration, tracker_app
 from ..exploration import Exploration
 from ..locations import location_name_to_id
-from ..tracker_app import parse_args
+from ..tracker_app import parse_args, serve_or_hand_over
 from ..tracker_app.context import TrackerContext
 from ..tracker_app.mapdata import map_data
-from ..tracker_app.server import TrackerServer
+from ..tracker_app.server import TrackerServer, build_id
 from ..tracker_app.ut import UPSTREAM
 from .test_universal_tracker import generate
 
@@ -291,11 +293,117 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
         async with self.open_socket() as socket:
             message = json.loads(await socket.recv())
             self.assertEqual(message["type"], "snapshot")
+            self.assertEqual((message["app"], message["build"]), ("cvaos-tracker", build_id()))
             self.assertEqual(message["snapshot"]["status"], "Not connected")
             await socket.send(json.dumps({"type": "quit"}))
             await socket.send(json.dumps({"type": "nonsense"}))
             await socket.send("not json")
             await asyncio.wait_for(self.ctx.exit_event.wait(), 5)
+
+
+def free_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+class HandOverTest(unittest.IsolatedAsyncioTestCase):
+    """What a running tracker does with the room and slot a new launch brings it."""
+
+    async def asyncSetUp(self) -> None:
+        self.ctx = TrackerContext(None, None, None)
+        self.addCleanup(self.ctx.close)
+        self.ctx.connect_to = mock.AsyncMock()
+
+    def connect_as(self, slot_name: str, address: str) -> None:
+        self.ctx.slot, self.ctx.slot_name, self.ctx.server_address = 1, slot_name, address
+
+    async def test_an_idle_tracker_takes_the_slot(self):
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", "pw"), "opened")
+        self.ctx.connect_to.assert_awaited_once_with("localhost:38281", "Soma", "pw")
+
+    async def test_a_launch_that_asks_for_nothing_just_opens_the_page(self):
+        self.connect_as("Link", "localhost:38281")
+        self.assertEqual(await self.ctx.hand_over("", "", None), "opened")
+        self.ctx.connect_to.assert_not_awaited()
+
+    async def test_the_same_room_and_slot_just_open_the_page(self):
+        self.connect_as("Soma", "localhost:38281")
+        self.assertEqual(await self.ctx.hand_over("ws://LOCALHOST:38281", "Soma", None), "opened")
+        self.ctx.connect_to.assert_not_awaited()
+
+    async def test_another_room_or_slot_finds_it_busy(self):
+        self.connect_as("Soma", "localhost:38281")
+        self.assertEqual(await self.ctx.hand_over("localhost:38282", "Soma", None), "busy")
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Link", None), "busy")
+        self.ctx.connect_to.assert_not_awaited()
+
+
+class OldTrackerServer(TrackerServer):
+    def snapshot_message(self) -> str:
+        message = json.loads(super().snapshot_message())
+        message["build"] = "0/2020.1.1"
+        return json.dumps(message)
+
+
+class SecondLaunchTest(unittest.IsolatedAsyncioTestCase):
+    """A launch while a tracker already serves on its port."""
+
+    async def run_tracker(self, server_class: type[TrackerServer] = TrackerServer):
+        ctx = TrackerContext(None, None, None)
+        self.addCleanup(ctx.close)
+        ctx.connect_to = mock.AsyncMock()
+        server = server_class(ctx)
+        port = await server.start("127.0.0.1", 0)
+        self.addAsyncCleanup(server.stop)
+        return ctx, server, port
+
+    async def launch(self, *args: str) -> int | None:
+        server = TrackerServer(TrackerContext(None, None, None))
+        self.addCleanup(server.ctx.close)
+        self.addAsyncCleanup(server.stop)
+        return await serve_or_hand_over(server, parse_args([*args, "--no-browser"]))
+
+    async def test_it_opens_the_running_tracker_and_hands_it_the_slot(self):
+        ctx, _, port = await self.run_tracker()
+        self.assertIsNone(await self.launch("--port", str(port),
+                                            "--connect", "localhost:38281", "--name", "Soma"))
+        ctx.connect_to.assert_awaited_once_with("localhost:38281", "Soma", None)
+
+    async def test_a_tracker_busy_with_another_slot_keeps_its_port(self):
+        ctx, _, port = await self.run_tracker()
+        ctx.slot, ctx.slot_name, ctx.server_address = 1, "Link", "localhost:38281"
+        spare = free_port()
+        with mock.patch.object(tracker_app, "DEFAULT_PORT", port), \
+                mock.patch.object(tracker_app, "SPARE_PORTS", [spare]):
+            self.assertEqual(await self.launch("--connect", "localhost:38281", "--name", "Soma"),
+                             spare)
+        ctx.connect_to.assert_not_awaited()
+
+    async def test_a_tracker_from_another_version_is_replaced(self):
+        ctx, server, port = await self.run_tracker(OldTrackerServer)
+
+        async def stop_once_asked() -> None:
+            await ctx.exit_event.wait()
+            await server.stop()
+
+        stopping = asyncio.create_task(stop_once_asked())
+        self.assertEqual(await self.launch("--port", str(port)), port)
+        await stopping
+
+    async def test_another_program_on_the_port_is_left_alone(self):
+        async def not_a_tracker(_reader, writer) -> None:
+            writer.write(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
+            await writer.drain()
+            writer.close()
+
+        other = await asyncio.start_server(not_a_tracker, "127.0.0.1", 0)
+        self.addAsyncCleanup(other.wait_closed)
+        self.addCleanup(other.close)
+        port, spare = other.sockets[0].getsockname()[1], free_port()
+        with mock.patch.object(tracker_app, "DEFAULT_PORT", port), \
+                mock.patch.object(tracker_app, "SPARE_PORTS", [spare]):
+            self.assertEqual(await self.launch(), spare)
 
 
 class LaunchTest(unittest.TestCase):
