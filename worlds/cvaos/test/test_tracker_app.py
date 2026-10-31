@@ -274,6 +274,20 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.fetch("/style.css"))[:2], (200, "text/css; charset=utf-8"))
         self.assertEqual((await self.fetch("/secret.txt"))[0], 404)
 
+    async def test_the_map_names_the_build_that_served_the_page(self):
+        # A page learns its build here, before its socket might reach a newer tracker.
+        self.assertEqual(json.loads((await self.fetch("/map.json"))[2])["build"], build_id())
+
+    def test_the_build_changes_with_the_page_s_files(self):
+        from ..tracker_app import server
+        before = build_id()
+        build_id.cache_clear()
+        self.addCleanup(build_id.cache_clear)
+        with mock.patch.object(server.pkgutil, "get_data", return_value=b"another page"):
+            changed = build_id()
+        self.assertNotEqual(changed, before)
+        self.assertEqual(changed.rsplit("/", 1)[0], before.rsplit("/", 1)[0])
+
     async def test_serving_the_page_logs_no_errors(self):
         # websockets 13 logs each HTTP answer as a failed handshake unless the server quiets it.
         with self.assertNoLogs("websockets", level="ERROR"):
@@ -345,6 +359,36 @@ def free_port() -> int:
         return probe.getsockname()[1]
 
 
+class RefusedConnectionTest(unittest.IsolatedAsyncioTestCase):
+    """What the page says when the tracker can't log in, which happens inside the connection."""
+
+    async def log_in(self, slot_name: str | None, password_requested: bool) -> str:
+        ctx = TrackerContext(None, None, slot_name)
+        self.addCleanup(ctx.close)
+
+        async def connection() -> None:
+            await ctx.server_auth(password_requested)
+
+        # server_auth runs in the connection's own task, as the server loop runs it.
+        ctx.server_task = asyncio.create_task(connection())
+        await ctx.server_task
+        await asyncio.sleep(0)  # the disconnect that runs beside it
+        return ctx.snapshot()["status"]
+
+    async def test_a_room_that_needs_a_password_says_so(self):
+        # A room link carries no password, so a room that has one refuses the first try.
+        self.assertEqual(await self.log_in("Soma", True), "This room needs a password")
+
+    async def test_a_missing_slot_name_says_so(self):
+        self.assertEqual(await self.log_in(None, False), "Enter a slot name to connect")
+
+
+def following():
+    """Make ``tracking`` true, as for a tracker that has rebuilt its slot's seed."""
+    return mock.patch.object(TrackerContext, "tracking", new_callable=mock.PropertyMock,
+                             return_value=True)
+
+
 class HandOverTest(unittest.IsolatedAsyncioTestCase):
     """What a running tracker does with the room and slot a new launch brings it."""
 
@@ -354,7 +398,7 @@ class HandOverTest(unittest.IsolatedAsyncioTestCase):
         self.ctx.connect_to = mock.AsyncMock()
 
     def connect_as(self, slot_name: str, address: str) -> None:
-        self.ctx.slot, self.ctx.slot_name, self.ctx.server_address = 1, slot_name, address
+        self.ctx.slot, self.ctx.slot_name, self.ctx.room_address = 1, slot_name, address
 
     async def test_an_idle_tracker_takes_the_slot(self):
         self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", "pw"), "opened")
@@ -367,13 +411,36 @@ class HandOverTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_the_same_room_and_slot_just_open_the_page(self):
         self.connect_as("Soma", "localhost:38281")
-        self.assertEqual(await self.ctx.hand_over("ws://LOCALHOST:38281", "Soma", None), "opened")
+        with following():
+            self.assertEqual(await self.ctx.hand_over("ws://LOCALHOST:38281", "Soma", None),
+                             "opened")
         self.ctx.connect_to.assert_not_awaited()
 
     async def test_another_room_or_slot_finds_it_busy(self):
         self.connect_as("Soma", "localhost:38281")
-        self.assertEqual(await self.ctx.hand_over("localhost:38282", "Soma", None), "busy")
-        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Link", None), "busy")
+        with following():
+            self.assertEqual(await self.ctx.hand_over("localhost:38282", "Soma", None), "busy")
+            self.assertEqual(await self.ctx.hand_over("localhost:38281", "Link", None), "busy")
+        self.ctx.connect_to.assert_not_awaited()
+
+    async def test_a_tracker_still_connecting_keeps_its_room(self):
+        # Before the server's Connected, the slot isn't known yet, but the room is spoken for.
+        self.ctx.slot_name, self.ctx.room_address = "Soma", "localhost:38281"
+        self.ctx.server_task = asyncio.get_running_loop().create_future()
+        self.addCleanup(self.ctx.server_task.cancel)
+        self.assertEqual(await self.ctx.hand_over("localhost:38282", "Link", None), "busy")
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "opened")
+        self.ctx.connect_to.assert_not_awaited()
+
+    async def test_a_tracker_that_can_t_follow_its_slot_takes_another(self):
+        # Connected to a slot of another game, or one whose seed couldn't be rebuilt.
+        self.connect_as("Link", "localhost:38281")
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "opened")
+        self.ctx.connect_to.assert_awaited_once_with("localhost:38281", "Soma", None)
+
+    async def test_a_tracker_that_is_stopping_says_so(self):
+        self.ctx.exit_event.set()
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "closing")
         self.ctx.connect_to.assert_not_awaited()
 
 
@@ -410,12 +477,35 @@ class SecondLaunchTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_a_tracker_busy_with_another_slot_keeps_its_port(self):
         ctx, _, port = await self.run_tracker()
-        ctx.slot, ctx.slot_name, ctx.server_address = 1, "Link", "localhost:38281"
+        ctx.slot, ctx.slot_name, ctx.room_address = 1, "Link", "localhost:38281"
         spare = free_port()
         with mock.patch.object(tracker_app, "DEFAULT_PORT", port), \
-                mock.patch.object(tracker_app, "SPARE_PORTS", [spare]):
+                mock.patch.object(tracker_app, "SPARE_PORTS", [spare]), following():
             self.assertEqual(await self.launch("--connect", "localhost:38281", "--name", "Soma"),
                              spare)
+        ctx.connect_to.assert_not_awaited()
+
+    async def test_the_slot_s_tracker_is_found_past_a_free_port(self):
+        # The default port came free when another room's tracker stopped, but this slot's
+        # tracker still serves on a spare one, and the launch opens it.
+        ctx, _, port = await self.run_tracker()
+        ctx.slot, ctx.slot_name, ctx.room_address = 1, "Soma", "localhost:38281"
+        with mock.patch.object(tracker_app, "DEFAULT_PORT", free_port()), \
+                mock.patch.object(tracker_app, "SPARE_PORTS", [port]), following():
+            self.assertIsNone(await self.launch("--connect", "localhost:38281", "--name", "Soma"))
+
+    async def test_a_tracker_that_is_stopping_leaves_its_port_to_the_launch(self):
+        ctx, server, port = await self.run_tracker()
+        ctx.exit_event.set()
+
+        async def stop_soon() -> None:
+            await asyncio.sleep(0.3)
+            await server.stop()
+
+        stopping = asyncio.create_task(stop_soon())
+        self.assertEqual(await self.launch("--port", str(port), "--connect", "localhost:38281",
+                                           "--name", "Soma"), port)
+        await stopping
         ctx.connect_to.assert_not_awaited()
 
     async def test_a_tracker_from_another_version_is_replaced(self):
@@ -443,6 +533,11 @@ class SecondLaunchTest(unittest.IsolatedAsyncioTestCase):
                 mock.patch.object(tracker_app, "SPARE_PORTS", [spare]):
             self.assertEqual(await self.launch(), spare)
 
+        # With no spare port to move to, it serves on whatever port the system gives it.
+        with mock.patch.object(tracker_app, "DEFAULT_PORT", port), \
+                mock.patch.object(tracker_app, "SPARE_PORTS", []):
+            self.assertNotIn(await self.launch(), (port, None))
+
 
 class OpenFromClientTest(unittest.TestCase):
     """/map in the game clients, which start the tracker for the slot they're connected as."""
@@ -455,17 +550,49 @@ class OpenFromClientTest(unittest.TestCase):
         with mock.patch.object(tracker_app.subprocess, "Popen") as popen:
             tracker_app.open_for_client(self.client(password="secret"))
         command, env = popen.call_args.args[0], popen.call_args.kwargs["env"]
-        self.assertEqual(command[-6:], ["Aria of Sorrow Tracker", "--", "--connect",
-                                        "localhost:38281", "--name", "Soma"])
+        self.assertEqual(command[-4:], ["Aria of Sorrow Tracker", "--",
+                                        "--connect=localhost:38281", "--name=Soma"])
         # The password goes to the tracker out of sight of other programs' process lists.
         self.assertNotIn("secret", command)
         self.assertEqual(env[tracker_app.PASSWORD_ENV], "secret")
 
-    def test_the_password_reaches_the_tracker(self):
+    def test_a_login_in_the_client_s_address_stays_out_of_the_command(self):
+        # A client connected with "/connect Soma:secret@host:port" keeps that in its address.
+        client = self.client(password="secret")
+        client.server_address = "wss://Soma:secret@archipelago.gg:38281"
+        with mock.patch.object(tracker_app.subprocess, "Popen") as popen:
+            tracker_app.open_for_client(client)
+        command = popen.call_args.args[0]
+        self.assertIn("--connect=wss://archipelago.gg:38281", command)
+        self.assertFalse(any("secret" in part for part in command))
+
+    def test_a_slot_name_like_an_option_still_reaches_the_tracker(self):
+        command = tracker_app.tracker_command("localhost:38281", "-Soma")
+        self.assertEqual(parse_args(command[command.index("--") + 1:]).name, "-Soma")
+
+    def test_the_password_reaches_the_tracker_and_leaves_the_environment(self):
         with mock.patch.dict(tracker_app.os.environ, {tracker_app.PASSWORD_ENV: "secret"}):
             self.assertEqual(parse_args(["--name", "Soma"]).password, "secret")
+            # The browser the tracker may start, and what that starts, don't inherit it.
+            self.assertNotIn(tracker_app.PASSWORD_ENV, tracker_app.os.environ)
         with mock.patch.dict(tracker_app.os.environ, {tracker_app.PASSWORD_ENV: ""}):
             self.assertIsNone(parse_args(["--name", "Soma"]).password)
+
+    def test_addresses_match_whatever_login_or_scheme_they_carry(self):
+        from ..tracker_app.context import same_address
+        self.assertTrue(same_address("ws://Soma:pw@localhost:38281", "localhost:38281"))
+        self.assertTrue(same_address("wss://archipelago.gg:38281", "archipelago.gg:38281"))
+        self.assertFalse(same_address("localhost:38281", "localhost:38282"))
+
+    def test_a_slot_of_another_game_gets_no_tracker(self):
+        # After another game's ROM is loaded, /map and the button can still be there.
+        client = self.client()
+        client.slot_info = {1: NetworkSlot("Link", "A Link to the Past", SlotType.player)}
+        with mock.patch.object(tracker_app.subprocess, "Popen") as popen, \
+                self.assertLogs("Client", level="INFO") as logs:
+            tracker_app.open_for_client(client)
+        popen.assert_not_called()
+        self.assertIn("A Link to the Past", logs.output[0])
 
     def test_before_connecting_it_says_to_connect_first(self):
         with mock.patch.object(tracker_app.subprocess, "Popen") as popen, \

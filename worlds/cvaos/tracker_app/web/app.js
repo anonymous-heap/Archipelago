@@ -39,9 +39,10 @@ const page = {
   map: null,           // /map.json
   snapshot: {},        // the tracker's latest snapshot
   socket: null,
-  build: null,         // the version of the tracker that served this page
+  build: null,         // the version of the tracker that served this page, from its map
   quit: false,         // whether the player stopped the tracker from this page
   retry: null,         // the timer that opens the socket again after it closes
+  reloading: false,    // set once the page has started loading a newer tracker's page
   focus: CASTLE,       // CASTLE or an area id
   selected: null,      // the selected location's id
   view: { x: 0, y: 0, w: 64, h: 47 },
@@ -67,7 +68,8 @@ const els = {
 const EDGE_LOOKS = ["wall unfocused", "wall", "door unfocused", "door"];
 // How thick walls and doors are drawn, in cells. It depends on the look, so style.css sets it.
 function wallWidth() {
-  return parseFloat(getComputedStyle($("map")).getPropertyValue("--wall-width"));
+  // The usual width if the stylesheet hasn't loaded, rather than drawing nothing.
+  return parseFloat(getComputedStyle($("map")).getPropertyValue("--wall-width")) || 0.12;
 }
 
 const locationsById = new Map();
@@ -725,8 +727,21 @@ function select(id) {
 
 // --- The tracker connection -----------------------------------------------------------------
 
+// Send a request to the tracker, and say whether it went. It can't while the tracker is away.
 function send(message) {
-  if (page.socket && page.socket.readyState === WebSocket.OPEN) page.socket.send(JSON.stringify(message));
+  if (!page.socket || page.socket.readyState !== WebSocket.OPEN) return false;
+  page.socket.send(JSON.stringify(message));
+  return true;
+}
+
+const NOT_RUNNING = "Tracker not running. Type /map in your client.";
+
+// With its tracker gone, the page keeps the last map it had, but drops what needs the tracker:
+// the counts, the route and Find Route. The pill and the connection dialog say why.
+function showTrackerGone() {
+  const status = page.quit ? "The tracker has stopped. You can close this tab." : NOT_RUNNING;
+  onSnapshot({ ...page.snapshot, status, connected: false, tracking: false,
+               route: null, route_target: null });
 }
 
 function onSnapshot(snapshot) {
@@ -750,23 +765,30 @@ function onSnapshot(snapshot) {
 }
 
 function openSocket() {
+  clearTimeout(page.retry);
   const socket = new WebSocket(`ws://${location.host}/ws`);
   page.socket = socket;
+  socket.addEventListener("open", () => {
+    page.quit = false;  // a tracker is back, whether or not this page stopped the last one
+  });
   socket.addEventListener("message", (event) => {
+    if (socket !== page.socket || page.reloading) return;
     const message = JSON.parse(event.data);
     if (message.type !== "snapshot") return;
-    // A newer tracker that took over this address serves a newer page, so load that instead.
+    // A newer tracker that took over this address serves a newer page, so load that instead,
+    // once, ignoring the snapshots that come before the new page does.
     if (page.build && message.build !== page.build) {
+      page.reloading = true;
+      socket.close();
       location.reload();
       return;
     }
-    page.build = message.build;
     onSnapshot(message.snapshot);
   });
   socket.addEventListener("close", () => {
-    $("status-text").textContent = page.quit ? "The tracker has stopped. You can close this tab."
-                                             : "Tracker not running. Type /map in your client.";
-    $("connection").classList.remove("tracking", "connecting");
+    // A socket already replaced by a newer one, or closed for a reload, has nothing to report.
+    if (socket !== page.socket || page.reloading) return;
+    showTrackerGone();
     page.retry = setTimeout(openSocket, 2000);
   });
 }
@@ -775,9 +797,7 @@ function openSocket() {
 // tries again at once rather than waiting for its next retry.
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !page.socket) return;
-  if (page.socket.readyState !== WebSocket.CLOSED) return;
-  clearTimeout(page.retry);
-  openSocket();
+  if (page.socket.readyState === WebSocket.CLOSED && !page.reloading) openSocket();
 });
 
 function openConnectDialog() {
@@ -828,8 +848,7 @@ function setUpControls() {
     $("connect-dialog").close();
   });
   $("quit").addEventListener("click", () => {
-    page.quit = true;
-    send({ type: "quit" });
+    page.quit = send({ type: "quit" });
     $("connect-dialog").close();
   });
   $("show-log").addEventListener("click", () => {
@@ -842,7 +861,10 @@ function setUpControls() {
     const slot = form.slot.value.trim();
     prefs.set("server", server);
     prefs.set("slot", slot);
-    send({ type: "connect", server, slot, password: form.password.value });
+    if (!send({ type: "connect", server, slot, password: form.password.value })) {
+      $("dialog-status").textContent = NOT_RUNNING;  // the dialog stays open to say so
+      return;
+    }
     $("connect-dialog").close();
   });
 
@@ -859,7 +881,17 @@ function setUpControls() {
 }
 
 async function start() {
-  page.map = await (await fetch("map.json")).json();
+  // The page has nothing to draw without the map. If the tracker went away while the page was
+  // loading, it waits for one to come back rather than staying blank.
+  while (!page.map) {
+    try {
+      page.map = await (await fetch("map.json")).json();
+    } catch {
+      $("status-text").textContent = NOT_RUNNING;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
+  page.build = page.map.build;
   applyLook();
   buildMap();
   setUpPanAndZoom();

@@ -331,7 +331,7 @@ dialog {
   background: var(--panel);
   color: var(--text);
   padding: 0;
-  width: min(440px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));  /* wide enough for its five buttons in one row */
 }
 dialog::backdrop { background: rgba(4, 5, 9, 0.6); }
 dialog form { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
@@ -345,7 +345,8 @@ dialog input {
   font-size: 14px;
 }
 dialog input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-.dialog-actions { display: flex; gap: 8px; align-items: center; }
+.dialog-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dialog-actions button { white-space: nowrap; }
 .spacer { flex: 1; }
 .log {
   margin: 0;
