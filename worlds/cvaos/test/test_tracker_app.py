@@ -535,17 +535,39 @@ class OpenFromClientTest(unittest.TestCase):
         with mock.patch.object(tracker_app.subprocess, "Popen") as popen:
             tracker_app.open_for_client(self.client(password="secret"))
         command, env = popen.call_args.args[0], popen.call_args.kwargs["env"]
-        self.assertEqual(command[-6:], ["Aria of Sorrow Tracker", "--", "--connect",
-                                        "localhost:38281", "--name", "Soma"])
+        self.assertEqual(command[-4:], ["Aria of Sorrow Tracker", "--",
+                                        "--connect=localhost:38281", "--name=Soma"])
         # The password goes to the tracker out of sight of other programs' process lists.
         self.assertNotIn("secret", command)
         self.assertEqual(env[tracker_app.PASSWORD_ENV], "secret")
 
-    def test_the_password_reaches_the_tracker(self):
+    def test_a_login_in_the_client_s_address_stays_out_of_the_command(self):
+        # A client connected with "/connect Soma:secret@host:port" keeps that in its address.
+        client = self.client(password="secret")
+        client.server_address = "wss://Soma:secret@archipelago.gg:38281"
+        with mock.patch.object(tracker_app.subprocess, "Popen") as popen:
+            tracker_app.open_for_client(client)
+        command = popen.call_args.args[0]
+        self.assertIn("--connect=wss://archipelago.gg:38281", command)
+        self.assertFalse(any("secret" in part for part in command))
+
+    def test_a_slot_name_like_an_option_still_reaches_the_tracker(self):
+        command = tracker_app.tracker_command("localhost:38281", "-Soma")
+        self.assertEqual(parse_args(command[command.index("--") + 1:]).name, "-Soma")
+
+    def test_the_password_reaches_the_tracker_and_leaves_the_environment(self):
         with mock.patch.dict(tracker_app.os.environ, {tracker_app.PASSWORD_ENV: "secret"}):
             self.assertEqual(parse_args(["--name", "Soma"]).password, "secret")
+            # The browser the tracker may start, and what that starts, don't inherit it.
+            self.assertNotIn(tracker_app.PASSWORD_ENV, tracker_app.os.environ)
         with mock.patch.dict(tracker_app.os.environ, {tracker_app.PASSWORD_ENV: ""}):
             self.assertIsNone(parse_args(["--name", "Soma"]).password)
+
+    def test_addresses_match_whatever_login_or_scheme_they_carry(self):
+        from ..tracker_app.context import same_address
+        self.assertTrue(same_address("ws://Soma:pw@localhost:38281", "localhost:38281"))
+        self.assertTrue(same_address("wss://archipelago.gg:38281", "archipelago.gg:38281"))
+        self.assertFalse(same_address("localhost:38281", "localhost:38282"))
 
     def test_before_connecting_it_says_to_connect_first(self):
         with mock.patch.object(tracker_app.subprocess, "Popen") as popen, \

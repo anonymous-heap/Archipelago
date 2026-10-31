@@ -48,11 +48,21 @@ PASSWORD_ENV = "CVAOS_TRACKER_PASSWORD"
 logger = logging.getLogger("Client")
 
 
+def without_login(address: str) -> str:
+    """Return a server address without the slot name and password it can carry."""
+    scheme, has_scheme, rest = address.partition("://")
+    host = (rest if has_scheme else address).rsplit("@", 1)[-1]
+    return f"{scheme}://{host}" if has_scheme else host
+
+
 def parse_args(args: list[str]) -> argparse.Namespace:
+    # The password is read once and then dropped from the environment, so that the browser, which
+    # the tracker may start, and anything the browser starts later don't inherit it.
+    password = os.environ.pop(PASSWORD_ENV, None) or None
     parser = argparse.ArgumentParser(description="A map tracker for Castlevania: Aria of Sorrow.")
     parser.add_argument("--connect", default=None, help="server address, such as localhost:38281")
     parser.add_argument("--name", default=None, help="the slot name to track")
-    parser.add_argument("--password", default=os.environ.get(PASSWORD_ENV) or None,
+    parser.add_argument("--password", default=password,
                         help="the room's password, if it has one")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT,
                         help="the port the page is served on, or 0 for any free port")
@@ -65,6 +75,8 @@ def parse_args(args: list[str]) -> argparse.Namespace:
         # handle_url_arg keeps the name and password in the address, which the page shows.
         url = parsed.url
         parsed.connect = f"{url.hostname}:{url.port}" if url.port else url.hostname
+    elif parsed.connect:
+        parsed.connect = without_login(parsed.connect)  # the slot and password come separately
     return parsed
 
 
@@ -219,9 +231,12 @@ def launcher_command() -> list[str]:
 
 
 def tracker_command(address: str, slot_name: str) -> list[str]:
-    """Return the command that starts the tracker for ``slot_name`` in the room at ``address``."""
+    """Return the command that starts the tracker for ``slot_name`` in the room at ``address``.
+
+    Each value is joined to its option, so a slot name that starts with "-" stays a value.
+    """
     return [*launcher_command(), "Aria of Sorrow Tracker", "--",
-            "--connect", address, "--name", slot_name]
+            f"--connect={without_login(address)}", f"--name={slot_name}"]
 
 
 def open_for_client(ctx: CommonContext) -> None:

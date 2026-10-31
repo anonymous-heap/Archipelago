@@ -20,6 +20,7 @@ from Utils import async_start
 from .. import CVAOSWorld, exploration, tracker_map, tracker_route
 from ..data import item_info_collection
 from ..regions import UT_TRICKS_ITEM
+from . import without_login
 from .ut import CurrentTrackerState
 from .ut.TrackerCore import TrackerCore
 
@@ -37,9 +38,13 @@ ITEM_GROUPS = {"ability_soul": "Souls", "red_soul": "Souls", "blue_soul": "Souls
 
 
 def same_address(first: str, second: str) -> bool:
-    """Whether two server addresses name the same server, written with or without a scheme."""
+    """Whether two server addresses name the same server.
+
+    Either can be written with or without a scheme, and with or without a slot name and password.
+    """
     def bare(address: str) -> str:
-        return address.strip().lower().removeprefix("wss://").removeprefix("ws://").rstrip("/")
+        address = without_login(address.strip().lower())
+        return address.removeprefix("wss://").removeprefix("ws://").rstrip("/")
     return bare(first) == bare(second)
 
 
