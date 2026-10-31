@@ -133,8 +133,16 @@ class TrackerServer:
         return self.port
 
     async def stop(self) -> None:
+        self.close()
+        await self.wait_closed()
+
+    def close(self) -> None:
+        """Stop listening and close the pages' connections, without waiting for them to end."""
         if self.server is not None:
             self.server.close()
+
+    async def wait_closed(self) -> None:
+        if self.server is not None:
             await self.server.wait_closed()
 
     async def stop_when_idle(self, limit: float = IDLE_STOP, check: float = IDLE_CHECK) -> None:

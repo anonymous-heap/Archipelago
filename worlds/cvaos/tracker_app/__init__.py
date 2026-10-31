@@ -225,9 +225,12 @@ async def main(args: list[str]) -> None:
     finally:
         idle_watch.cancel()
         # The port goes first, so a launch that comes now serves there instead of handing its
-        # request to a tracker that is about to stop.
-        await server.stop()
+        # request to a tracker that is about to stop. A page's request can still be waiting on a
+        # connection that is opening, which only the context's shutdown ends, so the server
+        # finishes closing after that.
+        server.close()
         await ctx.shutdown()
+        await server.wait_closed()
 
 
 def launch(*args: str) -> None:

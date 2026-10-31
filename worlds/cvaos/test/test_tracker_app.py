@@ -388,6 +388,25 @@ def following():
                              return_value=True)
 
 
+class ShutdownTest(unittest.IsolatedAsyncioTestCase):
+    async def test_a_connection_still_opening_doesn_t_hold_up_the_shutdown(self):
+        ctx = TrackerContext(None, None, "Soma")
+        self.addCleanup(ctx.close)
+        unanswered = asyncio.Event()  # a server that hasn't answered the connection yet
+        ctx.server_task = asyncio.create_task(unanswered.wait())
+        opening = ctx.server_task
+        await asyncio.wait_for(ctx.shutdown(), 2)
+        self.assertTrue(opening.cancelled())
+
+    async def test_a_stopping_tracker_opens_no_new_connection(self):
+        ctx = TrackerContext(None, None, None)
+        self.addCleanup(ctx.close)
+        ctx.connect = mock.AsyncMock()
+        ctx.exit_event.set()
+        await ctx.connect_to("localhost:38281", "Soma", None)
+        ctx.connect.assert_not_awaited()
+
+
 class HandOverTest(unittest.IsolatedAsyncioTestCase):
     """What a running tracker does with the room and slot a new launch brings it."""
 

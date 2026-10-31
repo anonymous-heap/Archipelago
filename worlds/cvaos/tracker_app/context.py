@@ -9,6 +9,8 @@ shows, and listeners hear when it may have changed.
 """
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 from collections import deque
 from typing import Callable
@@ -99,7 +101,9 @@ class TrackerContext(CommonContext):
         await self.send_connect(game="")
 
     async def connect_to(self, address: str, slot_name: str, password: str | None) -> None:
-        """Connect to the server at ``address`` and track ``slot_name``."""
+        """Connect to the server at ``address`` and track ``slot_name``, unless stopping."""
+        if self.exit_event.is_set():
+            return
         self.slot_name = slot_name
         self.room_address = address
         self.username = slot_name  # CommonContext reconnects on its own only when this is set
@@ -159,6 +163,14 @@ class TrackerContext(CommonContext):
         async_start(self.disconnect())
 
     async def shutdown(self) -> None:
+        # CommonContext waits for the connection's task, which goes on while a connection is still
+        # opening, and logs in if that succeeds. So a connection still opening is cancelled first.
+        task = self.server_task
+        if task is not None and not task.done() and self.server is None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+            self.server_task = None
         await super().shutdown()
         self.close()
 
