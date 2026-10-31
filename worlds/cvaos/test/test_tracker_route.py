@@ -9,7 +9,7 @@ import unittest
 
 from .. import CVAOSWorld
 from ..regions import UT_TRICKS_ITEM
-from ..tracker_route import describe_route
+from ..tracker_route import DOOR_POINTS, describe_route, plan_route
 from .test_universal_tracker import generate, reachable, regenerate_from, state_with
 
 TERRACE = "Terrace [503 CASTLE MAP 3]"
@@ -65,6 +65,27 @@ class DescribeRouteTest(unittest.TestCase):
                          describe_route(world, "lucky charm", state))
         # UT shows this docstring in its command help.
         self.assertTrue(CVAOSWorld.get_logical_path.__doc__)
+
+
+class PlanRouteTest(unittest.TestCase):
+    """The Aria of Sorrow tracker's routes, which start in the room Soma is in."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.multiworld = generate({})
+
+    def test_a_route_starts_at_the_door_soma_is_by(self):
+        # With only Malphas, Soma can't cross room 108 from the door to 104 to the door to 109,
+        # so the short way through 109's door isn't his way from the 104 door.
+        world = self.multiworld.worlds[1]
+        state = state_with(self.multiworld, ["Malphas"])
+        target = world.get_location("Underneath Grand Staircase [109 Silk Robe]")
+        from_anywhere = plan_route(world, target, state, "108")
+        self.assertEqual(from_anywhere.entrances[0].parent_region.name, "Entrance: 108:109")
+        from_104 = plan_route(world, target, state, "108", DOOR_POINTS["108:104"])
+        self.assertEqual(from_104.entrances[0].parent_region.name, "Entrance: 108:104")
+        self.assertNotIn("Door: 108:109 -> 109:108", [e.name for e in from_104.entrances])
+        self.assertEqual(from_104.start_room, "108")
 
 
 if __name__ == "__main__":

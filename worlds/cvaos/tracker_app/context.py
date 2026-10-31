@@ -348,9 +348,16 @@ class TrackerContext(CommonContext):
         location = world.get_location(world.location_id_to_name[self.route_target])
         position = self.position()
         self.route_room = position[0] if position is not None else None
+        # The route is planned again only when Soma enters another room, so at the door he came in
+        # by, which is where it starts.
+        try:
+            start_point = tracker_map.cell_position(*position) if position is not None else None
+        except KeyError:
+            start_point = None  # a room this world has no place for
         for state in (self.result.state, self.result.glitches_state):
             if state is not None:
-                self.route = tracker_route.plan_route(world, location, state, self.route_room)
+                self.route = tracker_route.plan_route(world, location, state, self.route_room,
+                                                      start_point)
                 if self.route is not None:
                     return
 
