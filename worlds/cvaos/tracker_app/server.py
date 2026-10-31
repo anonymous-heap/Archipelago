@@ -11,6 +11,11 @@ back what the player asks for, each as a JSON object with a "type":
     {"type": "route", "location": 123}      a route to the location with that id
     {"type": "clear_route"}
     {"type": "quit"}                        stop the tracker
+
+The server answers only its own page. Any web site open in the browser could otherwise reach it,
+read the slot and the room's chat, and point the tracker at another server or stop it. So every
+request must name this server as its Host, which also defeats DNS rebinding, and the websocket
+also needs the page's own Origin, which a browser always sends and a site can't forge.
 """
 from __future__ import annotations
 
@@ -66,6 +71,7 @@ class TrackerServer:
         self.ctx = ctx
         self.sockets: set[ServerConnection] = set()
         self.server: Server | None = None
+        self.port: int | None = None
         self.map_json = json.dumps(map_data()).encode("utf-8")
         self._push_task: asyncio.Task | None = None
         ctx.listeners.append(self.push)
@@ -74,7 +80,8 @@ class TrackerServer:
         """Start serving on ``host`` and ``port``, and return the port, which 0 lets the OS pick."""
         self.server = await serve(self.on_socket, host, port, process_request=self.on_request,
                                   logger=socket_logger)
-        return self.server.sockets[0].getsockname()[1]
+        self.port = self.server.sockets[0].getsockname()[1]
+        return self.port
 
     async def stop(self) -> None:
         if self.server is not None:
@@ -83,9 +90,18 @@ class TrackerServer:
 
     # --- HTTP ----------------------------------------------------------------------------------
 
+    def own_hosts(self) -> set[str]:
+        """The Host values a request to this server carries, however the page was opened."""
+        return {f"127.0.0.1:{self.port}", f"localhost:{self.port}"}
+
     def on_request(self, connection: ServerConnection, request: Request) -> Response | None:
         path = request.path.split("?", 1)[0]
+        hosts = self.own_hosts()
+        if request.headers.get("Host") not in hosts:
+            return _response(HTTPStatus.FORBIDDEN, b"Forbidden", "text/plain")
         if path == SOCKET_PATH:
+            if request.headers.get("Origin") not in {f"http://{host}" for host in hosts}:
+                return _response(HTTPStatus.FORBIDDEN, b"Forbidden", "text/plain")
             return None  # carry on with the websocket handshake
         if path == "/map.json":
             return _response(HTTPStatus.OK, self.map_json, "application/json")

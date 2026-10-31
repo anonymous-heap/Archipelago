@@ -16,8 +16,8 @@ import unittest
 import urllib.error
 import urllib.request
 
-import websockets
 from NetUtils import NetworkItem, NetworkSlot, SlotType
+from websockets.exceptions import InvalidStatus
 from worlds.LauncherComponents import components
 
 from .. import CVAOSWorld, exploration
@@ -229,6 +229,12 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
     async def fetch(self, path: str) -> tuple[int, str, bytes]:
         return await asyncio.to_thread(self.get, path)
 
+    def open_socket(self, origin: str | None = None):
+        """Connect to the websocket as the tracker's own page does, or from ``origin``."""
+        from websockets.asyncio.client import connect
+        return connect(f"ws://127.0.0.1:{self.port}/ws",
+                       origin=origin or f"http://127.0.0.1:{self.port}")
+
     async def test_it_serves_the_page_and_the_map(self):
         status, content_type, body = await self.fetch("/")
         self.assertEqual((status, content_type), (200, "text/html; charset=utf-8"))
@@ -247,21 +253,42 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(0.2)  # the library logs after the response has gone
 
     async def test_a_page_that_vanishes_logs_no_errors(self):
-        from websockets.asyncio.client import connect
         with self.assertNoLogs("websockets", level="ERROR"):
             # A connection opened and dropped before any request, as browsers open them ahead.
             _, writer = await asyncio.open_connection("127.0.0.1", self.port)
             writer.close()
             await writer.wait_closed()
             # A page whose connection ends with no closing handshake, as a killed browser's does.
-            socket = await connect(f"ws://127.0.0.1:{self.port}/ws")
+            socket = await self.open_socket()
             await socket.recv()
             socket.transport.abort()
             await asyncio.sleep(0.3)
         self.assertEqual(self.server.sockets, set())
 
+    async def test_another_site_can_t_reach_the_tracker(self):
+        # A page from any other origin, even one on this computer, is turned away.
+        for origin in ("https://example.com", f"http://127.0.0.1:{self.port + 1}", "null"):
+            with self.subTest(origin=origin), self.assertRaises(InvalidStatus) as refused:
+                async with self.open_socket(origin):
+                    pass
+            self.assertEqual(refused.exception.response.status_code, 403)
+
+    async def test_a_request_for_another_host_is_refused(self):
+        # DNS rebinding points a site's own name at this computer, so the Host header names it.
+        def get_as(host: str) -> int:
+            request = urllib.request.Request(f"http://127.0.0.1:{self.port}/map.json",
+                                             headers={"Host": host})
+            try:
+                with urllib.request.urlopen(request) as response:
+                    return response.status
+            except urllib.error.HTTPError as error:
+                return error.code
+
+        self.assertEqual(await asyncio.to_thread(get_as, f"evil.example:{self.port}"), 403)
+        self.assertEqual(await asyncio.to_thread(get_as, f"localhost:{self.port}"), 200)
+
     async def test_the_page_gets_a_snapshot_and_its_requests_reach_the_tracker(self):
-        async with websockets.connect(f"ws://127.0.0.1:{self.port}/ws") as socket:
+        async with self.open_socket() as socket:
             message = json.loads(await socket.recv())
             self.assertEqual(message["type"], "snapshot")
             self.assertEqual(message["snapshot"]["status"], "Not connected")
