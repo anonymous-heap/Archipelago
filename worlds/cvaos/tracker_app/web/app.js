@@ -331,8 +331,8 @@ function setUpPanAndZoom() {
 // The cells to draw, or null for all of them. Cells Soma hasn't explored, and that no Castle Map
 // he holds shows, stay hidden unless the full map is revealed. The game never marks the Chaotic
 // Realm as explored, so it is drawn whole, but only while it is in focus or Soma is in it. The
-// panels count the Realm's checks once Soma has been there (countRealm), so that their numbers
-// don't change with the focus.
+// panels count the Realm's checks once Soma has been there (countRealm), whatever the focus, so
+// that their numbers don't change with it.
 function visibleCells({ countRealm = false } = {}) {
   const cells = explored();
   if (page.reveal || !cells) return null;
@@ -343,8 +343,9 @@ function visibleCells({ countRealm = false } = {}) {
   for (const [x, y] of cells.revealed || []) visible.add(key(x, y));
   const soma = somaPoint();
   if (soma) visible.add(key(Math.floor(soma.x), Math.floor(soma.y)));
-  const known = countRealm ? knownAreas() : null;
-  if (page.focus === REALM || (soma && soma.room[0] === REALM) || (known && known.has(REALM))) {
+  const inRealm = Boolean(soma && soma.room[0] === REALM);
+  const realmShown = countRealm ? inRealm || knownAreas().has(REALM) : inRealm || page.focus === REALM;
+  if (realmShown) {
     for (const cell of page.map.cells) if (cell.area === REALM) visible.add(key(cell.x, cell.y));
   }
   return visible;
