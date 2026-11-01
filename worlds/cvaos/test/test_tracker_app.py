@@ -86,6 +86,10 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.ctx.close)
         self.changes = 0
         self.ctx.listeners.append(self.count_change)
+        self.connect()
+
+    def connect(self) -> None:
+        """Connect the context as the server would."""
         ids = set(location_name_to_id.values())
         self.ctx.slot, self.ctx.team = 1, 0
         self.ctx.slot_info = {1: NetworkSlot("Soma", CVAOSWorld.game, SlotType.player)}
@@ -249,6 +253,28 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(route.entrances[0].parent_region.name, "Entrance: 108:104")
         self.receive("Malphas")  # planned again on an update, still from the door he came in by
         self.assertEqual(self.ctx.route.entrances[0].parent_region.name, "Entrance: 108:104")
+
+    async def test_a_route_survives_a_reconnect(self):
+        self.receive("Malphas", "Hippogryph")
+        terrace = location_name_to_id[TERRACE]
+        self.ctx.set_route(terrace)
+        items = list(self.ctx.items_received)
+        self.ctx.reset_server_state()  # the connection ended
+        self.assertEqual(self.ctx.route_target, terrace)
+        self.connect()  # and came back
+        self.ctx.items_received = items
+        self.ctx.on_package("ReceivedItems", {})
+        snapshot = self.ctx.snapshot()
+        self.assertEqual(snapshot["route_target"], terrace)
+        self.assertIsNotNone(snapshot["route"])
+
+    async def test_a_route_is_dropped_for_another_slot(self):
+        self.receive("Malphas", "Hippogryph")
+        self.ctx.room_address = "localhost:38281"
+        self.ctx.set_route(location_name_to_id[TERRACE])
+        self.ctx.connect = mock.AsyncMock()
+        await self.ctx.connect_to("localhost:38281", "Alucard", None)
+        self.assertIsNone(self.ctx.route_target)
 
     async def test_there_is_no_route_out_of_reach(self):
         self.ctx.set_route(location_name_to_id[TERRACE])

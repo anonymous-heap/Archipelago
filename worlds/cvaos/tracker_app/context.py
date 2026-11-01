@@ -122,6 +122,8 @@ class TrackerContext(CommonContext):
         """Connect to the server at ``address`` and track ``slot_name``, unless stopping."""
         if self.exit_event.is_set():
             return
+        if slot_name != self.slot_name or not same_address(address, self.room_address or ""):
+            self.route_target = None  # a route belongs to its room and slot
         self.slot_name = slot_name
         self.room_address = address
         self.username = slot_name  # CommonContext reconnects on its own only when this is set
@@ -258,8 +260,7 @@ class TrackerContext(CommonContext):
             return  # CommonContext.__init__ calls this before the tracker's own state exists
         self.core.disconnect()
         self.result = None
-        self.route = None
-        self.route_target = None
+        self.route = None  # planned again once the seed is rebuilt, to the same target
         # A reason the connection failed stays on screen. Anything else just ends.
         if self.status.startswith(("Connecting", "Rebuilding", "Tracking")):
             self.set_status("Not connected")
