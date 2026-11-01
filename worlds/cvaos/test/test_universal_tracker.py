@@ -15,6 +15,7 @@ import unittest
 from collections import Counter
 
 from BaseClasses import CollectionState, MultiWorld
+from Options import Choice, Range, Toggle
 from test.general import setup_multiworld
 from worlds.AutoWorld import call_all
 
@@ -158,6 +159,40 @@ class RoundTripTest(unittest.TestCase):
         self.assertIn("logic_difficulty_preset", "\n".join(logs.output))
         self.assertEqual(rebuilt.logic_difficulty_preset.value,
                          rebuilt.logic_difficulty_preset.default)
+
+
+def unlisted_option_values() -> dict:
+    """A value other than its default for each option not in LOGIC_OPTION_NAMES, of the kinds that
+    have one: toggles, choices and ranges."""
+    values = {}
+    for name, option in CVAOSWorld.options_dataclass.type_hints.items():
+        if name in LOGIC_OPTION_NAMES:
+            continue
+        if issubclass(option, Toggle):
+            values[name] = int(not option.default)
+        elif issubclass(option, Choice):
+            values[name] = next(value for value in sorted(set(option.options.values()))
+                                if value != option.default)
+        elif issubclass(option, Range):
+            values[name] = (option.range_start if option.default != option.range_start
+                            else option.range_end)
+    return values
+
+
+class UnlistedOptionsTest(unittest.TestCase):
+    def test_options_left_out_of_slot_data_leave_the_logic_alone(self):
+        # The recorder above misses an option that a rule reads only when it runs, and one read
+        # only while another option is away from its default. Moving every unlisted option away
+        # from its default, with the logic options at their defaults and then away from them,
+        # catches both, since slot_data doesn't carry the unlisted ones.
+        unlisted = unlisted_option_values()
+        self.assertTrue(unlisted)
+        logic_changed = {name: value for _probed, config in ROUND_TRIPS
+                         for name, value in config.items()}
+        for logic in ({}, logic_changed):
+            with self.subTest(logic=logic):
+                self.assertEqual(logic_fingerprint(generate({**logic, **unlisted})),
+                                 logic_fingerprint(generate(logic)))
 
 
 class TricksTierTest(unittest.TestCase):
