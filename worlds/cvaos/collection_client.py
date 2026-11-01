@@ -515,13 +515,22 @@ class CollectionBackend:
 # Client context + watcher
 # ---------------------------------------------------------------------------
 
-from CommonClient import CommonContext, get_base_parser, gui_enabled, logger, server_loop  # noqa: E402
+from CommonClient import (ClientCommandProcessor, CommonContext, get_base_parser,  # noqa: E402
+                          gui_enabled, logger, server_loop)
+
+
+class CVAOSCollectionCommandProcessor(ClientCommandProcessor):
+    def _cmd_map(self) -> None:
+        """Open the map tracker for this slot in your browser."""
+        from .tracker_app import open_for_client
+        open_for_client(self.ctx)
 
 
 class CVAOSCollectionContext(CommonContext):
     game = "Castlevania - Aria of Sorrow"
     items_handling = 0b001
     want_slot_data = True
+    command_processor = CVAOSCollectionCommandProcessor
 
     def __init__(self, server_address: str | None, password: str | None) -> None:
         super().__init__(server_address, password)
@@ -550,6 +559,8 @@ class CVAOSCollectionContext(CommonContext):
 
     def on_package(self, cmd: str, args: dict) -> None:
         if cmd == "Connected":
+            logger.info("Press Open map, or type /map, to open the map tracker for this slot in "
+                        "your browser.")
             self.slot_data = args.get("slot_data", {}) or {}
             target = self.slot_data.get("target_platform")
             if target is not None and int(target) != TARGET_ADVANCE_COLLECTION:
@@ -564,6 +575,25 @@ class CVAOSCollectionContext(CommonContext):
         class CVAOSCollectionManager(GameManager):
             logging_pairs = [("Client", "Archipelago")]
             base_title = "Archipelago CVAoS Collection Client"
+
+            def build(self):
+                layout = super().build()
+                # An "Open map" button after Connect. The window is still usable without it, so
+                # a kvui that builds its buttons differently only loses the button.
+                try:
+                    from kivy.metrics import dp
+                    from kivymd.uix.button import MDButton, MDButtonText
+
+                    from .tracker_app import open_for_client
+                    button = MDButton(MDButtonText(text="Open map"), style="outlined",
+                                      size=(dp(110), self.server_connect_bar.height),
+                                      size_hint_x=None, size_hint_y=None, radius=5,
+                                      pos_hint={"center_y": 0.55})
+                    button.bind(on_press=lambda _button: open_for_client(self.ctx))
+                    self.connect_layout.add_widget(button)
+                except Exception:
+                    logger.exception("Couldn't add the Open map button; /map still works")
+                return layout
 
         self.ui = CVAOSCollectionManager(self)
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")

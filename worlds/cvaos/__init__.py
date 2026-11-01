@@ -1,8 +1,9 @@
 import base64
+import logging
 import os
 from typing import ClassVar
 
-from BaseClasses import MultiWorld, Tutorial
+from BaseClasses import CollectionState, ItemClassification, MultiWorld, Tutorial
 from worlds.AutoWorld import WebWorld, World
 from worlds.LauncherComponents import Component, Type, components, launch as launch_component
 import settings
@@ -10,14 +11,20 @@ import settings
 from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA_ROM_MD5
 from .items import CVAOSItem, item_name_to_id, create_item, create_itempool
 from .locations import location_name_to_id
-from .options import CVAOSOptions, Goal, cvaos_option_groups
-from .regions import create_regions, can_reach_room
+from .options import LOGIC_OPTION_NAMES, CVAOSOptions, Goal, cvaos_option_groups
+from .regions import UT_TRICKS_ITEM, create_regions, can_reach_room
+from . import tracker_map, tracker_route
 from .client import CVAOSClient  # noqa: F401  (imported for its registration side effect)
 
 
 def launch_collection_client(*args: str) -> None:
     from .collection_client import launch
     launch_component(launch, name="CVAoSCollectionClient", args=args)
+
+
+def launch_tracker(*args: str) -> None:
+    from .tracker_app import launch
+    launch_component(launch, name="CVAoSTracker", args=args)
 
 
 def launch_collection_installer(*args: str) -> None:
@@ -34,6 +41,17 @@ components.append(Component(
     func=launch_collection_client,
     component_type=Type.CLIENT,
     description="Play a CVAoS seed inside the Steam Castlevania Advance Collection.",
+))
+
+# A room's archipelago:// link offers the tracker too, already filled in with the room and slot.
+components.append(Component(
+    "Aria of Sorrow Tracker",
+    func=launch_tracker,
+    component_type=Type.CLIENT,
+    game_name="Castlevania - Aria of Sorrow",
+    supports_uri=True,
+    description="A map of the castle in your browser: what is in logic, where Soma is, and the "
+                "way to any location.",
 ))
 
 components.append(Component(
@@ -122,8 +140,76 @@ class CVAOSWorld(World):
     # connect_names (modify_multidata) so the client can connect by reading it from the ROM.
     auth: bytearray
 
+    # Universal Tracker rebuilds this world from the seed's slot_data, without the player's YAML. It
+    # passes slot_data through interpret_slot_data and stores the result in
+    # multiworld.re_gen_passthrough. It then runs the generation steps up to generate_basic, and
+    # generate_early reads the options back from the passthrough. The YAML-less choice is made for
+    # the whole world, so it applies to older seeds too (see interpret_slot_data).
+    ut_can_gen_without_yaml = True
+
+    # Universal Tracker shows the locations that open up once it collects this item as reachable
+    # with tricks, and only the tracker's rebuild of the world has rules that use it.
+    glitches_item_name = UT_TRICKS_ITEM
+
+    # Universal Tracker's map tab. The maps, their images and the pin for each location are all
+    # generated from this world's data (tracker_map.py builds them into tracker/), so no game art
+    # ships and nothing else needs installing. Soma's marker and the choice of map follow the
+    # position the client keeps in data storage.
+    tracker_world: ClassVar[dict] = {
+        "map_page_folder": tracker_map.FOLDER,
+        "map_page_maps": [tracker_map.MAPS_FILE],
+        "map_page_locations": [tracker_map.LOCATIONS_FILE],
+        "map_page_groups": tracker_map.MAP_GROUPS,
+        "map_page_setting_key": tracker_map.POSITION_KEY,
+        "map_page_index": tracker_map.map_page_index,
+        "location_setting_key": tracker_map.POSITION_KEY,
+        "location_icon_coords": tracker_map.position_icon,
+    }
+
+    def get_logical_path(self, dest_name: str, state: CollectionState):
+        """Routes list the rooms on the way, area by area, with the souls or weapons each room
+        needs. They lead to locations; for a region or an entrance, UT shows its own route."""
+        return tracker_route.describe_route(self, dest_name, state)
+
+    @staticmethod
+    def interpret_slot_data(slot_data: dict) -> dict:
+        """Return ``slot_data`` unchanged, so Universal Tracker rebuilds the world from it.
+
+        A seed generated before slot_data carried every logic option is still rebuilt, and the
+        missing options take their defaults. A warning names them, because the tracker's logic can
+        then differ from the seed's.
+        """
+        missing = [name for name in LOGIC_OPTION_NAMES if name not in slot_data]
+        if missing:
+            logging.getLogger("Client").warning(
+                "This Aria of Sorrow seed was generated before its slot data recorded every logic "
+                "option, so the tracker assumes the default for: %s.", ", ".join(missing))
+        return slot_data
+
     def generate_early(self) -> None:
+        self._restore_logic_options_for_tracker()
         self.auth = bytearray(self.random.getrandbits(8) for _ in range(16))
+
+    def _restore_logic_options_for_tracker(self) -> None:
+        """When Universal Tracker regenerates this world, take the logic options from slot_data.
+
+        slot_data from a seed generated before an option was added to LOGIC_OPTION_NAMES has no
+        key for it, so that option keeps the value the rebuilt world started with. A value this
+        world doesn't know, from a seed generated by a newer version of it, is kept the same way,
+        with a warning, rather than stopping the rebuild.
+        """
+        passthrough = getattr(self.multiworld, "re_gen_passthrough", {}).get(self.game)
+        if not passthrough:
+            return
+        for name in LOGIC_OPTION_NAMES:
+            if name in passthrough:
+                option_type = type(getattr(self.options, name))
+                try:
+                    setattr(self.options, name, option_type.from_any(passthrough[name]))
+                except (KeyError, ValueError, TypeError):
+                    logging.getLogger("Client").warning(
+                        "This Aria of Sorrow seed's %s is %r, which this version doesn't know, so "
+                        "the tracker assumes the default.", name, passthrough[name])
 
     def create_regions(self) -> None:
         create_regions(self)
@@ -145,6 +231,8 @@ class CVAOSWorld(World):
         self.multiworld.itempool += itempool
 
     def create_item(self, name: str) -> CVAOSItem:
+        if name == UT_TRICKS_ITEM:
+            return CVAOSItem(name, ItemClassification.progression, None, self.player)
         return create_item(self, name)
 
     def pre_fill(self) -> None:
@@ -190,11 +278,10 @@ class CVAOSWorld(World):
         return {
             "target_platform": self.options.target_platform.value,
             "randomize_pickups": self.options.randomize_pickups.value,
-            "goal": self.options.goal.value,
-            "hard_mode": self.options.hard_mode.value,
             "skull_key_warp": self.options.skull_key_warp.value,
             "new_soul_pause": self.options.new_soul_pause.value,
             "death_link": self.options.death_link.value,
+            **self.options.as_dict(*LOGIC_OPTION_NAMES),
         }
 
     def modify_multidata(self, multidata: dict) -> None:
