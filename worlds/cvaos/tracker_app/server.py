@@ -229,6 +229,10 @@ class TrackerServer:
             result = await ctx.hand_over(str(request.get("server") or "").strip(),
                                          str(request.get("slot") or "").strip(),
                                          request.get("password"), bool(request.get("take", True)))
+            if result == "opened":
+                # The launch now opens this tracker's page, so the half hour starts again, as for
+                # a page, rather than the tracker stopping before the page has loaded.
+                self.launches.discard(socket)
             await socket.send(json.dumps({"type": "handover", "result": result}))
 
     def snapshot_message(self) -> str:

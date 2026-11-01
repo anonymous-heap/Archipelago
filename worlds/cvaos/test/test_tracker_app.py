@@ -315,18 +315,29 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(self.ctx.exit_event.wait(), 2)
         await watch
 
-    async def test_a_launch_asking_doesn_t_restart_the_idle_wait(self):
-        idle_since = self.server.idle_since
+    async def ask(self, request: dict) -> str:
         async with self.open_socket() as launch:
             await launch.recv()
-            await launch.send(json.dumps({"type": "handover", "server": "", "slot": ""}))
-            await launch.recv()
+            await launch.send(json.dumps({"type": "handover", **request}))
+            answer = json.loads(await launch.recv())["result"]
         await asyncio.sleep(0.1)
+        return answer
+
+    async def test_a_launch_asking_doesn_t_restart_the_idle_wait(self):
+        idle_since = self.server.idle_since
+        request = {"server": "localhost:38281", "slot": "Soma", "take": False}
+        self.assertEqual(await self.ask(request), "idle")
         self.assertEqual(self.server.idle_since, idle_since)
         # A page does restart it, since someone looked at the tracker.
         async with self.open_socket() as page:
             await page.recv()
         await asyncio.sleep(0.1)
+        self.assertGreater(self.server.idle_since, idle_since)
+
+    async def test_a_launch_that_opens_this_tracker_restarts_the_idle_wait(self):
+        # Its page is about to load, so the tracker mustn't stop in the meantime.
+        idle_since = self.server.idle_since
+        self.assertEqual(await self.ask({"server": "", "slot": ""}), "opened")
         self.assertGreater(self.server.idle_since, idle_since)
 
     async def test_another_site_can_t_reach_the_tracker(self):
