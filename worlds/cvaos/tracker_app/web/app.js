@@ -799,10 +799,14 @@ function openSocket() {
       return;
     }
     // While the tracker reconnects or rebuilds the seed, its snapshots carry no explored map or
-    // position. The page keeps the last ones it had for the same slot, rather than show the whole
-    // castle, with every area's name and secret door, until the next arrive.
+    // position. The page keeps the last ones it had for the same slot in the same room, rather
+    // than show the whole castle, with every area's name and secret door, until the next arrive.
+    // Once the tracker is tracking, a snapshot without them is a seed the client hasn't sent them
+    // for yet, so nothing is kept.
     const snapshot = message.snapshot;
-    if (!snapshot.exploration && page.snapshot.exploration && snapshot.slot === page.snapshot.slot) {
+    const last = page.snapshot;
+    if (!snapshot.exploration && !snapshot.tracking && last.exploration
+        && snapshot.slot === last.slot && snapshot.server === last.server) {
       snapshot.exploration = page.snapshot.exploration;
       snapshot.position = snapshot.position ?? page.snapshot.position;
     }
