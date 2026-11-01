@@ -97,7 +97,9 @@ class CVAOSSettings(settings.Group):
             kwargs.setdefault("filetypes", [("AoS ROM or Collection game.exe", [".gba", ".exe"])])
             return super().browse(**kwargs)
 
-    class CollectionExePath(settings.FilePath):
+    # A user path, like rom_file, so that a game.exe picked inside the Archipelago folder is saved
+    # relative to that folder and read back from it, whatever the working directory.
+    class CollectionExePath(settings.UserFilePath):
         """game.exe inside the Steam Castlevania Advance Collection install. Used to install a
         patched ROM into the collection, and to source the base ROM for advance_collection-target
         seeds. Optional: defaults to the standard Steam path, so gba-only users can ignore it. The

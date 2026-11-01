@@ -597,5 +597,23 @@ class ExePromptTest(unittest.TestCase):
         self.saved.assert_not_called()
 
 
+class ExePathSettingTest(unittest.TestCase):
+    """A game.exe saved relative to the Archipelago folder reads back from that folder."""
+
+    def test_a_relative_path_reads_back_from_the_archipelago_folder(self) -> None:
+        import Utils
+
+        from .. import CVAOSSettings
+        relative = os.path.join("collection", "game.exe")
+        group = CVAOSSettings()
+        group.collection_exe = CVAOSSettings.CollectionExePath(relative)
+        elsewhere = tempfile.mkdtemp(prefix="cvaos_cwd_")
+        self.addCleanup(shutil.rmtree, elsewhere, ignore_errors=True)
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(elsewhere)  # the Launcher may start in another folder than last time
+        self.assertEqual(os.path.normcase(group.collection_exe),
+                         os.path.normcase(Utils.user_path(relative)))
+
+
 if __name__ == "__main__":
     unittest.main()
