@@ -368,10 +368,12 @@ dialog input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .layout { grid-template-columns: 180px minmax(0, 1fr) 230px; }
   .sidebar { padding: 10px; }
 }
-/* A phone: the map first, then the right sidebar, then the left one. */
+/* A phone: the map first, then the right sidebar, then the left one, and the page scrolls
+   rather than squeezing the sidebars into what is left of the window. */
 @media (max-width: 680px) {
   body { overflow: auto; }
-  .layout { grid-template-columns: 1fr; grid-template-rows: 60vh auto auto; }
+  .layout { flex: none; grid-template-columns: 1fr; grid-template-rows: 60vh auto auto; }
+  .sidebar { overflow: visible; }
   .map-pane { order: -2; }
   .sidebar.right { order: -1; border-left: 0; border-top: 1px solid var(--border); }
   .sidebar.left { border-right: 0; border-top: 1px solid var(--border); }
