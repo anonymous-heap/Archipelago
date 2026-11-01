@@ -97,6 +97,8 @@ class TrackerContext(CommonContext):
         self.route_target: int | None = None  # the location id a route was asked for
         self.route: tracker_route.Route | None = None
         self.route_room: str | None = None    # the room the route was planned from
+        self.entry_room: str | None = None    # the room Soma is in, and where he came into it,
+        self.entry_point: tuple[float, float] | None = None  # in map cells
         self.log_tail = LogTail(self.changed)
         logger.addHandler(self.log_tail)
 
@@ -317,11 +319,18 @@ class TrackerContext(CommonContext):
         return value
 
     def follow_position(self) -> None:
-        """Plan the route again when Soma has gone into another room, so it starts where he is."""
+        """Note where Soma came into the room he is in, and plan the route again once he has gone
+        into another room, so that it starts from the door he came in by."""
         position = self.position()
-        if self.route_target is None or position is None:
+        if position is None:
             return
-        if position[0] != self.route_room:
+        if position[0] != self.entry_room:
+            self.entry_room = position[0]
+            try:
+                self.entry_point = tracker_map.cell_position(*position)
+            except KeyError:
+                self.entry_point = None  # a room this world has no place for
+        if self.route_target is not None and position[0] != self.route_room:
             self.plan_route()
 
     @property
@@ -358,18 +367,12 @@ class TrackerContext(CommonContext):
         location = world.get_location(world.location_id_to_name[self.route_target])
         position = self.position()
         self.route_room = position[0] if position is not None else None
-        # The route is planned again only when Soma enters another room, so at the door he came in
-        # by, which is where it starts.
-        try:
-            start_point = tracker_map.cell_position(*position) if position is not None else None
-        except KeyError:
-            start_point = None  # a room this world has no place for
-        for state in (self.result.state, self.result.glitches_state):
-            if state is not None:
-                self.route = tracker_route.plan_route(world, location, state, self.route_room,
-                                                      start_point)
-                if self.route is not None:
-                    return
+        # From the door Soma came in by, which he can get back to wherever he has gone since.
+        start_point = self.entry_point if self.route_room == self.entry_room else None
+        states = [state for state in (self.result.state, self.result.glitches_state)
+                  if state is not None]
+        self.route = tracker_route.plan_route(world, location, states, self.route_room,
+                                              start_point)
 
     # --- what the page shows -------------------------------------------------------------------
 

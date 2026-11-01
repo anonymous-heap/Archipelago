@@ -23,6 +23,7 @@ from websockets.exceptions import InvalidStatus
 from worlds.LauncherComponents import components
 
 from .. import CVAOSWorld, exploration, tracker_app
+from ..data.room_info import by_identifier as rooms_by_identifier
 from ..exploration import Exploration
 from ..locations import location_name_to_id
 from ..tracker_app import parse_args, serve_or_hand_over
@@ -30,6 +31,7 @@ from ..tracker_app.context import TrackerContext
 from ..tracker_app.mapdata import map_data
 from ..tracker_app.server import TrackerServer, build_id
 from ..tracker_app.ut import UPSTREAM
+from ..tracker_route import DOOR_POINTS
 from .test_universal_tracker import generate
 
 TERRACE = "Terrace [503 CASTLE MAP 3]"
@@ -219,6 +221,22 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.ctx.snapshot()["route_target"])
         self.receive("Malphas")  # an update after it still works
         self.assertTrue(self.ctx.snapshot()["tracking"])
+
+    async def test_a_route_starts_at_the_door_soma_came_in_by(self):
+        # With only Malphas, the door to 109 in room 108 is out of reach from the door to 104.
+        def by_door(door: str) -> list:
+            room = rooms_by_identifier["108"]
+            x, y = DOOR_POINTS[door]
+            return ["108", int((x - int(room.x)) * 256), int((y - int(room.y)) * 256)]
+
+        self.receive("Malphas")
+        self.store(self.ctx.position_key, by_door("108:104"))  # he comes in by the 104 door
+        self.store(self.ctx.position_key, by_door("108:109"))  # and walks under the 109 door
+        self.ctx.set_route(location_name_to_id["Underneath Grand Staircase [109 Silk Robe]"])
+        route = self.ctx.route
+        self.assertEqual(route.entrances[0].parent_region.name, "Entrance: 108:104")
+        self.receive("Malphas")  # planned again on an update, still from the door he came in by
+        self.assertEqual(self.ctx.route.entrances[0].parent_region.name, "Entrance: 108:104")
 
     async def test_there_is_no_route_out_of_reach(self):
         self.ctx.set_route(location_name_to_id[TERRACE])
