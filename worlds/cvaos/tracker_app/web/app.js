@@ -48,6 +48,7 @@ const page = {
   selected: null,      // the selected location's id
   view: { x: 0, y: 0, w: 64, h: 47 },
   somaArea: null,      // the area Soma was last seen in, to follow him when it changes
+  somaCell: null,      // and the cell, to follow him with the view when he leaves it
   askedToConnect: false,
   fittedTo: null,      // "whole" or "explored": the map the view was last fitted to
   reveal: prefs.get("reveal", false),
@@ -248,6 +249,13 @@ function zoom(factor, clientX, clientY) {
   page.view = { x: at.x - (at.x - view.x) * factor, y: at.y - (at.y - view.y) * factor,
                 w: view.w * factor, h: view.h * factor };
   applyView();
+}
+
+// Whether a point is within the view, a little way in from its edges.
+function inView(point, margin = 0.5) {
+  const view = page.view;
+  return point.x >= view.x + margin && point.x <= view.x + view.w - margin
+      && point.y >= view.y + margin && point.y <= view.y + view.h - margin;
 }
 
 function centerOn(x, y) {
@@ -452,6 +460,13 @@ function renderSoma() {
                 class: "soma-cell-outline" }, cellLayer);
   const marker = somaMarker(soma);
   svg("circle", { cx: marker.x, cy: marker.y, r: 0.22, class: "soma-dot" }, layer);
+  // Following Soma moves the view only once he has gone into another cell outside it, so a view
+  // the player has moved stays put while he stands still, and picking an area never moves it.
+  const cell = key(x, y);
+  if (page.follow && page.somaCell !== null && cell !== page.somaCell && !inView(marker)) {
+    centerOn(marker.x, marker.y);
+  }
+  page.somaCell = cell;
   const area = soma.room[0];
   if (page.follow && area !== page.somaArea && page.somaArea !== null) setFocus(area);
   if (page.somaArea === null && page.focus === CASTLE && page.follow) setFocus(area);
