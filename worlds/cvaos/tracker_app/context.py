@@ -44,23 +44,26 @@ DEFAULT_SERVER_PORT = 38281  # the port Archipelago assumes when an address leav
 LOOPBACK_NAMES = {"127.0.0.1", "::1"}  # the names of this computer that "localhost" also means
 
 
-def same_address(first: str, second: str) -> bool:
-    """Whether two server addresses name the same server.
+def server_of(address: str) -> tuple[str, int | str]:
+    """Return the host and port a server address names.
 
-    Either can be written with or without a scheme, a slot name and password, or the default port,
-    and "localhost" names the same server as 127.0.0.1.
+    The address can be written with or without a scheme, a slot name and password, or the default
+    port, and "localhost" names the same host as 127.0.0.1.
     """
-    def server(address: str) -> tuple[str, int | str]:
-        address = without_login(address.strip().lower())
-        address = address.removeprefix("wss://").removeprefix("ws://").rstrip("/")
-        parts = urllib.parse.urlsplit(f"//{address}")
-        try:
-            port = parts.port or DEFAULT_SERVER_PORT
-        except ValueError:
-            return address, ""  # not an address urlsplit can read, so compared as written
-        host = parts.hostname or ""
-        return ("localhost" if host in LOOPBACK_NAMES else host), port
-    return server(first) == server(second)
+    address = without_login(address.strip().lower())
+    address = address.removeprefix("wss://").removeprefix("ws://").rstrip("/")
+    parts = urllib.parse.urlsplit(f"//{address}")
+    try:
+        port = parts.port or DEFAULT_SERVER_PORT
+    except ValueError:
+        return address, ""  # not an address urlsplit can read, so compared as written
+    host = parts.hostname or ""
+    return ("localhost" if host in LOOPBACK_NAMES else host), port
+
+
+def same_address(first: str, second: str) -> bool:
+    """Whether two server addresses name the same server, however each is written."""
+    return server_of(first) == server_of(second)
 
 
 class LogTail(logging.Handler):
@@ -142,23 +145,30 @@ class TrackerContext(CommonContext):
         another, and "closing" when it is shutting down, so that the launch serves on the port
         itself once it comes free.
 
-        A tracker that follows nothing takes the request when ``take`` is true, and otherwise
-        answers "idle". A launch asks every tracker without ``take`` first, so that a tracker that
-        already follows its slot opens rather than an idle one being given the slot twice. A
-        tracker follows nothing after a connection that was refused, or when its slot plays
-        another game or its seed couldn't be rebuilt.
+        Without ``take``, a tracker that could take the request says so instead: "remembers" when
+        the slot is the one it last followed, and "idle" otherwise. A launch asks every tracker
+        without ``take`` first, so that a tracker that already follows the slot opens rather than
+        another being given it too. Then it gives the request to one that remembers the slot,
+        before any other.
+
+        A tracker that follows nothing could take any request. That is a tracker whose connection
+        was refused, or whose slot plays another game or couldn't be rebuilt. So could one still
+        trying to reconnect to the slot on the same host, since archipelago.gg brings a room that
+        went to sleep back on a new port.
         """
         if self.exit_event.is_set():
             return "closing"
         if not address or not slot_name:
             return "opened"  # the launch asked for nothing but the page
-        same = (slot_name == self.slot_name
-                and same_address(address, self.room_address or self.server_address or ""))
-        if self.following:
-            return "opened" if same else "busy"
-        if not same and not take:
-            return "idle"
-        # Its own room and slot again, perhaps now with the password, or a request it may take.
+        room = self.room_address or self.server_address or ""
+        own_slot = slot_name == self.slot_name
+        if self.following and own_slot and same_address(address, room):
+            return "opened"
+        moved = own_slot and not self.tracking and server_of(address)[0] == server_of(room)[0]
+        if self.following and not moved:
+            return "busy"
+        if not take:
+            return "remembers" if own_slot else "idle"
         await self.connect_to(address, slot_name, password)
         return "opened"
 

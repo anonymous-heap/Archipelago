@@ -19,7 +19,8 @@ asks for, each as a JSON object with a "type":
     {"type": "quit"}                        stop the tracker
 
 A new launch sends the room and slot it was given, and whether this tracker may take them if it
-follows nothing. It hears back "opened", "idle", "busy" or "closing" (see TrackerContext.hand_over):
+follows nothing. It hears back "opened", "remembers", "idle", "busy" or "closing" (see
+TrackerContext.hand_over):
 
     {"type": "handover", "server": "localhost:38281", "slot": "Soma", "password": null,
      "take": false}

@@ -483,12 +483,34 @@ class HandOverTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "busy")
         self.ctx.connect_to.assert_not_awaited()
 
-    async def test_its_own_slot_again_reconnects_even_untaken(self):
-        # A room that refused it for a missing password, asked for again with the password.
+    async def test_its_own_slot_again_waits_to_be_taken(self):
+        # A room that refused it for a missing password, asked for again with the password. It
+        # says it remembers the slot, and reconnects only once given the request, so that it
+        # doesn't follow a slot another tracker already follows.
         self.ctx.slot_name, self.ctx.room_address = "Soma", "localhost:38281"
         self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", "pw", take=False),
-                         "opened")
+                         "remembers")
+        self.ctx.connect_to.assert_not_awaited()
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", "pw"), "opened")
         self.ctx.connect_to.assert_awaited_once_with("localhost:38281", "Soma", "pw")
+
+    async def test_a_room_that_came_back_on_another_port_is_followed_there(self):
+        # archipelago.gg wakes a sleeping room on a new port, while the tracker keeps retrying
+        # the old one.
+        self.ctx.slot_name, self.ctx.room_address = "Soma", "archipelago.gg:12345"
+        self.ctx.autoreconnect_task = asyncio.get_running_loop().create_future()
+        self.addCleanup(self.ctx.autoreconnect_task.cancel)
+        self.assertEqual(await self.ctx.hand_over("archipelago.gg:54321", "Soma", None, take=False),
+                         "remembers")
+        self.assertEqual(await self.ctx.hand_over("archipelago.gg:54321", "Soma", None), "opened")
+        self.ctx.connect_to.assert_awaited_once_with("archipelago.gg:54321", "Soma", None)
+
+    async def test_another_room_on_the_same_server_is_still_another_room(self):
+        # Two rooms on one host can both have a slot named Soma.
+        self.connect_as("Soma", "localhost:38281")
+        with following():
+            self.assertEqual(await self.ctx.hand_over("localhost:38282", "Soma", None), "busy")
+        self.ctx.connect_to.assert_not_awaited()
 
     async def test_a_tracker_that_is_stopping_says_so(self):
         self.ctx.exit_event.set()
@@ -585,6 +607,16 @@ class SecondLaunchTest(unittest.IsolatedAsyncioTestCase):
                 mock.patch.object(tracker_app, "SPARE_PORTS", [idle_port]):
             self.assertIsNone(await self.launch("--connect", "localhost:38281", "--name", "Soma"))
         idle.connect_to.assert_awaited_once_with("localhost:38281", "Soma", None)
+
+    async def test_the_tracker_that_remembers_the_slot_is_given_it_first(self):
+        idle, _, idle_port = await self.run_tracker()
+        remembers, _, remembers_port = await self.run_tracker()
+        remembers.slot_name, remembers.room_address = "Soma", "localhost:38281"
+        with mock.patch.object(tracker_app, "DEFAULT_PORT", idle_port), \
+                mock.patch.object(tracker_app, "SPARE_PORTS", [remembers_port]):
+            self.assertIsNone(await self.launch("--connect", "localhost:38281", "--name", "Soma"))
+        remembers.connect_to.assert_awaited_once_with("localhost:38281", "Soma", None)
+        idle.connect_to.assert_not_awaited()
 
     async def test_a_tracker_that_is_stopping_leaves_its_port_to_the_launch(self):
         ctx, server, port = await self.run_tracker()
