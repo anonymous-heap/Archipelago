@@ -293,10 +293,11 @@ function setUpPanAndZoom() {
   map.addEventListener("wheel", (event) => {
     event.preventDefault();
     if (!event.deltaY) return;  // a sideways scroll isn't a zoom
-    // A mouse wheel notch is about 100 pixels or 3 lines, and a touchpad sends many small steps,
-    // so the zoom follows how far the wheel turned, up to one notch's step for each event.
-    const lines = event.deltaMode === WheelEvent.DOM_DELTA_LINE;
-    const notches = lines ? event.deltaY / 3 : event.deltaY / 100;
+    // A mouse wheel notch is about 100 pixels, 3 lines or 1 page, and a touchpad sends many small
+    // steps, so the zoom follows how far the wheel turned, up to one notch's step for each event.
+    const perNotch = { [WheelEvent.DOM_DELTA_PIXEL]: 100, [WheelEvent.DOM_DELTA_LINE]: 3,
+                       [WheelEvent.DOM_DELTA_PAGE]: 1 }[event.deltaMode] || 100;
+    const notches = event.deltaY / perNotch;
     zoom(ZOOM_STEP ** Math.max(-1, Math.min(1, notches)), event.clientX, event.clientY);
   }, { passive: false });
 
