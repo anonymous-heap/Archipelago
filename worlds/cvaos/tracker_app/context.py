@@ -341,14 +341,26 @@ class TrackerContext(CommonContext):
     def set_route(self, location_id: int | None) -> None:
         """Show a route to the location with ``location_id``, or none.
 
-        A location the seed doesn't have is ignored, since planning a route to it would fail on
-        every update after.
+        A location the seed doesn't have is ignored, and so is one the tracker's rebuilt world
+        lacks, as a seed from another version of this world can have. Planning a route to either
+        would fail on every update after.
         """
-        if location_id is not None and (self.race_mode or location_id not in self.server_locations):
+        if location_id is not None and (self.race_mode or not self.routable(location_id)):
             return
         self.route_target = location_id
         self.plan_route()
         self.changed()
+
+    def routable(self, location_id: int) -> bool:
+        """Whether the seed has the location, and so does the world the tracker rebuilt."""
+        world = self.core.get_current_world()
+        if location_id not in self.server_locations or world is None:
+            return False
+        try:
+            world.get_location(world.location_id_to_name.get(location_id))
+        except KeyError:
+            return False
+        return True
 
     def plan_route(self) -> None:
         """Plan the route to the route's target from Soma's room, or drop it once it is checked.
@@ -362,6 +374,9 @@ class TrackerContext(CommonContext):
         if self.route_target in self.checked_locations:
             self.route_target = None  # Soma got there
         if self.route_target is None or not self.tracking or self.result is None:
+            return
+        if not self.routable(self.route_target):
+            self.route_target = None  # a world rebuilt since, without it
             return
         world = self.core.get_current_world()
         location = world.get_location(world.location_id_to_name[self.route_target])

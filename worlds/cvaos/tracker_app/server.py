@@ -188,7 +188,14 @@ class TrackerServer:
         try:
             await socket.send(self.snapshot_message())
             async for message in socket:
-                await self.on_message(socket, message)
+                try:
+                    await self.on_message(socket, message)
+                except ConnectionClosed:
+                    raise
+                except Exception:
+                    # A request that fails is logged, and the page stays connected for the next.
+                    logger.exception("The tracker couldn't carry out the page's request %r",
+                                     message)
         except ConnectionClosed:
             pass  # a page closed without saying goodbye, as a closed tab or browser can
         finally:

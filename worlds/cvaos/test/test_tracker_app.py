@@ -222,6 +222,18 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         self.receive("Malphas")  # an update after it still works
         self.assertTrue(self.ctx.snapshot()["tracking"])
 
+    async def test_a_route_to_a_location_the_rebuilt_world_lacks_is_ignored(self):
+        # The server's seed can have a location that this version's rebuild of it doesn't, as a
+        # seed from another version of the world can.
+        world = self.ctx.core.get_current_world()
+        missing = next(location_id for location_id in CVAOSWorld.location_name_to_id.values()
+                       if location_id not in {loc.address for loc in world.get_locations()})
+        self.ctx.server_locations.add(missing)
+        self.ctx.set_route(missing)
+        self.assertIsNone(self.ctx.snapshot()["route_target"])
+        self.receive("Malphas")  # an update after it still works
+        self.assertTrue(self.ctx.snapshot()["tracking"])
+
     async def test_a_route_starts_at_the_door_soma_came_in_by(self):
         # With only Malphas, the door to 109 in room 108 is out of reach from the door to 104.
         def by_door(door: str) -> list:
@@ -379,6 +391,16 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(await asyncio.to_thread(get_as, f"evil.example:{self.port}"), 403)
         self.assertEqual(await asyncio.to_thread(get_as, f"localhost:{self.port}"), 200)
+
+    async def test_a_request_that_fails_leaves_the_page_connected(self):
+        self.ctx.set_route = mock.Mock(side_effect=RuntimeError("a bug"))
+        async with self.open_socket() as page:
+            await page.recv()
+            with self.assertLogs("Client", level="ERROR"):
+                await page.send(json.dumps({"type": "route", "location": 1}))
+                await asyncio.sleep(0.2)
+            await page.send(json.dumps({"type": "quit"}))
+            await asyncio.wait_for(self.ctx.exit_event.wait(), 5)
 
     async def test_the_page_gets_a_snapshot_and_its_requests_reach_the_tracker(self):
         async with self.open_socket() as socket:
