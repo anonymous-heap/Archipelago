@@ -19,7 +19,8 @@ asks for, each as a JSON object with a "type":
     {"type": "quit"}                        stop the tracker
 
 A new launch sends the room and slot it was given, and whether this tracker may take them if it
-follows nothing. It hears back "opened", "idle", "busy" or "closing" (see TrackerContext.hand_over):
+follows nothing. It hears back "opened", "remembers", "idle", "busy" or "closing" (see
+TrackerContext.hand_over):
 
     {"type": "handover", "server": "localhost:38281", "slot": "Soma", "password": null,
      "take": false}
@@ -187,7 +188,14 @@ class TrackerServer:
         try:
             await socket.send(self.snapshot_message())
             async for message in socket:
-                await self.on_message(socket, message)
+                try:
+                    await self.on_message(socket, message)
+                except ConnectionClosed:
+                    raise
+                except Exception:
+                    # A request that fails is logged, and the page stays connected for the next.
+                    logger.exception("The tracker couldn't carry out the page's request %r",
+                                     message)
         except ConnectionClosed:
             pass  # a page closed without saying goodbye, as a closed tab or browser can
         finally:
@@ -228,6 +236,10 @@ class TrackerServer:
             result = await ctx.hand_over(str(request.get("server") or "").strip(),
                                          str(request.get("slot") or "").strip(),
                                          request.get("password"), bool(request.get("take", True)))
+            if result == "opened":
+                # The launch now opens this tracker's page, so the half hour starts again, as for
+                # a page, rather than the tracker stopping before the page has loaded.
+                self.launches.discard(socket)
             await socket.send(json.dumps({"type": "handover", "result": result}))
 
     def snapshot_message(self) -> str:

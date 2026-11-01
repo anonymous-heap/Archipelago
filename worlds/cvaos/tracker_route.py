@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import itertools
 from collections import deque
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple, Sequence
 
 from BaseClasses import CollectionState, Entrance, Location, Region
 from Utils import get_intended_text
@@ -107,36 +107,38 @@ def nearest_door(world: CVAOSWorld, room: str, point: tuple[float, float]) -> Re
     return world.get_region(min(distances)[1]) if distances else None
 
 
-def plan_route(world: CVAOSWorld, location: Location, state: CollectionState,
-               start_room: str | None = None,
+def plan_route(world: CVAOSWorld, location: Location,
+               states: CollectionState | Sequence[CollectionState], start_room: str | None = None,
                start_point: tuple[float, float] | None = None) -> Route | None:
-    """Return the route at ``state`` to ``location`` through the fewest doors and rooms.
+    """Return a route to ``location`` through the fewest doors and rooms.
 
-    The route starts in ``start_room`` when one is given and the location can be reached from
-    there, and at the start of the game otherwise. Returns None when ``state`` can't reach it.
+    ``states`` is one state, or states to try in turn, such as the state for logic and then the
+    one with tricks. Returns None when none of them can reach the location.
 
-    Within the room, the route starts at the door nearest ``start_point``, Soma's position in map
-    cells, when that is given. Another door of the room may be one he can't get to from where he
-    is, such as across a gap he can't yet cross. Only when no route leads from the nearest door
-    does it start from any door of the room.
+    The route starts at the first of these that leads there with any of the states:
+      - the door of ``start_room`` nearest ``start_point``, where Soma came into the room, in map
+        cells. Another door of the room may be one he can't get to, such as across a gap he can't
+        yet cross;
+      - any door of ``start_room``;
+      - the start of the game.
     """
-    if not location.can_reach(state):
-        return None
-    path = None
+    if isinstance(states, CollectionState):
+        states = [states]
+    states = [state for state in states if location.can_reach(state)]
+    starts: list[tuple[list[Region], str | None]] = []
     if start_room is not None:
         door = nearest_door(world, start_room, start_point) if start_point is not None else None
         if door is not None:
-            path = _search(state, [door], location.parent_region)
-        if path is None:
-            names = world.entrance_region_names_by_room.get(start_room, [])
-            path = _search(state, [world.get_region(name) for name in names],
-                           location.parent_region)
-    if path is None:
-        start_room = None
-        path = _search(state, [world.get_region(world.origin_region_name)], location.parent_region)
-    if path is None:
-        return None
-    return Route(location, path, start_room, state.has(UT_TRICKS_ITEM, world.player))
+            starts.append(([door], start_room))
+        names = world.entrance_region_names_by_room.get(start_room, [])
+        starts.append(([world.get_region(name) for name in names], start_room))
+    starts.append(([world.get_region(world.origin_region_name)], None))
+    for regions, room in starts:
+        for state in states:
+            path = _search(state, regions, location.parent_region)
+            if path is not None:
+                return Route(location, path, room, state.has(UT_TRICKS_ITEM, world.player))
+    return None
 
 
 def route_steps(state: CollectionState, entrances: list[Entrance]) -> list[tuple[str, list[str]]]:

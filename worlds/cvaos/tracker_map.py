@@ -264,8 +264,12 @@ def map_page_index(value) -> int:
     """Return the index of the map for Soma's area, or -1 to keep the current map.
 
     UT calls this with the same value as :func:`position_icon`. A castle room selects its area's
-    map, and a Chaotic Realm room selects the Chaotic Realm.
+    map, and a Chaotic Realm room selects the Chaotic Realm. Before the client has stored a
+    position, as before the game starts, it selects the whole castle, since UT shows no map at
+    all until something selects one.
     """
+    if value is None or value == "":
+        return 0
     try:
         room_identifier = cell_of(value)[0]
         return next(index for index in (*AREA_MAPS, 1) if room_identifier in MAPS[index].rooms)

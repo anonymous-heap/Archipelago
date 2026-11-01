@@ -44,23 +44,26 @@ DEFAULT_SERVER_PORT = 38281  # the port Archipelago assumes when an address leav
 LOOPBACK_NAMES = {"127.0.0.1", "::1"}  # the names of this computer that "localhost" also means
 
 
-def same_address(first: str, second: str) -> bool:
-    """Whether two server addresses name the same server.
+def server_of(address: str) -> tuple[str, int | str]:
+    """Return the host and port a server address names.
 
-    Either can be written with or without a scheme, a slot name and password, or the default port,
-    and "localhost" names the same server as 127.0.0.1.
+    The address can be written with or without a scheme, a slot name and password, or the default
+    port, and "localhost" names the same host as 127.0.0.1.
     """
-    def server(address: str) -> tuple[str, int | str]:
-        address = without_login(address.strip().lower())
-        address = address.removeprefix("wss://").removeprefix("ws://").rstrip("/")
-        parts = urllib.parse.urlsplit(f"//{address}")
-        try:
-            port = parts.port or DEFAULT_SERVER_PORT
-        except ValueError:
-            return address, ""  # not an address urlsplit can read, so compared as written
-        host = parts.hostname or ""
-        return ("localhost" if host in LOOPBACK_NAMES else host), port
-    return server(first) == server(second)
+    address = without_login(address.strip().lower())
+    address = address.removeprefix("wss://").removeprefix("ws://").rstrip("/")
+    parts = urllib.parse.urlsplit(f"//{address}")
+    try:
+        port = parts.port or DEFAULT_SERVER_PORT
+    except ValueError:
+        return address, ""  # not an address urlsplit can read, so compared as written
+    host = parts.hostname or ""
+    return ("localhost" if host in LOOPBACK_NAMES else host), port
+
+
+def same_address(first: str, second: str) -> bool:
+    """Whether two server addresses name the same server, however each is written."""
+    return server_of(first) == server_of(second)
 
 
 class LogTail(logging.Handler):
@@ -94,6 +97,8 @@ class TrackerContext(CommonContext):
         self.route_target: int | None = None  # the location id a route was asked for
         self.route: tracker_route.Route | None = None
         self.route_room: str | None = None    # the room the route was planned from
+        self.entry_room: str | None = None    # the room Soma is in, and where he came into it,
+        self.entry_point: tuple[float, float] | None = None  # in map cells
         self.log_tail = LogTail(self.changed)
         logger.addHandler(self.log_tail)
 
@@ -117,6 +122,8 @@ class TrackerContext(CommonContext):
         """Connect to the server at ``address`` and track ``slot_name``, unless stopping."""
         if self.exit_event.is_set():
             return
+        if slot_name != self.slot_name or not same_address(address, self.room_address or ""):
+            self.route_target = None  # a route belongs to its room and slot
         self.slot_name = slot_name
         self.room_address = address
         self.username = slot_name  # CommonContext reconnects on its own only when this is set
@@ -142,29 +149,43 @@ class TrackerContext(CommonContext):
         another, and "closing" when it is shutting down, so that the launch serves on the port
         itself once it comes free.
 
-        A tracker that follows nothing takes the request when ``take`` is true, and otherwise
-        answers "idle". A launch asks every tracker without ``take`` first, so that a tracker that
-        already follows its slot opens rather than an idle one being given the slot twice. A
-        tracker follows nothing after a connection that was refused, or when its slot plays
-        another game or its seed couldn't be rebuilt.
+        Without ``take``, a tracker that could take the request says so instead: "remembers" when
+        the slot is the one it last followed, and "idle" otherwise. A launch asks every tracker
+        without ``take`` first, so that a tracker that already follows the slot opens rather than
+        another being given it too. Then it gives the request to one that remembers the slot,
+        before any other.
+
+        A tracker that follows nothing could take any request. That is a tracker whose connection
+        was refused, or whose slot plays another game or couldn't be rebuilt. So could one still
+        trying to reconnect to the slot on the same host, since archipelago.gg brings a room that
+        went to sleep back on a new port.
         """
         if self.exit_event.is_set():
             return "closing"
         if not address or not slot_name:
             return "opened"  # the launch asked for nothing but the page
-        same = (slot_name == self.slot_name
-                and same_address(address, self.room_address or self.server_address or ""))
-        if self.following:
-            return "opened" if same else "busy"
-        if not same and not take:
-            return "idle"
-        # Its own room and slot again, perhaps now with the password, or a request it may take.
+        room = self.room_address or self.server_address or ""
+        own_slot = slot_name == self.slot_name
+        if self.following and own_slot and same_address(address, room):
+            return "opened"
+        moved = own_slot and not self.tracking and server_of(address)[0] == server_of(room)[0]
+        if self.following and not moved:
+            return "busy"
+        if not take:
+            return "remembers" if own_slot else "idle"
         await self.connect_to(address, slot_name, password)
         return "opened"
 
+    @property
+    def will_reconnect(self) -> bool:
+        """Whether CommonContext will try the connection again by itself once it ends."""
+        return bool(self.server_address and self.username and not self.disconnected_intentionally)
+
     def handle_connection_loss(self, msg: str) -> None:
         super().handle_connection_loss(msg)
-        self.set_status(msg)
+        # CommonClient says to type /connect, which the page doesn't have.
+        reason = msg.replace(", type /connect to reconnect", "").rstrip(". ")
+        self.set_status(f"{reason}. Trying again shortly" if self.will_reconnect else reason)
 
     def event_invalid_slot(self) -> None:
         # CommonContext raises here, which would report a lost connection instead of the reason.
@@ -246,11 +267,12 @@ class TrackerContext(CommonContext):
             return  # CommonContext.__init__ calls this before the tracker's own state exists
         self.core.disconnect()
         self.result = None
-        self.route = None
-        self.route_target = None
-        # A reason the connection failed stays on screen. Anything else just ends.
+        self.route = None  # planned again once the seed is rebuilt, to the same target
+        # A reason the connection failed stays on screen. Anything else just ends, unless
+        # CommonContext is about to try again, as after the server closed the connection.
         if self.status.startswith(("Connecting", "Rebuilding", "Tracking")):
-            self.set_status("Not connected")
+            room = self.room_address or self.server_address
+            self.set_status(f"Reconnecting to {room}" if self.will_reconnect else "Not connected")
         else:
             self.changed()
 
@@ -307,11 +329,18 @@ class TrackerContext(CommonContext):
         return value
 
     def follow_position(self) -> None:
-        """Plan the route again when Soma has gone into another room, so it starts where he is."""
+        """Note where Soma came into the room he is in, and plan the route again once he has gone
+        into another room, so that it starts from the door he came in by."""
         position = self.position()
-        if self.route_target is None or position is None:
+        if position is None:
             return
-        if position[0] != self.route_room:
+        if position[0] != self.entry_room:
+            self.entry_room = position[0]
+            try:
+                self.entry_point = tracker_map.cell_position(*position)
+            except KeyError:
+                self.entry_point = None  # a room this world has no place for
+        if self.route_target is not None and position[0] != self.route_room:
             self.plan_route()
 
     @property
@@ -322,14 +351,26 @@ class TrackerContext(CommonContext):
     def set_route(self, location_id: int | None) -> None:
         """Show a route to the location with ``location_id``, or none.
 
-        A location the seed doesn't have is ignored, since planning a route to it would fail on
-        every update after.
+        A location the seed doesn't have is ignored, and so is one the tracker's rebuilt world
+        lacks, as a seed from another version of this world can have. Planning a route to either
+        would fail on every update after.
         """
-        if location_id is not None and (self.race_mode or location_id not in self.server_locations):
+        if location_id is not None and (self.race_mode or not self.routable(location_id)):
             return
         self.route_target = location_id
         self.plan_route()
         self.changed()
+
+    def routable(self, location_id: int) -> bool:
+        """Whether the seed has the location, and so does the world the tracker rebuilt."""
+        world = self.core.get_current_world()
+        if location_id not in self.server_locations or world is None:
+            return False
+        try:
+            world.get_location(world.location_id_to_name.get(location_id))
+        except KeyError:
+            return False
+        return True
 
     def plan_route(self) -> None:
         """Plan the route to the route's target from Soma's room, or drop it once it is checked.
@@ -344,22 +385,19 @@ class TrackerContext(CommonContext):
             self.route_target = None  # Soma got there
         if self.route_target is None or not self.tracking or self.result is None:
             return
+        if not self.routable(self.route_target):
+            self.route_target = None  # a world rebuilt since, without it
+            return
         world = self.core.get_current_world()
         location = world.get_location(world.location_id_to_name[self.route_target])
         position = self.position()
         self.route_room = position[0] if position is not None else None
-        # The route is planned again only when Soma enters another room, so at the door he came in
-        # by, which is where it starts.
-        try:
-            start_point = tracker_map.cell_position(*position) if position is not None else None
-        except KeyError:
-            start_point = None  # a room this world has no place for
-        for state in (self.result.state, self.result.glitches_state):
-            if state is not None:
-                self.route = tracker_route.plan_route(world, location, state, self.route_room,
-                                                      start_point)
-                if self.route is not None:
-                    return
+        # From the door Soma came in by, which he can get back to wherever he has gone since.
+        start_point = self.entry_point if self.route_room == self.entry_room else None
+        states = [state for state in (self.result.state, self.result.glitches_state)
+                  if state is not None]
+        self.route = tracker_route.plan_route(world, location, states, self.route_room,
+                                              start_point)
 
     # --- what the page shows -------------------------------------------------------------------
 
@@ -368,6 +406,7 @@ class TrackerContext(CommonContext):
         snapshot = {
             "status": self.status,
             "connected": self.slot is not None,
+            "following": self.following,  # including while it connects or waits to reconnect
             "tracking": self.tracking,
             "server": self.server_address or "",
             "slot": self.slot_name or "",

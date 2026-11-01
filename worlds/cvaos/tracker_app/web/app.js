@@ -48,6 +48,7 @@ const page = {
   selected: null,      // the selected location's id
   view: { x: 0, y: 0, w: 64, h: 47 },
   somaArea: null,      // the area Soma was last seen in, to follow him when it changes
+  somaCell: null,      // and the cell, to follow him with the view when he leaves it
   askedToConnect: false,
   fittedTo: null,      // "whole" or "explored": the map the view was last fitted to
   reveal: prefs.get("reveal", false),
@@ -89,15 +90,24 @@ function svg(tag, attributes, parent) {
 
 const UNKNOWN_AREA = "???";
 
+const NOTHING_EXPLORED = { visited: [], remembered: [], hidden_doors: [], castle_maps: [], revealed: [] };
+
+// What Soma has explored, or null to treat the whole castle as explored. A page that tracks a slot
+// whose client hasn't sent the explored map yet, as before play, has nothing explored, rather than
+// showing every room until it arrives.
+function explored() {
+  return page.snapshot.exploration || (page.snapshot.tracking ? NOTHING_EXPLORED : null);
+}
+
 // The areas Soma has been to, or null to treat them all as known. While unexplored cells are
 // hidden, he has been to an area once he has visited or remembers a cell in it, is in it, or has
 // checked a location in it. The last is the only sign of the Chaotic Realm, which the game never
 // marks as explored.
 function knownAreas() {
-  const explored = page.snapshot.exploration;
-  if (page.reveal || !explored) return null;
+  const cells = explored();
+  if (page.reveal || !cells) return null;
   const known = new Set();
-  for (const [x, y] of [...explored.visited, ...explored.remembered]) {
+  for (const [x, y] of [...cells.visited, ...cells.remembered]) {
     const rect = els.cells.get(key(x, y));
     if (rect) known.add(rect.dataset.area);
   }
@@ -204,10 +214,13 @@ function fitView() {
   applyView();
 }
 
-// Fit the view again only when what kind of map is shown changes: the whole map, or the explored
+// Fit the view again only when what kind of map is shown changes: the whole map, nothing yet, or
+// the explored part. So the view fits the first rooms the client sends, and then stays.
 // part once the client has sent it. Exploring further, or picking an area, leaves the view alone.
 function fitWhenTheShownMapChanges() {
-  const shown = page.reveal ? "whole" : page.snapshot.exploration ? "explored" : "whole";
+  const cells = explored();
+  const anything = cells && (cells.visited.length || cells.remembered.length || cells.revealed.length);
+  const shown = page.reveal || !cells ? "whole" : anything ? "explored" : "nothing";
   if (shown !== page.fittedTo) {
     page.fittedTo = shown;
     fitView();
@@ -248,6 +261,13 @@ function zoom(factor, clientX, clientY) {
   page.view = { x: at.x - (at.x - view.x) * factor, y: at.y - (at.y - view.y) * factor,
                 w: view.w * factor, h: view.h * factor };
   applyView();
+}
+
+// Whether a point is within the view, a little way in from its edges.
+function inView(point, margin = 0.5) {
+  const view = page.view;
+  return point.x >= view.x + margin && point.x <= view.x + view.w - margin
+      && point.y >= view.y + margin && point.y <= view.y + view.h - margin;
 }
 
 function centerOn(x, y) {
@@ -293,10 +313,11 @@ function setUpPanAndZoom() {
   map.addEventListener("wheel", (event) => {
     event.preventDefault();
     if (!event.deltaY) return;  // a sideways scroll isn't a zoom
-    // A mouse wheel notch is about 100 pixels or 3 lines, and a touchpad sends many small steps,
-    // so the zoom follows how far the wheel turned, up to one notch's step for each event.
-    const lines = event.deltaMode === WheelEvent.DOM_DELTA_LINE;
-    const notches = lines ? event.deltaY / 3 : event.deltaY / 100;
+    // A mouse wheel notch is about 100 pixels, 3 lines or 1 page, and a touchpad sends many small
+    // steps, so the zoom follows how far the wheel turned, up to one notch's step for each event.
+    const perNotch = { [WheelEvent.DOM_DELTA_PIXEL]: 100, [WheelEvent.DOM_DELTA_LINE]: 3,
+                       [WheelEvent.DOM_DELTA_PAGE]: 1 }[event.deltaMode] || 100;
+    const notches = event.deltaY / perNotch;
     zoom(ZOOM_STEP ** Math.max(-1, Math.min(1, notches)), event.clientX, event.clientY);
   }, { passive: false });
 
@@ -310,28 +331,29 @@ function setUpPanAndZoom() {
 // The cells to draw, or null for all of them. Cells Soma hasn't explored, and that no Castle Map
 // he holds shows, stay hidden unless the full map is revealed. The game never marks the Chaotic
 // Realm as explored, so it is drawn whole, but only while it is in focus or Soma is in it. The
-// panels count the Realm's checks once Soma has been there (countRealm), so that their numbers
-// don't change with the focus.
+// panels count the Realm's checks once Soma has been there (countRealm), whatever the focus, so
+// that their numbers don't change with it.
 function visibleCells({ countRealm = false } = {}) {
-  const explored = page.snapshot.exploration;
-  if (page.reveal || !explored) return null;
+  const cells = explored();
+  if (page.reveal || !cells) return null;
   const visible = new Set();
-  for (const [x, y] of explored.visited) visible.add(key(x, y));
-  for (const [x, y] of explored.remembered) visible.add(key(x, y));
+  for (const [x, y] of cells.visited) visible.add(key(x, y));
+  for (const [x, y] of cells.remembered) visible.add(key(x, y));
   // The areas a Castle Map shows. Not visited yet, they are drawn dimmed, as the game does.
-  for (const [x, y] of explored.revealed || []) visible.add(key(x, y));
+  for (const [x, y] of cells.revealed || []) visible.add(key(x, y));
   const soma = somaPoint();
   if (soma) visible.add(key(Math.floor(soma.x), Math.floor(soma.y)));
-  const known = countRealm ? knownAreas() : null;
-  if (page.focus === REALM || (soma && soma.room[0] === REALM) || (known && known.has(REALM))) {
+  const inRealm = Boolean(soma && soma.room[0] === REALM);
+  const realmShown = countRealm ? inRealm || knownAreas().has(REALM) : inRealm || page.focus === REALM;
+  if (realmShown) {
     for (const cell of page.map.cells) if (cell.area === REALM) visible.add(key(cell.x, cell.y));
   }
   return visible;
 }
 
 function visitedCells() {
-  const explored = page.snapshot.exploration;
-  return explored ? new Set(explored.visited.map(([x, y]) => key(x, y))) : null;
+  const cells = explored();
+  return cells ? new Set(cells.visited.map(([x, y]) => key(x, y))) : null;
 }
 
 // Whether a cell is drawn in full rather than greyed out. While unexplored cells are hidden, the
@@ -352,23 +374,22 @@ function checkShown(location, visible, visited) {
 
 function renderMap() {
   const visible = visibleCells();
-  const explored = page.snapshot.exploration;
   const visited = visitedCells();
   for (const [cellKey, rect] of els.cells) {
     rect.style.display = !visible || visible.has(cellKey) ? "" : "none";
     rect.classList.toggle("remembered", !drawnInFull(cellKey, visited));
   }
   renderEdges(visible);
-  $("fog-note").hidden = Boolean(explored) || page.reveal || !page.snapshot.tracking;
+  $("fog-note").hidden = Boolean(page.snapshot.exploration) || page.reveal || !page.snapshot.tracking;
   renderPins(visible);
 }
 
 // Draw the walls and doors that touch a shown cell, one path for each look. A path's stroke is
 // filled as one shape, so where two segments overlap at a cell corner nothing is drawn twice.
 function renderEdges(visible = visibleCells()) {
-  const explored = page.snapshot.exploration;
+  const cells = explored();
   const visited = visitedCells();
-  const passed = new Set(explored ? explored.hidden_doors : []);
+  const passed = new Set(cells ? cells.hidden_doors : []);
   const paths = Object.fromEntries(EDGE_LOOKS.map((look) => [look, []]));
   // As on the game's map, a door fills its edge between the two corners, which stay in the wall
   // colour. So it stops half a wall's width short of each end.
@@ -384,7 +405,7 @@ function renderEdges(visible = visibleCells()) {
     paths[`wall${dim}`].push(edge.top ? `M${x} ${y}h1` : `M${x} ${y}v1`);
     // A door is its edge in the door colour, all but the wall at each corner, as on the game's own
     // map. A hidden door looks like a wall until Soma has gone through it.
-    const open = edge.hidden === null || page.reveal || !explored || passed.has(edge.hidden);
+    const open = edge.hidden === null || page.reveal || !cells || passed.has(edge.hidden);
     if (edge.door && open) {
       paths[`door${dim}`].push(edge.top ? `M${x + inset} ${y}h${1 - 2 * inset}`
                                         : `M${x} ${y + inset}v${1 - 2 * inset}`);
@@ -451,6 +472,13 @@ function renderSoma() {
                 class: "soma-cell-outline" }, cellLayer);
   const marker = somaMarker(soma);
   svg("circle", { cx: marker.x, cy: marker.y, r: 0.22, class: "soma-dot" }, layer);
+  // Following Soma moves the view only once he has gone into another cell outside it, so a view
+  // the player has moved stays put while he stands still, and picking an area never moves it.
+  const cell = key(x, y);
+  if (page.follow && page.somaCell !== null && cell !== page.somaCell && !inView(marker)) {
+    centerOn(marker.x, marker.y);
+  }
+  page.somaCell = cell;
   const area = soma.room[0];
   if (page.follow && area !== page.somaArea && page.somaArea !== null) setFocus(area);
   if (page.somaArea === null && page.focus === CASTLE && page.follow) setFocus(area);
@@ -773,10 +801,6 @@ function onSnapshot(snapshot) {
   renderLocationList();
   $("log").textContent = (snapshot.log || []).join("\n");
   if ($("connect-dialog").open) renderDialog();
-  if (!snapshot.connected && snapshot.status === "Not connected" && !page.askedToConnect) {
-    page.askedToConnect = true;
-    openConnectDialog();
-  }
 }
 
 function openSocket() {
@@ -799,15 +823,27 @@ function openSocket() {
       return;
     }
     // While the tracker reconnects or rebuilds the seed, its snapshots carry no explored map or
-    // position. The page keeps the last ones it had for the same slot, rather than show the whole
-    // castle, with every area's name and secret door, until the next arrive.
+    // position. The page keeps the last ones it had for the same slot in the same room, rather
+    // than show the whole castle, with every area's name and secret door, until the next arrive.
+    // Once the tracker is tracking, a snapshot without them is a seed the client hasn't sent them
+    // for yet, so nothing is kept.
     const snapshot = message.snapshot;
-    if (!snapshot.exploration && page.snapshot.exploration && snapshot.slot === page.snapshot.slot) {
+    const last = page.snapshot;
+    if (!snapshot.exploration && !snapshot.tracking && last.exploration
+        && snapshot.slot === last.slot && snapshot.server === last.server) {
       snapshot.exploration = page.snapshot.exploration;
       snapshot.position = snapshot.position ?? page.snapshot.position;
     }
     page.gone = false;
     onSnapshot(snapshot);
+    // The dialog opens by itself only for a tracker that has no room when the page first hears
+    // from it, not when a connection later ends, as before a reconnect or after Disconnect.
+    if (!page.askedToConnect) {
+      page.askedToConnect = true;
+      if (!snapshot.connected && !snapshot.following && snapshot.status === "Not connected") {
+        openConnectDialog();
+      }
+    }
   });
   socket.addEventListener("close", () => {
     // A socket already replaced by a newer one, or closed for a reload, has nothing to report.
@@ -840,7 +876,8 @@ function openConnectDialog() {
 function renderDialog() {
   const live = Boolean(page.socket && page.socket.readyState === WebSocket.OPEN);
   $("dialog-status").textContent = page.snapshot.status || "";
-  $("disconnect").disabled = !live || !page.snapshot.connected;
+  // Disconnect also stops a tracker that is reconnecting, or retrying a room that has closed.
+  $("disconnect").disabled = !live || !(page.snapshot.connected || page.snapshot.following);
   $("quit").disabled = !live;
 }
 

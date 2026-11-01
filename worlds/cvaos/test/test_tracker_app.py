@@ -24,6 +24,7 @@ from websockets.exceptions import InvalidStatus
 from worlds.LauncherComponents import components
 
 from .. import CVAOSWorld, exploration, tracker_app
+from ..data.room_info import by_identifier as rooms_by_identifier
 from ..exploration import Exploration
 from ..locations import location_name_to_id
 from ..tracker_app import parse_args, serve_or_hand_over
@@ -31,6 +32,7 @@ from ..tracker_app.context import TrackerContext
 from ..tracker_app.mapdata import map_data
 from ..tracker_app.server import TrackerServer, build_id
 from ..tracker_app.ut import UPSTREAM
+from ..tracker_route import DOOR_POINTS
 from .test_universal_tracker import generate
 
 TERRACE = "Terrace [503 CASTLE MAP 3]"
@@ -85,6 +87,10 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.ctx.close)
         self.changes = 0
         self.ctx.listeners.append(self.count_change)
+        self.connect()
+
+    def connect(self) -> None:
+        """Connect the context as the server would."""
         ids = set(location_name_to_id.values())
         self.ctx.slot, self.ctx.team = 1, 0
         self.ctx.slot_info = {1: NetworkSlot("Soma", CVAOSWorld.game, SlotType.player)}
@@ -221,6 +227,56 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         self.receive("Malphas")  # an update after it still works
         self.assertTrue(self.ctx.snapshot()["tracking"])
 
+    async def test_a_route_to_a_location_the_rebuilt_world_lacks_is_ignored(self):
+        # The server's seed can have a location that this version's rebuild of it doesn't, as a
+        # seed from another version of the world can.
+        world = self.ctx.core.get_current_world()
+        missing = next(location_id for location_id in CVAOSWorld.location_name_to_id.values()
+                       if location_id not in {loc.address for loc in world.get_locations()})
+        self.ctx.server_locations.add(missing)
+        self.ctx.set_route(missing)
+        self.assertIsNone(self.ctx.snapshot()["route_target"])
+        self.receive("Malphas")  # an update after it still works
+        self.assertTrue(self.ctx.snapshot()["tracking"])
+
+    async def test_a_route_starts_at_the_door_soma_came_in_by(self):
+        # With only Malphas, the door to 109 in room 108 is out of reach from the door to 104.
+        def by_door(door: str) -> list:
+            room = rooms_by_identifier["108"]
+            x, y = DOOR_POINTS[door]
+            return ["108", int((x - int(room.x)) * 256), int((y - int(room.y)) * 256)]
+
+        self.receive("Malphas")
+        self.store(self.ctx.position_key, by_door("108:104"))  # he comes in by the 104 door
+        self.store(self.ctx.position_key, by_door("108:109"))  # and walks under the 109 door
+        self.ctx.set_route(location_name_to_id["Underneath Grand Staircase [109 Silk Robe]"])
+        route = self.ctx.route
+        self.assertEqual(route.entrances[0].parent_region.name, "Entrance: 108:104")
+        self.receive("Malphas")  # planned again on an update, still from the door he came in by
+        self.assertEqual(self.ctx.route.entrances[0].parent_region.name, "Entrance: 108:104")
+
+    async def test_a_route_survives_a_reconnect(self):
+        self.receive("Malphas", "Hippogryph")
+        terrace = location_name_to_id[TERRACE]
+        self.ctx.set_route(terrace)
+        items = list(self.ctx.items_received)
+        self.ctx.reset_server_state()  # the connection ended
+        self.assertEqual(self.ctx.route_target, terrace)
+        self.connect()  # and came back
+        self.ctx.items_received = items
+        self.ctx.on_package("ReceivedItems", {})
+        snapshot = self.ctx.snapshot()
+        self.assertEqual(snapshot["route_target"], terrace)
+        self.assertIsNotNone(snapshot["route"])
+
+    async def test_a_route_is_dropped_for_another_slot(self):
+        self.receive("Malphas", "Hippogryph")
+        self.ctx.room_address = "localhost:38281"
+        self.ctx.set_route(location_name_to_id[TERRACE])
+        self.ctx.connect = mock.AsyncMock()
+        await self.ctx.connect_to("localhost:38281", "Alucard", None)
+        self.assertIsNone(self.ctx.route_target)
+
     async def test_there_is_no_route_out_of_reach(self):
         self.ctx.set_route(location_name_to_id[TERRACE])
         snapshot = self.ctx.snapshot()
@@ -316,18 +372,29 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(self.ctx.exit_event.wait(), 2)
         await watch
 
-    async def test_a_launch_asking_doesn_t_restart_the_idle_wait(self):
-        idle_since = self.server.idle_since
+    async def ask(self, request: dict) -> str:
         async with self.open_socket() as launch:
             await launch.recv()
-            await launch.send(json.dumps({"type": "handover", "server": "", "slot": ""}))
-            await launch.recv()
+            await launch.send(json.dumps({"type": "handover", **request}))
+            answer = json.loads(await launch.recv())["result"]
         await asyncio.sleep(0.1)
+        return answer
+
+    async def test_a_launch_asking_doesn_t_restart_the_idle_wait(self):
+        idle_since = self.server.idle_since
+        request = {"server": "localhost:38281", "slot": "Soma", "take": False}
+        self.assertEqual(await self.ask(request), "idle")
         self.assertEqual(self.server.idle_since, idle_since)
         # A page does restart it, since someone looked at the tracker.
         async with self.open_socket() as page:
             await page.recv()
         await asyncio.sleep(0.1)
+        self.assertGreater(self.server.idle_since, idle_since)
+
+    async def test_a_launch_that_opens_this_tracker_restarts_the_idle_wait(self):
+        # Its page is about to load, so the tracker mustn't stop in the meantime.
+        idle_since = self.server.idle_since
+        self.assertEqual(await self.ask({"server": "", "slot": ""}), "opened")
         self.assertGreater(self.server.idle_since, idle_since)
 
     async def test_another_site_can_t_reach_the_tracker(self):
@@ -351,6 +418,16 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(await asyncio.to_thread(get_as, f"evil.example:{self.port}"), 403)
         self.assertEqual(await asyncio.to_thread(get_as, f"localhost:{self.port}"), 200)
+
+    async def test_a_request_that_fails_leaves_the_page_connected(self):
+        self.ctx.set_route = mock.Mock(side_effect=RuntimeError("a bug"))
+        async with self.open_socket() as page:
+            await page.recv()
+            with self.assertLogs("Client", level="ERROR"):
+                await page.send(json.dumps({"type": "route", "location": 1}))
+                await asyncio.sleep(0.2)
+            await page.send(json.dumps({"type": "quit"}))
+            await asyncio.wait_for(self.ctx.exit_event.wait(), 5)
 
     async def test_the_page_gets_a_snapshot_and_its_requests_reach_the_tracker(self):
         async with self.open_socket() as socket:
@@ -401,6 +478,36 @@ def following():
     """Make ``tracking`` true, as for a tracker that has rebuilt its slot's seed."""
     return mock.patch.object(TrackerContext, "tracking", new_callable=mock.PropertyMock,
                              return_value=True)
+
+
+class ReconnectStatusTest(unittest.IsolatedAsyncioTestCase):
+    """What the page says when the tracker's connection ends."""
+
+    async def asyncSetUp(self) -> None:
+        self.ctx = TrackerContext(None, None, "Soma")
+        self.addCleanup(self.ctx.close)
+        self.ctx.server_address, self.ctx.username = "ws://localhost:38281", "Soma"
+        self.ctx.room_address = "localhost:38281"
+        self.ctx.disconnected_intentionally = False
+        self.ctx.status = "Tracking Soma"
+
+    async def test_a_connection_that_will_come_back_says_so(self):
+        # The server closed it, and CommonContext tries again by itself.
+        self.ctx.reset_server_state()
+        self.assertEqual(self.ctx.status, "Reconnecting to localhost:38281")
+
+    async def test_a_disconnect_just_ends(self):
+        self.ctx.disconnected_intentionally = True
+        self.ctx.reset_server_state()
+        self.assertEqual(self.ctx.status, "Not connected")
+
+    async def test_a_lost_connection_says_it_tries_again_and_not_to_type_connect(self):
+        with self.assertLogs("Client", level="ERROR"):
+            self.ctx.handle_connection_loss(
+                "Lost connection to the multiworld server, type /connect to reconnect")
+        self.assertEqual(self.ctx.status,
+                         "Lost connection to the multiworld server. Trying again shortly")
+        self.assertTrue(self.ctx.snapshot()["following"] is self.ctx.following)
 
 
 class ShutdownTest(unittest.IsolatedAsyncioTestCase):
@@ -484,12 +591,34 @@ class HandOverTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", None), "busy")
         self.ctx.connect_to.assert_not_awaited()
 
-    async def test_its_own_slot_again_reconnects_even_untaken(self):
-        # A room that refused it for a missing password, asked for again with the password.
+    async def test_its_own_slot_again_waits_to_be_taken(self):
+        # A room that refused it for a missing password, asked for again with the password. It
+        # says it remembers the slot, and reconnects only once given the request, so that it
+        # doesn't follow a slot another tracker already follows.
         self.ctx.slot_name, self.ctx.room_address = "Soma", "localhost:38281"
         self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", "pw", take=False),
-                         "opened")
+                         "remembers")
+        self.ctx.connect_to.assert_not_awaited()
+        self.assertEqual(await self.ctx.hand_over("localhost:38281", "Soma", "pw"), "opened")
         self.ctx.connect_to.assert_awaited_once_with("localhost:38281", "Soma", "pw")
+
+    async def test_a_room_that_came_back_on_another_port_is_followed_there(self):
+        # archipelago.gg wakes a sleeping room on a new port, while the tracker keeps retrying
+        # the old one.
+        self.ctx.slot_name, self.ctx.room_address = "Soma", "archipelago.gg:12345"
+        self.ctx.autoreconnect_task = asyncio.get_running_loop().create_future()
+        self.addCleanup(self.ctx.autoreconnect_task.cancel)
+        self.assertEqual(await self.ctx.hand_over("archipelago.gg:54321", "Soma", None, take=False),
+                         "remembers")
+        self.assertEqual(await self.ctx.hand_over("archipelago.gg:54321", "Soma", None), "opened")
+        self.ctx.connect_to.assert_awaited_once_with("archipelago.gg:54321", "Soma", None)
+
+    async def test_another_room_on_the_same_server_is_still_another_room(self):
+        # Two rooms on one host can both have a slot named Soma.
+        self.connect_as("Soma", "localhost:38281")
+        with following():
+            self.assertEqual(await self.ctx.hand_over("localhost:38282", "Soma", None), "busy")
+        self.ctx.connect_to.assert_not_awaited()
 
     async def test_a_tracker_that_is_stopping_says_so(self):
         self.ctx.exit_event.set()
@@ -586,6 +715,16 @@ class SecondLaunchTest(unittest.IsolatedAsyncioTestCase):
                 mock.patch.object(tracker_app, "SPARE_PORTS", [idle_port]):
             self.assertIsNone(await self.launch("--connect", "localhost:38281", "--name", "Soma"))
         idle.connect_to.assert_awaited_once_with("localhost:38281", "Soma", None)
+
+    async def test_the_tracker_that_remembers_the_slot_is_given_it_first(self):
+        idle, _, idle_port = await self.run_tracker()
+        remembers, _, remembers_port = await self.run_tracker()
+        remembers.slot_name, remembers.room_address = "Soma", "localhost:38281"
+        with mock.patch.object(tracker_app, "DEFAULT_PORT", idle_port), \
+                mock.patch.object(tracker_app, "SPARE_PORTS", [remembers_port]):
+            self.assertIsNone(await self.launch("--connect", "localhost:38281", "--name", "Soma"))
+        remembers.connect_to.assert_awaited_once_with("localhost:38281", "Soma", None)
+        idle.connect_to.assert_not_awaited()
 
     async def test_a_tracker_that_is_stopping_leaves_its_port_to_the_launch(self):
         ctx, server, port = await self.run_tracker()
