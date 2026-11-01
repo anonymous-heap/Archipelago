@@ -176,9 +176,16 @@ class TrackerContext(CommonContext):
         await self.connect_to(address, slot_name, password)
         return "opened"
 
+    @property
+    def will_reconnect(self) -> bool:
+        """Whether CommonContext will try the connection again by itself once it ends."""
+        return bool(self.server_address and self.username and not self.disconnected_intentionally)
+
     def handle_connection_loss(self, msg: str) -> None:
         super().handle_connection_loss(msg)
-        self.set_status(msg)
+        # CommonClient says to type /connect, which the page doesn't have.
+        reason = msg.replace(", type /connect to reconnect", "").rstrip(". ")
+        self.set_status(f"{reason}. Trying again shortly" if self.will_reconnect else reason)
 
     def event_invalid_slot(self) -> None:
         # CommonContext raises here, which would report a lost connection instead of the reason.
@@ -261,9 +268,11 @@ class TrackerContext(CommonContext):
         self.core.disconnect()
         self.result = None
         self.route = None  # planned again once the seed is rebuilt, to the same target
-        # A reason the connection failed stays on screen. Anything else just ends.
+        # A reason the connection failed stays on screen. Anything else just ends, unless
+        # CommonContext is about to try again, as after the server closed the connection.
         if self.status.startswith(("Connecting", "Rebuilding", "Tracking")):
-            self.set_status("Not connected")
+            room = self.room_address or self.server_address
+            self.set_status(f"Reconnecting to {room}" if self.will_reconnect else "Not connected")
         else:
             self.changed()
 
@@ -397,6 +406,7 @@ class TrackerContext(CommonContext):
         snapshot = {
             "status": self.status,
             "connected": self.slot is not None,
+            "following": self.following,  # including while it connects or waits to reconnect
             "tracking": self.tracking,
             "server": self.server_address or "",
             "slot": self.slot_name or "",

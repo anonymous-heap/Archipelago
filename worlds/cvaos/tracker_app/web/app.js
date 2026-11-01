@@ -774,10 +774,6 @@ function onSnapshot(snapshot) {
   renderLocationList();
   $("log").textContent = (snapshot.log || []).join("\n");
   if ($("connect-dialog").open) renderDialog();
-  if (!snapshot.connected && snapshot.status === "Not connected" && !page.askedToConnect) {
-    page.askedToConnect = true;
-    openConnectDialog();
-  }
 }
 
 function openSocket() {
@@ -813,6 +809,14 @@ function openSocket() {
     }
     page.gone = false;
     onSnapshot(snapshot);
+    // The dialog opens by itself only for a tracker that has no room when the page first hears
+    // from it, not when a connection later ends, as before a reconnect or after Disconnect.
+    if (!page.askedToConnect) {
+      page.askedToConnect = true;
+      if (!snapshot.connected && !snapshot.following && snapshot.status === "Not connected") {
+        openConnectDialog();
+      }
+    }
   });
   socket.addEventListener("close", () => {
     // A socket already replaced by a newer one, or closed for a reload, has nothing to report.
@@ -845,7 +849,8 @@ function openConnectDialog() {
 function renderDialog() {
   const live = Boolean(page.socket && page.socket.readyState === WebSocket.OPEN);
   $("dialog-status").textContent = page.snapshot.status || "";
-  $("disconnect").disabled = !live || !page.snapshot.connected;
+  // Disconnect also stops a tracker that is reconnecting, or retrying a room that has closed.
+  $("disconnect").disabled = !live || !(page.snapshot.connected || page.snapshot.following);
   $("quit").disabled = !live;
 }
 

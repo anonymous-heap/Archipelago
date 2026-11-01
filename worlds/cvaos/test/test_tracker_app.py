@@ -479,6 +479,36 @@ def following():
                              return_value=True)
 
 
+class ReconnectStatusTest(unittest.IsolatedAsyncioTestCase):
+    """What the page says when the tracker's connection ends."""
+
+    async def asyncSetUp(self) -> None:
+        self.ctx = TrackerContext(None, None, "Soma")
+        self.addCleanup(self.ctx.close)
+        self.ctx.server_address, self.ctx.username = "ws://localhost:38281", "Soma"
+        self.ctx.room_address = "localhost:38281"
+        self.ctx.disconnected_intentionally = False
+        self.ctx.status = "Tracking Soma"
+
+    async def test_a_connection_that_will_come_back_says_so(self):
+        # The server closed it, and CommonContext tries again by itself.
+        self.ctx.reset_server_state()
+        self.assertEqual(self.ctx.status, "Reconnecting to localhost:38281")
+
+    async def test_a_disconnect_just_ends(self):
+        self.ctx.disconnected_intentionally = True
+        self.ctx.reset_server_state()
+        self.assertEqual(self.ctx.status, "Not connected")
+
+    async def test_a_lost_connection_says_it_tries_again_and_not_to_type_connect(self):
+        with self.assertLogs("Client", level="ERROR"):
+            self.ctx.handle_connection_loss(
+                "Lost connection to the multiworld server, type /connect to reconnect")
+        self.assertEqual(self.ctx.status,
+                         "Lost connection to the multiworld server. Trying again shortly")
+        self.assertTrue(self.ctx.snapshot()["following"] is self.ctx.following)
+
+
 class ShutdownTest(unittest.IsolatedAsyncioTestCase):
     async def test_a_connection_still_opening_doesn_t_hold_up_the_shutdown(self):
         ctx = TrackerContext(None, None, "Soma")
