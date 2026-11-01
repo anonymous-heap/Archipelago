@@ -173,10 +173,11 @@ def base_rom_override(base: bytes):
 def get_base_rom_bytes(target: int = TARGET_GBA) -> bytes:
     """The base ROM to patch against, chosen by the seed's declared target platform.
 
-    - ``advance_collection``: source the ROM from the installed collection automatically — the
-      stock AoS ROM is pulled out of ``windata/`` next to ``collection_exe`` (default Steam path),
-      so a collection player configures nothing. Only if the collection can't be found there does
-      it fall back to the prompted ``rom_file``.
+    - ``advance_collection``: source the ROM from the installed collection automatically. The
+      stock AoS ROM is pulled out of ``windata/`` next to the collection's game.exe, which is
+      ``collection_exe`` or else the one in the player's Steam libraries (find_collection_exe),
+      so a collection player configures nothing. Only if the collection can't be found does it
+      fall back to the prompted ``rom_file``.
     - ``gba``: use ``rom_file``; accessing it opens a file browser when unset. The pick may be a
       GBA ROM *or* the collection's game.exe (``_read_base_rom_source`` extracts from the exe).
 
@@ -186,9 +187,12 @@ def get_base_rom_bytes(target: int = TARGET_GBA) -> bytes:
         return _base_rom_override
     opts = get_settings().cvaos_options
     if target == TARGET_ADVANCE_COLLECTION:
-        exe = str(opts.collection_exe)
-        if exe and os.path.exists(exe):
-            from ..advance_collection.install import extract_base_rom_bytes
+        from ..advance_collection.install import extract_base_rom_bytes, find_collection_exe
+        configured = str(opts.collection_exe)
+        exe = find_collection_exe(opts)
+        if exe is not None:
+            if exe != configured:
+                get_settings().save()  # found in a Steam library, so remember it
             return extract_base_rom_bytes(exe)
     return _read_base_rom_source(str(opts.rom_file))
 

@@ -493,10 +493,17 @@ class BaseRomSourceTest(unittest.TestCase):
         self.TARGET_AC = TARGET_ADVANCE_COLLECTION
         self.root = tempfile.mkdtemp(prefix="cvaos_baserom_test_")
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        # What a search of the Steam libraries finds: nothing, unless a test says otherwise.
+        self.in_libraries: list[str] = []
+        search = mock.patch.object(install.steam, "game_exe_candidates",
+                                   side_effect=lambda: iter(self.in_libraries))
+        search.start()
+        self.addCleanup(search.stop)
 
     def _patch_settings(self, collection_exe: str, rom_file: str) -> None:
-        fake = types.SimpleNamespace(cvaos_options=types.SimpleNamespace(
+        fake = types.SimpleNamespace(save=mock.Mock(), cvaos_options=types.SimpleNamespace(
             collection_exe=collection_exe, rom_file=rom_file))
+        self.settings = fake
         p = mock.patch.object(self.patch, "get_settings", return_value=fake)
         p.start()
         self.addCleanup(p.stop)
@@ -507,6 +514,16 @@ class BaseRomSourceTest(unittest.TestCase):
         # rom_file points somewhere that must NOT be read for an AC-target seed.
         self._patch_settings(exe, os.path.join(self.root, "unused-cart.gba"))
         self.assertEqual(self.patch.get_base_rom_bytes(self.TARGET_AC), stock)
+
+    def test_ac_target_finds_the_collection_in_a_steam_library(self) -> None:
+        stock = _make_stock_base_rom()
+        exe = _build_fake_collection(self.root, stock)
+        self.in_libraries = [exe]
+        self._patch_settings(os.path.join(self.root, "no-such-game.exe"), "unused-cart.gba")
+        with mock.patch.object(install, "is_collection_exe", return_value=True):
+            self.assertEqual(self.patch.get_base_rom_bytes(self.TARGET_AC), stock)
+        self.assertEqual(self.settings.cvaos_options.collection_exe, exe)
+        self.settings.save.assert_called_once()
 
     def test_ac_target_falls_back_to_rom_file_without_a_collection(self) -> None:
         cart = os.path.join(self.root, "cart.gba")
@@ -560,6 +577,11 @@ class ExePromptTest(unittest.TestCase):
         from .. import CVAOSWorld
         self.root = tempfile.mkdtemp(prefix="cvaos_exe_prompt_")
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.in_libraries: list[str] = []
+        search = mock.patch.object(install.steam, "game_exe_candidates",
+                                   side_effect=lambda: iter(self.in_libraries))
+        search.start()
+        self.addCleanup(search.stop)
         self.options = types.SimpleNamespace()
         self.saved = mock.Mock()
         # CVAOSWorld.settings is a read-only metaclass property. It caches the settings group in
@@ -595,6 +617,38 @@ class ExePromptTest(unittest.TestCase):
         self.options.collection_exe = self.FakePath(os.path.join(self.root, "missing", "game.exe"))
         self.assertIsNone(install._exe_path_from_settings())
         self.saved.assert_not_called()
+
+    def test_a_game_exe_in_a_steam_library_is_used_and_saved_without_asking(self) -> None:
+        found = self.exe()
+        self.in_libraries = [found]
+        self.options.collection_exe = self.FakePath(os.path.join(self.root, "missing", "game.exe"))
+        with mock.patch.object(install, "is_collection_exe", return_value=True), \
+                mock.patch.object(self.FakePath, "browse") as browse:
+            self.assertEqual(install._exe_path_from_settings(), found)
+        browse.assert_not_called()
+        self.assertEqual(self.options.collection_exe, found)
+        self.saved.assert_called_once()
+
+    def test_a_game_exe_with_another_hash_is_passed_over(self) -> None:
+        self.in_libraries = [self.exe()]  # "MZ", not the collection's game.exe
+        self.options.collection_exe = self.FakePath(os.path.join(self.root, "missing", "game.exe"))
+        self.assertIsNone(install._exe_path_from_settings())  # asked, and the dialog cancelled
+        self.saved.assert_not_called()
+
+
+class CollectionExeHashTest(unittest.TestCase):
+    """A file is taken for the collection's game.exe only when its MD5 hash matches."""
+
+    def test_the_hash_decides(self) -> None:
+        root = tempfile.mkdtemp(prefix="cvaos_exe_hash_")
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        path = os.path.join(root, "game.exe")
+        with open(path, "wb") as f:
+            f.write(b"MZ")
+        self.assertFalse(install.is_collection_exe(path))
+        self.assertFalse(install.is_collection_exe(os.path.join(root, "missing.exe")))
+        with mock.patch.object(install, "AC_GAME_EXE_MD5", hashlib.md5(b"MZ").hexdigest()):
+            self.assertTrue(install.is_collection_exe(path))
 
 
 class ExePathSettingTest(unittest.TestCase):

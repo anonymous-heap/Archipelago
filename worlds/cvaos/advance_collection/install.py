@@ -7,8 +7,10 @@ The collection keeps every ROM inside ``windata/alldata.bin`` (payload) plus
 AoS member replaced. This module is the friendly wrapper around
 ``cac_archive.replace_member`` behind the "CVAoS Collection ROM Installer"
 Launcher component. It finds the collection from the hash-validated
-``CVAOSSettings.collection_exe`` path. When no file is at that path, it asks
-for game.exe with a browse dialog and saves the answer in host.yaml.
+``CVAOSSettings.collection_exe`` path. When no file is at that path, it looks in
+every Steam library (``steam.py``), and asks for game.exe with a browse dialog
+only when the collection isn't in any of them. Either answer is saved in
+host.yaml.
 
 Safety model, in order:
 
@@ -53,9 +55,9 @@ import shutil
 import zlib
 from typing import Callable
 
-from . import cac_archive
+from . import cac_archive, steam
 from .._bytemaker_compat import Entry
-from ..constants import AC_DEFAULT_EXE_PATH, AC_USA_ROM_MD5
+from ..constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5
 from ..rom.address_space import M2_AUDIO_BRIDGE, M2_GRAPHIC, gba_space
 from ..rom.patch import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, COMPATIBLE_IDENTIFIERS
 
@@ -427,24 +429,56 @@ def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Launcher component entry point
+# Finding game.exe, and the Launcher component entry point
 # ---------------------------------------------------------------------------
 
-def _exe_path_from_settings() -> str | None:
-    """Return the collection's game.exe path from host.yaml, asking for it when no file is there.
+def is_collection_exe(path: str) -> bool:
+    """Return whether the file at ``path`` is the collection's game.exe, judged by its hash."""
+    digest = hashlib.md5()
+    try:
+        with open(path, "rb") as file:
+            for chunk in iter(lambda: file.read(1 << 20), b""):
+                digest.update(chunk)
+    except OSError:
+        return False
+    return digest.hexdigest() == AC_GAME_EXE_MD5
 
-    AP never asks for ``collection_exe`` itself, because the setting is optional. Without this
-    prompt, a Steam library outside the default location would end in a "no windata" error. The
-    chosen file must match the collection's game.exe hash, and a mismatch raises ``ValueError``.
-    The answer is saved to host.yaml. Returns None when the player cancels the dialog.
+
+def find_collection_exe(options) -> str | None:
+    """Return the collection's game.exe, or None when it can't be found.
+
+    That is the ``collection_exe`` setting in ``options`` when a file is there. Otherwise it is
+    the first game.exe in the player's Steam libraries that has the collection's hash, and the
+    setting is changed to it. The caller saves the settings, so the next search is immediate.
+    """
+    current = options.collection_exe
+    if current and os.path.isfile(current):
+        return str(current)
+    found = next((exe for exe in steam.game_exe_candidates() if is_collection_exe(exe)), None)
+    if found is not None:
+        options.collection_exe = type(current)(found)
+    return found
+
+
+def _exe_path_from_settings() -> str | None:
+    """Return the collection's game.exe path, asking for it when it can't be found.
+
+    The path comes from host.yaml, or from the player's Steam libraries (find_collection_exe).
+    AP never asks for ``collection_exe`` itself, because the setting is optional, so without
+    this prompt a collection the search misses would end in a "no windata" error. The chosen file
+    must match the collection's game.exe hash, and a mismatch raises ``ValueError``. A path that
+    was found or chosen is saved to host.yaml. Returns None when the player cancels the dialog.
     """
     from settings import get_settings
 
     from .. import CVAOSWorld
     options = CVAOSWorld.settings
     current = options.collection_exe
-    if os.path.isfile(current):
-        return str(current)
+    found = find_collection_exe(options)
+    if found is not None:
+        if found != str(current):
+            get_settings().save()
+        return found
     chosen = current.browse()
     if chosen is None:
         return None
@@ -500,13 +534,17 @@ def main(argv=None) -> None:
         description="Install a patched CVAoS ROM into the Steam Castlevania Advance Collection.")
     parser.add_argument("rom", nargs="?",
                         help=".apcvaos patch or patched .gba (omit with --restore/--extract-base)")
-    parser.add_argument("--exe", default=AC_DEFAULT_EXE_PATH,
-                        help="path to the collection's game.exe (default: standard Steam path)")
+    parser.add_argument("--exe", default=None,
+                        help="path to the collection's game.exe (default: the one in your Steam "
+                             "libraries, or the standard Steam path)")
     parser.add_argument("--restore", action="store_true",
                         help="restore the stock archive from the *.apbackup files")
     parser.add_argument("--extract-base", metavar="OUT_GBA",
                         help="write the collection's stock (unpatched) AoS ROM to OUT_GBA and exit")
     args = parser.parse_args(argv)
+    if args.exe is None:
+        args.exe = next((exe for exe in steam.game_exe_candidates() if is_collection_exe(exe)),
+                        AC_DEFAULT_EXE_PATH)
     if args.extract_base:
         print(extract_base_rom_to(args.extract_base, args.exe))
     elif args.restore:
