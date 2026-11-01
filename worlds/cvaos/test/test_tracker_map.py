@@ -139,9 +139,15 @@ class TrackerMapTest(unittest.TestCase):
         self.assertEqual(tracker_map.map_page_index(["721", 0, 0]),
                          self.index["Underground Reservoir"])
         self.assertEqual(tracker_map.map_page_index(["B14", 0, 0]), self.index["Chaotic Realm"])
-        for value in ("", None, ["ZZZ", 0, 0], ["000"]):
+        for value in (["ZZZ", 0, 0], ["000"]):
             with self.subTest(value=value):
                 self.assertEqual(tracker_map.map_page_index(value), -1, "keep the current map")
+
+    def test_with_no_position_yet_the_whole_castle_shows(self):
+        # UT shows no map until something selects one, and before the game starts, nothing would.
+        for value in ("", None):
+            with self.subTest(value=value):
+                self.assertEqual(tracker_map.map_page_index(value), self.index["Castle"])
 
     def test_the_dropdown_lists_every_map_once(self):
         listed = [node for node in tracker_map.MAP_GROUPS if isinstance(node, str)]
