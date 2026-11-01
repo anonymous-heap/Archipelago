@@ -33,6 +33,8 @@ DOCUMENTED = {
     "PLAYER_SCREEN_X": (0x00526, 2), "PLAYER_SCREEN_Y": (0x0052A, 2),
     "CURRENT_GOLD": (0x13290, 4), "AP_RECEIVED_COUNT": (0x1328A, 2), "KILL_REQUEST": (0x1324C, 1),
     "ABILITY_ENABLED": (0x13396, 2),
+    "EVENT_FLAGS": (0x0033C, 4), "EXPLORED_MAP": (0x000B4, 0x280),
+    "CASTLE_MAPS": (0x132B1, 3),  # consumables 29 to 31
 }
 
 # category -> (EWRAM-domain base, item count, nibble-packed)

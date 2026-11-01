@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
 
-from .._bytemaker_compat import Buffer, Entry, Space, count, s16, u8, u16, u32, unknown
+from .._bytemaker_compat import Buffer, Entry, Space, count, s16, u8, u16, u32
 from .structures import EquippedGear, PlayerVitals, SoulPair
 
 # --- Memory/BizHawk address-section names ---
@@ -78,13 +78,24 @@ PICKUP_FLAGS_LEN = PICKUP_FLAGS.size
 
 
 # --- Progress / goal flags ---
-EVENT_FLAGS = ewram.entry(0x0200033C, u8, unknown("event flags; Phase 6 autotracking"), name="event_flags")
+# The first 32 of the game's event flags (the decomp's unk_60.unk_33C), one bit each, LSB first.
+# Flags 0 to 12 record the hidden doors Soma has gone through, in map_info.hidden_doors order.
+EVENT_FLAGS = ewram.entry(0x0200033C, u32, name="event_flags")
+# The map's record of where Soma has been (the decomp's unk_60.unk_B4[2][40]). Entry [half][row]
+# is two u32 bitmasks over columns half*32 to half*32 + 31, with bit 0 the leftmost. The first
+# marks the cells visited, which the map draws in full, and the second marks the cells remembered,
+# which it draws dimmed. See exploration.py.
+EXPLORED_MAP = ewram.entry(0x020000B4, Buffer.of(nbytes=0x280), name="explored_map")
+# How many of each Castle Map Soma holds: consumables 29 to 31 (the decomp's itemInventory[0x1D]
+# to [0x1F]), one byte each. Each one held reveals areas on the map (exploration.CASTLE_MAP_AREAS).
+CASTLE_MAPS = ewram.entry(0x020132B1, Buffer.of(nbytes=3), name="castle_maps")
 BOSS_FLAGS = ewram.entry(0x0200037E, u16, name="boss_flags")
 GLOBAL_FLAGS = ewram.entry(0x0200042C, u32, name="global_flags")
 CURRENT_AREA = ewram.entry(0x0200009E, u8, name="current_area")          # Phase 6 (area-aware DeathLink)
 CURRENT_ROOM = ewram.entry(0x0200009F, u8, name="current_room")
-# Soma's position in the room is the camera's (background layer 1's scroll) plus his entity's
-# position on screen, as GetEntityRoomXPositionInteger computes it. His entity is the first one.
+# Soma's position in the room is the camera's position (background layer 1's scroll) plus his
+# position on screen, as GetEntityRoomXPositionInteger computes it. PLAYER_SCREEN_X and _Y are
+# fields of the first entity, which is Soma.
 CAMERA_X = ewram.entry(0x0200A09A, u16, name="camera_x")
 CAMERA_Y = ewram.entry(0x0200A09E, u16, name="camera_y")
 PLAYER_SCREEN_X = ewram.entry(0x02000526, s16, name="player_screen_x")

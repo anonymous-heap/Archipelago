@@ -600,7 +600,15 @@ class CollectionBackend:
 # Client context + watcher
 # ---------------------------------------------------------------------------
 
-from CommonClient import CommonContext, get_base_parser, gui_enabled, logger, server_loop  # noqa: E402
+from CommonClient import (ClientCommandProcessor, CommonContext, get_base_parser,  # noqa: E402
+                          gui_enabled, logger, server_loop)
+
+
+class CVAOSCollectionCommandProcessor(ClientCommandProcessor):
+    def _cmd_map(self) -> None:
+        """Open the map tracker for this slot in your browser."""
+        from .tracker_app import open_for_client
+        open_for_client(self.ctx)
 
 
 class CVAOSCollectionContext(CommonContext):
@@ -608,6 +616,7 @@ class CVAOSCollectionContext(CommonContext):
     # Items from other worlds plus the starting inventory, as in the BizHawk client.
     items_handling = 0b101
     want_slot_data = True
+    command_processor = CVAOSCollectionCommandProcessor
 
     def __init__(self, server_address: str | None, password: str | None) -> None:
         super().__init__(server_address, password)
@@ -642,6 +651,8 @@ class CVAOSCollectionContext(CommonContext):
 
     def on_package(self, cmd: str, args: dict) -> None:
         if cmd == "Connected":
+            logger.info('Press "Open map" or type /map to open the map tracker for this slot in '
+                        "your browser.")
             # A reconnect to the same seed starts a new server session, so the checks the last one
             # sent are sent again (the server ignores repeats). One sent into a connection that was
             # already dead would otherwise never arrive.
@@ -662,6 +673,12 @@ class CVAOSCollectionContext(CommonContext):
         class CVAOSCollectionManager(GameManager):
             logging_pairs = [("Client", "Archipelago")]
             base_title = "Archipelago CVAoS Collection Client"
+
+            def build(self):
+                layout = super().build()
+                from .tracker_app import add_map_button
+                add_map_button(self.ctx)
+                return layout
 
         self.ui = CVAOSCollectionManager(self)
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")

@@ -1,8 +1,8 @@
 """
-A minimal PNG encoder and decoder for the tracker's generated map images.
+A minimal PNG encoder and decoder for the images on Universal Tracker's map tab.
 
 They handle only what tracker_map draws: 8-bit RGB or RGBA, one image data chunk, and no row
-filtering. That keeps the world free of an imaging dependency.
+filtering. With them, the world needs no imaging library.
 """
 from __future__ import annotations
 

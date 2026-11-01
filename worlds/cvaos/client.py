@@ -23,11 +23,17 @@ from .rom import (ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUM
                   COMPATIBLE_IDENTIFIERS)
 
 if TYPE_CHECKING:
-    from worlds._bizhawk.context import BizHawkClientContext
+    from worlds._bizhawk.context import BizHawkClientCommandProcessor, BizHawkClientContext
 
 # GBA header: 12-byte internal game title at 0xA0.
 ROM_NAME_START = 0xA0
 ROM_NAME = "CASTLEVANIA2"
+
+
+def cmd_map(self: "BizHawkClientCommandProcessor") -> None:
+    """Open the map tracker for this slot in your browser."""
+    from .tracker_app import open_for_client
+    open_for_client(self.ctx)
 
 
 class CVAOSClient(CVAOSClientLogic, BizHawkClient):
@@ -39,6 +45,22 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
     _session_auth: str | None = None
 
     async def validate_rom(self, ctx: "BizHawkClientContext") -> bool:
+        valid = await self._validate_rom(ctx)
+        # /map and the "Open map" button are for Aria of Sorrow only, like other games' commands in
+        # this client. A ROM that passes validation adds /map, and one that fails removes both. A
+        # context with no command processor, such as a test's stand-in, gets no /map.
+        commands = getattr(getattr(ctx, "command_processor", None), "commands", None)
+        if commands is not None:
+            if valid:
+                commands["map"] = cmd_map
+            else:
+                commands.pop("map", None)
+        if not valid:
+            from .tracker_app import remove_map_button
+            remove_map_button(ctx)
+        return valid
+
+    async def _validate_rom(self, ctx: "BizHawkClientContext") -> bool:
         from CommonClient import logger
 
         try:
@@ -79,9 +101,14 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
 
     def on_package(self, ctx: "BizHawkClientContext", cmd: str, args: dict) -> None:
         if cmd == "Connected":
+            from CommonClient import logger
+
+            from .tracker_app import add_map_button
+            add_map_button(ctx)  # adds it only once, though Connected arrives on every reconnect
+            logger.info('Press "Open map" or type /map to open the map tracker for this slot in '
+                        "your browser.")
             target = (args.get("slot_data") or {}).get("target_platform")
             if target is not None and int(target) == TARGET_ADVANCE_COLLECTION:
-                from CommonClient import logger
                 logger.info(
                     "This seed's target platform is the Steam Advance Collection. You can play it "
                     "in BizHawk, but the intended client is the CVAoS Collection Client.")

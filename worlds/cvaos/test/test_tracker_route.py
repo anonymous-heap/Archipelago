@@ -1,5 +1,6 @@
 """
-Universal Tracker's Find Route: the route this world describes for a location.
+Routes to a location: the route this world describes for Universal Tracker's Find Route, and the
+routes the Aria of Sorrow tracker plans from the room Soma is in.
 
     python -m pytest worlds/cvaos/test/test_tracker_route.py -v
 """
@@ -9,7 +10,7 @@ import unittest
 
 from .. import CVAOSWorld
 from ..regions import UT_TRICKS_ITEM
-from ..tracker_route import describe_route
+from ..tracker_route import DOOR_POINTS, describe_route, plan_route
 from .test_universal_tracker import generate, reachable, regenerate_from, state_with
 
 TERRACE = "Terrace [503 CASTLE MAP 3]"
@@ -43,7 +44,8 @@ class DescribeRouteTest(unittest.TestCase):
         self.assertEqual(route[-1], "-> Entrance Parapet [000 Lucky Charm]")
 
     def test_there_is_no_route_out_of_reach_or_to_anything_else(self):
-        # UT then tries its state for tricks, and then its own route to a region or entrance.
+        # When there is no route, UT tries again with its state for tricks, and then shows its own
+        # route to a region or entrance.
         self.assertIsNone(self.route(TERRACE, []))
         self.assertIsNone(self.route("Entrance: 000:003", ["Malphas", "Hippogryph"]))
         self.assertIsNone(self.route("no such place", ["Malphas"]))
@@ -65,6 +67,27 @@ class DescribeRouteTest(unittest.TestCase):
                          describe_route(world, "lucky charm", state))
         # UT shows this docstring in its command help.
         self.assertTrue(CVAOSWorld.get_logical_path.__doc__)
+
+
+class PlanRouteTest(unittest.TestCase):
+    """The Aria of Sorrow tracker's routes, which start at the door Soma came into his room by."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.multiworld = generate({})
+
+    def test_a_route_starts_at_the_door_soma_is_by(self):
+        # With only Malphas, Soma can't cross room 108 from the door to 104 to the door to 109.
+        # A route from anywhere in 108 can leave by the 109 door, but one from the 104 door can't.
+        world = self.multiworld.worlds[1]
+        state = state_with(self.multiworld, ["Malphas"])
+        target = world.get_location("Underneath Grand Staircase [109 Silk Robe]")
+        from_anywhere = plan_route(world, target, state, "108")
+        self.assertEqual(from_anywhere.entrances[0].parent_region.name, "Entrance: 108:109")
+        from_104 = plan_route(world, target, state, "108", DOOR_POINTS["108:104"])
+        self.assertEqual(from_104.entrances[0].parent_region.name, "Entrance: 108:104")
+        self.assertNotIn("Door: 108:109 -> 109:108", [e.name for e in from_104.entrances])
+        self.assertEqual(from_104.start_room, "108")
 
 
 if __name__ == "__main__":

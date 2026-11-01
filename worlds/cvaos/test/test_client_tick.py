@@ -66,6 +66,7 @@ class TickSaveBlockGateTest(unittest.IsolatedAsyncioTestCase):
             pass
 
         self.client._report_position = ignore  # tested in test_tracker_map
+        self.client._report_exploration = ignore  # tested in test_exploration
         self.client._receive_items = recorder("items")
         self.client._grant_progressive_movement = recorder("progressive")
         self.client._report_goal = recorder("goal")

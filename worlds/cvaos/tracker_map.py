@@ -1,21 +1,23 @@
 """
 Map data for Universal Tracker's map tab.
 
-UT shows the maps in ``tracker/``, with a pin for every location and a marker for Soma. All of it is
-generated from this world's own data by :func:`write`. The images are schematics drawn from the
-castle's cell grid and edge table (``data/map_info``), and each pin comes from its pickup's room and
-position, so no game art is shipped. Running this module rewrites the files, and a test checks that
-they match.
+UT shows the maps in ``tracker/``, with a pin for every location and a marker for Soma.
+:func:`write` generates every file there from this world's own data. The images are schematics
+drawn from the castle's cell grid and edge table (``data/map_info``), so no game art is shipped.
+Each pin is placed from its pickup's room and position.
 
-There is a map of the castle, one of the Chaotic Realm, and one for each of the game's areas that
-shows the rest of the castle dimmed around it. A room's area is the first digit of its identifier.
-Each map draws 24 pixels per map cell, and a cell is 256 by 256 pixels of a room, as in the game's
-own map-cell routine (sub_0804F7A4). UT shows a pin only for a location the server has, so the
-Hard Mode pickups appear only in seeds that have them.
+There is a map of the whole castle, one of the Chaotic Realm, and one for each area of the castle.
+An area's map shows the rest of the castle dimmed around it. A room's area is the first digit of its
+identifier. Each map uses 24 image pixels per map cell, and a cell covers 256 by 256 pixels of a
+room, as it does in the game's own map-cell routine (sub_0804F7A4). UT shows a pin only for a
+location the server has, so the Hard Mode pickups appear only in seeds that have them.
 
-The client keeps Soma's room and position in data storage under :data:`POSITION_KEY`.
-:func:`position_icon` marks the cell he is in, as the in-game map does, and :func:`map_page_index`
-switches UT to the map of his area.
+The client keeps Soma's room and position in data storage. UT reads them from
+:data:`MAP_CELL_KEY`, which changes only when he enters another map cell. :func:`position_icon`
+marks the cell he is in, as the in-game map does, and :func:`map_page_index` switches UT to the
+map of his area.
+
+A test checks that the shipped files match this world's data. Running this module rewrites them::
 
     python -m worlds.cvaos.tracker_map
 """
@@ -43,8 +45,12 @@ LOCATIONS_FILE = "locations.json"
 MARKER_FILE = "marker.png"
 
 # Soma's position, kept in data storage by the client as [room, x, y]: the room's identifier and
-# his position in it, in pixels. UT fills in the team and slot.
+# his position in it, in pixels. The client updates it as he moves, and the tracker's map reads it.
 POSITION_KEY = "cvaos_position_{team}_{player}"
+# The same value, updated only when Soma enters another map cell. UT's map reads this key, because
+# it marks only the cell and reloads its map whenever the key changes. UT fills in the team and
+# slot.
+MAP_CELL_KEY = "cvaos_map_cell_{team}_{player}"
 
 BACKGROUND = (46, 0, 118)
 
@@ -66,7 +72,7 @@ MARKER = (255, 140, 0, 255)
 class TrackerMap(NamedTuple):
     name: str
     img: str
-    bounds: tuple[int, int, int, int]  # first and last cell column and row drawn, inclusive
+    bounds: tuple[int, int, int, int]  # first column and row drawn, then last, inclusive
     rooms: frozenset[str]              # rooms drawn in full colour, with pins and Soma's marker
     context: frozenset[str]            # other rooms drawn dimmed around them
 
@@ -127,10 +133,10 @@ MAP_GROUPS = [MAPS[0].name, MAPS[1].name, ("Areas", [MAPS[index].name for index 
 def render(tracker: TrackerMap) -> bytes:
     """Return the PNG image of ``tracker``.
 
-    Each cell is filled in its room's colour. The walls and doors come from the game's edge table,
-    and each is centred on the line between two cells, so a wall that two rooms share is drawn
-    once. A hidden door is drawn as a door, which is how the game's map shows it once Soma has gone
-    through it.
+    Each cell is filled in its room's colour. The walls and doors come from the game's edge table.
+    Every wall and door is centred on the line between two cells, so a wall that two rooms share is
+    drawn once. A hidden door is drawn as a door, which is how the game's map shows it once Soma has
+    gone through it.
     """
     width, height = tracker.size
     canvas = bytearray(bytes(BACKGROUND) * (width * height))
@@ -239,11 +245,11 @@ def cell_of(value) -> tuple:
 
 
 def position_icon(map_id, value):
-    """Return Soma's marker for map ``map_id``, as ``(x, y, image)``, or None when it has none.
+    """Return Soma's marker on map ``map_id`` as ``(x, y, image)``, or None when there is none.
 
-    UT calls this with "" or None before the client has written a position, and with a map_id of
-    None before a map has loaded. An exception here would disconnect UT, so anything it cannot place
-    returns None instead.
+    A map marks Soma only in a room it draws in full colour. UT calls this with "" or None before
+    the client has written a position, and with a map_id of None before a map has loaded. An
+    exception here would disconnect UT, so this returns None for any value it cannot place.
     """
     if not isinstance(map_id, int) or not 0 <= map_id < len(MAPS):
         return None
@@ -263,9 +269,13 @@ def position_icon(map_id, value):
 def map_page_index(value) -> int:
     """Return the index of the map for Soma's area, or -1 to keep the current map.
 
-    UT calls this with the same value as :func:`position_icon`. A castle room selects its area's
-    map, and a Chaotic Realm room selects the Chaotic Realm.
+    UT calls this with the same value as :func:`position_icon`. For a castle room this is its
+    area's map, and for a Chaotic Realm room it is the Realm's map. Before the client has stored a
+    position, such as before the game starts, this returns the whole castle's map, because UT shows
+    no map at all until one is selected.
     """
+    if value is None or value == "":
+        return 0
     try:
         room_identifier = cell_of(value)[0]
         return next(index for index in (*AREA_MAPS, 1) if room_identifier in MAPS[index].rooms)

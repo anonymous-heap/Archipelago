@@ -528,7 +528,7 @@ class CVAOSOptions(PerGameCommonOptions):
 
 
 # Names of the options that determine which locations exist, which items are in the pool, or what
-# an access rule requires. fill_slot_data writes them into slot_data so Universal Tracker can
+# an access rule requires. fill_slot_data writes them into the slot data so Universal Tracker can
 # rebuild the world with the logic the seed was generated with. An option that starts affecting
 # logic must be added here; test_universal_tracker fails until it is.
 LOGIC_OPTION_NAMES: tuple[str, ...] = (

@@ -1,6 +1,6 @@
 """
 Universal Tracker's map tab: the map data in tracker/ matches this world, and loads the way UT
-loads it.
+loads it. The client also reports Soma's position for the map.
 
     python -m pytest worlds/cvaos/test/test_tracker_map.py -v
 """
@@ -65,7 +65,8 @@ class TrackerMapTest(unittest.TestCase):
             shipped = ut_bytes(name)
             with self.subTest(file=name):
                 if name.endswith(".png"):
-                    # Pixels, not bytes: another zlib may compress the same pixels differently.
+                    # Compare pixels, not bytes, because another zlib may compress the same
+                    # pixels differently.
                     self.assertEqual(tracker_png.decode(shipped), tracker_png.decode(data))
                 else:
                     self.assertEqual(json.loads(shipped), json.loads(data),
@@ -102,7 +103,8 @@ class TrackerMapTest(unittest.TestCase):
         self.assertEqual([spot for spot, count in spots.items() if count > 1], [])
 
     def test_a_pin_lands_where_its_pickup_is(self):
-        # Entrance Parapet's pickup is 384 by 184 pixels into room 000, at map cell (0, 19).
+        # Entrance Parapet's pickup is 384 by 184 pixels into room 000, which starts at map cell
+        # (0, 19).
         node = next(node for node in self.locations
                     if node["sections"][0]["name"] == "Entrance Parapet [000 Lucky Charm]")
         castle = next(pin for pin in node["map_locations"] if pin["map"] == "Castle")
@@ -111,7 +113,8 @@ class TrackerMapTest(unittest.TestCase):
                                                       origin_y + round(24 * (19 + 184 / 256))))
 
     def test_soma_is_marked_at_the_centre_of_his_map_cell(self):
-        # 384 by 184 pixels into room 000, whose cell is (0, 19), is in cell (1, 19).
+        # A point 384 by 184 pixels into room 000, which starts at cell (0, 19), lies in cell
+        # (1, 19).
         castle, realm = 0, 1
         origin_x, origin_y = tracker_map.MAPS[castle].origin
         icon = tracker_map.position_icon(castle, ["000", 384, 184])
@@ -125,8 +128,8 @@ class TrackerMapTest(unittest.TestCase):
         self.assertIsNotNone(tracker_map.position_icon(realm, ["B14", 100, 100]))
 
     def test_soma_has_no_marker_until_ut_can_place_him(self):
-        # UT passes "" or None before the client writes, and None before a map loads. Any
-        # exception would disconnect UT.
+        # UT passes "" or None as the position before the client first writes it, and None as
+        # the map before one loads. Any exception here would disconnect UT.
         beyond = len(tracker_map.MAPS)
         for map_id, value in ((0, ""), (0, None), (None, ["000", 0, 0]), (beyond, ["000", 0, 0]),
                               (-1, ["000", 0, 0]), (0, ["ZZZ", 0, 0]), (0, ["000", "x", 0]),
@@ -139,9 +142,16 @@ class TrackerMapTest(unittest.TestCase):
         self.assertEqual(tracker_map.map_page_index(["721", 0, 0]),
                          self.index["Underground Reservoir"])
         self.assertEqual(tracker_map.map_page_index(["B14", 0, 0]), self.index["Chaotic Realm"])
-        for value in ("", None, ["ZZZ", 0, 0], ["000"]):
+        for value in (["ZZZ", 0, 0], ["000"]):
             with self.subTest(value=value):
                 self.assertEqual(tracker_map.map_page_index(value), -1, "keep the current map")
+
+    def test_with_no_position_yet_the_whole_castle_shows(self):
+        # UT shows no map until something selects one, and before the game starts there is no
+        # position to select one.
+        for value in ("", None):
+            with self.subTest(value=value):
+                self.assertEqual(tracker_map.map_page_index(value), self.index["Castle"])
 
     def test_the_dropdown_lists_every_map_once(self):
         listed = [node for node in tracker_map.MAP_GROUPS if isinstance(node, str)]
@@ -186,7 +196,8 @@ class TrackerMapTest(unittest.TestCase):
         origin_x, origin_y = castle.origin
         half = tracker_map.WALL_PIXELS // 2
         for kind, colour in ((map_info.WALL, BRIGHT.wall), (map_info.DOOR, BRIGHT.door)):
-            # Two plain cells of different rooms, side by side, with this kind of edge between them.
+            # Find two plain cells of different rooms, side by side, with this kind of edge
+            # between them.
             x, y = next((x, y) for y in range(map_info.ROWS) for x in range(map_info.COLUMNS)
                         if map_info.left_edge(x, y) == kind
                         and plain_room(x - 1, y) and plain_room(x, y)
@@ -207,6 +218,17 @@ class TrackerMapTest(unittest.TestCase):
             rom = f.read()
         self.assertEqual(map_info.extract(rom), map_info.grid)
         self.assertEqual(map_info.extract_edges(rom), map_info.edges)
+        self.assertEqual(map_info.extract_hidden_doors(rom), map_info.hidden_doors)
+        self.assertEqual(map_info.extract_castle_map_skips(rom), map_info.CASTLE_MAP_SKIPS)
+
+    def test_the_hidden_door_list_holds_every_hidden_door_edge(self):
+        on_edges = set()
+        for (a, b), kind in table_edges():
+            if kind == map_info.HIDDEN_DOOR:
+                side = "top" if a[0] == b[0] else "left"
+                on_edges.add(map_info.HiddenDoor(side, *b))
+        self.assertEqual(set(map_info.hidden_doors), on_edges)
+        self.assertEqual(len(map_info.hidden_doors), len(on_edges), "each door is listed once")
 
 
 class FakeRam:
@@ -218,7 +240,7 @@ class FakeRam:
 
 
 class PositionReportTest(unittest.IsolatedAsyncioTestCase):
-    """The client keeps Soma's position in data storage for the tracker's map."""
+    """The client keeps Soma's position in data storage for UT's map tab and the tracker."""
 
     def setUp(self) -> None:
         self.client = CVAOSClientLogic()
@@ -235,38 +257,58 @@ class PositionReportTest(unittest.IsolatedAsyncioTestCase):
         clock.start()
         self.addCleanup(clock.stop)
 
-    async def test_the_position_goes_to_the_key_ut_reads(self):
+    def sent_values(self) -> list[tuple[str, list]]:
+        return [(msg["key"], msg["operations"][0]["value"]) for msg in self.sent]
+
+    async def test_the_first_position_goes_to_both_keys(self):
         await self.client._report_position(self.ctx, self.ram)
         self.assertEqual(self.sent, [{
-            "cmd": "Set", "key": "cvaos_position_0_3", "default": None, "want_reply": False,
-            "operations": [{"operation": "replace", "value": ["000", 384, 184]}]}])
+            "cmd": "Set", "key": key, "default": None, "want_reply": False,
+            "operations": [{"operation": "replace", "value": ["000", 384, 184]}]}
+            for key in ("cvaos_position_0_3", "cvaos_map_cell_0_3")])
         self.assertEqual(tracker_map.POSITION_KEY.format(team=0, player=3), "cvaos_position_0_3")
+        self.assertEqual(tracker_map.MAP_CELL_KEY.format(team=0, player=3), "cvaos_map_cell_0_3")
 
-    async def test_a_move_within_the_cell_is_not_sent(self):
+    async def test_ut_reads_the_map_cell_key(self):
+        # UT reloads its map whenever its key changes, so it must not read the moving position.
+        self.assertEqual(CVAOSWorld.tracker_world["map_page_setting_key"], tracker_map.MAP_CELL_KEY)
+        self.assertEqual(CVAOSWorld.tracker_world["location_setting_key"], tracker_map.MAP_CELL_KEY)
+
+    async def test_a_move_within_the_cell_updates_only_the_position(self):
         await self.client._report_position(self.ctx, self.ram)
+        self.sent.clear()
         self.now += 5
         self.ram.position = (0, 0, 500, 250)
         await self.client._report_position(self.ctx, self.ram)
-        self.assertEqual(len(self.sent), 1)
+        self.assertEqual(self.sent_values(), [("cvaos_position_0_3", ["000", 500, 250])])
+        self.now += client_logic.POSITION_INTERVAL
         self.ram.position = (0, 0, 512, 250)
         await self.client._report_position(self.ctx, self.ram)
-        self.assertEqual(self.sent[-1]["operations"][0]["value"], ["000", 512, 250])
+        self.assertEqual(self.sent_values()[1:], [("cvaos_position_0_3", ["000", 512, 250]),
+                                                  ("cvaos_map_cell_0_3", ["000", 512, 250])])
 
-    async def test_a_new_room_is_sent_but_not_twice_in_one_interval(self):
+    async def test_standing_still_sends_nothing(self):
+        await self.client._report_position(self.ctx, self.ram)
+        self.now += 5
+        await self.client._report_position(self.ctx, self.ram)
+        self.assertEqual(len(self.sent), 2)
+
+    async def test_a_move_is_sent_at_most_once_per_interval(self):
         await self.client._report_position(self.ctx, self.ram)
         self.ram.position = (0, 2, 10, 10)
         await self.client._report_position(self.ctx, self.ram)
-        self.assertEqual(len(self.sent), 1, "too soon after the last message")
+        self.assertEqual(len(self.sent), 2, "too soon after the last message")
         self.now += client_logic.POSITION_INTERVAL
         await self.client._report_position(self.ctx, self.ram)
-        self.assertEqual(self.sent[-1]["operations"][0]["value"], ["002", 10, 10])
+        self.assertEqual(self.sent_values()[2:], [("cvaos_position_0_3", ["002", 10, 10]),
+                                                  ("cvaos_map_cell_0_3", ["002", 10, 10])])
 
     async def test_a_new_session_sends_the_position_again(self):
         await self.client._report_position(self.ctx, self.ram)
         self.client._reset_session_state()
         self.now += client_logic.POSITION_INTERVAL
         await self.client._report_position(self.ctx, self.ram)
-        self.assertEqual(len(self.sent), 2)
+        self.assertEqual(len(self.sent), 4)
 
 
 if __name__ == "__main__":

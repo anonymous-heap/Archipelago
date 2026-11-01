@@ -397,10 +397,10 @@ _BREAK_BITS: int = int(AbilityCombo.Ceil | AbilityCombo.Floor)
 # TODO: implement Vert's real requirement, then move it out of here.
 _ROOM_TECHNIQUE_BITS: int = 0  # would be int(AbilityCombo.Vert) once it has a requirement
 
-# Universal Tracker marks a location as "glitched" when it becomes reachable once the item named by
-# the world's glitches_item_name is collected. While UT rebuilds the world, a way through that needs
-# only tricks the seed leaves out of logic is kept behind this item, so UT shows those locations in
-# its second colour. A normal generation never builds these ways.
+# Universal Tracker marks a location as "glitched" when it becomes reachable once UT collects the
+# item named by the world's glitches_item_name. While UT rebuilds the world, a way through whose
+# only out-of-logic requirements are tricks also requires this item, so the locations past it are
+# marked as glitched. A normal generation never builds these ways.
 UT_TRICKS_ITEM = "Out-of-Logic Tricks"
 _TRICK_BITS: int = int(functools.reduce(operator.or_, (technique.bit for technique in TECHNIQUES)))
 
@@ -457,8 +457,8 @@ def _create_access_rule_from_routing(
                 bool(mask & int(AbilityCombo.Floor)))
         out_of_logic = mask & ~_SOUL_BITS & ~in_logic_bits & ~_TFORM_BIT & ~_BREAK_BITS
         if out_of_logic:
-            # Demands Impossible or an out-of-logic technique. For the tracker's tricks tier, a
-            # way that needs only out-of-logic tricks is kept behind the tricks item.
+            # Demands Impossible or an out-of-logic technique. If every out-of-logic requirement
+            # is a trick, the way goes into UT's tricks tier, which requires the tricks item.
             if tricks_tier and not out_of_logic & ~_TRICK_BITS:
                 trick_needs.append(need)
             continue
@@ -488,9 +488,10 @@ def _create_access_rule_from_routing(
                     and any(satisfied(state, need) for need in resolved_trick_needs)))
 
     def uses(state: CollectionState) -> tuple[str, ...]:
-        """Return what the simplest way through that ``state`` allows needs, as a route names it.
+        """Return what the simplest way through needs, among the ways that ``state`` can use.
 
-        A way without a trick counts as simpler than any way with one.
+        Each need is worded as a route shows it, such as "a transformation soul". A way without a
+        trick is simpler than any way with one, and otherwise the way with fewer needs is simpler.
         """
         ways = [(False, need) for need in resolved_needs if satisfied(state, need)]
         if state.has(UT_TRICKS_ITEM, player):
