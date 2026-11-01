@@ -90,15 +90,24 @@ function svg(tag, attributes, parent) {
 
 const UNKNOWN_AREA = "???";
 
+const NOTHING_EXPLORED = { visited: [], remembered: [], hidden_doors: [], castle_maps: [], revealed: [] };
+
+// What Soma has explored, or null to treat the whole castle as explored. A page that tracks a slot
+// whose client hasn't sent the explored map yet, as before play, has nothing explored, rather than
+// showing every room until it arrives.
+function explored() {
+  return page.snapshot.exploration || (page.snapshot.tracking ? NOTHING_EXPLORED : null);
+}
+
 // The areas Soma has been to, or null to treat them all as known. While unexplored cells are
 // hidden, he has been to an area once he has visited or remembers a cell in it, is in it, or has
 // checked a location in it. The last is the only sign of the Chaotic Realm, which the game never
 // marks as explored.
 function knownAreas() {
-  const explored = page.snapshot.exploration;
-  if (page.reveal || !explored) return null;
+  const cells = explored();
+  if (page.reveal || !cells) return null;
   const known = new Set();
-  for (const [x, y] of [...explored.visited, ...explored.remembered]) {
+  for (const [x, y] of [...cells.visited, ...cells.remembered]) {
     const rect = els.cells.get(key(x, y));
     if (rect) known.add(rect.dataset.area);
   }
@@ -205,10 +214,13 @@ function fitView() {
   applyView();
 }
 
-// Fit the view again only when what kind of map is shown changes: the whole map, or the explored
+// Fit the view again only when what kind of map is shown changes: the whole map, nothing yet, or
+// the explored part. So the view fits the first rooms the client sends, and then stays.
 // part once the client has sent it. Exploring further, or picking an area, leaves the view alone.
 function fitWhenTheShownMapChanges() {
-  const shown = page.reveal ? "whole" : page.snapshot.exploration ? "explored" : "whole";
+  const cells = explored();
+  const anything = cells && (cells.visited.length || cells.remembered.length || cells.revealed.length);
+  const shown = page.reveal || !cells ? "whole" : anything ? "explored" : "nothing";
   if (shown !== page.fittedTo) {
     page.fittedTo = shown;
     fitView();
@@ -322,13 +334,13 @@ function setUpPanAndZoom() {
 // panels count the Realm's checks once Soma has been there (countRealm), so that their numbers
 // don't change with the focus.
 function visibleCells({ countRealm = false } = {}) {
-  const explored = page.snapshot.exploration;
-  if (page.reveal || !explored) return null;
+  const cells = explored();
+  if (page.reveal || !cells) return null;
   const visible = new Set();
-  for (const [x, y] of explored.visited) visible.add(key(x, y));
-  for (const [x, y] of explored.remembered) visible.add(key(x, y));
+  for (const [x, y] of cells.visited) visible.add(key(x, y));
+  for (const [x, y] of cells.remembered) visible.add(key(x, y));
   // The areas a Castle Map shows. Not visited yet, they are drawn dimmed, as the game does.
-  for (const [x, y] of explored.revealed || []) visible.add(key(x, y));
+  for (const [x, y] of cells.revealed || []) visible.add(key(x, y));
   const soma = somaPoint();
   if (soma) visible.add(key(Math.floor(soma.x), Math.floor(soma.y)));
   const known = countRealm ? knownAreas() : null;
@@ -339,8 +351,8 @@ function visibleCells({ countRealm = false } = {}) {
 }
 
 function visitedCells() {
-  const explored = page.snapshot.exploration;
-  return explored ? new Set(explored.visited.map(([x, y]) => key(x, y))) : null;
+  const cells = explored();
+  return cells ? new Set(cells.visited.map(([x, y]) => key(x, y))) : null;
 }
 
 // Whether a cell is drawn in full rather than greyed out. While unexplored cells are hidden, the
@@ -361,23 +373,22 @@ function checkShown(location, visible, visited) {
 
 function renderMap() {
   const visible = visibleCells();
-  const explored = page.snapshot.exploration;
   const visited = visitedCells();
   for (const [cellKey, rect] of els.cells) {
     rect.style.display = !visible || visible.has(cellKey) ? "" : "none";
     rect.classList.toggle("remembered", !drawnInFull(cellKey, visited));
   }
   renderEdges(visible);
-  $("fog-note").hidden = Boolean(explored) || page.reveal || !page.snapshot.tracking;
+  $("fog-note").hidden = Boolean(page.snapshot.exploration) || page.reveal || !page.snapshot.tracking;
   renderPins(visible);
 }
 
 // Draw the walls and doors that touch a shown cell, one path for each look. A path's stroke is
 // filled as one shape, so where two segments overlap at a cell corner nothing is drawn twice.
 function renderEdges(visible = visibleCells()) {
-  const explored = page.snapshot.exploration;
+  const cells = explored();
   const visited = visitedCells();
-  const passed = new Set(explored ? explored.hidden_doors : []);
+  const passed = new Set(cells ? cells.hidden_doors : []);
   const paths = Object.fromEntries(EDGE_LOOKS.map((look) => [look, []]));
   // As on the game's map, a door fills its edge between the two corners, which stay in the wall
   // colour. So it stops half a wall's width short of each end.
@@ -393,7 +404,7 @@ function renderEdges(visible = visibleCells()) {
     paths[`wall${dim}`].push(edge.top ? `M${x} ${y}h1` : `M${x} ${y}v1`);
     // A door is its edge in the door colour, all but the wall at each corner, as on the game's own
     // map. A hidden door looks like a wall until Soma has gone through it.
-    const open = edge.hidden === null || page.reveal || !explored || passed.has(edge.hidden);
+    const open = edge.hidden === null || page.reveal || !cells || passed.has(edge.hidden);
     if (edge.door && open) {
       paths[`door${dim}`].push(edge.top ? `M${x + inset} ${y}h${1 - 2 * inset}`
                                         : `M${x} ${y + inset}v${1 - 2 * inset}`);
