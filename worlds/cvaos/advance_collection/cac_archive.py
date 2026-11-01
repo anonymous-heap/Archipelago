@@ -652,7 +652,7 @@ def load_index(psb_m_path: str, index_key_name: str | None = None):
     """Decrypt/parse ``alldata.psb.m``; returns the root object (a dict).
 
     *index_key_name* names the file for key derivation when it is not stored
-    under the name the game knows it by; the default is the file's own
+    under the name the game knows it by. The default is the file's own
     basename, with an installer backup's ``.apbackup`` suffix removed."""
     with open(psb_m_path, "rb") as f:
         data = f.read()
@@ -766,8 +766,8 @@ def replace_member(alldata_psb_m: str, alldata_bin: str, member_name: str,
     If the index cannot be moved into place after the payload has been, the
     new index is kept beside its target and the error names it.
     """
-    # The source index may be a renamed copy (a backup), so its key also comes from the name
-    # the game knows it by.
+    # The source index may be a renamed copy (a backup), so it is read with the same key name as
+    # the output.
     root = load_index(alldata_psb_m, index_key_name)
     fi = root["file_info"]
     target = _resolve_member(fi, member_name)

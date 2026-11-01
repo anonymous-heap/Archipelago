@@ -112,7 +112,8 @@ class TestSmoothingMinimalAccessibility(CVAOSWorldTestBase):
 
 
 class TestSmoothingStrict(CVAOSWorldTestBase):
-    # Pinned to the spheres axis; the default is now map_distance (covered by TestSmoothingMapDistanceAxis).
+    # Pinned to the spheres axis. The default axis, map_distance, is covered by
+    # TestSmoothingMapDistanceAxis.
     options = {"item_smoothing": "strict", "item_smoothing_order": "spheres"}
 
     def test_desirable_items_land_later(self):
@@ -142,8 +143,8 @@ class TestSmoothingStrict(CVAOSWorldTestBase):
 
 
 class TestSmoothingMapDistanceAxis(CVAOSWorldTestBase):
-    """item_smoothing_order=map_distance smooths along structural map distance (seed-independent),
-    instead of the default post-randomization spheres."""
+    """item_smoothing_order=map_distance, the default, smooths along structural map distance, which
+    is the same in every seed, rather than along this seed's spheres."""
     options = {"item_smoothing": "strict", "item_smoothing_order": "map_distance"}
 
     def test_ordering_is_monotonic_in_map_distance(self):
@@ -210,8 +211,9 @@ class EarlySoulChoiceTest(unittest.TestCase):
 
 
 class TestEarlyMobilityGuaranteed(CVAOSWorldTestBase):
-    """early_mobility_souls=guarantee_early always designates an early soul, so Malphas or
-    Hippogryph is always aimed at the early band (vs ~93% of seeds for the bias_early default)."""
+    """early_mobility_souls=guarantee_early designates an early soul in every seed, while the
+    bias_early default does so in about 93% of seeds. The early soul, Malphas or Hippogryph, is
+    aimed at the early band, and Giant Bat is aimed late."""
     options = {"item_smoothing": "strict", "early_mobility_souls": "guarantee_early",
                "black_panther_bias": False}
 
@@ -229,8 +231,8 @@ class TestEarlyMobilityGuaranteed(CVAOSWorldTestBase):
 
 
 class TestGiantBatLandsLate(CVAOSWorldTestBase):
-    """With the default bias, Giant Bat is aimed late and, after the fill and the refine pass,
-    usually ends up in the later part of the run."""
+    """With the default early_mobility_souls (bias_early), Giant Bat is aimed late. After the fill
+    and the refine pass, it usually ends up in the later half of the run."""
     options = {"item_smoothing": "strict"}
 
     def test_giant_bat_is_aimed_late_and_usually_lands_late(self):

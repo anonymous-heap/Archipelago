@@ -23,8 +23,8 @@ Domains are the BizHawk names ``"EWRAM"`` (offset relative to GBA 0x02000000) an
 (offset = file offset, GBA 0x08000000-relative), the only two this world uses.
 
 Error contract: each backend raises its own transport exception on connection loss
-(``worlds._bizhawk.RequestFailedError`` for BizHawk); each client catches the one its transport
-raises and retries or re-attaches.
+(``RequestFailedError`` or ``NotConnectedError`` from ``worlds._bizhawk`` for BizHawk); each client
+catches the ones its transport raises and retries or re-attaches.
 """
 from __future__ import annotations
 

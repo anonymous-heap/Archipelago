@@ -1,10 +1,10 @@
 """
-The BizHawk client accepts a ROM from this version or the previous compatible one, and refuses
-others.
+The BizHawk client accepts a ROM patched by this version or by the previous compatible one, and
+refuses any other.
 
-A client older than Progressive Movement cannot grant its items, so the identifier changed with it.
-Seeds patched by the previous version hold nothing the current client cannot handle, so they still
-connect.
+Older clients cannot grant Progressive Movement items, so this version has its own identifier,
+which they refuse. A ROM from the previous version holds nothing the current client cannot handle,
+so the current client still accepts it.
 
     python -m pytest worlds/cvaos/test/test_identifier.py -v
 """

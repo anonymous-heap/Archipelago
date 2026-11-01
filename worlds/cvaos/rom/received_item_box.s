@@ -133,12 +133,13 @@ ReceivedItemBox:
     cmp  r0, #0
     beq  .Ldone                     @ nothing requested
 
-    @ Is the game able to take a banner request this frame? Keep pending set and retry later
-    @ while it cannot. A request still waiting for display (the box for an item the player just
-    @ picked up, say) would be replaced: sub_0800EF98 overwrites its text, and the soul banner
-    @ clears it. sub_0800EF98 also drops a request silently while the busy bits are set. The soul
-    @ banner is gated on the same bits: sub_0800E708's body is not decompiled, so waiting for a
-    @ quiet frame is the conservative choice rather than firing during a transition.
+    @ Can the game take a banner request this frame? While it cannot, keep pending set and retry
+    @ on a later frame. It cannot while an earlier request is still waiting for display (the box
+    @ for an item the player just picked up, say), because sub_0800EF98 would overwrite that
+    @ request's text and the soul banner would clear it. It also cannot while the busy bits are
+    @ set, because sub_0800EF98 then drops a request silently. The soul banner is gated on the
+    @ same bits: sub_0800E708's body is not decompiled, so waiting for a quiet frame is safer
+    @ than firing during a transition.
     ldr  r0, =TEXTBOX
     ldrb r1, [r0, #TB_KIND]
     cmp  r1, #0

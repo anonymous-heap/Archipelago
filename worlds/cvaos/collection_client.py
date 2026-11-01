@@ -14,12 +14,12 @@ tuned against the live process:
 * ROM image: located by validating a real GBA header -- the "CASTLEVANIA2" title at +0xA0
   backed by the Nintendo logo at +0x04 and the "A2CE" game code at +0xAC. That uniquely
   picks the one true ROM out of the ~188 stray copies of the title string in memory.
-  We then read ARCHIPELAGO_IDENTIFIER at ROM+0x670000 to confirm the ROM is patched and
-  version-matched (a bare header = unpatched -> point at the ROM installer; a different
-  version suffix = a seed from another apworld version). The ROM sits in its own committed
-  private-RW region. When the US Aria of Sorrow is absent, the same scan recognizes the
-  collection's other eight GBA ROMs by their game codes, so the error message can name the
-  game or region that is loaded instead.
+  We then read ARCHIPELAGO_IDENTIFIER at ROM+0x670000 to confirm that the ROM is patched by a
+  compatible version. Without the identifier the ROM is unpatched, and the error points at the
+  ROM installer. A different version suffix means a seed from another apworld version. The
+  ROM sits in its own committed private-RW region. When the US Aria of Sorrow is absent, the
+  same scan recognizes the collection's other eight GBA ROMs by their game codes, so the error
+  message can name the game or region that is loaded instead.
 * EWRAM: M2 heap-allocates the emulated GBA memory (no static pointer to it exists in
   game.exe). The emulator's allocator prefixes every block with a header whose ``next`` and
   ``prev`` words link the blocks, and the GBA-memory object is allocated right before the
@@ -299,7 +299,7 @@ class RomImage(NamedTuple):
 
 
 def collection_roms_in(buf: bytes, region_base: int) -> list[tuple[int, bytes]]:
-    """Find every collection ROM header in ``buf`` and return its host address and game code.
+    """Return the host address and game code of every collection ROM header in ``buf``.
 
     A header counts only when the Nintendo logo, a game code from
     :data:`COLLECTION_GBA_ROMS`, and that code's title all sit at their header offsets.
@@ -613,7 +613,7 @@ class CVAOSCollectionCommandProcessor(ClientCommandProcessor):
 
 class CVAOSCollectionContext(CommonContext):
     game = "Castlevania - Aria of Sorrow"
-    # Items from other worlds plus the starting inventory, as in the BizHawk client.
+    # Items from other worlds plus the starting inventory, as in the BizHawk Client.
     items_handling = 0b101
     want_slot_data = True
     command_processor = CVAOSCollectionCommandProcessor
@@ -653,9 +653,9 @@ class CVAOSCollectionContext(CommonContext):
         if cmd == "Connected":
             logger.info('Press "Open map" or type /map to open the map tracker for this slot in '
                         "your browser.")
-            # A reconnect to the same seed starts a new server session, so the checks the last one
-            # sent are sent again (the server ignores repeats). One sent into a connection that was
-            # already dead would otherwise never arrive.
+            # A reconnect to the same seed starts a new server session, so the checks sent in the
+            # last session are sent again (the server ignores repeats). Otherwise a check sent into
+            # a connection that had already died would never arrive.
             self.brain._reset_session_state(same_seed=self.auth == self._connected_auth)
             self._connected_auth = self.auth
             self._seed_changed = False
@@ -663,8 +663,8 @@ class CVAOSCollectionContext(CommonContext):
             target = self.slot_data.get("target_platform")
             if target is not None and int(target) != TARGET_ADVANCE_COLLECTION:
                 logger.warning(
-                    "This seed's target platform is GBA (BizHawk), not the Advance Collection. "
-                    "It will still play here, but double-check you connected the intended client.")
+                    "This seed's target platform is GBA (BizHawk). You can play it in the Advance "
+                    "Collection, but the intended client is the BizHawk Client.")
         self.brain.queue_deathlink_from_bounce(self, cmd, args)
 
     def run_gui(self) -> None:
@@ -720,16 +720,16 @@ class CVAOSCollectionContext(CommonContext):
         logger.info("Attached to the Advance Collection (ROM at %#x, EWRAM at %#x).",
                     rom.base, ewram_base)
         if self._connected_auth not in (None, installed):
-            # The installed seed is not the one this client last played. The old seed's goal does
-            # not carry over: CommonClient reports CLIENT_GOAL on every Connected while
+            # The installed seed is not the one this client last played. The old seed's goal must
+            # not carry over, because CommonClient reports CLIENT_GOAL on every Connected while
             # finished_game is set.
             self.finished_game = False
             self._connected_auth = None
             if self.slot is not None:
                 # The open connection still plays the old seed's slot. Reconnecting authenticates
                 # with the new seed's auth.
-                logger.info("The collection now holds a different seed from the connected slot's; "
-                            "reconnecting as the new seed's slot.")
+                logger.info("The collection now has a different seed installed, so the client is "
+                            "reconnecting as that seed's slot.")
                 self._seed_changed = True
                 Utils.async_start(self.disconnect(allow_autoreconnect=True))
 

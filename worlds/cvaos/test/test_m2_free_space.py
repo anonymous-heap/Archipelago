@@ -7,6 +7,9 @@ ranges are all-zero on a cart dump and live on the collection image, so a write 
 harmless on a cart dump corrupts the collection. The regions are declared in
 ``rom/address_space.py``; this test drives every feature's real write set against them.
 
+AP's scratch areas in high EWRAM must likewise avoid the addresses that M2's code writes on the
+collection (``M2_EWRAM``).
+
     python -m pytest worlds/cvaos/test/test_m2_free_space.py -v
 """
 from __future__ import annotations
@@ -31,8 +34,8 @@ class M2RegionsTest(unittest.TestCase):
         self.assertEqual(tuple(M2_AUDIO_BRIDGE.bind(geometry).request()), (0x700000, 0xE4))
 
     def test_ap_scratch_ewram_avoids_m2s(self):
-        # The free high-EWRAM tail is free only on a cart: M2's code writes into it on the
-        # collection. Every AP scratch area there has to stay clear of those writes.
+        # The game never uses the high-EWRAM tail, but on the collection M2's code writes into
+        # part of it. Every AP scratch area there has to stay clear of those writes.
         scratch = {
             "item-use shadow inventory": range(cp.SHADOW_INVENTORY_GBA,
                                                cp.SHADOW_INVENTORY_GBA + cp.MAX_SHADOW_SLOT + 1),

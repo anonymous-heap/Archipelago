@@ -1,5 +1,6 @@
 """
-Applying a patch checks the base ROM's MD5 before anything else reads it.
+Applying a patch checks the base ROM's MD5 before anything else reads it. It also warns when a
+seed made for the collection is patched from a cart dump.
 
     python -m pytest worlds/cvaos/test/test_base_rom_check.py -v
 """
@@ -35,10 +36,12 @@ class BaseRomCheckTest(unittest.TestCase):
 
 
 class TargetBaseTest(unittest.TestCase):
-    """A seed made for the collection still patches from a cart dump, for an emulator."""
+    """A cart dump is an accepted base for either target, with a warning when the seed was made
+    for the collection."""
 
     def test_a_collection_seed_patched_from_a_cart_dump_warns(self) -> None:
-        # The result plays in BizHawk; the collection's installer refuses it on its own.
+        # The result plays in BizHawk. The collection's installer refuses it anyway, so the check
+        # only warns.
         from ..options import TARGET_ADVANCE_COLLECTION
         from ..constants import USA_ROM_MD5
         from ..rom.patch import check_base_for_target

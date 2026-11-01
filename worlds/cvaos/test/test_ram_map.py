@@ -80,8 +80,8 @@ class EwramMapTest(unittest.TestCase):
 class FakeBackend:
     """A ``RamBackend`` over dict-of-bytearray memory.
 
-    Reads are batched, writes are plain, and a guarded write or batch checks every guard before
-    applying anything, which is the connector's frame-atomic semantics.
+    Reads are batched and writes are plain. A guarded write or batch checks every guard before
+    applying anything, which matches the connector's frame-atomic behaviour.
     """
 
     def __init__(self, memory: dict) -> None:
@@ -129,7 +129,8 @@ class AccessorBehaviourTest(unittest.TestCase):
         return asyncio.run(coro)
 
     def test_a_souls_count_includes_its_second_list(self):
-        # A copied save file keeps its souls in the second list; the game sums both.
+        # The file-select Copy moves a file's souls into the second list, and the game's total for
+        # a soul sums both lists.
         self.mem[0x13361] = 0x01                                 # blue_soul[0] second list = 1
         self.assertEqual(self.run_(self.ram.owned_count("blue_soul", 0)), 1)
         self.mem[0x13354] = 0x02                                 # first list = 2
@@ -152,7 +153,8 @@ class AccessorBehaviourTest(unittest.TestCase):
         self.assertEqual(self.mem[0x13396], 0b0000_1001, "and switched on, keeping Grave Keeper on")
 
     def test_the_callers_writes_come_last_in_the_batch(self):
-        # A backend that stops partway then has not advanced the counter, so the item is retried.
+        # With the counter's write last, a backend that stops partway through the batch leaves the
+        # counter unadvanced, so the next tick grants the item again.
         from ..ram.backend import GuardedWrite
         sentinel = GuardedWrite(0x1328A, b"\x06\x00", b"\x05\x00", EWRAM)
         batches = []

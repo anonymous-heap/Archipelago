@@ -1,7 +1,7 @@
 """
 Async helpers for reading/writing Aria of Sorrow live memory.
 
-``AoSRAM`` wraps a transport backend (``backend.RamBackend``; the BizHawk connector is one). Its
+``AoSRAM`` wraps a transport backend (a ``backend.RamBackend``, such as ``BizHawkBackend``). Its
 transport primitives are ``read``, ``write``, ``guarded_write`` and ``guarded_write_many``, one
 round-trip each. Its semantic accessors work over the ``Entry`` declarations in ``addresses.py``.
 An entry supplies the ``(offset, nbytes)`` a request needs and the codec that decodes or encodes
@@ -288,8 +288,8 @@ class AoSRAM:
         """How many of one item the player owns, from the same arrays :meth:`give_item` writes.
 
         ``category``/``index`` are an item_info category and its within-category id. Soul arrays
-        pack two counts per byte, which this unpacks. A soul's count is the sum of both of its
-        lists, as the game counts it.
+        pack two counts per byte, which this unpacks. A red, blue or yellow soul's count is the
+        sum of both of its lists, as the game counts it.
         """
         array = addr.INVENTORY[category]
         self._check_index(category, array, index)
@@ -328,7 +328,8 @@ class AoSRAM:
 
         A soul also adds one to the game's souls-collected statistic, which is what the vanilla
         collect path does after its own add. The first copy of an ability soul also switches the
-        ability on, as the game's pickup does, since the player cannot use it until it is on.
+        ability on, as the game's pickup does, because the player cannot use an ability while it
+        is off.
         """
         array = addr.INVENTORY[category]
         self._check_index(category, array, index)
@@ -351,9 +352,10 @@ class AoSRAM:
             writes = [self._guarded(slot, slot.pack(pair), old_byte)]
             if category == "ability_soul" and total == 0:
                 writes.append(await self._ability_switched_on(index))
-            # The caller's writes go last. A backend that dies partway through a batch then leaves
-            # the item granted without its counter advance, so it is granted again, rather than
-            # counted without being switched on.
+            # The caller's writes go last. If a backend fails partway through the batch, the soul
+            # can then be granted without the counter advancing, and it is granted again later.
+            # With the counter first, a failure could instead count the soul as delivered while its
+            # ability stays switched off.
             writes.extend(together_with)
             if not await self.guarded_write_many(writes):
                 return False
@@ -365,7 +367,8 @@ class AoSRAM:
             return True
 
         # At the cap the slot is written back unchanged, so the guard still catches a change made
-        # between the read and the write (the player using one, say). The next tick then grants it.
+        # between the read and the write (the player using one, say). The next tick then retries
+        # the grant.
         slot = array.entry.item(index)
         current = await self._fetch(slot)
         new = min(current + 1, cap)
@@ -410,7 +413,8 @@ class AoSRAM:
     async def add_gold(self, amount: int, *, together_with: Sequence[GuardedWrite] = ()) -> bool:
         """
         Adds ``amount`` to the player's gold (subtype-1 'money' pickups),
-        race-safely. The caller resolves the money item to its gold value.
+        race-safely. The caller resolves the money item to its gold value. Like the game, it
+        caps the total at ``addr.GOLD_CAP``.
 
         ``together_with`` works as in :meth:`give_item`.
         """

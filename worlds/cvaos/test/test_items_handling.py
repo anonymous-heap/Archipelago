@@ -1,8 +1,8 @@
 """
 Both clients ask the server for the starting inventory as well as other worlds' items.
 
-Logic counts the starting inventory as owned from the start, and nothing else puts it into the
-game, so a client that does not ask for it can leave a seed unbeatable.
+Logic counts the starting inventory as owned from the start, but nothing else puts it into the
+game. A client that does not ask for it can therefore leave a seed unbeatable.
 
     python -m pytest worlds/cvaos/test/test_items_handling.py -v
 """
@@ -33,7 +33,8 @@ class ItemsHandlingTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(CVAOSCollectionContext.items_handling, OTHER_WORLDS | STARTING_INVENTORY)
 
     def test_slot_data_tells_the_client_its_counter_includes_the_starting_inventory(self):
-        # Without the key, the client treats the seed as one generated before this change.
+        # Without the key, the client treats the seed as an older one, whose saves count only
+        # items from other worlds.
         from test.general import setup_multiworld
         from .. import CVAOSWorld
         multiworld = setup_multiworld(CVAOSWorld, seed=1)

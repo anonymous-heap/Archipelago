@@ -118,9 +118,9 @@ def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Di
         elif loc.item.player == world.player and loc.item.name != PROGRESSIVE_MOVEMENT:
             type_num, subtype_num, item_offset = get_item_encoding(loc.item.code)
         else:
-            # Another world's item uses the placeholder. A Progressive Movement copy does too, since
-            # it has no pickup of its own, and once its location is checked the client grants the
-            # next stage soul.
+            # Another world's item uses the placeholder. So does a Progressive Movement copy,
+            # because it has no pickup of its own. When its location is checked, the client
+            # grants the next soul in PROGRESSIVE_MOVEMENT_STAGES.
             type_num, subtype_num, item_offset = _AP_PLACEHOLDER
         if every_difficulty and type_num == HARD_PICKUP:
             type_num = PICKUP
@@ -179,6 +179,8 @@ def get_base_rom_bytes(target: int = TARGET_GBA) -> bytes:
       it fall back to the prompted ``rom_file``.
     - ``gba``: use ``rom_file``; accessing it opens a file browser when unset. The pick may be a
       GBA ROM *or* the collection's game.exe (``_read_base_rom_source`` extracts from the exe).
+
+    While :func:`base_rom_override` is active, its ROM is returned instead, whatever the target.
     """
     if _base_rom_override is not None:
         return _base_rom_override
@@ -291,8 +293,8 @@ class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
     def _checked_base(cls, base: bytes) -> bytes:
         """Return ``base`` if it is one of the two accepted base ROMs, and raise otherwise.
 
-        AP records ``hash`` in the patch but never compares it, so without this a wrong base (a
-        previous seed's .gba, say) only fails later, at some feature's ROM-mismatch guard.
+        AP records ``hash`` in the patch but never compares it. Without this check, a wrong base
+        (a previous seed's .gba, say) would fail only later, at some feature's ROM-mismatch guard.
         """
         digest = hashlib.md5(base).hexdigest()
         if digest not in cls.hash:
@@ -318,9 +320,9 @@ class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
 def check_base_for_target(base: bytes, target: int) -> bytes:
     """Return ``base``, warning when a seed made for the collection is patched from a cart dump.
 
-    An advance_collection seed falls back to ``rom_file`` when no collection is found. A cart dump
-    there gives a ROM that plays in an emulator but not in the collection. The collection's
-    installer refuses such a ROM by itself, so this only warns.
+    An advance_collection seed falls back to ``rom_file`` when no collection is found. If that file
+    is a cart dump, the patched ROM plays in an emulator but not in the collection. The
+    collection's installer already refuses such a ROM, so this only warns.
     """
     if target == TARGET_ADVANCE_COLLECTION and hashlib.md5(base).hexdigest() == USA_ROM_MD5:
         logging.getLogger("Patch").warning(

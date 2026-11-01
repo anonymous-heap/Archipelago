@@ -40,7 +40,8 @@ _ALL_DIFFICULTIES = (LogicDifficultyPreset.option_canonical, LogicDifficultyPres
 
 
 def _options(difficulty: int = LogicDifficultyPreset.default, **overrides: str) -> SimpleNamespace:
-    """An options stand-in: real option instances, only the fields the resolver reads."""
+    """An options stand-in: real option instances, with only the fields that the resolver and the
+    access-rule factory read."""
     ns = SimpleNamespace(logic_difficulty_preset=LogicDifficultyPreset(difficulty),
                          oops_all_whips=OopsAllWhips.from_any(overrides.get("oops_all_whips", 0)))
     for attr, cls in _OPTION_CLASSES.items():
@@ -49,7 +50,7 @@ def _options(difficulty: int = LogicDifficultyPreset.default, **overrides: str) 
 
 
 class _State:
-    """CollectionState stand-in for access rules: has_all over a fixed item set, plus
+    """CollectionState stand-in for access rules: has_all and has_any over a fixed item set, plus
     can_reach_region over a fixed region-name set (for Tform rules)."""
 
     def __init__(self, *items: str, regions: tuple[str, ...] = ()) -> None:

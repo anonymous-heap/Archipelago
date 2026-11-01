@@ -13,12 +13,14 @@ by the first entry with type==0:
 
 Rather than delete the entity (which would mean shifting the list / juggling the terminator), we
 overwrite the button **in place** with an object that does nothing: subtype 0x07 with var_a=4 and
-var_b=0. Object07Create does nothing when var_a is 4 and var_b is 0, and Object07Update ignores
-var_a 4. Other var_a values are not inert. Castle Corridor's ambient particles are var_a 0, which spawns
-effect entities and forces alpha blending every frame, and var_a 1 animates a palette.
+var_b=0. Object07Create does nothing for that pair, and Object07Update ignores var_a 4.
+
+Other var_a values are not inert. With var_a 0 the object is Castle Corridor's ambient particles:
+it spawns effect entities and forces alpha blending every frame. With var_a 1 it animates a
+palette.
 
 The list length, terminator, and list pointer are all unchanged. The barrier stays, so 20D->A02 is
-blocked until the Key sets MISC #48.
+blocked until the Study Sealswitch sets MISC #48.
 """
 from __future__ import annotations
 

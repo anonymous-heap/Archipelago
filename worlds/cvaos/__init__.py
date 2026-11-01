@@ -345,9 +345,9 @@ class CVAOSWorld(World):
             "death_link": self.options.death_link.value,
             **self.options.as_dict(*LOGIC_OPTION_NAMES),
             # Locations holding this world's own Progressive Movement copies, and how many copies
-            # the starting inventory holds. The client adds the checked locations and the starting
-            # copies to the copies received from other worlds, and grants stage souls up to that
-            # total, the same count logic uses.
+            # the starting inventory holds. The client adds up the starting copies, the copies
+            # received from other worlds, and how many of these locations are checked. It grants
+            # stage souls up to that total, which is the same count logic uses.
             "progressive_movement_starting": sum(
                 1 for item in self.multiworld.precollected_items[self.player]
                 if item.name == PROGRESSIVE_MOVEMENT),
@@ -355,9 +355,9 @@ class CVAOSWorld(World):
                 loc.address for loc in self.multiworld.get_locations(self.player)
                 if loc.address is not None and loc.item is not None
                 and loc.item.player == self.player and loc.item.name == PROGRESSIVE_MOVEMENT),
-            # The client receives the starting inventory and counts it in the saved received
-            # counter.
-            # Seeds without this key were generated for a client that did neither.
+            # The client receives the starting inventory from the server and counts it in the
+            # received-item counter it saves. Seeds without this key were generated for a client
+            # that did neither.
             "starting_inventory_from_server": True,
         }
 

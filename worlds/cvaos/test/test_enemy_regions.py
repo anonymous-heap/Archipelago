@@ -1,8 +1,8 @@
 """
-Enemy regions exist only for enemies whose soul the player can farm.
+Tests that enemy regions exist only for enemies whose soul the player can farm.
 
-Logic asks whether an enemy that drops a soul can be reached, so an enemy that never respawns after
-its first defeat is not a source it can rely on.
+Logic counts a soul as obtainable when the player can reach an enemy that drops it. An enemy that
+never respawns after its first defeat gives only one chance at its soul, so it gets no region.
 
     python -m pytest worlds/cvaos/test/test_enemy_regions.py -v
 """

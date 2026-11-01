@@ -1,18 +1,20 @@
 """
 Transport-neutral per-tick client logic for Castlevania: Aria of Sorrow.
 
-``CVAOSClientLogic`` is the game-side brain shared by both clients: the BizHawk client
-(``client.py``) and the Steam Advance Collection process-attach client
-(``collection_client.py``). It holds the per-session state and implements one private
-helper per concern -- location checks, item receipt, DeathLink relay, goal report --
-plus the ``_tick`` orchestrator. Everything here talks to the game only through
-``AoSRAM`` (whose transport backend the caller chose) and to Archipelago only through
-``CommonContext`` APIs, so it neither knows nor cares which emulator is on the other
-end. Transport exceptions are the caller's problem: each client wraps ``_tick`` in a
-try/except for its own backend's error type and retries/reconnects.
+``CVAOSClientLogic`` is the game logic that both clients share: the BizHawk Client
+(``client.py``) and the Collection Client (``collection_client.py``). It holds the per-session
+state, and its ``_tick`` runs one private helper per task. Those helpers send location checks,
+grant received items and Progressive Movement souls, relay DeathLink, and report the goal. They
+also keep Soma's position and the explored map in data storage, where the map tracker reads
+them; Universal Tracker's map reads the position too.
 
-Mixed into ``CVAOSClient`` (so tests can keep driving ``client._relay_deathlink`` etc.
-directly) and held as a component by the collection client's context.
+The logic reaches the game only through ``AoSRAM``, on whichever transport backend the caller
+chose, and reaches Archipelago only through ``CommonContext``. It therefore works the same in
+either client. Each client wraps ``_tick`` in error handling for its own backend, and retries or
+reconnects when that backend fails.
+
+``CVAOSClient`` mixes this class in, so tests can call helpers such as
+``client._relay_deathlink`` directly. The Collection Client's context holds an instance instead.
 """
 from __future__ import annotations
 
@@ -62,14 +64,15 @@ class CVAOSClientLogic:
         # same_seed True when it is reconnecting to the seed it was already playing.
         self.local_checked_locations = set()
         # DeathLink: the cause of an incoming death not applied yet. A reconnect to the same seed
-        # keeps it, so a death received while Soma could not be killed (paused, say) still lands.
+        # keeps it, so a death received while Soma could not be killed (paused, say) is still
+        # applied.
         if not same_seed:
             self.death_causes = []
         # DeathLink: whether we currently consider Soma dead. It guards against re-sending our own
         # death and re-applying an incoming one until HP recovers. A reconnect to the same seed
         # keeps it, so a death sent before the disconnect is not sent again, while one that
-        # happened during the disconnect still is. Otherwise it is None until the first tick
-        # reads the game.
+        # happened during the disconnect still is. On a first connect or a different seed, it is
+        # None until the first tick reads the game.
         if not same_seed:
             self.currently_dead = None
         # AP's timestamp on the death we last sent, so the bounce handler can recognize our own echo.
@@ -104,7 +107,8 @@ class CVAOSClientLogic:
 
     async def _tick(self, ctx: "CommonContext", ram: AoSRAM) -> None:
         # Per-tick orchestrator: read the run state once, relay DeathLink every tick, and run the
-        # in-gameplay-only concerns (checks/items/goal) when it is safe to read & write game memory.
+        # in-gameplay-only concerns (checks, tracker data, items, goal) when it is safe to read &
+        # write game memory.
         game_state, menu_state = await ram.get_run_state()
         in_gameplay = (game_state == addr.GameState.INGAME
                        and menu_state == addr.MENU_STATE_NORMAL)
@@ -203,9 +207,9 @@ class CVAOSClientLogic:
     async def _receive_items(self, ctx: "CommonContext", ram: AoSRAM) -> None:
         # Receive items from the server: grant each not-yet-given item and advance the saved
         # received-counter past it, so a reload doesn't re-give it. An item's transfer and the
-        # counter's advance go in one guarded write, so a connector failure can neither grant an
-        # item twice nor skip one. Stop on a lost guarded write (a race with the game's writes, or
-        # the counter changing underneath us) and retry next tick.
+        # counter's advance go in one batch of guarded writes, so a connector failure can neither
+        # grant an item twice nor skip one. Stop on a lost guarded write (a race with the game's
+        # writes, or the counter changing underneath us) and retry next tick.
         from CommonClient import logger
 
         items = self._grantable_items(ctx)
@@ -235,9 +239,9 @@ class CVAOSClientLogic:
         # Grant one stage soul per Progressive Movement copy obtained so far. The count adds the
         # copies in the starting inventory, the copies received from other worlds, and the copies
         # found at this world's own checked locations. Souls already owned are skipped, so repeating
-        # this every tick is safe, and it also restores the souls an older save lacks after a
-        # reload. Only one soul is granted per tick, and only once the announcement slot is free,
-        # so that every granted soul gets its own banner.
+        # this every tick is safe. When the player reloads an older save, it also restores the
+        # souls that save lacks. Only one soul is granted per tick, and only once the announcement
+        # slot is free, so that every granted soul gets its own banner.
         from . import announce
         if not ctx.slot_data.get("progressive_movement"):
             return
@@ -266,10 +270,10 @@ class CVAOSClientLogic:
         """
         Return the received items that the saved received-counter counts, in server order.
 
-        The server puts the starting inventory at the front of the list. A seed whose slot_data
+        The server puts the starting inventory at the front of the list. A seed whose slot data
         has ``starting_inventory_from_server`` counts those items in its saves. An older seed's
-        saves count only items from other worlds, so for it the starting inventory is left out
-        and is not given.
+        saves count only the items from other worlds. For such a seed this leaves the starting
+        inventory out, so the client does not give it.
         """
         if ctx.slot_data.get("starting_inventory_from_server"):
             return ctx.items_received
@@ -289,8 +293,9 @@ class CVAOSClientLogic:
         from CommonClient import logger
 
         # Follow the seed's DeathLink setting. update_death_link adds or removes the "DeathLink"
-        # tag, so this does nothing on later ticks. Removing it matters when the client moves on to
-        # a seed without DeathLink, which also has no kill hook to run a requested death.
+        # tag, so once the tag matches the setting this does nothing. Removing the tag matters when
+        # the client moves on to a seed without DeathLink, which also has no kill hook to run a
+        # requested death.
         wanted = bool(ctx.slot_data.get("death_link"))
         if wanted != ("DeathLink" in ctx.tags):
             await ctx.update_death_link(wanted)

@@ -290,7 +290,7 @@ def open_for_client(ctx: CommonContext) -> None:
     is already running for the slot, the new process just opens that tracker's page.
     """
     if ctx.slot is None:
-        logger.info("Connect to the room first. Then /map opens the tracker for your slot.")
+        logger.info("Connect to the room first, then open the map again.")
         return
     # The BizHawk Client keeps /map and the button after a ROM for another system is loaded,
     # because it asks this world only about GBA ROMs. So the slot's game is checked here.

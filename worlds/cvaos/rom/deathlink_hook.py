@@ -18,8 +18,9 @@ How it works:
   handler; then -- set or not -- it reproduces _0801B9D0's stolen prologue and resumes the tail,
   which plays the death animation the handler selected. So a received DeathLink kills Soma through
   the canonical routine, immediately and regen-proof, and normal play is untouched.
-* Before that call it clears status bits 0x820, as the damage path does before its own call. The
-  handler skips the death animation while bit 0x800 is set, and the Sky Fish soul sets it.
+* Before calling the death handler, the trampoline clears status bits 0x820, as the damage path
+  does before its own call. The handler skips the death animation while bit 0x800 is set, and
+  the Sky Fish soul sets that bit.
 
 The trampoline bytes below are assembled from ``deathlink_hook.s`` at DEV time with
 ``thumb_assembler.py`` and verified with capstone, so AP generation needs no toolchain. Regenerate

@@ -131,8 +131,8 @@ _HARD_PICKUP_ITEM_NAMES: frozenset[str] = frozenset(
 
 
 # The item the Study Sealswitch displaces when it is shuffled in: the smallest gold pickup, with
-# ties going to the first in table order. Every pickup's item is unique, so the displaced item
-# leaves the game, and gold is the one kind with near-duplicates to spare.
+# ties going to the first in table order. The displaced item leaves the game. Gold pickups differ
+# only in amount, so losing the smallest one costs the player the least.
 _SEALSWITCH_DISPLACES: str = min(
     (p for p in pickup_infos if p.subtype_num == _MONEY_SUBTYPE and not p.is_hard_mode_only),
     key=lambda p: int(p.simple_name)).display_name

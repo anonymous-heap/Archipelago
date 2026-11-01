@@ -8,10 +8,9 @@ states them once; ``Entry`` declarations then address the ROM by GBA address and
 
 The Steam Castlevania Advance Collection ships its own copy of the ROM, and M2 changed it in 23
 places. Most are small patches to the game's code and data, and one zeroes a sound-mixer routine.
-Two are additions in what is free space on a cart. Those two are zero on a cart dump and live on
+Two are additions in what is free space on a cart. Those two are zero on a cart dump but in use on
 the collection image, so an AP write there that is harmless on a cart corrupts the collection.
-They are declared here as the ``M2_NO_GO`` regions, so placements can be checked against them
-rather than against a comment.
+They are declared here as the ``M2_NO_GO`` regions, so placements can be checked against them.
 
 The other changes sit inside the game's own code and data. A hook that replays the instructions
 it overwrites must not be placed on any of them, because the collection's instructions there

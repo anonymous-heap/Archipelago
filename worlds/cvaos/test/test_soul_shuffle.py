@@ -2,9 +2,9 @@
 
 These do not run the ROM. They check the committed vanilla table's shape, that a planned shuffle
 is always a soul-preserving permutation that leaves progression souls alone, and that the emitted
-writes say what the plan says -- including the rate carve-outs that keep a scripted boss's soul
-obtainable wherever it lands. Confirming the table's field meanings in-game still needs an emulator
-playtest -- see rom/soul_shuffle.py.
+writes say what the plan says. When rates move with their souls, a scripted boss still keeps its
+rate of 0, and an ordinary enemy that receives a boss's soul keeps its own rate. Confirming the
+table's field meanings in-game still needs an emulator playtest (see rom/soul_shuffle.py).
 """
 from __future__ import annotations
 
@@ -198,8 +198,9 @@ class TestBuildWrites(unittest.TestCase):
                         _assert_every_soul_obtainable(self, patched)
 
     def test_rate_edits_after_the_shuffle_keep_every_soul_obtainable(self):
-        """The patch runs the shuffle, then the per-enemy rate overrides, then the multiplier; none
-        of the later steps may put a 0 back on an ordinary enemy."""
+        """The patch applies the shuffle, then the per-enemy rate overrides, then the multiplier.
+        After all three, every soul is still obtainable: no ordinary enemy holding a soul has a rate
+        of 0, and no boss has gained a random roll."""
         from worlds.cvaos.rom import soul_drop_rates as sdr
         for mode in ALL_MODES:
             for seed in range(5):

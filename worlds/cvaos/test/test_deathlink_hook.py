@@ -41,8 +41,9 @@ class DeathlinkHookBytesTest(unittest.TestCase):
         self.assertIn(dh.KILL_REQUEST_EWRAM.to_bytes(4, "little"), self.writes[self.tramp_off])
 
     def test_trampoline_clears_the_sky_fish_bit_before_the_kill(self) -> None:
-        # movs r0,#0x82; lsls r0,r0,#4; bics r2,r0: the damage path clears status bits 0x820
-        # before calling the death handler, which skips the death animation while 0x800 is set.
+        # movs r0,#0x82; lsls r0,r0,#4; bics r2,r0 clears status bits 0x820, as the damage path
+        # does before it calls the death handler. The handler skips the death animation while bit
+        # 0x800 (set by the Sky Fish soul) is on.
         blob = self.writes[self.tramp_off]
         clear = bytes.fromhex("8220" "0001" "8243")
         handler_call = blob.index(bytes.fromhex("8e461847"))   # mov lr, r1; bx r3

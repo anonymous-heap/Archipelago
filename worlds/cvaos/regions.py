@@ -359,11 +359,11 @@ _ABILITY_TO_ITEM: dict[AbilityCombo, str] = {
     AbilityCombo.Panth: "Black Panther",
     AbilityCombo.Bat: "Giant Bat",
     AbilityCombo.BDash: "Grave Keeper",
-    # Kicker Skeleton has no pickup or location. Its soul is a rare enemy drop (rate 2), so no
-    # item has this name and every Kick route stays out of logic. Putting Kick in logic would
-    # need an enemy region for the Kicker Skeleton in room 505, checked the way Tform checks the
-    # Devil and Manticore regions. It would also ask players to farm that drop for an optional
-    # route.
+    # Kicker Skeleton has no pickup or location, because its soul is only a rare enemy drop
+    # (rate 2). No item has this name, so every Kick route stays out of logic. Putting Kick in
+    # logic would need an enemy region for the Kicker Skeleton in room 505, checked the way Tform
+    # checks the Devil and Manticore regions. It would also ask players to farm that drop for an
+    # optional route.
     AbilityCombo.Kick: "Kicker Skeleton",
     AbilityCombo.Galamoth: "Galamoth",
     # Chronomage currently has no pickup/location (b/c Galamoth accomplishes
@@ -382,7 +382,7 @@ _CEILING_BREAKERS: frozenset[str] = frozenset(
 _FLOOR_BREAKERS: frozenset[str] = frozenset(
     info.name for info in item_info_collection if info.breaks_floors)
 # Oops! All Whips gives every weapon the Whip Sword's swing, and the Whip Sword breaks neither
-# ceilings nor floors. With it on, only the breakers that are not weapons count.
+# ceilings nor floors. With that option on, only the breakers that are not weapons count.
 _WEAPON_NAMES: frozenset[str] = frozenset(
     info.name for info in item_info_collection if info.item_category == "weapon")
 
@@ -428,17 +428,24 @@ def _create_access_rule_from_routing(
     Each bit in a mask is one required ability (conjunctive options, e.g. DJump + Skula).
 
     Technique bits gate on the resolved logic options (options.resolve_allowed_techniques)
-    and are fixed once generation starts, so they resolve here at build time: a mask
-    demanding an out-of-logic technique is pruned (Impossible prunes the same way, never
-    being in logic).
+    and are fixed once generation starts, so they resolve here at build time. A mask that
+    demands Impossible or an out-of-logic technique is pruned.
+
+    The exception is a Universal Tracker rebuild. There, a mask whose only out-of-logic
+    requirements are tricks (TECHNIQUES bits) goes into a separate tricks tier instead of being
+    pruned. A way through in that tier also requires UT_TRICKS_ITEM, so UT shows the locations
+    past it as reachable with tricks. A mask with any other out-of-logic requirement, such as
+    Impossible, is pruned even then.
 
     Tform is "is a transformation-soul source usable" (_tform_available).
-    
-    Ceil / Floor are "do we hold any item that breaks ceilings / floors respectively"
 
-    Returns None when some way through requires nothing (always accessible), an
-    always-False rule when every way through is out of logic, and a per-state rule
-    otherwise.
+    Ceil / Floor are "do we hold any item that breaks ceilings / floors respectively"
+    (_breakers, which leaves out the weapons under Oops! All Whips).
+
+    Returns None when some in-logic way through requires nothing (always accessible), an
+    always-False rule when every way through is out of logic and none is in the tricks tier,
+    and a per-state rule otherwise. The per-state rule also has a ``uses`` attribute, which
+    returns what the simplest usable way through needs, for Universal Tracker's routes.
     """
     requirement_masks = routing_info.get_requirement_bitmasks()
 
@@ -638,14 +645,14 @@ SPECIAL_TRANSDOOR_DEPS: dict[tuple[str, str], object] = {
 
 def _forbidden_area_forward_gate(world: CVAOSWorld, _csv_rule):
     """
-    The within-A01 route 20D -> A02 (the barrier-blocked direction).
+    The within-A01 route 20D -> A02, down from the Study toward the Forbidden Area.
 
-    With e.g. ForbiddenAreaButton == pickup the unlock is the shuffled "Study Sealswitch"
-        (it sets misc #48 on receipt), so we gate the forward direction on holding it.
+    With ForbiddenAreaButton set to pickup, the barrier opens once the shuffled "Study Sealswitch"
+        is obtained (it sets misc #48), so this direction requires only the Sealswitch.
 
-    Otherwise return None to keep the CSV-derived rule.
+    With the button left in place, return None to keep the CSV-derived rule.
 
-    The reverse direction is _forbidden_area_reverse_gate.
+    The reverse direction is handled by _forbidden_area_reverse_gate.
     """
     use_csv_logic_options = frozenset({ForbiddenAreaButton.option_off})
     if world.options.forbidden_area_button.value in use_csv_logic_options:

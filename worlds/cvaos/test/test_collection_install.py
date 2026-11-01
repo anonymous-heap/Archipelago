@@ -89,7 +89,8 @@ def _build_fake_collection(root: str, aos_bytes: bytes = _STOCK_AOS_BYTES) -> st
 
 
 class _InstallerCase(unittest.TestCase):
-    """Temp fake collection + collection_running stubbed to 'not running'."""
+    """A temporary fake collection whose stock ROM the installer accepts, with
+    collection_running stubbed to report that the game is not running."""
 
     def setUp(self) -> None:
         self.root = tempfile.mkdtemp(prefix="cvaos_install_test_")
@@ -192,7 +193,8 @@ class InstallTest(_InstallerCase):
         self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
 
     def lock_the_live_index(self):
-        """Make every move onto the live index fail, the way a file another program holds does."""
+        """Return a patch under which every move onto the live index fails, as it does while
+        another program holds the file open."""
         real_replace = os.replace
         live_psb = os.path.join(self.windata, "alldata.psb.m")
 
@@ -250,7 +252,7 @@ class InstallTest(_InstallerCase):
                          b"a new member", "the kept index must match the new payload")
 
     def test_a_failed_first_backup_leaves_no_backup_behind(self) -> None:
-        # Half a backup would make every later install refuse to run.
+        # A backup of one file without the other would make every later install refuse to run.
         real_replace = os.replace
         moves = []
 
@@ -336,8 +338,8 @@ class PatchFileInstallTest(_InstallerCase):
         self.assertEqual(self._member(AOS_MEMBER), _make_patched_rom())
 
     def test_a_patch_is_applied_to_the_collection_it_installs_into(self) -> None:
-        # Whatever target the seed was made for, the base is the collection's own ROM, and
-        # host.yaml's rom_file (often a cart dump for BizHawk players) is not consulted.
+        # Whatever target the seed was made for, the base is the collection's own ROM. The
+        # installer does not read host.yaml's rom_file, which is often a cart dump for BizHawk.
         from ..options import TARGET_GBA
         from ..rom import patch as patch_module
         bases = []
@@ -539,7 +541,11 @@ class BaseRomSourceTest(unittest.TestCase):
 
 
 class ExePromptTest(unittest.TestCase):
-    """The installer asks for game.exe when nothing is at the configured path, once."""
+    """The installer asks for game.exe only when no file is at the configured path.
+
+    It saves the chosen path to host.yaml, so it does not ask again. A cancelled dialog saves
+    nothing.
+    """
 
     class FakePath(str):
         chosen: "str | None" = None
@@ -556,7 +562,8 @@ class ExePromptTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
         self.options = types.SimpleNamespace()
         self.saved = mock.Mock()
-        # CVAOSWorld.settings is a read-only metaclass property that caches the group here.
+        # CVAOSWorld.settings is a read-only metaclass property. It caches the settings group in
+        # _AutoWorldRegister__settings, so the test replaces that cache instead.
         for patcher in (mock.patch.object(CVAOSWorld, "_AutoWorldRegister__settings", self.options),
                         mock.patch("settings.get_settings",
                                    return_value=types.SimpleNamespace(save=self.saved))):

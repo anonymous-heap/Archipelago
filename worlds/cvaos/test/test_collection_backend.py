@@ -58,8 +58,11 @@ def _make_ewram_ingame(overrides: dict[int, int] | None = None) -> bytearray:
 
 
 def _make_rom_header(code: bytes = _ROM_GAMECODE) -> bytes:
-    """Minimal bytes with a valid collection ROM header at offset 0 (title + logo + game code).
-    ``code`` defaults to the US Aria of Sorrow."""
+    """Return minimal bytes holding a valid collection ROM header at offset 0.
+
+    The header has the title, the Nintendo logo and the game code of ``code``, which defaults to
+    the US Aria of Sorrow.
+    """
     title = COLLECTION_GBA_ROMS[code].title
     buf = bytearray(0x200)
     buf[ROM_TITLE_OFFSET:ROM_TITLE_OFFSET + len(title)] = title
@@ -304,10 +307,13 @@ class FindRomImageTest(unittest.TestCase):
 
     def _proc(self, *codes: bytes, marker: bytes = b"", header_offset: int = 0x20,
               proc_class: type = _ScanProc) -> _ScanProc:
-        """One region per code, each holding that ROM's header ``header_offset`` into it, which
-        is where the emulator puts the ROM it runs. ``marker`` goes at the AP identifier's
-        address in every ROM; that address lies past the small fake region on purpose, since
-        find_rom_image reads it separately."""
+        """Return a process with one region per code, each holding that code's ROM header.
+
+        The header sits ``header_offset`` bytes into its region. The default, 0x20, is where the
+        emulator puts the ROM it runs. ``marker`` is written at the AP identifier's address in
+        every ROM. That address lies past the end of the small fake region on purpose, because
+        find_rom_image reads the identifier separately from the region scan.
+        """
         from ..collection_client import _Region
         regions = [_Region(self._region(i), self.REGION_SIZE, protect=0x04, state=0x1000,
                            mem_type=0x20000) for i in range(len(codes))]
@@ -417,7 +423,8 @@ class EwramSignatureTest(unittest.TestCase):
 
 
 class WatcherResilienceTest(unittest.TestCase):
-    """A tick that raises something other than CollectionError must not end the watcher."""
+    """The collection watcher skips its tick while a seed change is pending, and keeps running
+    when a tick raises something other than CollectionError."""
 
     def test_no_tick_runs_while_a_seed_change_is_pending(self) -> None:
         # Between noticing a different installed seed and reconnecting for it, the connection
@@ -482,7 +489,11 @@ class WatcherResilienceTest(unittest.TestCase):
 
 
 class ReattachTest(unittest.IsolatedAsyncioTestCase):
-    """Re-attaching to a differently seeded collection must not keep playing the old slot."""
+    """Attaching to a collection that holds a different seed reconnects as that seed's slot.
+
+    The old seed's goal and DeathLink latch do not carry over to the new seed. Re-attaching to the
+    same seed keeps the connection, the goal and the latch.
+    """
 
     OLD_AUTH, NEW_AUTH = bytes(range(16)), bytes(range(16, 32))
 

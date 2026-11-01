@@ -1,12 +1,15 @@
 """
-BizHawk client for Castlevania: Aria of Sorrow.
+BizHawk Client for Castlevania: Aria of Sorrow.
 
-This client validates the patched ROM, authenticates, and connects. The per-tick game
-logic (location checks, item grants, DeathLink relay, goal report) lives in the
-transport-neutral ``client_logic.CVAOSClientLogic`` mixin, shared with the Steam
-Advance Collection client (``collection_client.py``); this module supplies only the
-BizHawk-specific transport shell: ROM validation over the connector, the
-``BizHawkBackend``, and the connector's error handling.
+This client validates the patched ROM, authenticates, and connects. Its per-tick game logic
+lives in the transport-neutral ``client_logic.CVAOSClientLogic`` mixin, which it shares with the
+Collection Client (``collection_client.py``). That logic sends location checks, grants received
+items, relays DeathLink and reports the goal. It also keeps Soma's position and the explored map
+in data storage, where the map tracker reads them; Universal Tracker's map reads the position too.
+
+This module supplies the parts specific to BizHawk: ROM validation over the connector, the
+``BizHawkBackend``, and the connector's error handling. It also adds the /map command and the
+"Open map" button, which open the map tracker for the connected slot in a browser.
 """
 from __future__ import annotations
 
@@ -40,8 +43,8 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
     game = "Castlevania - Aria of Sorrow"
     system = "GBA"
     patch_suffix = ".apcvaos"
-    # The auth of the seed the last session played. BizHawk keeps one handler for the life of the
-    # client, so this survives a reconnect.
+    # The auth of the seed the last session played. The BizHawk Client keeps one instance of this
+    # class for as long as it runs, so the value survives a reconnect.
     _session_auth: str | None = None
 
     async def validate_rom(self, ctx: "BizHawkClientContext") -> bool:
@@ -78,8 +81,9 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
                 return False
             # Reject a ROM patched by an incompatible generator/client version.
             if identifier.decode("ascii", "ignore") not in COMPATIBLE_IDENTIFIERS:
-                logger.info("ERROR: This ROM was patched by an incompatible version. Check your "
-                            "client version against the one used to generate the seed.")
+                logger.info("ERROR: This ROM was patched by an incompatible apworld version. Use a "
+                            "ROM patched from a seed generated with this apworld, or switch to "
+                            "the apworld that generated the seed.")
                 return False
         except (UnicodeDecodeError, bizhawk.RequestFailedError):
             return False
@@ -120,7 +124,7 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
         try:
             await self._tick(ctx, AoSRAM(BizHawkBackend(ctx.bizhawk_ctx)))
         except (bizhawk.RequestFailedError, bizhawk.NotConnectedError):
-            # Emulator/connection hiccup; retry next tick. A request that times out drops the
-            # connector, so the next request raises NotConnectedError. That must not end the
-            # watcher either, because the context reconnects and calls it again.
+            # Emulator/connection hiccup; retry next tick. A request that times out closes the
+            # connection to the connector, so the next request raises NotConnectedError. That must
+            # not end the watcher either, because the context reconnects and calls it again.
             return

@@ -12,9 +12,9 @@ bytes to 0x22 (the Whip Sword's animation), sets bit 0x20 in the adjacent animat
 zeroes two animation-category bytes. Weapon stats/hitboxes are untouched, but effective reach
 follows the whip swing, so feel (and some incidental enemy hits) will differ.
 
-Logic impact: the weapons that break floors and ceilings do it with their own swing, and the Whip
-Sword's breaks neither. So with this option on, logic counts only the breakers that are not
-weapons (regions._breakers).
+Logic impact: a weapon breaks floors and ceilings through its own swing, and the Whip Sword's
+swing breaks neither. With this option on, no weapon can break them, so logic counts only the
+breakers that are not weapons (regions._breakers).
 
 ``_RECORDS`` is byte-for-byte from Xanthus's distributed patch.
 """

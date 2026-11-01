@@ -73,7 +73,7 @@ class FakeRam:
 
 def _new_client() -> CVAOSClient:
     # Bypass BizHawkClient.__init__ (registration / emulator wiring) and set just the per-session
-    # DeathLink state. currently_dead starts False, as if the first tick had already read the game.
+    # DeathLink state. currently_dead starts False, as if a tick had already found Soma alive.
     client = CVAOSClient.__new__(CVAOSClient)
     client.death_causes = []
     client.currently_dead = False
@@ -186,11 +186,13 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
         await self.relay(INGAME, DEATH, hp=0)
         self.assertEqual(self.client.death_causes, [])
 
-    # A reconnect to the same seed: set_auth runs the reset again and keeps the latch.
+    # A reconnect to the same seed: set_auth runs the reset again, which keeps the latch and any
+    # pending death.
     def reconnect(self) -> None:
         self.client._reset_session_state(same_seed=True)
 
-    # A first connect, or a different seed: the latch is unknown until a relay reads the game.
+    # A first connect, or a different seed: the reset drops any pending death, and the latch is
+    # unknown until a relay reads the game.
     def connect_fresh(self) -> None:
         self.client._reset_session_state()
 
@@ -311,7 +313,8 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
 
 
 class SetAuthTest(unittest.IsolatedAsyncioTestCase):
-    """set_auth runs on every connect, and keeps the DeathLink latch only for the same seed."""
+    """set_auth keeps the DeathLink latch when the client reconnects to the same seed, and resets
+    it to unknown for a different seed."""
 
     async def connect(self, client: CVAOSClient, auth: bytes) -> None:
         ctx = SimpleNamespace(bizhawk_ctx=None, auth=None)

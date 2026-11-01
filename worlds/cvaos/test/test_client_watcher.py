@@ -1,5 +1,6 @@
 """
-A connector hiccup during a tick must not end the BizHawk client's game watcher.
+A failed request or a dropped connector during a tick does not end the BizHawk client's game
+watcher, so the next tick tries again.
 
     python -m pytest worlds/cvaos/test/test_client_watcher.py -v
 """

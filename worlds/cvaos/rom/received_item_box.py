@@ -15,8 +15,8 @@ directly would have its box silently dropped whenever a transition or another bo
   dropped mid-cutscene while the sound still played)
   -- and ``sub_0800EFD4`` dispatches request kind 1 to the real textbox ``sub_0800E0E8`` on a
   later frame. The hook checks that same guard so a request is retried rather than lost. It also
-  waits while a request is still queued (``unk_423`` nonzero), because sub_0800EF98 would
-  overwrite that request's text and the soul banner would clear it.
+  waits while an earlier request is still queued (``unk_423`` nonzero). Otherwise sub_0800EF98
+  would overwrite that request's text, and the soul banner would clear it.
 * ``PlaySong`` (GBA 0x080D7910) plays the sound the mailbox names. Vanilla's collect path plays
   :data:`SFX_MONEY` for gold, :data:`SFX_ITEM` for a consumable, :data:`SFX_ITEM_TO_INVENTORY`
   for a weapon or armor (accessories included), and :data:`SFX_SOUL` for a soul.
@@ -93,7 +93,7 @@ assert len(_HOOK_BODY) == 144, f"hook body must be 144 bytes, got {len(_HOOK_BOD
 assert len(_HOOK_BODY) <= 0x200, "hook body overruns its 0x200-byte slot"
 assert MAILBOX_GBA.to_bytes(4, "little") in _HOOK_BODY, "mailbox addr missing from hook body"
 assert (0x0800EF98 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_0800EF98 missing from hook body"
-assert (0x02000420).to_bytes(4, "little") in _HOOK_BODY, "busy-guard addr missing from hook body"
+assert (0x02000420).to_bytes(4, "little") in _HOOK_BODY, "textbox addr missing from hook body"
 assert (0x0800E708 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_0800E708 missing from hook body"
 assert (0x08049E64 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_08049E64 missing from hook body"
 assert (0x08045C34 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_08045C34 missing from hook body"

@@ -13,7 +13,7 @@ come out of a first jump too, with two guard rails kept from the original patch:
 
 Three small edits inside the USA ROM's divekick-eligibility routine (GBA 0x08017D90 area):
 
-* 0x08019320: ``bne`` that skips the divekick check after a double jump -> ``nop``.
+* 0x08019320: ``bne`` that, after a double jump, skips the divekick check -> ``nop``.
 * 0x08017DB6: ``cmp r1, #4`` (has-double-jumped state) -> ``cmp r1, #2`` (is-midair state).
 * 0x08017E18: the state-flag mask word the routine tests: ``0x00800004`` -> ``0x09000002``
   (require first-jump 0x2; exclude in-water 0x01000000 and ground-below 0x08000000).

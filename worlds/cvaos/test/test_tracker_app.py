@@ -839,8 +839,9 @@ class OpenFromClientTest(unittest.TestCase):
         self.assertEqual(parse_args(["archipelago://Soma:@[::1]:38281"]).connect, "[::1]:38281")
 
     def test_a_slot_of_another_game_gets_no_tracker(self):
-        # The BizHawk Client can still offer /map and the "Open map" button after another game's
-        # ROM is loaded, so the tracker starts only for an Aria of Sorrow slot.
+        # The BizHawk Client keeps /map and the "Open map" button after a ROM for another system is
+        # loaded, because it asks this world only about GBA ROMs. So the tracker starts only for an
+        # Aria of Sorrow slot.
         client = self.client()
         client.slot_info = {1: NetworkSlot("Link", "A Link to the Past", SlotType.player)}
         with mock.patch.object(tracker_app.subprocess, "Popen") as popen, \

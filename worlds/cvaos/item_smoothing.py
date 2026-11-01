@@ -8,15 +8,15 @@ Two logic-safe passes, both gated on the ``item_smoothing`` option:
      before the fill, then refined onto the real sphere-thirds afterward via logic-verified swaps.
 * ``smooth_placed_items`` (``World.stage_post_fill``): non-progression items, and the weapons whose
      only progression use is breaking floors or ceilings, are re-assigned among the locations that
-     already hold them. They are ordered earliest-first along the axis chosen by the
+     already hold them. Those locations are ordered earliest-first along the axis chosen by the
      ``item_smoothing_order`` option: structural map distance (the default, seed-independent) or
      logical spheres (seed-specific). Low-desirability items land early and high-desirability items
      land late, with long-tailed per-item jitter (Student-t) plus a wildcard, so a lucky early find
      is rare-but-possible.
 
 Re-assigning non-progression items among their own already-reachable locations never changes
-   reachability. Moving a breaker can, so when the result fails the accessibility check, the
-   breakers go back to the locations the fill gave them.
+   reachability. Moving one of those weapons can, so when the result fails the accessibility
+   check, the weapons go back to the locations the main fill gave them.
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ SOUL_LATE_TARGETS = {
     "Giant Bat": (0.92, 0.10),   # latest
 }
 # Each run, with EARLY_GUARANTEE probability, Malphas or Hippogryph is pulled early so you have
-# basic mobility in the first third; the other ~7% of runs leave all three on their late targets.
+# basic mobility in the first third. In the other ~7% of runs, all three keep their late targets.
 # The early pick is weighted toward double jump. Giant Bat is never the early pick, because its
 # flight reaches nearly everything the other two souls do. An early Giant Bat would open most of
 # the castle at once.
@@ -300,7 +300,9 @@ def smoothable_locations_in_order(multiworld: MultiWorld, player: int, spheres: 
        keeps the order a deterministic total order (own location names are unique) and respects
        local/non_local placement for free.
     Excluded locations are left alone: they may hold only filler, so moving a ``useful`` item into one
-       would be illegal (and they hold junk regardless)."""
+       would be illegal (and they hold junk regardless).
+    Priority locations are left alone too. The ceiling and floor breakers are progression, so
+       moving one out of a priority location could leave that location with no progression item."""
     # get_spheres yields the reachable spheres, then an empty sentinel, then a set of all *unreachable*
     # filled locations. Stop at the sentinel so genuinely-unreachable spots are never smoothed -- keeps
     # the "only reachable locations are smoothed" contract true under accessibility=items/minimal too.
@@ -338,12 +340,16 @@ def take_smoothing_items(world: "CVAOSWorld", itempool: List[Item]) -> List[Item
     The world returns them from ``get_pre_fill_items`` until they are placed, so ``get_all_state``
     still collects them.
 
-    Nothing is taken when ``item_smoothing`` is off. Otherwise the Ancient Books are taken, and so
-    are the three gating souls unless ``early_mobility_souls`` is off. With Progressive Movement on,
-    all three copies are taken too, because two of them stand in for Malphas and Giant Bat. Black
-    Panther is taken when ``black_panther_bias`` is on and this run's ``BLACK_PANTHER_EARLY_CHANCE``
-    roll, made here, succeeds. An item that the core needs in the pool for an item link, a plando or
-    ``non_local_items`` is left there (see ``_names_used_elsewhere``).
+    Nothing is taken when ``item_smoothing`` is off. Otherwise the Ancient Books are taken. Unless
+    ``early_mobility_souls`` is off, the three gating souls are taken too. In that case, with
+    Progressive Movement on, the three Progressive Movement copies are taken as well, because two
+    of them stand in for Malphas and Giant Bat. Black Panther is taken when ``black_panther_bias``
+    is on and this run's ``BLACK_PANTHER_EARLY_CHANCE`` roll, made here, succeeds.
+
+    An item that the core needs in the pool for an item link, a plando or ``non_local_items`` is
+    left there (see ``_names_used_elsewhere``). Nothing at all is taken when holding these items
+    back would leave too few progression items for the priority locations (see
+    ``_starves_priority_locations``).
     """
     options = world.options
     if options.item_smoothing.current_key == "off":
@@ -368,8 +374,9 @@ def _starves_priority_locations(world: "CVAOSWorld", itempool: List[Item],
     world has priority locations.
 
     The main fill puts progression into priority locations before anything else, and generation
-    fails when it runs out. The pre-fill passes place their items by lateness instead, so when the
-    priority locations need nearly every progression item, smoothing leaves its items in the pool.
+    fails if it runs out of progression items for them. The pre-fill passes place their items by
+    lateness instead, so when the priority locations need nearly every progression item,
+    smoothing leaves its items in the pool.
     """
     options = world.options
     existing = {location.name for location in world.multiworld.get_locations(world.player)}
@@ -480,8 +487,9 @@ def _soul_tiers(multiworld: MultiWorld, player: int, pool: List[Item], souls: Li
     Return each location's ability tier for ``_lateness_ranking``.
 
     The state starts with every item in ``pool`` except ``souls``, then collects the souls one at a
-    time, most-unlocking first. A location's tier is the step at which it first becomes reachable:
-    0 with no soul, and one past the last step if it never does. Each soul goes in through
+    time, starting with the one that makes the most locations reachable on its own. A location's
+    tier is the step at which it first becomes reachable: 0 with no soul, and one past the last
+    step if it never does. Each soul goes in through
     ``CollectionState.collect``, which marks the cached reachability stale, so the next
     ``can_reach`` accounts for it.
     """
@@ -522,8 +530,8 @@ def _designate_early_soul(rng, names: List[str], guarantee: float) -> Optional[s
     """Return the soul to place in the first third of the run, or None.
 
     With probability ``guarantee``, the soul is drawn from ``names`` using ``EARLY_PICK_WEIGHTS``.
-    Otherwise, or when no soul in ``names`` has a positive weight (Giant Bat alone, after plando or
-    an item link removed the others), every soul keeps its late target.
+    Otherwise this returns None, so every soul keeps its late target. It also returns None when no
+    soul in ``names`` has a positive weight, as when plando or an item link leaves only Giant Bat.
     """
     if rng.random() >= guarantee:
         return None
@@ -546,13 +554,13 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
        
     Items are placed earliest-target first, recomputing reachability after each, so
        a later one may *use* an already-placed earlier one to reach gated locations while never depending
-       on one placed after it (topological: none behind itself). ``fill_restrictive`` refuses to place
-       where unreachable; if nothing fits, the item goes into the multiworld pool for the normal
-       fill to place, so the bias can never make a seed unbeatable.
+       on one placed after it (topological: none behind itself). ``fill_restrictive`` places an
+       item only where it is reachable. If nothing fits, the item goes into the multiworld pool for
+       the main fill to place, so the bias can never make a seed unbeatable.
 
-    With Progressive Movement on, the copies take Malphas's and Giant Bat's places: two draw
-       Malphas's target and one draws Giant Bat's. ``refine_soul_positions`` leaves them where this
-       pass put them.
+    With Progressive Movement on, the three Progressive Movement copies stand in for Malphas and
+       Giant Bat. Two of them get targets drawn the way Malphas's is, and the third gets one drawn
+       the way Giant Bat's is. ``refine_soul_positions`` does not move the copies afterwards.
 
     Gating: the three souls follow ``early_mobility_souls`` (``off`` skips them; ``guarantee_early``
        forces one early every run; ``bias_early`` does so ~``EARLY_GUARANTEE`` of runs). Black Panther is
@@ -583,8 +591,8 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
     mode = world.options.early_mobility_souls.current_key
     present = [found[name] for name in BIASED_SOULS if name in found]
     # With Progressive Movement on, copies replace Malphas and Giant Bat in the pool. The second
-    # and third copies obtained become those souls, so the copies take their place when choosing
-    # the early soul and setting targets.
+    # copy obtained grants Malphas and the third grants Giant Bat, so the copies stand in for those
+    # souls when the early soul is chosen and the targets are set.
     copies = [item for item in world.get_pre_fill_items() if item.name == PROGRESSIVE_MOVEMENT]
     if mode != "off" and (present or copies):
         guarantee = 1.0 if mode == "guarantee_early" else EARLY_GUARANTEE
@@ -621,8 +629,8 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
     lateness = _lateness_ranking(multiworld, player, depth)
     # Stored for the post-fill refine pass, which moves each item to this target by *real* run
     # position (sphere ordering); these values double as the rough pre-fill lateness used just below.
-    # _soul_targets is keyed by item name and the copies share one, so the refine pass skips them
-    # and their pre-fill placement stands.
+    # _soul_targets is keyed by item name and the copies share a name, so the refine pass skips
+    # them and their pre-fill placement stands.
     world._soul_targets = {item.name: target for item, target in targets
                            if item.name != PROGRESSIVE_MOVEMENT}
 
@@ -731,11 +739,11 @@ def refine_soul_positions(world: "CVAOSWorld") -> None:
     """
     Move each biased soul to its target run-position (chosen in pre_fill) using the real post-fill
        spheres, via logic-verified swaps with a non-progression item.
-    Candidates are pre-filtered to
-       locations reachable *without* this soul (so it is never placed behind itself) and to swaps that
-       keep progression out of excluded locations and in priority locations, and each swap is
-       kept only if the multiworld still fulfills accessibility -- so it can never make a seed (in any
-       game combination) unbeatable. A soul that can't be moved safely stays where pre_fill left it.
+    Candidates are limited to locations reachable *without* this soul, so it is never placed behind
+       itself. They are also limited to swaps that keep progression out of excluded locations and
+       in priority locations. Each swap is kept only if the multiworld still fulfills
+       accessibility, so it can never make a seed (in any game combination) unbeatable. A soul that
+       can't be moved safely stays where pre_fill left it.
     Runs before the equipment smoothing, which recomputes spheres afterward."""
     targets = getattr(world, "_soul_targets", None)
     if not targets:

@@ -1,8 +1,9 @@
 """_receive_items grants each received item and advances the saved received-counter in one step.
 
-The item and the counter change in one guarded write. If they were two requests, a failure between
-them would leave the item granted and the counter behind it. The next tick would then grant the
-item again. A connector timeout while the emulator is paused is one such failure.
+An item's transfer and the counter's advance go in one guarded write. If they were two requests, a
+failure between them would leave the item granted and the counter behind it. The next tick would
+then grant the item again. A connector timeout while the emulator is paused is one such failure.
+A flag-only item sets its flag in a write of its own first, which is safe to repeat.
 
 These tests drive _receive_items over the dict-backed FakeBackend, so they need no emulator.
 """
@@ -98,7 +99,8 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
         return int.from_bytes(self.ewram[GOLD_OFFSET:GOLD_OFFSET + 4], "little")
 
     async def fail_then_heal(self, name: str) -> AoSRAM:
-        """Receive ``name`` over a connector that times out after the write, then receive again."""
+        """Receive ``name`` over a connector that times out after the write, then receive it
+        again once the connector recovers."""
         backend = TimesOutAfterAWrite(self.memory)
         ram = AoSRAM(backend)
         with contextlib.suppress(ConnectionError):
@@ -133,8 +135,8 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await ram.get_received_count(), 1)
 
     async def test_a_failure_after_the_flag_write_still_delivers_a_flag_only_item(self) -> None:
-        # The flag goes in its own write before the counter's batch, so a timeout after it leaves
-        # the counter behind and the next tick sets the flag again rather than losing it.
+        # The flag goes in its own write before the counter's batch. A timeout after that write
+        # leaves the counter behind, so the next tick sets the flag again and the item is not lost.
         action = item_granting.resolve(item_table[FORBIDDEN_AREA_SWITCH].code)
         ram = await self.fail_then_heal(FORBIDDEN_AREA_SWITCH)
         self.assertEqual((self.ewram[action.flag_offset] >> action.flag_bit) & 1, 1)
@@ -214,7 +216,7 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
         return SimpleNamespace(items_received=items, slot_data=slot_data)
 
     async def test_an_older_seeds_save_counts_only_items_from_other_worlds(self) -> None:
-        # Its client already granted Mind Up and counted it, and never received the gold.
+        # An older client already granted Mind Up and counted it, but never received the gold.
         self.ewram[MIND_UP_OFFSET] = 1
         await self.ram.set_received_count(1, expected=0)
         await self.client._receive_items(self.starting_then_received({}), self.ram)

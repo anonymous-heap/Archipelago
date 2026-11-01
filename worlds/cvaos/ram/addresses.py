@@ -151,8 +151,8 @@ class InventoryArray:
     does the base + index arithmetic either way.
 
     Red, blue and yellow souls also have a second list, ``second``, laid out the same way. The
-    file-select Copy moves a file's souls into it, and the game's total for a soul is the sum of
-    both lists (SoulInventory_GetSoulTotal). Ability souls have no second list.
+    file-select Copy moves a file's souls into it. The game's total for a soul is the sum of both
+    lists (SoulInventory_GetSoulTotal). Ability souls have no second list.
     """
 
     name: str

@@ -22,8 +22,9 @@ from .data import AbilityCombo
 
 class RandomizePickups(Toggle):
     """
-    Not implemented yet: the one-time on-the-ground pickups are always shuffled, and turning this off
-       changes nothing. Hidden from the options page and templates until it does something.
+    Not implemented yet. The one-time pickups on the ground are always shuffled, so turning this
+       off changes nothing. The option stays hidden from the options page and the templates until
+       it does something.
     """
     display_name = "Randomize Pickups"
     default = 1
@@ -72,8 +73,9 @@ class HardMode(Toggle):
     """
     Turns on Hard Mode (the client forces the relevant nibble).
 
-    Also shuffles the game's five Hard Mode pickups while Hard Mode Pickups is at its default.
-       That option can instead shuffle them without Hard Mode, or leave them out of a Hard Mode seed.
+    Also shuffles the game's five Hard Mode pickups while Hard Mode Pickups is left at
+       with_hard_mode, its default. That option can instead shuffle them without Hard Mode, or
+       leave them out of a Hard Mode seed.
 
     Makes enemies take less damage.
 
@@ -85,8 +87,8 @@ class HardMode(Toggle):
 
 class HardModePickups(Choice):
     """
-    Whether the five pickups that the game spawns only in Hard Mode are shuffled: Kaiser Knuckle,
-       Death's Sickle, Death's Robe, Silver Gun, and Tear of Blood.
+    Whether to shuffle the five pickups that the game spawns only in Hard Mode. They are
+       Kaiser Knuckle, Death's Sickle, Death's Robe, Silver Gun and Tear of Blood.
 
     - with_hard_mode: they are shuffled when Hard Mode is on and left out when it is off.
     - always: they are shuffled whether or not Hard Mode is on. The patch makes them spawn in
@@ -136,7 +138,7 @@ class KeepSoulDropRates(DefaultOnToggle):
     Either way, the one-time bosses Headhunter, Death, Legion and Balore still award exactly one
        soul when they die: whichever soul the shuffle gave them. In vanilla, those four souls come
        only from that scripted award, never from a random drop, so they have no rarity to keep.
-       When one moves to an ordinary enemy, it drops at that enemy's usual rate.
+       When one of those souls moves to an ordinary enemy, it drops at that enemy's usual rate.
     """
     display_name = "Keep Soul Drop Rates"
 
@@ -225,11 +227,11 @@ class ForbiddenAreaButton(Choice):
     """
     How the Forbidden Area (gate at the bottom of the Study) is unlocked.
 
-    The Forbidden Area can normally not be accessed _first_ through the Study due to a metal
-        barrier that a button on the other side opens.
-    
-    This option replaces the button with a shufflable pickup.
-    
+    Normally the Forbidden Area can't be entered _first_ through the Study, because a metal
+        barrier blocks the way until a button on the far side is pressed.
+
+    With pickup, the default, the button is replaced by a shuffled item.
+
     - off: the button is present in A01 and opens the barrier when pressed.
     - pickup: the button is removed and the unlock becomes a shuffled "Study Sealswitch" pickup.
     """
@@ -281,9 +283,9 @@ class ItemSmoothing(Choice):
        using community tier-list data (data/item_balancing).
 
     Most progression items are placed as usual, with three exceptions. The three Ancient Books are
-       spread across early, mid and late. The mobility souls and Black Panther follow Early
-       Mobility Souls and Black Panther Bias. Weapons whose only progression use is breaking floors
-       or ceilings are ordered like other equipment.
+       spread across the early, middle and late parts of the run. The mobility souls and Black
+       Panther follow Early Mobility Souls and Black Panther Bias. Weapons whose only progression
+       use is breaking floors or ceilings are ordered like other equipment.
 
     - off: vanilla placement -- any item can appear anywhere.
     - loose: gentle escalation with wide, long-tailed luck (more surprises, lucky early finds).
@@ -334,12 +336,12 @@ class ItemSmoothingOrder(Choice):
 class ProgressiveMovement(Toggle):
     """
     Replaces the Flying Armor, Malphas and Giant Bat souls with three Progressive Movement items.
-       The first one you get, found or received, gives Flying Armor, the second Malphas (double
-       jump), and the third Giant Bat.
+       The first one you get gives Flying Armor, the second Malphas (double jump), and the third
+       Giant Bat, whether you find them yourself or receive them from another world.
 
-    A Progressive Movement item in your own world looks like a Skull Key, the pickup that stands
-       in for other players' items. Picking it up gives no soul by itself, so its soul arrives
-       only once the client is connected.
+    A Progressive Movement item in your own world looks like a Skull Key, the same pickup used for
+       other players' items. Picking one up gives no soul on its own. The client grants the soul,
+       so it arrives only once the client is connected.
     """
     display_name = "Progressive Movement"
     default = 0
@@ -350,11 +352,11 @@ class EarlyMobilitySouls(Choice):
     No effect when Item Smoothing is off.
 
     When Item Smoothing is on, how the three vertical mobility souls (Malphas/DJump, Hippogryph, and
-       Giant bat) are placed. They gate movement, so this is a separate axis from item desirability.
+       Giant Bat) are placed. They gate movement, so this is a separate axis from item desirability.
     
-    - off: no special handling -- the souls place like any other progression item.
-    - bias_early: ~93% of seeds pull Malphas or, less often, Hippogryph into the first third of the
-      run. The other seeds leave all three late.
+    - off: no special handling. The souls are placed like any other progression item.
+    - bias_early: in about 93% of seeds, pull Malphas or, less often, Hippogryph into the first
+      third of the run. In the other seeds, all three stay late.
     - guarantee_early: always pull Malphas or Hippogryph early, so you never start fully
       mobility-starved.
 
@@ -364,7 +366,7 @@ class EarlyMobilitySouls(Choice):
 
     With Progressive Movement on, two of the three Progressive Movement items are placed the way
        Malphas would be, and the third the way Giant Bat would be. When Malphas is the soul pulled
-       early, both of those items are aimed early, so you get Flying Armor and double jump early.
+       early, those two items are both aimed early, so you get Flying Armor and double jump early.
     """
     display_name = "Early Mobility Souls"
     option_off = 0

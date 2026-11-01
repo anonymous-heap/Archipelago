@@ -1,6 +1,8 @@
 """
-The Progressive Movement option: three copies replace Flying Armor, Malphas and Giant Bat, and the
-n-th copy obtained counts as the n-th of those souls, in logic and in the game.
+Tests for the Progressive Movement option.
+
+With the option on, three Progressive Movement items replace the Flying Armor, Malphas and Giant Bat
+souls. The n-th copy obtained counts as the n-th of those souls, both in logic and in the game.
 
     python -m pytest worlds/cvaos/test/test_progressive_movement.py -v
 """
@@ -89,7 +91,7 @@ class CollectTest(unittest.TestCase):
                         reachable(plain, list(PROGRESSIVE_MOVEMENT_STAGES[:k]) + extra))
 
     def test_a_copy_gives_nothing_while_the_option_is_off(self):
-        # The client grants no soul for a copy then, so logic must not count one either.
+        # With the option off, the client grants no soul for a copy, so logic must not count one.
         multiworld = build(False)
         state = CollectionState(multiworld)
         state.collect(multiworld.worlds[1].create_item(PROGRESSIVE_MOVEMENT), True)
@@ -136,8 +138,8 @@ class GenerationTest(unittest.TestCase):
         self.assertEqual(world.fill_slot_data()["progressive_movement_starting"], 1)
 
     def test_slot_data_lists_only_this_players_own_copies(self):
-        # Smoothing would pre-place every copy in its own world, so it is off here, which lets the
-        # main fill put copies in the other player's world.
+        # Smoothing is off here because it would pre-place every copy in its own world. The main
+        # fill can then put copies in the other player's world.
         multiworld = setup_multiworld([CVAOSWorld, CVAOSWorld], gen_steps, seed=4,
                                       options={"progressive_movement": True,
                                                "item_smoothing": "off"})
@@ -155,8 +157,9 @@ class GenerationTest(unittest.TestCase):
 
 
 class SmoothingTest(unittest.TestCase):
-    """With Malphas chosen as the early soul, all three copies are pre-placed, and the two that
-    stand in for Malphas are aimed early, so double jump (the second copy obtained) lands early."""
+    """With Malphas as the early soul, all three copies are pre-placed, and the two that stand in
+    for Malphas are aimed early. The second copy obtained, which gives double jump, then usually
+    lands in the early band."""
 
     def test_two_copies_land_early_when_malphas_is_the_early_soul(self):
         from unittest import mock
@@ -178,8 +181,10 @@ class SmoothingTest(unittest.TestCase):
 
 
 class FakeRam:
-    """Soul counts, plus a record of what was granted. ``ready`` is whether the announcement slot
-    is free."""
+    """A stand-in for the game's RAM that holds soul counts and records each soul granted.
+
+    ``ready`` is what the patched ``announce.is_ready`` returns: whether the announcement slot is
+    free."""
 
     def __init__(self, owned: set[str] = frozenset(), ready: bool = True) -> None:
         self.owned = {name: 1 for name in owned}
@@ -241,8 +246,8 @@ class ClientGrantTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ram.granted, ["Flying Armor"])
 
     async def test_starting_copies_count_once_even_when_the_server_also_sends_them(self):
-        # The ctx lists the starting copy among received items too, as a client that asks the
-        # server for its starting inventory sees it; it must still count once.
+        # The ctx also lists the starting copy among the received items, as the server sends it to
+        # a client that asks for its starting inventory. The copy must still count only once.
         ram = FakeRam()
         await self.ticks(self.ctx(starting=1), ram)
         self.assertEqual(ram.granted, ["Flying Armor"])
@@ -278,7 +283,7 @@ class ClientGrantTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ram.granted, ["Malphas"])
 
     async def test_a_reloaded_save_gets_back_only_the_souls_it_lacks(self):
-        # The save was made after the first copy; two more arrived since.
+        # The save was made after the first copy arrived, and two more have arrived since.
         ram = FakeRam(owned={"Flying Armor"})
         await self.ticks(self.ctx(received_copies=3), ram)
         self.assertEqual(ram.granted, ["Malphas", "Giant Bat"])
@@ -291,8 +296,9 @@ class ClientGrantTest(unittest.IsolatedAsyncioTestCase):
 
 class ReceivedCopyGrantTest(unittest.IsolatedAsyncioTestCase):
     async def test_a_received_copy_grants_nothing_and_later_items_still_arrive(self):
-        # The copy's soul comes from the client's count of copies. Receiving one must still move
-        # the saved received-counter past it, or every item after it would wait forever.
+        # A copy's soul is granted from the client's count of copies, not when the copy is
+        # received. Receiving one must still advance the saved received-counter past it, or every
+        # later item would wait forever.
         from NetUtils import NetworkItem
 
         from ..ram import AoSRAM

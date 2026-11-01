@@ -1,10 +1,10 @@
 """
-Item smoothing must respect the player's location settings and plando placements.
+Tests that item smoothing respects the player's location settings and plando placements.
 
-The pre-fill bias and the post-fill refine passes move progression items on their own, outside the
-main fill, so they have to apply the rules the main fill applies: no progression in an excluded
-location, a priority location keeps its progression, a plando'd item stays put, and an item is
-never moved somewhere that needs that same item to reach.
+The pre-fill bias and the post-fill refine passes place and move progression items outside the main
+fill, so they apply the same rules the main fill does. No excluded location gets progression, every
+priority location keeps its progression, and a plando'd item stays where it was put. No item is
+moved to a location that needs that same item to reach.
 
     python -m pytest worlds/cvaos/test/test_smoothing_location_settings.py -v
 """
@@ -80,8 +80,8 @@ class LocationSettingsTest(unittest.TestCase):
                 self.assertEqual(wrong, [])
 
     def test_many_priority_locations_leave_the_smoothing_items_to_the_main_fill(self):
-        # With nearly every progression item needed for a priority location, smoothing holding some
-        # back made the main fill run out. Seeds 4, 5 and 9 failed to generate that way.
+        # On these seeds, holding the smoothing items back would leave the main fill fewer
+        # progression items than there are priority locations, so smoothing leaves them in the pool.
         for seed in (4, 5, 9):
             priority = set(random.Random(1000 + seed).sample(LOCATION_NAMES, 30))
             multiworld = generate(seed, {"priority_locations": priority})
@@ -107,8 +107,8 @@ class LocationSettingsTest(unittest.TestCase):
 
     def test_the_lateness_tiers_count_each_soul_as_it_is_collected(self):
         # The pre-fill passes rank locations by the step at which they become reachable as the
-        # movement souls are added. Without a fresh reachability check after each soul, every
-        # location after the first step looked unreachable.
+        # movement souls are added one at a time. Reachability is checked again after each soul,
+        # or every location past the first step would look unreachable.
         multiworld = setup_multiworld(CVAOSWorld, BEFORE_FILL, seed=2)
         world = multiworld.worlds[1]
         pool = [*multiworld.itempool, *world.get_pre_fill_items()]
@@ -157,7 +157,7 @@ class LocationSettingsTest(unittest.TestCase):
 
     def test_the_refine_passes_try_only_locations_reachable_without_the_item(self):
         # With a target at the very end of the run, the nearest candidates are late locations that
-        # need the moved item, so a pass checking against a state that still holds it tries them.
+        # need the moved item. A pass that checked against a state still holding it would try them.
         from .. import item_smoothing
         multiworld = generate(5, {})
         world = multiworld.worlds[1]
@@ -187,8 +187,8 @@ class PoolTest(unittest.TestCase):
 
     A world must not change the pool after create_items, so the items that smoothing places in
     pre_fill never enter it. Items that the core needs in the pool, for an item link, a plando or
-    non_local_items, stay there. An item that a pre-fill pass cannot place goes into the pool once,
-    for the main fill.
+    non_local_items, stay there. The one exception is an item that a pre-fill pass cannot place,
+    which goes into the pool once, for the main fill.
     """
 
     def test_the_pool_does_not_change_after_create_items(self):

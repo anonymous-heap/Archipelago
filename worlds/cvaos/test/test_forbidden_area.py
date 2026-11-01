@@ -100,7 +100,8 @@ def test_key_displaces_one_filler():
 
 
 def test_the_key_displaces_gold_rather_than_a_unique_item():
-    # The first filler in table order is the game's only Lucky Charm.
+    # The first filler in table order is the game's only Lucky Charm, so the Key displaces the
+    # smallest gold pickup instead.
     names = [i.name for i in _create_itempool(_mock_world(_FAB.option_pickup))]
     assert "Lucky Charm" in names
     assert "100 Gold (A)" not in names
@@ -125,8 +126,8 @@ def test_rom_button_becomes_inert_object():
     w = fab.build_writes(base)
     assert set(w) == {off} and len(w[off]) == 12, "should be a single in-place 12-byte write"
     b = bytearray(base); b[off:off + 12] = w[off]
-    # after: object 07 with varA=4, varB=0, which does nothing; barrier (next entity) untouched.
-    # varA=0 would be Castle Corridor's particle effect, not an inert object.
+    # after: object 07 with varA=4 and varB=0, which does nothing. The barrier (next entity) is
+    # untouched. varA=0 would not be inert, because it is Castle Corridor's particle effect.
     assert b[off + 5] == 0x02 and b[off + 6] == 0x07
     assert int.from_bytes(b[off + 8:off + 10], "little") == 4
     assert int.from_bytes(b[off + 10:off + 12], "little") == 0

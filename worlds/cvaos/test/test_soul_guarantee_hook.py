@@ -3,6 +3,9 @@ Pins for the soul guarantee hook (``rom/soul_guarantee_hook.py``): the book-to-s
 blob's layout, the veneer, the base-ROM check, and, when capstone is installed, a real
 disassembly of the trampoline.
 
+The tests also cover the pause-menu descriptions: which books gain the note that their soul always
+drops, how the new strings are laid out, and whether and when the patch applies them.
+
     python -m pytest worlds/cvaos/test/test_soul_guarantee_hook.py -v
 """
 from __future__ import annotations
@@ -141,9 +144,10 @@ class VeneerAndWritesTest(unittest.TestCase):
             sgh.build_writes(bytes(rom))
 
 
-# Each fixture book gets a made-up two-line description, shaped like the vanilla ones, at these
-# text-ids and addresses. The first line is as long as the vanilla first lines (33 characters), so
-# the strings are as long as the real ones and the second needs alignment padding.
+# Each fixture book has a made-up two-line description at these text-ids and addresses, shaped like
+# the vanilla ones. Each first line is padded to 33 characters, the length of a vanilla first line,
+# so the strings are as long as the real ones. Book 1's string is then not a multiple of 4 bytes
+# long, so alignment padding goes between it and Book 3's string.
 FIXTURE_TEXT_IDS = {26: 374, 27: 375, 28: 376}
 FIXTURE_STRINGS_GBA = 0x08500000
 FIXTURE_FIRST_LINE = "{:<33}"
@@ -242,8 +246,8 @@ class DescriptionTest(unittest.TestCase):
 
 
 class PatchPipelineTest(unittest.TestCase):
-    """apply_rom_features installs the descriptions only with the option on, and before the
-    Item-Use menu extension copies the string-pointer array."""
+    """apply_rom_features installs the book descriptions only when Ancient Book Soul Drops is on,
+    and installs them before the Item-Use menu extension copies the string-pointer array."""
 
     def _rom_seen_by_the_menu_extension(self, books_on: bool) -> bytes:
         from unittest import mock

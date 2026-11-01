@@ -1,6 +1,6 @@
 """
-The Hard Mode Pickups option: which seeds shuffle the five Hard Mode pickups, and how the patch
-lets them spawn outside Hard Mode.
+Tests for the Hard Mode Pickups option: which settings shuffle the five Hard Mode pickups, and how
+the patch lets them spawn outside Hard Mode.
 
     python -m pytest worlds/cvaos/test/test_hard_mode_pickups.py -v
 """
@@ -81,9 +81,11 @@ class InclusionTest(unittest.TestCase):
 
 
 class SpawnTypeTest(unittest.TestCase):
-    """A Hard Mode item makes its location a HARD_PICKUP, unless Hard Mode Pickups is ``always``.
-    The type follows the item, so the item is placed at an ordinary location, which is where a
-    real fill nearly always puts it."""
+    """A location holding a Hard Mode item is written as a HARD_PICKUP, unless Hard Mode Pickups is
+    ``always``.
+
+    The entity type comes from the item rather than the location, so these tests place the item at
+    an ordinary location, which is where a real fill nearly always puts it."""
 
     def _written_type(self, hard_mode: bool, setting: str) -> int:
         world = build(hard_mode, setting).worlds[1]

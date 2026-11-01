@@ -1,5 +1,6 @@
 """
-Filler created outside the item pool (item links, fill fallbacks) is plain filler.
+Tests that filler created outside the item pool, for item links and fill fallbacks, is plain
+filler: never progression, and never an item that exists only in Hard Mode.
 
     python -m pytest worlds/cvaos/test/test_filler.py -v
 """

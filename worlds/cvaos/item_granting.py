@@ -123,7 +123,7 @@ async def grant(ram: "AoSRAM", action: ReceiveAction, *, new_soul_pause: bool = 
     """
     # ORDER MATTERS: set the flag (idempotent, a no-op when the bit already has the target value)
     # FIRST, and make the transfer LAST, in the same batch as the received-counter's advance.
-    # Nothing after that batch is retried, so the flag has to land before it. If the flag write
+    # Nothing after that batch is retried, so the flag has to be set before it. If the flag write
     # loses its guarded race we return before any transfer; if the transfer loses, re-setting the
     # flag next tick is harmless. Do not reorder.
     if action.set_flag:
