@@ -83,6 +83,7 @@ class GameWatcherRamForcingTest(unittest.IsolatedAsyncioTestCase):
         client._send_location_checks = AsyncMock()
         client._receive_items = AsyncMock()
         client._report_goal = AsyncMock()
+        client._report_position = AsyncMock()
 
         fake_ram = AsyncMock()
         fake_ram.get_run_state = AsyncMock(return_value=(game_state, menu_state))

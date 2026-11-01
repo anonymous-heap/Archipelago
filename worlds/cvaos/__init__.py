@@ -3,7 +3,7 @@ import logging
 import os
 from typing import ClassVar, Sequence
 
-from BaseClasses import CollectionState, Item, MultiWorld, Tutorial
+from BaseClasses import CollectionState, Item, ItemClassification, MultiWorld, Tutorial
 from worlds.AutoWorld import WebWorld, World
 from worlds.LauncherComponents import Component, Type, components, launch as launch_component
 import settings
@@ -13,7 +13,8 @@ from .items import (FILLER_ITEM_NAMES, PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMEN
                     item_name_to_id, create_item, create_itempool)
 from .locations import location_name_to_id
 from .options import LOGIC_OPTION_NAMES, CVAOSOptions, Goal, cvaos_option_groups
-from .regions import create_regions, can_reach_room
+from .regions import UT_TRICKS_ITEM, create_regions, can_reach_room
+from . import tracker_map, tracker_route
 from .client import CVAOSClient  # noqa: F401  (imported for its registration side effect)
 
 
@@ -146,6 +147,30 @@ class CVAOSWorld(World):
     # the whole world, so it applies to older seeds too (see interpret_slot_data).
     ut_can_gen_without_yaml = True
 
+    # Universal Tracker shows the locations that open up once it collects this item as reachable
+    # with tricks, and only the tracker's rebuild of the world has rules that use it.
+    glitches_item_name = UT_TRICKS_ITEM
+
+    # Universal Tracker's map tab. The maps, their images and the pin for each location are all
+    # generated from this world's data (tracker_map.py builds them into tracker/), so no game art
+    # ships and nothing else needs installing. Soma's marker and the choice of map follow the
+    # position the client keeps in data storage.
+    tracker_world: ClassVar[dict] = {
+        "map_page_folder": tracker_map.FOLDER,
+        "map_page_maps": [tracker_map.MAPS_FILE],
+        "map_page_locations": [tracker_map.LOCATIONS_FILE],
+        "map_page_groups": tracker_map.MAP_GROUPS,
+        "map_page_setting_key": tracker_map.POSITION_KEY,
+        "map_page_index": tracker_map.map_page_index,
+        "location_setting_key": tracker_map.POSITION_KEY,
+        "location_icon_coords": tracker_map.position_icon,
+    }
+
+    def get_logical_path(self, dest_name: str, state: CollectionState):
+        """Routes list the rooms on the way, area by area, with the souls or weapons each room
+        needs. They lead to locations; for a region or an entrance, UT shows its own route."""
+        return tracker_route.describe_route(self, dest_name, state)
+
     @staticmethod
     def interpret_slot_data(slot_data: dict) -> dict:
         """Return ``slot_data`` unchanged, so Universal Tracker rebuilds the world from it.
@@ -211,6 +236,8 @@ class CVAOSWorld(World):
         return [item for item in self._smoothing_items if item.location is None]
 
     def create_item(self, name: str) -> CVAOSItem:
+        if name == UT_TRICKS_ITEM:
+            return CVAOSItem(name, ItemClassification.progression, None, self.player)
         return create_item(self, name)
 
     def collect(self, state: CollectionState, item: Item) -> bool:

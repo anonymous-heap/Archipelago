@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
 
-from .._bytemaker_compat import Buffer, Entry, Space, count, u8, u16, u32, unknown
+from .._bytemaker_compat import Buffer, Entry, Space, count, s16, u8, u16, u32, unknown
 from .structures import EquippedGear, PlayerVitals, SoulPair
 
 # --- Memory/BizHawk address-section names ---
@@ -83,6 +83,12 @@ BOSS_FLAGS = ewram.entry(0x0200037E, u16, name="boss_flags")
 GLOBAL_FLAGS = ewram.entry(0x0200042C, u32, name="global_flags")
 CURRENT_AREA = ewram.entry(0x0200009E, u8, name="current_area")          # Phase 6 (area-aware DeathLink)
 CURRENT_ROOM = ewram.entry(0x0200009F, u8, name="current_room")
+# Soma's position in the room is the camera's (background layer 1's scroll) plus his entity's
+# position on screen, as GetEntityRoomXPositionInteger computes it. His entity is the first one.
+CAMERA_X = ewram.entry(0x0200A09A, u16, name="camera_x")
+CAMERA_Y = ewram.entry(0x0200A09E, u16, name="camera_y")
+PLAYER_SCREEN_X = ewram.entry(0x02000526, s16, name="player_screen_x")
+PLAYER_SCREEN_Y = ewram.entry(0x0200052A, s16, name="player_screen_y")
 CURRENT_SAVE_SLOT = ewram.entry(0x02000428, u8, name="current_save_slot")
 
 BOSS_FLAG_GRAHAM = 0x0001          # bad-ending final boss
