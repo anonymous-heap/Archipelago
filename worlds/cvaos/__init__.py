@@ -83,10 +83,11 @@ components.append(Component(
 
 class CVAOSSettings(settings.Group):
     class RomFile(settings.UserFilePath):
-        """The base ROM for a **gba**-target seed. Prompted for when applying the patch; you may
-        select a Castlevania AoS (US) GBA ROM *or* the Advance Collection's game.exe -- if you
-        pick the exe, the base ROM is extracted from the collection for you. (advance_collection
-        seeds ignore this and source the ROM from collection_exe automatically.)"""
+        """The base ROM for a gba-target seed, asked for when a patch is first applied. Select a
+        Castlevania AoS (US) GBA ROM. The Advance Collection's game.exe also works, and the ROM is
+        then extracted from the collection, but that ROM has no sound outside the collection. An
+        advance_collection seed uses the installed collection's ROM instead, and falls back to
+        this file only when it can't find the collection."""
         description = "Castlevania AoS (US) ROM, or Advance Collection game.exe"
         # Accept a GBA ROM (cart or collection-extracted) or the collection exe. No copy_to:
         # if the user hands us the exe, it must stay next to its windata/ so we can extract.

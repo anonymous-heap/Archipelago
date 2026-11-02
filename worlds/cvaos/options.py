@@ -33,16 +33,15 @@ class RandomizePickups(Toggle):
 
 class TargetPlatform(Choice):
     """
-    Where you intend to play this seed. The generated patch is identical either way; this
-    only decides, at patch-apply time, where the base ROM comes from, and lets the client warn
-    if you connect the wrong one.
+    Where you intend to play this seed. The generated patch is the same either way. This only
+    decides where the base ROM comes from when the patch is applied, and lets the client warn you
+    if you connect the other one.
 
-    - gba: play the patched ROM in an emulator (BizHawk client). Applying the patch prompts for
-      the base ROM; you may point it at a GBA ROM *or* at the Advance Collection's game.exe
-      (the ROM is then extracted from the collection for you).
-    - advance_collection: play inside the Steam Castlevania Advance Collection. The base ROM is
-      taken from the installed collection automatically (see the collection_exe host setting);
-      run the "CVAoS Collection Client".
+    - gba: play the patched ROM in BizHawk, with the BizHawk Client. Applying the patch asks for
+      the base ROM, so select your US ROM. The Advance Collection's game.exe is also accepted, but
+      the ROM extracted from it has no sound outside the collection.
+    - advance_collection: play inside the Steam Castlevania Advance Collection, with the "CVAoS
+      Collection Client". The base ROM is taken from the installed collection automatically.
     """
     display_name = "Target Platform"
     option_gba = 0
