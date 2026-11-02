@@ -14,10 +14,13 @@ from .data import (
     entrance_to_enemy_region_info_collection,
     by_enemy_name_for_enemy_regions,
     enemy_meta_by_number,
+    by_enemy_number_for_enemy_regions,
     item_info_collection,
     AbilityCombo,
     transdoor_connection_collection,
 )
+from .enemy_checks import (FALLBACK_SOULS, SPAWNS_AFTER_BOSS_IN, defeat_location_name,
+                           enemy_check_types, placements_of)
 from .locations import CVAOSLocation, location_name_to_id
 from .options import (TECHNIQUES, ForbiddenAreaButton, hard_mode_pickups_included,
                       resolve_allowed_techniques)
@@ -318,14 +321,19 @@ def create_regions(world: CVAOSWorld) -> None:
 
     # Index entrance regions by room id (the part before ':') so can_reach_room can ask
     # whether any door of a room is reachable. Includes the auto-created portal nodes.
-    entrance_region_names_by_room: dict[str, list[str]] = {}
+    entrance_regions_by_room: dict[str, list[Region]] = {}
     for door_id, number in door_id_unique_to_number.items():
         region = entrance_regions.get(number)
         if region is not None:
-            entrance_region_names_by_room.setdefault(door_id.split(":", 1)[0], []).append(region.name)
+            entrance_regions_by_room.setdefault(door_id.split(":", 1)[0], []).append(region)
     for door_id, region in extra_entrance_regions.items():
-        entrance_region_names_by_room.setdefault(door_id.split(":", 1)[0], []).append(region.name)
-    world.entrance_region_names_by_room = entrance_region_names_by_room
+        entrance_regions_by_room.setdefault(door_id.split(":", 1)[0], []).append(region)
+    world.entrance_region_names_by_room = {
+        room: [region.name for region in regions] for room, regions in entrance_regions_by_room.items()}
+
+    _create_enemy_checks(world, entrance_regions_by_room,
+                         lambda door_id: entrance_region_for(door_id, create=False),
+                         tform_gated_entrances)
 
     # An entrance whose access_rule reads region reachability (can_reach_*) must be registered
     # as an indirect condition of those regions, or the fill sweep evaluates it once while
@@ -346,6 +354,60 @@ def create_regions(world: CVAOSWorld) -> None:
     for entrance in tform_gated_entrances:
         for region in tform_regions:
             multiworld.register_indirect_condition(region, entrance)
+
+
+def _create_enemy_checks(world: CVAOSWorld, entrance_regions_by_room: dict[str, list[Region]],
+                         door_region: Callable[[str], Region | None],
+                         tform_gated_entrances: list[Entrance]) -> None:
+    """Create a region holding the defeat location of each type the enemy checks option asks for.
+
+    Each placement of the type connects to that region. A placement with routing connects from
+    each entrance its routing names, under that routing's rule. A placement without routing has
+    not been annotated yet, so it connects from every door of its room and asks for
+    FALLBACK_SOULS. A placement that spawns only after a boss elsewhere also needs that boss's room.
+    """
+    types = enemy_check_types(world.options)
+    if not types:
+        return
+    multiworld, player = world.multiworld, world.player
+
+    def fallback(state: CollectionState) -> bool:
+        return state.has_all(FALLBACK_SOULS, player)
+
+    def after_boss(rule: Callable[[CollectionState], bool] | None,
+                   boss_room: str | None) -> Callable[[CollectionState], bool] | None:
+        if boss_room is None:
+            return rule
+        if rule is None:
+            return lambda state: can_reach_room(state, world, boss_room)
+        return lambda state: rule(state) and can_reach_room(state, world, boss_room)
+
+    for enemy in types:
+        region = Region(f"Defeat: {enemy.name}", player, multiworld)
+        multiworld.regions.append(region)
+        location_name = defeat_location_name(enemy.name)
+        region.locations.append(
+            CVAOSLocation(player, location_name, location_name_to_id[location_name], region))
+        for placement in placements_of(enemy.name):
+            boss_room = SPAWNS_AFTER_BOSS_IN.get(placement.room)
+            routing = by_enemy_number_for_enemy_regions.get(placement.enemy_number)
+            if routing:
+                ways = [(door_region(row.entrance_identifier), row.entrance_identifier,
+                         _create_access_rule_from_routing(row, world), _requires_tform(row))
+                        for row in routing]
+            else:
+                ways = [(door, door.name, fallback, False)
+                        for door in entrance_regions_by_room.get(placement.room, ())]
+            for from_region, from_name, rule, needs_tform in ways:
+                if from_region is None:
+                    continue
+                entrance = from_region.connect(
+                    region, f"{from_name} -> Defeat:{enemy.name} #{placement.enemy_number}",
+                    after_boss(rule, boss_room))
+                if needs_tform:
+                    tform_gated_entrances.append(entrance)
+                for boss_door in entrance_regions_by_room.get(boss_room, ()) if boss_room else ():
+                    multiworld.register_indirect_condition(boss_door, entrance)
 
 
 # Soul-ability bit -> the AP item granting it.

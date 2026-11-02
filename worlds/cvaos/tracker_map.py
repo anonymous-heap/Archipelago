@@ -29,6 +29,7 @@ from typing import NamedTuple
 
 from . import tracker_png
 from .data import map_info, pickup_info_collection
+from .enemy_checks import checkable_types, defeat_location_name, pin_placement
 from .data._csv_resources import open_csv
 from .data.room_info import by_identifier as rooms_by_identifier
 
@@ -294,6 +295,26 @@ def build() -> tuple[list[dict], list[dict]]:
                          for m in MAPS if pickup.room_identifier in m.rooms]
         locations.append({"name": pickup.room_identifier,
                           "sections": [{"name": pickup.location_name}],
+                          "map_locations": map_locations})
+    # Each defeat location is pinned at one placement of its enemy (enemy_checks.pin_placement). UT
+    # shows it only in a seed that has it. UT keys a map's pins by position, so a pin that would land
+    # on a taken spot moves right, a pixel at a time, until the spot is free.
+    taken = {(spot["map"], spot["x"], spot["y"])
+             for node in locations for spot in node["map_locations"]}
+    for enemy in checkable_types():
+        placement = pin_placement(enemy.name)
+        cell = cell_position(placement.room, placement.x, placement.y)
+        map_locations = []
+        for m in MAPS:
+            if placement.room not in m.rooms:
+                continue
+            x, y = pin(m.origin, cell)
+            while (m.name, x, y) in taken:
+                x += 1
+            taken.add((m.name, x, y))
+            map_locations.append({"map": m.name, "x": x, "y": y})
+        locations.append({"name": placement.room,
+                          "sections": [{"name": defeat_location_name(enemy.name)}],
                           "map_locations": map_locations})
     return maps, locations
 

@@ -26,11 +26,13 @@ from ..item_smoothing import (ANCIENT_BOOK_NAMES, BIASED_SOULS, BLACK_PANTHER, M
                               _region_depth, _soul_tiers, _state_without,
                               smoothable_locations_in_order)
 from ..items import logic_only_progression_names
-from ..locations import location_name_to_id
+from ..locations import location_name_to_id, pickup_location_ids
 
 BEFORE_FILL = ("generate_early", "create_regions", "create_items", "set_rules",
                "connect_entrances", "generate_basic")
-LOCATION_NAMES = sorted(location_name_to_id)
+# The pickup locations: these tests leave enemy checks off.
+LOCATION_NAMES = sorted(name for name, location_id in location_name_to_id.items()
+                        if location_id in pickup_location_ids)
 SMOOTHED = (*BIASED_SOULS, BLACK_PANTHER, *ANCIENT_BOOK_NAMES)
 
 

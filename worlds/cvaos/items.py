@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections import Counter
 from typing import Dict, List, NamedTuple, TYPE_CHECKING
 
 from BaseClasses import Item, ItemClassification
 
 from .data import item_info_collection, pickup_info_collection as pickup_infos
+from .enemy_checks import checkable_types, enemy_check_types
 from .item_granting import DISAMBIG_MAX, ID_MAX, TransferCategory, pack
 from .options import ForbiddenAreaButton, hard_mode_pickups_included
 
@@ -119,6 +121,46 @@ item_table[PROGRESSIVE_MOVEMENT] = ItemData(
     ItemClassification.progression, pack(TransferCategory.PROGRESSIVE, 0))
 _SYNTHETIC_ITEM_NAMES: frozenset[str] = frozenset({FORBIDDEN_AREA_SWITCH, PROGRESSIVE_MOVEMENT})
 
+# --- Enemy check filler (enemy_checks.py) ---
+# Each defeat location adds one item to the pool: the enemy's own drop, from slot 1 or else slot 2,
+# or ENEMY_GOLD gold for an enemy that drops nothing. A type always adds the same item, because
+# Universal Tracker rebuilds the pool from the slot data and has to arrive at the same pool. A drop
+# that is normally progression counts only as useful here, so enemy checks never add progression.
+# ENEMY_GOLD is an amount that gold pickups hold, so the ROM can show the gold on a pickup too.
+ENEMY_GOLD = 100
+
+
+def _build_enemy_fillers() -> Dict[str, tuple[str, ItemData]]:
+    # Number each filler's copies after the pickups' own, so that "100 Gold (Bat)" and the
+    # vanilla "100 Gold" pickups get different codes.
+    copies: Dict[tuple, int] = dict(Counter(_transfer_for(pickup) for pickup in pickup_infos))
+    fillers: Dict[str, tuple[str, ItemData]] = {}
+    for enemy in checkable_types():
+        drop = enemy.drops[0] or enemy.drops[1]
+        if drop:
+            key = (TransferCategory.OTHER_ITEM, _item_info_by_name[drop].item_number)
+            classification = _classification_for_pickup(drop)
+            if classification & ItemClassification.progression:
+                classification = ItemClassification.useful
+            name = f"{drop} ({enemy.name})"
+        else:
+            key = (TransferCategory.MONEY, ENEMY_GOLD)
+            classification = ItemClassification.filler
+            name = f"{ENEMY_GOLD} Gold ({enemy.name})"
+        disambiguation = copies.get(key, 0)
+        copies[key] = disambiguation + 1
+        fillers[enemy.name] = (name, ItemData(classification, pack(*key, disambiguation=disambiguation)))
+    return fillers
+
+
+# enemy name -> (the name of the item its defeat location adds, that item's data)
+ENEMY_FILLER: Dict[str, tuple[str, ItemData]] = _build_enemy_fillers()
+for _filler_name, _filler_data in ENEMY_FILLER.values():
+    if _filler_name in item_table:
+        raise ValueError(f"enemy filler {_filler_name!r} has the name of another item")
+    item_table[_filler_name] = _filler_data
+_ENEMY_FILLER_NAMES: frozenset[str] = frozenset(name for name, _ in ENEMY_FILLER.values())
+
 # Convenience map for the World class. Kept complete (every pickup, Hard-Mode ones included) so
 # item ids stay stable for the data package; per-seed inclusion is decided in create_itempool.
 item_name_to_id: Dict[str, int] = {name: data.code for name, data in item_table.items()}
@@ -142,7 +184,8 @@ _SEALSWITCH_DISPLACES: str = min(
 FILLER_ITEM_NAMES: tuple[str, ...] = tuple(sorted(
     name for name, data in item_table.items()
     if data.classification == ItemClassification.filler
-    and name not in _HARD_PICKUP_ITEM_NAMES and name not in _SYNTHETIC_ITEM_NAMES))
+    and name not in _HARD_PICKUP_ITEM_NAMES and name not in _SYNTHETIC_ITEM_NAMES
+    and name not in _ENEMY_FILLER_NAMES))
 
 
 def create_item(world: "CVAOSWorld", name: str) -> CVAOSItem:
@@ -155,7 +198,7 @@ def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
     # returns True, the test regions.create_regions also uses, so item and location counts match.
     include_hard = hard_mode_pickups_included(world.options)
     pool = [create_item(world, name) for name in item_table
-            if name not in _SYNTHETIC_ITEM_NAMES
+            if name not in _SYNTHETIC_ITEM_NAMES and name not in _ENEMY_FILLER_NAMES
             and (include_hard or name not in _HARD_PICKUP_ITEM_NAMES)]
     if world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup:
         # Shuffle in the Study Sealswitch, displacing one gold pickup so the pool size still
@@ -164,6 +207,9 @@ def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
         displaced = next(i for i, existing in enumerate(pool)
                          if existing.name == _SEALSWITCH_DISPLACES)
         pool[displaced] = create_item(world, FORBIDDEN_AREA_SWITCH)
+    # One filler per defeat location, so the pool still matches the location count.
+    pool += [create_item(world, ENEMY_FILLER[enemy.name][0])
+             for enemy in enemy_check_types(world.options)]
     if world.options.progressive_movement.value:
         pool = [create_item(world, PROGRESSIVE_MOVEMENT) if item.name in PROGRESSIVE_MOVEMENT_STAGES
                 else item for item in pool]

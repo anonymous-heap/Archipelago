@@ -76,6 +76,11 @@ MENU_STATE_SHOP = 0x09
 PICKUP_FLAGS = ewram.entry(0x02000360, Buffer.of(nbytes=0x14), name="pickup_flags")
 PICKUP_FLAGS_LEN = PICKUP_FLAGS.size
 
+# --- Location detection: the Enemy List's defeated bits (enemy checks) ---
+# 0x020133A0, 16 bytes: one bit per enemy type, bit ``id & 7`` of byte ``id >> 3``. The game's death
+# routine sets a type's bit the first time any enemy of that type is defeated, and the save keeps it.
+ENEMY_DEFEATED = ewram.entry(0x020133A0, Buffer.of(nbytes=0x10), name="enemy_defeated")
+
 
 # --- Progress / goal flags ---
 # The first 32 of the game's event flags (the decomp's unk_60.unk_33C), one bit each, LSB first.

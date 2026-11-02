@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from BaseClasses import Location
 
 from .data import PickupInfo, pickup_info_collection
+from .enemy_checks import checkable_types, defeat_location_id, defeat_location_name
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -14,13 +15,15 @@ __all__ = [
     "location_name_to_id",
     "location_id_to_name",
     "flag_offset_to_location_id",
+    "pickup_location_ids",
+    "defeat_location_names",
 ]
 
 
 class CVAOSLocation(Location):
     """
-    A location in Castlevania: Aria of Sorrow.
-    Each location corresponds to a pickup in the game.
+    A location in Castlevania: Aria of Sorrow: a pickup, or with enemy checks on, the first
+    defeat of a kind of enemy (enemy_checks.py).
     """
     game: str = "Castlevania - Aria of Sorrow"
 
@@ -53,6 +56,21 @@ def _build_location_tables() -> tuple[dict[str, int], dict[int, str]]:
 
 
 location_name_to_id, location_id_to_name = _build_location_tables()
+
+# The pickup locations, whose ids are ROM pointers. Only these are written into the ROM, and only
+# these count for item smoothing.
+pickup_location_ids: frozenset[int] = frozenset(location_id_to_name)
+
+# Every possible defeat location joins the tables, whatever the options, so their ids are stable in
+# the data package. regions.create_regions creates the ones the options ask for.
+defeat_location_names: frozenset[str] = frozenset(
+    defeat_location_name(enemy.name) for enemy in checkable_types())
+for _enemy in checkable_types():
+    _name, _location_id = defeat_location_name(_enemy.name), defeat_location_id(_enemy.id)
+    if _name in location_name_to_id or _location_id in location_id_to_name:
+        raise ValueError(f"defeat location {_name!r} ({_location_id:#x}) clashes with a pickup")
+    location_name_to_id[_name] = _location_id
+    location_id_to_name[_location_id] = _name
 
 
 def _build_flag_offset_map() -> dict[int, int]:

@@ -230,6 +230,36 @@ class NewSoulPause(DefaultOnToggle):
     display_name = "New Soul Pause"
 
 
+class EnemyChecks(Choice):
+    """
+    Adds a check for the first defeat of each kind of enemy. Defeating any enemy of that kind,
+       anywhere in the castle, makes the check. The game's Enemy List records these defeats, so
+       one made while the client is disconnected is sent when it reconnects. Defeats in Boss
+       Rush or as Julius don't count, because the game doesn't record them there.
+
+    - off: no enemy checks.
+    - bosses: one check for each boss: Creaking Skull, Manticore, Great Armor, Big Golem,
+      Headhunter, Death, Legion, Balore, Belmont (the Julius fight) and Graham. Creaking Skull,
+      Manticore, Great Armor and Big Golem also appear as ordinary enemies, and defeating one of
+      those counts too. Graham's check is left out under the Graham goal, because defeating him
+      is the goal.
+    - all: one check for every kind of enemy except Chaos: 112, or 111 under the Graham goal.
+
+    The item at an enemy check comes through the client a moment after the defeat.
+
+    Logic counts an enemy as defeatable once you can reach a room where it appears. For most
+       rooms, the logic spreadsheet doesn't record the route to their enemies yet. Until it
+       does, logic also expects Flying Armor, Skeleton Blaze, Malphas, Hippogryph, Undine,
+       Skula, Black Panther and Giant Bat before those enemies' checks, so many of these checks
+       come late in logic.
+    """
+    display_name = "Enemy Checks"
+    option_off = 0
+    option_bosses = 1
+    option_all = 2
+    default = option_off
+
+
 class ForbiddenAreaButton(Choice):
     """
     How the Forbidden Area (gate at the bottom of the Study) is unlocked.
@@ -520,6 +550,7 @@ class CVAOSOptions(PerGameCommonOptions):
     skull_key_warp: SkullKeyWarp
     new_soul_pause: NewSoulPause
     forbidden_area_button: ForbiddenAreaButton
+    enemy_checks: EnemyChecks
     single_jump_divekick: SingleJumpDivekick
     classicvania_movement: ClassicvaniaMovement
     oops_all_whips: OopsAllWhips
@@ -547,6 +578,7 @@ LOGIC_OPTION_NAMES: tuple[str, ...] = (
     "progressive_movement",
     "forbidden_area_button",
     "oops_all_whips",
+    "enemy_checks",
     "logic_difficulty_preset",
     *(technique.option for technique in TECHNIQUES),
 )

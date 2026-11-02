@@ -44,6 +44,7 @@ ROUND_TRIPS = (
     ("progressive_movement", {"progressive_movement": True}),
     ("forbidden_area_button", {"forbidden_area_button": "off"}),
     ("oops_all_whips", {"oops_all_whips": True}),
+    ("enemy_checks", {"enemy_checks": "bosses"}),
     ("logic_difficulty_preset", {"logic_difficulty_preset": "standard"}),
     ("logic_difficulty_preset", {"logic_difficulty_preset": "expert"}),
     ("kickable_enemy_logic", {"kickable_enemy_logic": "in_logic"}),

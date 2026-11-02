@@ -11,7 +11,9 @@ import settings
 from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA_ROM_MD5
 from .items import (FILLER_ITEM_NAMES, PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, CVAOSItem,
                     item_name_to_id, create_item, create_itempool)
-from .locations import location_name_to_id
+from .enemy_checks import (defeat_location_name, enemy_check_types, has_recorded_route,
+                           uses_enemy_checks)
+from .locations import defeat_location_names, location_name_to_id, pickup_location_ids
 from .options import LOGIC_OPTION_NAMES, CVAOSOptions, Goal, cvaos_option_groups
 from .regions import UT_TRICKS_ITEM, create_regions, can_reach_room
 from . import tracker_map, tracker_route
@@ -150,6 +152,7 @@ class CVAOSWorld(World):
 
     item_name_to_id = item_name_to_id
     location_name_to_id = location_name_to_id
+    location_name_groups = {"Enemy Defeats": set(defeat_location_names)}
 
     topology_present = True
     origin_region_name = "Menu"
@@ -217,9 +220,33 @@ class CVAOSWorld(World):
     # multiworld pool (item_smoothing.take_smoothing_items).
     _smoothing_items: Sequence[Item] = ()
 
+    # At most this many defeat checks without a recorded route may be priority locations. The fill
+    # locks progression into priority locations first, and on such a check it lands behind all
+    # eight fallback souls, which then run out of places to go. Seeds stop generating reliably with
+    # 25 or more (local_docs/ENEMY_CHECKS_DESIGN.md).
+    MAX_FALLBACK_PRIORITY = 10
+
     def generate_early(self) -> None:
         self._restore_logic_options_for_tracker()
         self.auth = bytearray(self.random.getrandbits(8) for _ in range(16))
+        self._cap_fallback_priority_locations()
+
+    def _cap_fallback_priority_locations(self) -> None:
+        """Keep at most MAX_FALLBACK_PRIORITY defeat checks without a route as priority locations.
+
+        The rest become ordinary locations, and a warning names them.
+        """
+        fallback_only = sorted(defeat_location_name(enemy.name)
+                               for enemy in enemy_check_types(self.options)
+                               if not has_recorded_route(enemy.name))
+        priority = self.options.priority_locations.value
+        demoted = [name for name in fallback_only if name in priority][self.MAX_FALLBACK_PRIORITY:]
+        if demoted:
+            priority.difference_update(demoted)
+            logging.warning(
+                "%s: at most %d enemy checks without a recorded route can be priority locations, so "
+                "these are ordinary locations instead: %s", self.player_name,
+                self.MAX_FALLBACK_PRIORITY, ", ".join(demoted))
 
     def _restore_logic_options_for_tracker(self) -> None:
         """Set the logic options from the slot data when Universal Tracker rebuilds this world.
@@ -330,8 +357,9 @@ class CVAOSWorld(World):
     def generate_output(self, output_directory: str) -> None:
         from .rom import CVAOSProcedurePatch, get_location_data, patch_rom
 
+        # Only pickups are written into the ROM. A defeat location has no ROM pickup.
         active_locations = [loc for loc in self.multiworld.get_locations(self.player)
-                            if loc.address is not None]
+                            if loc.address in pickup_location_ids]
         offset_data = get_location_data(self, active_locations)
 
         patch = CVAOSProcedurePatch(player=self.player, player_name=self.player_name)
@@ -343,6 +371,8 @@ class CVAOSWorld(World):
         patch.write(rom_path)
 
     def fill_slot_data(self) -> dict:
+        from .rom.patch import rom_gives_item
+
         return {
             "target_platform": self.options.target_platform.value,
             "randomize_pickups": self.options.randomize_pickups.value,
@@ -365,6 +395,14 @@ class CVAOSWorld(World):
             # received-item counter it saves. Seeds without this key were generated for a client
             # that did neither.
             "starting_inventory_from_server": True,
+            # With enemy checks, the client asks the server for this player's own items too, because
+            # the ROM never hands out the item at a defeat location. It skips the items the ROM
+            # already handed out: those at these locations.
+            **({"rom_given_locations": sorted(
+                loc.address for loc in self.multiworld.get_locations(self.player)
+                if loc.address in pickup_location_ids and loc.item is not None
+                and rom_gives_item(self, loc))}
+               if uses_enemy_checks(self.options) else {}),
         }
 
     def modify_multidata(self, multidata: dict) -> None:

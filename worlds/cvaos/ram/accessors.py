@@ -160,6 +160,10 @@ class AoSRAM:
     async def read_pickup_flags(self) -> bytes:
         return await self._fetch(addr.PICKUP_FLAGS)
 
+    async def read_enemy_defeats(self) -> bytes:
+        """Return the Enemy List's defeated bits: one per enemy type, set on its first defeat."""
+        return await self._fetch(addr.ENEMY_DEFEATED)
+
     async def read_exploration(self) -> tuple[bytes, int, bytes]:
         """Return the map's explored-cell bitmasks, the first 32 event flags, and how many of
         each Castle Map Soma holds, in one read."""
@@ -178,6 +182,14 @@ class AoSRAM:
         ``byte_index * 8 + (7 - bit)``.
         """
         return byte_index * 8 + bit
+
+    @staticmethod
+    def defeated_enemy_ids(defeat_bytes: bytes) -> set[int]:
+        """Return the ids of the enemy types whose defeated bit is set in ``defeat_bytes``.
+
+        The Enemy List numbers its bits as the pickup flags do: bit ``id & 7`` of byte ``id >> 3``.
+        """
+        return AoSRAM.pickup_flag_ids(defeat_bytes)
 
     @staticmethod
     def pickup_flag_ids(flag_bytes: bytes) -> set[int]:

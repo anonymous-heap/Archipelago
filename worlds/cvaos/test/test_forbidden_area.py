@@ -74,7 +74,7 @@ class TestForbiddenAreaPickup(_Base):
 import types
 from BaseClasses import ItemClassification as _IC
 from ..items import create_itempool as _create_itempool
-from ..options import ForbiddenAreaButton as _FAB
+from ..options import EnemyChecks, ForbiddenAreaButton as _FAB, Goal
 
 
 def _mock_world(fab_value):
@@ -85,6 +85,8 @@ def _mock_world(fab_value):
             hard_mode_pickups=types.SimpleNamespace(value=0),
             progressive_movement=types.SimpleNamespace(value=0),
             forbidden_area_button=types.SimpleNamespace(value=fab_value),
+            enemy_checks=EnemyChecks(EnemyChecks.option_off),
+            goal=Goal(Goal.default),
         ),
     )
 

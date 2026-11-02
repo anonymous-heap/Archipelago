@@ -14,6 +14,9 @@ Two logic-safe passes, both gated on the ``item_smoothing`` option:
      land late, with long-tailed per-item jitter (Student-t) plus a wildcard, so a lucky early find
      is rare-but-possible.
 
+Only pickup locations take part. Defeat locations (enemy checks) are left out, because most of them
+   come late in logic, and counting them would push every pickup's position earlier.
+
 Re-assigning non-progression items among their own already-reachable locations never changes
    reachability. Moving one of those weapons can, so when the result fails the accessibility
    check, the weapons go back to the locations the main fill gave them.
@@ -32,6 +35,7 @@ from BaseClasses import CollectionState, Item, Location, LocationProgressType, M
 from .data import item_balancing as desirability_data
 from .data import item_info
 from .items import PROGRESSIVE_MOVEMENT, logic_only_progression_names
+from .locations import pickup_location_ids
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -314,6 +318,7 @@ def smoothable_locations_in_order(multiworld: MultiWorld, player: int, spheres: 
             sphere_of[loc] = index
     candidates = [loc for loc in sphere_of
                   if loc.item is not None
+                  and loc.address in pickup_location_ids
                   and loc.player == player
                   and loc.item.player == player
                   and loc.parent_region is not None
@@ -471,7 +476,7 @@ def _lateness_ranking(multiworld: MultiWorld, player: int, depth: Dict[str, int]
     souls = [item for item in pool if item.player == player and item.name in MOVEMENT_SOULS]
     # Excluded locations are left out, so the pre-fill bias never puts a soul in one.
     locs = [loc for loc in multiworld.get_locations(player)
-            if loc.address is not None and loc.parent_region is not None
+            if loc.address in pickup_location_ids and loc.parent_region is not None
             and loc.parent_region.name in depth
             and loc.progress_type != LocationProgressType.EXCLUDED]
 
@@ -668,7 +673,8 @@ def _run_position(multiworld: MultiWorld, player: int, *,
     """
     depth = _region_depth(multiworld, player)
     locs = [loc for loc in multiworld.get_locations(player)
-            if loc.address is not None and loc.item is not None and loc.parent_region is not None]
+            if loc.address in pickup_location_ids and loc.item is not None
+            and loc.parent_region is not None]
     if by_map_distance:
         locs.sort(key=lambda loc: (depth.get(loc.parent_region.name, 10**9), loc.name))
     else:
@@ -840,7 +846,7 @@ def spread_ancient_books(world: "CVAOSWorld") -> None:
 
     depth = _region_depth(multiworld, player)
     candidates = [loc for loc in multiworld.get_locations(player)
-                  if loc.address is not None and loc.item is None and not loc.locked
+                  if loc.address in pickup_location_ids and loc.item is None and not loc.locked
                   and loc.progress_type != LocationProgressType.EXCLUDED
                   and loc.parent_region is not None and loc.parent_region.name in depth]
     if not candidates:

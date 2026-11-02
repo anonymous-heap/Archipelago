@@ -25,6 +25,7 @@ from NetUtils import ClientStatus
 
 from . import exploration, item_granting, tracker_map
 from .data import item_info_collection
+from .enemy_checks import defeat_location_id, enemy_id_for_location
 from .items import PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, item_table
 from .locations import flag_offset_to_location_id
 from .options import Goal
@@ -206,6 +207,13 @@ class CVAOSClientLogic:
             location_id = flag_offset_to_location_id.get(flag_offset)
             if location_id is not None and location_id in ctx.server_locations:
                 checked.add(location_id)
+
+        # The first defeat of each kind of enemy, in a seed with enemy checks.
+        if any(enemy_id_for_location(location) is not None for location in ctx.server_locations):
+            for enemy_id in AoSRAM.defeated_enemy_ids(await ram.read_enemy_defeats()):
+                location_id = defeat_location_id(enemy_id)
+                if location_id in ctx.server_locations:
+                    checked.add(location_id)
 
         new_checks = checked - self.local_checked_locations
         if new_checks:
