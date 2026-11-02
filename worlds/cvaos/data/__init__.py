@@ -12,6 +12,7 @@ from here but is never imported by it.
 
 from __future__ import annotations
 
+from .enemy_info import EnemyType, by_name as enemy_type_by_name, rows as enemy_type_collection
 from .entrance_info import EntranceInfo, rows as entrance_info_collection
 from .item_balancing import DesirabilityInfo, rows as desirability_collection
 from .item_info import ItemInfo, rows as item_info_collection
@@ -21,12 +22,14 @@ from .routing_info import (
     AbilityCombo,
     EntranceToPickupRegionInfo,
     EntranceToEnemyRegionInfo,
+    EnemyPlacement,
     RoutingInfo,
     TransdoorConnection,
     by_enemy_name_for_enemy_regions,
     by_enemy_number_for_enemy_regions,
     by_from_entrance_for_transdoor,
     enemy_meta_by_number,
+    enemy_placements,
     enemy_region_rows as entrance_to_enemy_region_info_collection,
     lookup_pickup_region_requirement,
     pickup_region_rows as entrance_to_pickup_region_info_collection,
@@ -38,6 +41,8 @@ from .routing_info import (
 __all__ = [
     "AbilityCombo",
     "DesirabilityInfo",
+    "EnemyPlacement",
+    "EnemyType",
     "EntranceInfo",
     "EntranceToPickupRegionInfo",
     "EntranceToEnemyRegionInfo",
@@ -51,6 +56,9 @@ __all__ = [
     "by_from_entrance_for_transdoor",
     "desirability_collection",
     "enemy_meta_by_number",
+    "enemy_placements",
+    "enemy_type_by_name",
+    "enemy_type_collection",
     "entrance_info_collection",
     "entrance_to_entrance_info_collection",
     "entrance_to_enemy_region_info_collection",

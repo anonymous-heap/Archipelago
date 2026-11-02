@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from enum import IntFlag, auto
-from typing import Iterable
+from typing import Iterable, NamedTuple
 
 from ..._pydantic_compat import BaseModel
 from .._csv_resources import open_csv, open_csv_if_exists
@@ -18,6 +18,8 @@ __all__ = [
     "lookup_pickup_region_requirement",
     "EntranceToEnemyRegionInfo",
     "enemy_region_rows",
+    "EnemyPlacement",
+    "enemy_placements",
     "by_enemy_name_for_enemy_regions",
     "by_enemy_number_for_enemy_regions",
     "enemy_meta_by_number",
@@ -709,6 +711,41 @@ for _enemy_row in enemy_region_rows:
     _enemy_number_by_room_name_spec[
         (_enemy_row.enemy_room, _enemy_row.enemy_name, _enemy_row.specifier)
     ] = _enemy_row.enemy_number
+
+
+class EnemyPlacement(NamedTuple):
+    """One enemy in one room, as the enemy routing CSV lists it, with or without routing."""
+
+    enemy_number: int  # globally unique, one per CSV row
+    room: str
+    name: str
+    specifier: str
+    x: int  # position in the room, in pixels
+    y: int
+
+
+def _load_enemy_placements() -> tuple[EnemyPlacement, ...]:
+    """Return every enemy placement in the enemy routing CSV.
+
+    Unlike :data:`enemy_region_rows`, this keeps the placements whose ``dest_room_identifier`` is
+    blank, which are most of them. Enemy checks need every placement, and their logic applies a
+    fallback rule to those that have no routing yet. A placement with routing to several entrances
+    can take one row per entrance, and it is listed once.
+    """
+    placements = []
+    seen: set[int] = set()
+    for row in open_csv(__name__, "symmetric_entrance_to_enemy_region_requirements.csv"):
+        name = (row.get("Enemy Name") or "").strip()
+        if not name or int(row["enemy_number"]) in seen:
+            continue
+        seen.add(int(row["enemy_number"]))
+        placements.append(EnemyPlacement(int(row["enemy_number"]), (row.get("room_id") or "").strip(),
+                                         name, (row.get("Specifier") or "").strip(),
+                                         int(row.get("x") or 0), int(row.get("-y") or 0)))
+    return tuple(placements)
+
+
+enemy_placements: tuple[EnemyPlacement, ...] = _load_enemy_placements()
 
 
 def resolve_enemy_number(room_id: str, enemy_name: str, specifier: str = "") -> int:
