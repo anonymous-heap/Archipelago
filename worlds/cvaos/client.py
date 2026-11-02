@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 import worlds._bizhawk as bizhawk
 from worlds._bizhawk.client import BizHawkClient
 
-from .client_logic import CVAOSClientLogic
+from .client_logic import CVAOSClientLogic, items_handling_for
 from .options import TARGET_ADVANCE_COLLECTION
 from .ram import AoSRAM, BizHawkBackend
 from .rom import (ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUMBER_START,
@@ -90,8 +90,9 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
 
         ctx.game = self.game
         # Receive items from other worlds and the starting inventory. Nothing else delivers the
-        # starting inventory to the game, while logic counts it as owned from the start.
-        ctx.items_handling = 0b101
+        # starting inventory to the game, while logic counts it as owned from the start. A seed with
+        # enemy checks also asks for this player's own items (client_logic.items_handling_for).
+        ctx.items_handling = items_handling_for(identifier)
         ctx.want_slot_data = True
         ctx.watcher_timeout = 0.125
         return True

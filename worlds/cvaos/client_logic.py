@@ -29,6 +29,7 @@ from .items import PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, item_table
 from .locations import flag_offset_to_location_id
 from .options import Goal
 from .ram import AoSRAM, addresses as addr
+from .rom.patch import OWN_ITEMS_FROM_SERVER_IDENTIFIER
 
 if TYPE_CHECKING:
     from CommonClient import CommonContext
@@ -42,6 +43,20 @@ _STAGE_INFOS = tuple(next(info for info in item_info_collection if info.name == 
 POSITION_INTERVAL = 0.5
 # The explored map is read this often, and sent when it has changed.
 EXPLORATION_INTERVAL = 2.0
+
+# The items_handling a client connects with. Both ask for items from other worlds and for the
+# starting inventory. A seed with enemy checks also asks for the player's own items, because the
+# ROM never hands out the item at a defeat location (see items_handling_for).
+ITEMS_FROM_OTHER_WORLDS = 0b101
+ITEMS_INCLUDING_OWN = 0b111
+
+
+def items_handling_for(identifier: bytes) -> int:
+    """Return the items_handling for a ROM that carries ``identifier``."""
+    if identifier == OWN_ITEMS_FROM_SERVER_IDENTIFIER.encode("ascii"):
+        return ITEMS_INCLUDING_OWN
+    return ITEMS_FROM_OTHER_WORLDS
+
 
 # Max items to grant per tick, so a large backlog on connect can't stall the watcher
 # (each grant is a few emulator round-trips). Leftovers are picked up on the following ticks.
@@ -255,6 +270,9 @@ class CVAOSClientLogic:
         checked = ctx.checked_locations | self.local_checked_locations
         found = sum(1 for location in ctx.slot_data.get("progressive_movement_locations", ())
                     if location in checked)
+        if ctx.items_handling & 0b010:
+            # The server sends this world's own copies too, so they are already in ``received``.
+            found = 0
         for info in _STAGE_INFOS[:starting + received + found]:
             if await ram.owned_count(info.item_category, info.id) > 0:
                 continue
@@ -275,10 +293,19 @@ class CVAOSClientLogic:
         has ``starting_inventory_from_server`` counts those items in its saves. An older seed's
         saves count only the items from other worlds. For such a seed this leaves the starting
         inventory out, so the client does not give it.
+
+        A seed with enemy checks asks the server for the player's own items too. The ones at the
+        slot data's ``rom_given_locations`` were already handed out by the ROM, so they are left
+        out. The rest, such as an own item at a defeat location, are given like any other.
         """
+        items = ctx.items_received
+        if ctx.items_handling & 0b010:
+            rom_given = set(ctx.slot_data.get("rom_given_locations", ()))
+            items = [item for item in items
+                     if not (item.player == ctx.slot and item.location in rom_given)]
         if ctx.slot_data.get("starting_inventory_from_server"):
-            return ctx.items_received
-        return [item for item in ctx.items_received if item.location != STARTING_LOCATION]
+            return items
+        return [item for item in items if item.location != STARTING_LOCATION]
 
     async def _relay_deathlink(self, ctx: "CommonContext", ram: AoSRAM) -> None:
         # DeathLink: enable from slot_data, broadcast Soma's death the moment the engine enters its

@@ -57,7 +57,7 @@ from typing import TYPE_CHECKING, NamedTuple, Sequence
 import Utils
 
 from ._bytemaker_compat import Entry
-from .client_logic import CVAOSClientLogic
+from .client_logic import CVAOSClientLogic, items_handling_for
 from .options import TARGET_ADVANCE_COLLECTION
 from .ram import AoSRAM, addresses as addr
 from .ram.addresses import EWRAM
@@ -645,6 +645,9 @@ class CVAOSCollectionContext(CommonContext):
             # baked into ROM free space, registered server-side under connect_names.
             auth_raw = self.backend.proc.read(self.backend.rom_base + AUTH_NUMBER_START, 16)
             self.auth = base64.b64encode(auth_raw).decode("ascii")
+        # A seed with enemy checks also asks for this player's own items, as the BizHawk Client does.
+        self.items_handling = items_handling_for(self.backend.proc.read(
+            self.backend.rom_base + ARCHIPELAGO_IDENTIFIER_START, len(ARCHIPELAGO_IDENTIFIER)))
         if password_requested and not self.password:
             await super().server_auth(password_requested)
         await self.send_connect()

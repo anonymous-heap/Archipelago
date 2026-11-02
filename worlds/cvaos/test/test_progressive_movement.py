@@ -221,14 +221,14 @@ class ClientGrantTest(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(ready.stop)
 
     def ctx(self, received_copies: int = 0, checked=(), enabled: bool = True, starting: int = 0,
-            other_items: int = 0):
+            other_items: int = 0, items_handling: int = 0b101):
         items = ([SimpleNamespace(item=PROGRESSIVE_MOVEMENT_CODE, location=1)] * received_copies
                  + [SimpleNamespace(item=OTHER_ITEM_CODE, location=1)] * other_items
                  + [SimpleNamespace(item=PROGRESSIVE_MOVEMENT_CODE, location=-2)] * starting)
         return SimpleNamespace(
             slot_data={"progressive_movement": enabled, "progressive_movement_starting": starting,
                        "progressive_movement_locations": self.LOCAL_COPIES},
-            items_received=items, checked_locations=set(checked))
+            items_received=items, checked_locations=set(checked), items_handling=items_handling)
 
     async def ticks(self, ctx, ram: FakeRam, count: int = 5) -> None:
         for _ in range(count):
@@ -250,6 +250,13 @@ class ClientGrantTest(unittest.IsolatedAsyncioTestCase):
         # a client that asks for its starting inventory. The copy must still count only once.
         ram = FakeRam()
         await self.ticks(self.ctx(starting=1), ram)
+        self.assertEqual(ram.granted, ["Flying Armor"])
+
+    async def test_an_own_copy_sent_back_by_the_server_counts_once(self):
+        # A seed with enemy checks asks the server for the player's own items too, so a copy found
+        # at location 102 is also among the received items.
+        ram = FakeRam()
+        await self.ticks(self.ctx(received_copies=1, checked=[102], items_handling=0b111), ram)
         self.assertEqual(ram.granted, ["Flying Armor"])
 
     async def test_a_location_known_both_ways_counts_once(self):
@@ -309,7 +316,7 @@ class ReceivedCopyGrantTest(unittest.IsolatedAsyncioTestCase):
         ram = AoSRAM(FakeBackend({EWRAM: bytearray(0x40000), "ROM": bytearray(0x800000)}))
         ctx = SimpleNamespace(items_received=[NetworkItem(PROGRESSIVE_MOVEMENT_CODE, 0, 2),
                                               NetworkItem(item_table["Mind Up (A)"].code, 0, 2)],
-                              slot_data={})
+                              slot_data={}, items_handling=0b101)
         await _new_client()._receive_items(ctx, ram)
         self.assertEqual(await ram.get_received_count(), 2)
         self.assertEqual(await ram.owned_count("consumable", 5), 1)

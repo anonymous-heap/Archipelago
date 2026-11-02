@@ -93,7 +93,7 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
     def ctx(*names: str, codes: tuple[int, ...] = ()) -> SimpleNamespace:
         codes = (*codes, *(item_table[name].code for name in names))
         return SimpleNamespace(items_received=[NetworkItem(code, 0, 2) for code in codes],
-                               slot_data={})
+                               slot_data={}, items_handling=0b101)
 
     def gold(self) -> int:
         return int.from_bytes(self.ewram[GOLD_OFFSET:GOLD_OFFSET + 4], "little")
@@ -213,7 +213,7 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
         # The server sends the starting inventory first, at location -2.
         items = [NetworkItem(item_table["500 Gold (A)"].code, STARTING_LOCATION, 2),
                  NetworkItem(item_table["Mind Up (A)"].code, 5, 2)]
-        return SimpleNamespace(items_received=items, slot_data=slot_data)
+        return SimpleNamespace(items_received=items, slot_data=slot_data, items_handling=0b101)
 
     async def test_an_older_seeds_save_counts_only_items_from_other_worlds(self) -> None:
         # An older client already granted Mind Up and counted it, but never received the gold.
