@@ -136,7 +136,11 @@ async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction, new_soul_pause: 
                           together_with: Sequence["GuardedWrite"]) -> bool:
     category = action.category
     if category == TransferCategory.MONEY:
-        return await ram.add_gold(action.id_or_value, together_with=together_with)
+        granted = await ram.add_gold(action.id_or_value, together_with=together_with)
+        if granted:
+            from . import announce
+            await announce.announce_gold(ram, action.id_or_value)
+        return granted
     if category in (TransferCategory.PICKUP, TransferCategory.OTHER_ITEM):
         info = _by_item_number[action.id_or_value]
         granted = await ram.give_item(info.item_category, info.id, together_with=together_with)

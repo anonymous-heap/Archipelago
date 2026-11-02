@@ -31,6 +31,15 @@ def rom_with_names(**text_ids: int) -> bytearray:
     return rom
 
 
+def add_gold_rows(rom: bytearray, rows: dict[int, int]) -> bytearray:
+    """Fill the gold table of ``rom`` with ``rows``, each an amount and its text-id."""
+    for index, (amount, text_id) in enumerate(rows.items()):
+        at = announce.GOLD_TABLE_OFFSET + index * box.GOLD_ROW_SIZE
+        rom[at:at + 2] = amount.to_bytes(2, "little")
+        rom[at + 4:at + 8] = text_id.to_bytes(4, "little")
+    return rom
+
+
 class AnnounceTest(unittest.TestCase):
     def setUp(self) -> None:
         announce._text_id_cache.clear()
@@ -181,6 +190,55 @@ class FlagOnlyAnnounceTest(unittest.TestCase):
         self.assertFalse(self.run_(announce.announce_flag(self.ram, *cp.flag_location(STUDY_SEALSWITCH))))
 
 
+class AnnounceGoldTest(unittest.TestCase):
+    def setUp(self) -> None:
+        announce._gold_text_ids.clear()
+        self.ewram = bytearray(0x40000)
+        self.rom = add_gold_rows(bytearray(0x800000), {1: 835, 100: 838, 2000: 841})
+        self.ram = AoSRAM(FakeBackend({EWRAM: self.ewram, ROM: self.rom}))
+
+    def run_(self, coro):
+        return asyncio.run(coro)
+
+    def mailbox(self) -> bytes:
+        return bytes(self.ewram[MB:MB + box.MAILBOX_SIZE])
+
+    def test_gold_posts_the_amount_textbox_and_the_gold_sound(self):
+        self.assertTrue(self.run_(announce.announce_gold(self.ram, 100)))
+        self.assertEqual(self.mailbox(), box.mailbox_write(838, box.SFX_MONEY))
+
+    def test_an_amount_no_gold_pickup_holds_is_not_announced(self):
+        self.assertFalse(self.run_(announce.announce_gold(self.ram, 200)))
+        self.assertEqual(self.mailbox(), bytes(box.MAILBOX_SIZE))
+
+    def test_skips_while_the_previous_request_is_pending(self):
+        self.ewram[MB + box.MB_PENDING] = 1
+        self.assertFalse(self.run_(announce.announce_gold(self.ram, 100)))
+
+    def test_a_failing_backend_never_raises(self):
+        async def boom(*_a, **_k):
+            raise OSError("connection lost")
+
+        self.ram.backend.read_many = boom
+        self.assertFalse(self.run_(announce.announce_gold(self.ram, 100)))
+
+    def test_every_gold_item_has_a_row_in_the_real_rom(self):
+        from worlds.cvaos import item_granting
+        from worlds.cvaos.items import item_table
+
+        from .test_tracker_map import find_rom
+        path = find_rom()
+        if path is None:
+            self.skipTest("base ROM not found (set CVAOS_USA_ROM)")
+        rom = bytearray(open(path, "rb").read())
+        ram = AoSRAM(FakeBackend({EWRAM: self.ewram, ROM: rom}))
+        amounts = {action.id_or_value for action in map(item_granting.resolve,
+                                                        (data.code for data in item_table.values()))
+                   if action.category == item_granting.TransferCategory.MONEY}
+        self.assertEqual({amount for amount in amounts
+                          if self.run_(announce._gold_text_id(ram, amount)) is None}, set())
+
+
 class GrantIntegrationTest(unittest.TestCase):
     """The announcement rides on a successful grant and never changes its outcome."""
 
@@ -200,6 +258,18 @@ class GrantIntegrationTest(unittest.TestCase):
         )
         self.assertTrue(self.run_(item_granting.grant(self.ram, action)))
         self.assertEqual(bytes(self.ewram[MB:MB + box.MAILBOX_SIZE]), box.mailbox_write(92))
+
+    def test_a_gold_grant_announces_the_amount(self):
+        from worlds.cvaos import item_granting
+        announce._gold_text_ids.clear()
+        add_gold_rows(self.ram.backend.memory[ROM], {100: 838})
+        action = item_granting.ReceiveAction(
+            category=item_granting.TransferCategory.MONEY,
+            id_or_value=100, set_flag=False, flag_offset=0, flag_bit=0, flag_value=0,
+        )
+        self.assertTrue(self.run_(item_granting.grant(self.ram, action)))
+        self.assertEqual(bytes(self.ewram[MB:MB + box.MAILBOX_SIZE]),
+                         box.mailbox_write(838, box.SFX_MONEY))
 
     def test_a_lost_grant_does_not_announce(self):
         from worlds.cvaos import item_granting

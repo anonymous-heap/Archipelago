@@ -29,8 +29,9 @@ Which banner:
   stop-the-action acquisition box and a duplicate announces as a duplicate. The New Soul Pause
   option turns that off: every received soul is then posted as a duplicate, so the banner is
   the short self-expiring one and the action is never stopped.
-* Money is not announced: vanilla routes gold through a different banner, and the gold counter
-  updating on screen already shows it.
+* Gold uses the same textbox with the "$<amount>" string a gold pickup shows, and the gold sound.
+  Vanilla's gold branch takes that string from the gold pickups' table, which is read from the
+  ROM at runtime too. An amount that no gold pickup holds is not announced.
 """
 from __future__ import annotations
 
@@ -51,6 +52,8 @@ GBA_ROM_BASE = 0x08000000
 MAILBOX_OFFSET = _box.MAILBOX_GBA - EWRAM_BASE
 #: ROM-domain offset of the u16 item-name text-id table.
 NAME_TABLE_OFFSET = _box.ITEM_NAME_TEXT_IDS_GBA - GBA_ROM_BASE
+#: ROM-domain offset of the gold pickups' table.
+GOLD_TABLE_OFFSET = _box.GOLD_TABLE_GBA - GBA_ROM_BASE
 ROM_DOMAIN = "ROM"
 
 #: The soulType each soul category maps to, as SoulInventory_* and the soul banner number them.
@@ -70,6 +73,7 @@ SFX_BY_CATEGORY = {
 }
 
 _text_id_cache: dict[int, int] = {}
+_gold_text_ids: dict[int, int] = {}
 
 
 async def _name_text_id(ram: "AoSRAM", global_id: int) -> Optional[int]:
@@ -83,6 +87,21 @@ async def _name_text_id(ram: "AoSRAM", global_id: int) -> Optional[int]:
         return None
     _text_id_cache[global_id] = text_id
     return text_id
+
+
+async def _gold_text_id(ram: "AoSRAM", amount: int) -> Optional[int]:
+    """The text-id of the ROM's "$<amount>" string, or None when no gold pickup holds ``amount``.
+
+    The whole gold table is read once and cached.
+    """
+    if not _gold_text_ids:
+        raw = await ram.read(GOLD_TABLE_OFFSET, _box.GOLD_ROW_SIZE * _box.GOLD_ROWS, ROM_DOMAIN)
+        for row in range(0, len(raw), _box.GOLD_ROW_SIZE):
+            row_amount = int.from_bytes(raw[row:row + 2], "little")
+            text_id = int.from_bytes(raw[row + 4:row + 8], "little")
+            if row_amount and text_id:
+                _gold_text_ids[row_amount] = text_id
+    return _gold_text_ids.get(amount)
 
 
 async def _slot_is_free(ram: "AoSRAM") -> bool:
@@ -143,6 +162,25 @@ async def announce_item_number(ram: "AoSRAM", item_number: int, *,
     except Exception:          # noqa: BLE001 - cosmetic; a grant must never fail over a banner
         from CommonClient import logger
         logger.debug("CVAoS: could not announce item %s", item_number, exc_info=True)
+        return False
+
+
+async def announce_gold(ram: "AoSRAM", amount: int) -> bool:
+    """Post the "$<amount>" textbox and the gold sound, as picking up that much gold would.
+
+    Returns True when a request was posted. False means it was not, for any reason: no gold
+    pickup holds that amount, the previous request is still pending, or a read or write failed.
+    It is never an error the caller needs to handle.
+    """
+    try:
+        text_id = await _gold_text_id(ram, amount)
+        if text_id is None or not await _slot_is_free(ram):
+            return False
+        await ram.write(MAILBOX_OFFSET, list(_box.mailbox_write(text_id, _box.SFX_MONEY)))
+        return True
+    except Exception:          # noqa: BLE001 - cosmetic; a grant must never fail over a banner
+        from CommonClient import logger
+        logger.debug("CVAoS: could not announce %d gold", amount, exc_info=True)
         return False
 
 

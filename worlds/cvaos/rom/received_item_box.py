@@ -89,6 +89,13 @@ SFX_SOUL = 0xBC                # categories 5..8, the soul branch
 #: u16 table of item NAME text-ids, indexed by item global-id (257 entries).
 ITEM_NAME_TEXT_IDS_GBA = 0x08506734
 
+#: The gold pickups' table, which the gold branch of sub_080441F8 reads. Each 12-byte row holds an
+#: amount (u16 at +0) and the text-id of its "$<amount>" string (u32 at +4). Its 7 rows are the
+#: amounts 1, 10, 50, 100, 500, 1000 and 2000.
+GOLD_TABLE_GBA = 0x085250E4
+GOLD_ROW_SIZE = 12
+GOLD_ROWS = 7
+
 assert len(_HOOK_BODY) == 144, f"hook body must be 144 bytes, got {len(_HOOK_BODY)}"
 assert len(_HOOK_BODY) <= 0x200, "hook body overruns its 0x200-byte slot"
 assert MAILBOX_GBA.to_bytes(4, "little") in _HOOK_BODY, "mailbox addr missing from hook body"
