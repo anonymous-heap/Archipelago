@@ -117,6 +117,7 @@ class CVAOSSettings(settings.Group):
 
 class CVAOSWebWorld(WebWorld):
     theme = "ice"
+    bug_report_page = "https://github.com/anonymous-heap/Archipelago/issues"
 
     option_groups = cvaos_option_groups
 
