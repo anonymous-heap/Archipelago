@@ -48,6 +48,14 @@ class TargetPlatform(Choice):
     option_advance_collection = 1
     default = option_gba
 
+    @classmethod
+    def get_option_name(cls, value: int) -> str:
+        # The options page and the Options Creator show this name. Choice would title-case
+        # "gba" into "Gba".
+        if value == cls.option_gba:
+            return "GBA"
+        return super().get_option_name(value)
+
 
 # Slot-data / rom_config values for TargetPlatform (kept in sync with the option above so the
 # clients and the patch-apply base-ROM selector can compare without importing the Choice).

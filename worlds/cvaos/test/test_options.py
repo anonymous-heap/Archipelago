@@ -1,7 +1,8 @@
 """
 Tests for the technique-logic options: the resolution precedence chain
 (per-technique override > difficulty tier > built-in default), the QSave-is-manual-only
-rule, and technique gating through the routing access-rule factory.
+rule, and technique gating through the routing access-rule factory. Also, how the options page
+names the "Target Platform" values.
 
 Run from the Archipelago root directory:
     python -m pytest worlds/cvaos/test/test_options.py -v
@@ -21,6 +22,7 @@ from ..options import (
     PlatformClipLogic,
     QuickSaveResetLogic,
     TECHNIQUES,
+    TargetPlatform,
     TechniqueLogic,
     Tier,
     resolve_allowed_techniques,
@@ -219,3 +221,10 @@ def test_rule_tform_only_mask_is_exactly_source_reachability():
     assert rule is not None
     assert rule(_State(regions=(devil_region,)))
     assert not rule(_State())
+
+
+def test_target_platform_values_are_named_as_players_read_them():
+    # The options page and the Options Creator show these names, so GBA stays an abbreviation.
+    assert TargetPlatform.get_option_name(TargetPlatform.option_gba) == "GBA"
+    collection = TargetPlatform.option_advance_collection
+    assert TargetPlatform.get_option_name(collection) == "Advance Collection"
