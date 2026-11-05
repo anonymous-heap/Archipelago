@@ -130,6 +130,15 @@ class LocationSettingsTest(unittest.TestCase):
                               if loc.item.name == name]
                     self.assertEqual(len(copies), 1)
 
+    def test_a_book_never_lands_behind_an_item_plandoed_behind_the_books(self):
+        # The Balcony Center Item opens only once all three books are held, and Skula opens other
+        # locations. A book spread into one of those would wait for itself. Seed 17 did that.
+        target = "Balcony Center Item [900 Black Panther]"
+        for seed in range(15, 20):
+            multiworld = generate(seed, {"plando_items": [{"item": "Skula", "location": target}]})
+            with self.subTest(seed=seed):
+                self.assertTrue(multiworld.fulfills_accessibility())
+
     def test_a_moved_item_is_never_behind_itself_even_with_minimal_accessibility(self):
         for seed in (503, 504, 505):
             multiworld = generate(seed, {"accessibility": "minimal", "goal": "graham",

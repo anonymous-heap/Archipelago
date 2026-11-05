@@ -848,16 +848,10 @@ def spread_ancient_books(world: "CVAOSWorld") -> None:
     candidates.sort(key=lambda loc: (depth[loc.parent_region.name], loc.name))
     bands = _partition(candidates, 3)
 
-    # Place each book only where it's reachable WITHOUT any book, so a book is never locked behind its
-    # own gate. A no-op while the books gate nothing, but required once they become real progression
-    # (e.g. needed to reach Graham for the good ending) -- the same guard the gating souls rely on.
-    without_books = CollectionState(multiworld)
-    for item in [*multiworld.itempool, *world.get_pre_fill_items()]:
-        if not (item.player == player and item.name in ANCIENT_BOOK_NAMES):
-            multiworld.worlds[item.player].collect(without_books, item)
-    for loc in multiworld.get_filled_locations():
-        multiworld.worlds[loc.item.player].collect(without_books, loc.item)
-    without_books.sweep_for_advancements()
+    # Place each book only where it's reachable without any book, so a book is never locked behind its
+    # own gate. Items already placed count only once their locations are reachable that way, so a
+    # book also can't land behind an item that is itself behind the books, such as a plando'd one.
+    without_books = _all_state_except(multiworld, books)
 
     rng.shuffle(books)  # so Book 1/2/3 aren't deterministically early/mid/late
     world._spread_books = []
