@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from ..data import AbilityCombo
 from ..options import (
     CVAOSOptions,
+    InboundsZipLogic,
     KickableEnemyLogic,
     LogicDifficultyPreset,
     PixelPerfectLogic,
@@ -30,6 +31,7 @@ _OPTION_CLASSES: dict[str, type[TechniqueLogic]] = {
     "platform_clip_logic": PlatformClipLogic,
     "pixel_perfect_logic": PixelPerfectLogic,
     "quick_save_reset_logic": QuickSaveResetLogic,
+    "inbounds_zip_logic": InboundsZipLogic,
 }
 
 _ALL_DIFFICULTIES = (LogicDifficultyPreset.option_canonical, LogicDifficultyPreset.option_standard,

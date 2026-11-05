@@ -346,7 +346,8 @@ class LogicDifficultyPreset(Choice):
     - advanced: may also expect platform clips.
     - expert: may also expect pixel-perfect platforming.
 
-    Quick-save resets are never expected; see Quick-Save Reset Logic.
+    Quick-save resets and inbounds zips are never expected; see Quick-Save Reset Logic and
+    Inbounds Zip Logic.
     Each technique can be forced in or out of logic with its own option.
     """
     display_name = "Logic Difficulty Preset"
@@ -400,6 +401,14 @@ class QuickSaveResetLogic(TechniqueLogic):
     display_name = "Quick-Save Reset Logic"
 
 
+class InboundsZipLogic(TechniqueLogic):
+    """
+    Whether logic may require an inbounds zip. No difficulty expects this; it is in logic only if
+    set to in_logic.
+    """
+    display_name = "Inbounds Zip Logic"
+
+
 class Tier(IntEnum):
     """
     Lowest ``LogicDifficultyPreset`` at which a technique is in logic by default.
@@ -429,6 +438,7 @@ TECHNIQUES: tuple[Technique, ...] = (
     Technique(AbilityCombo.Clip,   "platform_clip_logic",    Tier.ADVANCED),
     Technique(AbilityCombo.PixPer, "pixel_perfect_logic",    Tier.EXPERT),
     Technique(AbilityCombo.QSave,  "quick_save_reset_logic", Tier.MANUAL),
+    Technique(AbilityCombo.InZip,  "inbounds_zip_logic",     Tier.MANUAL),
 )
 
 
@@ -461,6 +471,7 @@ class CVAOSOptions(PerGameCommonOptions):
     platform_clip_logic: PlatformClipLogic
     pixel_perfect_logic: PixelPerfectLogic
     quick_save_reset_logic: QuickSaveResetLogic
+    inbounds_zip_logic: InboundsZipLogic
     death_link: DeathLink
 
 
@@ -487,6 +498,7 @@ cvaos_option_groups = [
         PlatformClipLogic,
         PixelPerfectLogic,
         QuickSaveResetLogic,
+        InboundsZipLogic,
     ]),
     OptionGroup("Gameplay Tweaks", [
         SingleJumpDivekick,

@@ -111,6 +111,10 @@ class AbilityCombo(IntFlag):
     Chronomage = auto()
     """Chronomage soul (enemy-only; the gate is inert)"""
 
+    # Appended after the souls for the same reason: earlier bit values stay as they are.
+    InZip = auto()   # Inbounds zip
+    """Inbounds zip"""
+
 # Canonical enum-key -> bitflag
 _ABILITY_BY_NAME: dict[str, AbilityCombo] = {
     "None": AbilityCombo.None_,
@@ -136,6 +140,7 @@ _ABILITY_BY_NAME: dict[str, AbilityCombo] = {
     "Galamoth": AbilityCombo.Galamoth,
     # Chronomage has no pickup, so this resolves to an item that is never placed -- an inert gate.
     "Chronomage": AbilityCombo.Chronomage,
+    "InZip": AbilityCombo.InZip,
 }
 
 
