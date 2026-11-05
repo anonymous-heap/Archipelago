@@ -2394,13 +2394,13 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 210,
-    "y": 544
+    "x": 204,
+    "y": 542
    },
    {
     "map": "Castle Corridor",
-    "x": 210,
-    "y": 256
+    "x": 204,
+    "y": 254
    }
   ]
  },
@@ -2575,12 +2575,12 @@
    {
     "map": "Castle",
     "x": 420,
-    "y": 466
+    "y": 470
    },
    {
     "map": "Castle Corridor",
     "x": 420,
-    "y": 178
+    "y": 182
    }
   ]
  },
@@ -2614,13 +2614,13 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 452,
-    "y": 418
+    "x": 448,
+    "y": 415
    },
    {
     "map": "Castle Corridor",
-    "x": 452,
-    "y": 130
+    "x": 448,
+    "y": 127
    }
   ]
  },
@@ -2665,7 +2665,7 @@
   ]
  },
  {
-  "name": "012",
+  "name": "104",
   "sections": [
    {
     "name": "Defeat Ghost"
@@ -2674,13 +2674,13 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 528,
-    "y": 408
+    "x": 1104,
+    "y": 444
    },
    {
-    "map": "Castle Corridor",
-    "x": 528,
-    "y": 120
+    "map": "Chapel",
+    "x": 168,
+    "y": 156
    }
   ]
  },
@@ -2785,7 +2785,7 @@
   ]
  },
  {
-  "name": "002",
+  "name": "206",
   "sections": [
    {
     "name": "Defeat Winged Skeleton"
@@ -2794,13 +2794,13 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 96,
-    "y": 432
+    "x": 1056,
+    "y": 584
    },
    {
-    "map": "Castle Corridor",
-    "x": 96,
-    "y": 144
+    "map": "Study",
+    "x": 144,
+    "y": 80
    }
   ]
  },
@@ -2914,12 +2914,12 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 1128,
+    "x": 1116,
     "y": 546
    },
    {
     "map": "Chapel",
-    "x": 192,
+    "x": 180,
     "y": 258
    }
   ]
@@ -2954,12 +2954,12 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 686,
+    "x": 680,
     "y": 377
    },
    {
     "map": "Castle Corridor",
-    "x": 686,
+    "x": 680,
     "y": 89
    }
   ]
@@ -3035,12 +3035,12 @@
    {
     "map": "Castle",
     "x": 120,
-    "y": 467
+    "y": 464
    },
    {
     "map": "Castle Corridor",
     "x": 120,
-    "y": 179
+    "y": 176
    }
   ]
  },
@@ -3095,12 +3095,12 @@
    {
     "map": "Castle",
     "x": 174,
-    "y": 498
+    "y": 489
    },
    {
     "map": "Dance Hall",
     "x": 126,
-    "y": 282
+    "y": 273
    }
   ]
  },
@@ -3134,13 +3134,13 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 156,
-    "y": 689
+    "x": 150,
+    "y": 680
    },
    {
     "map": "The Arena",
-    "x": 156,
-    "y": 113
+    "x": 150,
+    "y": 104
    }
   ]
  },
@@ -3234,12 +3234,12 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 446,
+    "x": 440,
     "y": 372
    },
    {
     "map": "Inner Quarters",
-    "x": 182,
+    "x": 176,
     "y": 276
    }
   ]
@@ -3474,12 +3474,12 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 1129,
+    "x": 1128,
     "y": 546
    },
    {
     "map": "Chapel",
-    "x": 193,
+    "x": 192,
     "y": 258
    }
   ]
@@ -3525,7 +3525,7 @@
   ]
  },
  {
-  "name": "602",
+  "name": "80A",
   "sections": [
    {
     "name": "Defeat Medusa Head"
@@ -3534,13 +3534,13 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 816,
-    "y": 336
+    "x": 144,
+    "y": 756
    },
    {
-    "map": "Clock Tower",
-    "x": 48,
-    "y": 240
+    "map": "The Arena",
+    "x": 144,
+    "y": 180
    }
   ]
  },
@@ -3614,13 +3614,13 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 1042,
-    "y": 495
+    "x": 1048,
+    "y": 498
    },
    {
     "map": "Chapel",
-    "x": 106,
-    "y": 207
+    "x": 112,
+    "y": 210
    }
   ]
  },
@@ -3834,13 +3834,13 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 334,
-    "y": 255
+    "x": 332,
+    "y": 246
    },
    {
     "map": "Inner Quarters",
-    "x": 70,
-    "y": 159
+    "x": 68,
+    "y": 150
    }
   ]
  },
@@ -3894,12 +3894,12 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 448,
+    "x": 442,
     "y": 854
    },
    {
     "map": "Underground Reservoir",
-    "x": 352,
+    "x": 346,
     "y": 398
    }
   ]
@@ -3994,13 +3994,13 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 803,
-    "y": 688
+    "x": 800,
+    "y": 680
    },
    {
     "map": "Underground Reservoir",
-    "x": 707,
-    "y": 232
+    "x": 704,
+    "y": 224
    }
   ]
  },
@@ -4074,12 +4074,12 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 133,
+    "x": 136,
     "y": 714
    },
    {
     "map": "The Arena",
-    "x": 133,
+    "x": 136,
     "y": 138
    }
   ]
@@ -4289,12 +4289,12 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 157,
+    "x": 151,
     "y": 688
    },
    {
     "map": "The Arena",
-    "x": 157,
+    "x": 151,
     "y": 112
    }
   ]
@@ -4309,12 +4309,12 @@
   "map_locations": [
    {
     "map": "Castle",
-    "x": 320,
+    "x": 328,
     "y": 354
    },
    {
     "map": "Dance Hall",
-    "x": 272,
+    "x": 280,
     "y": 138
    }
   ]

@@ -7,6 +7,7 @@ loads it. The client also reports Soma's position for the map.
 from __future__ import annotations
 
 import json
+import math
 import os
 import pkgutil
 import unittest
@@ -16,10 +17,11 @@ from unittest import mock
 
 from .. import CVAOSWorld, client_logic, tracker_map, tracker_png
 from ..client_logic import CVAOSClientLogic
-from ..data import map_info
+from ..data import map_info, pickup_info_collection
 from ..data.room_info import by_identifier as rooms_by_identifier
+from ..enemy_checks import checkable_types, pin_placement
 from ..locations import location_name_to_id
-from ..tracker_map import BRIGHT
+from ..tracker_map import BRIGHT, cell_position
 
 
 def ut_bytes(name: str) -> bytes:
@@ -101,6 +103,29 @@ class TrackerMapTest(unittest.TestCase):
         spots = Counter((pin["map"], pin["x"], pin["y"])
                         for node in self.locations for pin in node["map_locations"])
         self.assertEqual([spot for spot, count in spots.items() if count > 1], [])
+
+    def test_no_defeat_pin_hides_another_pin(self):
+        # A crowded room can't keep every pin PIN_SPACING apart, but no pin may sit mostly under
+        # another. Two pairs of placements would otherwise share a spot: Quezlcoatl's and
+        # Manticore's in room 106, and Lilith's and Succubus's in room 808.
+        pins = [cell_position(p.room_identifier, p.x, p.y) for p in pickup_info_collection]
+        for name, _room, cell in tracker_map.defeat_pins():
+            with self.subTest(pin=name):
+                self.assertGreater(min(math.dist(cell, other) for other in pins), 0.3)
+            pins.append(cell)
+
+    def test_a_defeat_pin_stays_in_its_room(self):
+        for name, room, cell in tracker_map.defeat_pins():
+            with self.subTest(pin=name):
+                self.assertEqual(map_info.room_at(math.floor(cell[0]), math.floor(cell[1])), room)
+
+    def test_a_defeat_pin_is_never_at_an_unrecorded_position(self):
+        # Ghost, Winged Skeleton and Medusa Head each have placements recorded at (0, 0), which is
+        # a room's top-left corner rather than where the enemy appears.
+        for enemy in checkable_types():
+            placement = pin_placement(enemy.name)
+            with self.subTest(enemy=enemy.name):
+                self.assertNotEqual((placement.x, placement.y), (0, 0))
 
     def test_a_pin_lands_where_its_pickup_is(self):
         # Entrance Parapet's pickup is 384 by 184 pixels into room 000, which starts at map cell

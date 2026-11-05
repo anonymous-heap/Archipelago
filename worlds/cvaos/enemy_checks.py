@@ -120,8 +120,12 @@ def pin_placement(enemy_name: str):
 
     A check can be made at any of its placements, but a map pin needs one place. This is the first
     placement with routing, so that the pin sits where logic expects the defeat, or else the first.
+
+    A few placements are recorded at (0, 0), the room's top-left corner, rather than where the
+    enemy appears. They are passed over when the enemy has a placement with a real position.
     """
-    placements = placements_of(enemy_name)
+    placements = [placement for placement in placements_of(enemy_name)
+                  if (placement.x, placement.y) != (0, 0)] or placements_of(enemy_name)
     routed = [placement for placement in placements
               if placement.enemy_number in by_enemy_number_for_enemy_regions]
     return min(routed or placements, key=lambda placement: placement.enemy_number)

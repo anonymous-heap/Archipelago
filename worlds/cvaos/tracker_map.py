@@ -23,7 +23,9 @@ A test checks that the shipped files match this world's data. Running this modul
 """
 from __future__ import annotations
 
+import functools
 import json
+import math
 import os
 from typing import NamedTuple
 
@@ -231,6 +233,65 @@ def pin(origin: tuple[int, int], cell: tuple[float, float]) -> tuple[int, int]:
     return round(origin[0] + CELL_PIXELS * cell[0]), round(origin[1] + CELL_PIXELS * cell[1])
 
 
+# The least distance, in map cells, between a defeat pin and any other pin. UT draws a pin 12 pixels
+# across, half a cell, and the browser tracker's pins are a little smaller.
+PIN_SPACING = 0.5
+
+
+# The offsets tried for a pin that would cover another, nearest first: points an eighth of a cell
+# apart, up to a cell and a half away.
+_OFFSETS = sorted(((dx / 8, dy / 8) for dx in range(-12, 13) for dy in range(-12, 13)),
+                  key=lambda offset: (math.hypot(*offset), offset))
+
+
+@functools.cache
+def defeat_pins() -> tuple[tuple[str, str, tuple[float, float]], ...]:
+    """Return each defeat location's pin, as its name, its room and its map-cell position.
+
+    A pin goes at its enemy's pin placement (enemy_checks.pin_placement), unless that would bring
+    it within PIN_SPACING of another pin and hide part of it. The other pins are the pickups', the
+    defeat pins already placed, and the placements of those still to come. The pin then moves to
+    the nearest spot that is clear of them all and keeps the whole pin inside its room. In a room
+    too crowded for that, it goes where it comes closest to being clear.
+    """
+    placed = [cell_position(pickup.room_identifier, pickup.x, pickup.y)
+              for pickup in pickup_info_collection]
+    waiting = {}
+    for enemy in checkable_types():
+        placement = pin_placement(enemy.name)
+        waiting[enemy.name] = (placement.room, cell_position(placement.room, placement.x,
+                                                              placement.y))
+    pins = []
+    for enemy in checkable_types():
+        room, start = waiting.pop(enemy.name)
+        others = [cell for cell in (*placed, *(cell for _, cell in waiting.values()))
+                  if math.dist(start, cell) < 2]
+        cell = _free_spot(room, start, others)
+        placed.append(cell)
+        pins.append((defeat_location_name(enemy.name), room, cell))
+    return tuple(pins)
+
+
+def _free_spot(room: str, start: tuple[float, float],
+               others: list[tuple[float, float]]) -> tuple[float, float]:
+    def gap(spot: tuple[float, float]) -> float:
+        return min((math.dist(spot, other) for other in others), default=math.inf)
+
+    if gap(start) >= PIN_SPACING:
+        return start
+    inside = [spot for spot in ((start[0] + dx, start[1] + dy) for dx, dy in _OFFSETS)
+              if _pin_inside(room, spot)]
+    return next((spot for spot in inside if gap(spot) >= PIN_SPACING),
+                max(inside, key=gap, default=start))
+
+
+def _pin_inside(room: str, spot: tuple[float, float]) -> bool:
+    """Whether a pin centred at ``spot`` lies wholly in map cells of ``room``."""
+    half = PIN_SPACING / 2
+    return all(map_info.room_at(math.floor(spot[0] + dx), math.floor(spot[1] + dy)) == room
+               for dx in (-half, half) for dy in (-half, half))
+
+
 def position_value(area: int, room: int, x: int, y: int) -> list:
     """Return the data storage value for Soma at ``x``, ``y`` in room ``room`` of area ``area``."""
     return [f"{area:X}{room:02X}", x, y]
@@ -296,25 +357,22 @@ def build() -> tuple[list[dict], list[dict]]:
         locations.append({"name": pickup.room_identifier,
                           "sections": [{"name": pickup.location_name}],
                           "map_locations": map_locations})
-    # Each defeat location is pinned at one placement of its enemy (enemy_checks.pin_placement). UT
-    # shows it only in a seed that has it. UT keys a map's pins by position, so a pin that would land
-    # on a taken spot moves right, a pixel at a time, until the spot is free.
+    # Each defeat location is pinned where defeat_pins puts it. UT shows it only in a seed that has
+    # it. UT keys a map's pins by position, so a pin that would land on a taken spot moves right, a
+    # pixel at a time, until the spot is free.
     taken = {(spot["map"], spot["x"], spot["y"])
              for node in locations for spot in node["map_locations"]}
-    for enemy in checkable_types():
-        placement = pin_placement(enemy.name)
-        cell = cell_position(placement.room, placement.x, placement.y)
+    for name, room, cell in defeat_pins():
         map_locations = []
         for m in MAPS:
-            if placement.room not in m.rooms:
+            if room not in m.rooms:
                 continue
             x, y = pin(m.origin, cell)
             while (m.name, x, y) in taken:
                 x += 1
             taken.add((m.name, x, y))
             map_locations.append({"map": m.name, "x": x, "y": y})
-        locations.append({"name": placement.room,
-                          "sections": [{"name": defeat_location_name(enemy.name)}],
+        locations.append({"name": room, "sections": [{"name": name}],
                           "map_locations": map_locations})
     return maps, locations
 

@@ -8,10 +8,9 @@ and puts each location's pin where its pickup is.
 from __future__ import annotations
 
 from ..data import map_info, pickup_info_collection
-from ..enemy_checks import checkable_types, defeat_location_name, pin_placement
 from ..data.room_info import by_identifier as rooms_by_identifier
 from ..locations import location_name_to_id
-from ..tracker_map import AREA_NAMES, REALM_AREA, ROOM_CELL, cell_position
+from ..tracker_map import AREA_NAMES, REALM_AREA, ROOM_CELL, cell_position, defeat_pins
 
 EDGE_KINDS = {map_info.HIDDEN_DOOR: "hidden", map_info.DOOR: "door", map_info.WALL: "wall"}
 
@@ -60,14 +59,11 @@ def _locations() -> list[dict]:
         locations.append({"id": location_name_to_id[pickup.location_name],
                           "name": pickup.location_name, "room": pickup.room_identifier,
                           "area": pickup.room_identifier[0], "x": round(x, 3), "y": round(y, 3)})
-    # A defeat location is pinned at one placement of its enemy. The page hides it in a seed
+    # A defeat location is pinned where tracker_map.defeat_pins puts it. The page hides it in a seed
     # without it, as it hides any location the seed lacks.
-    for enemy in checkable_types():
-        placement = pin_placement(enemy.name)
-        x, y = cell_position(placement.room, placement.x, placement.y)
-        name = defeat_location_name(enemy.name)
-        locations.append({"id": location_name_to_id[name], "name": name, "room": placement.room,
-                          "area": placement.room[0], "x": round(x, 3), "y": round(y, 3)})
+    for name, room, (x, y) in defeat_pins():
+        locations.append({"id": location_name_to_id[name], "name": name, "room": room,
+                          "area": room[0], "x": round(x, 3), "y": round(y, 3)})
     return locations
 
 
