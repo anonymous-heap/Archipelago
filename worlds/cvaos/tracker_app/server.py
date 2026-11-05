@@ -225,7 +225,7 @@ class TrackerServer:
             await ctx.connect_to(str(request.get("server", "")).strip(),
                                  str(request.get("slot", "")).strip(), request.get("password"))
         elif kind == "disconnect":
-            await ctx.disconnect()
+            await ctx.leave()
         elif kind == "route":
             try:
                 location_id = int(request["location"])

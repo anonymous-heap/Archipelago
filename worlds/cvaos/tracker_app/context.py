@@ -105,6 +105,10 @@ class TrackerContext(CommonContext):
         self.entry_point: tuple[float, float] | None = None  # in map cells
         self.log_tail = LogTail(self.changed)
         logger.addHandler(self.log_tail)
+        # Held while a request connects or disconnects. Connecting first ends the current
+        # connection, which can take a while, so two requests at once (from two pages, or a page
+        # and a launch) could otherwise each open a connection.
+        self._connection_change = asyncio.Lock()
 
     # --- connecting -----------------------------------------------------------------------------
 
@@ -127,15 +131,44 @@ class TrackerContext(CommonContext):
         """Connect to the server at ``address`` and track ``slot_name``, unless shutting down."""
         if self.exit_event.is_set():
             return
-        if slot_name != self.slot_name or not same_address(address, self.room_address or ""):
-            self.route_target = None  # the route was asked for in another AP room or slot
-        self.slot_name = slot_name
-        self.room_address = address
-        self.username = slot_name  # CommonContext reconnects on its own only when this is set
-        self.password = password or None
-        await self.connect(address)
-        # After connect(), since ending the previous connection sets the status to "Not connected".
-        self.set_status(f"Connecting to {address}")
+        async with self._connection_change:
+            if slot_name != self.slot_name or not same_address(address, self.room_address or ""):
+                self.route_target = None  # the route was asked for in another AP room or slot
+            self.slot_name = slot_name
+            self.room_address = address
+            self.username = slot_name  # CommonContext reconnects on its own only when this is set
+            self.password = password or None
+            await self.connect(address)
+            # After connect(), since ending the previous connection sets the status to
+            # "Not connected".
+            self.set_status(f"Connecting to {address}")
+
+    async def leave(self) -> None:
+        """End the connection, as the page's Disconnect button asks."""
+        async with self._connection_change:
+            await self.disconnect()
+
+    async def disconnect(self, allow_autoreconnect: bool = False) -> None:
+        # CommonContext closes the socket only once the connection is open, and then waits for the
+        # connection's task. A connection still opening has no socket to close, so that wait would
+        # last until the connection opened and later closed. It is cancelled instead.
+        if not allow_autoreconnect:
+            self.disconnected_intentionally = True  # so the cancelled task doesn't reconnect
+        await self._cancel_opening_connection()
+        await super().disconnect(allow_autoreconnect)
+
+    async def _cancel_opening_connection(self) -> None:
+        """Cancel the connection's task while the connection is still opening.
+
+        Left running, that task logs in if the connection succeeds, and CommonContext would wait
+        for it until the connection later closed.
+        """
+        task = self.server_task
+        if task is not None and not task.done() and self.server is None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+            self.server_task = None
 
     @property
     def following(self) -> bool:
@@ -202,14 +235,7 @@ class TrackerContext(CommonContext):
         async_start(self.disconnect())
 
     async def shutdown(self) -> None:
-        # CommonContext waits for the connection's task. While a connection is still opening, that
-        # task keeps running and logs in if the connection succeeds, so it is cancelled first.
-        task = self.server_task
-        if task is not None and not task.done() and self.server is None:
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
-            self.server_task = None
+        await self._cancel_opening_connection()
         await super().shutdown()
         self.close()
 

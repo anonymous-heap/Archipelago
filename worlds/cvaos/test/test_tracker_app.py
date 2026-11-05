@@ -481,6 +481,62 @@ class RefusedConnectionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.log_in(None, False), "Enter a slot name to connect")
 
 
+class OpeningConnectionTest(unittest.IsolatedAsyncioTestCase):
+    """Connecting or disconnecting while a connection is still opening, as to a slow server."""
+
+    async def asyncSetUp(self) -> None:
+        self.ctx = TrackerContext(None, None, "Soma")
+        self.addCleanup(self.ctx.close)
+        self.addAsyncCleanup(self.ctx.leave)
+        never = asyncio.Event()
+
+        async def still_opening(ctx, address=None) -> None:
+            await never.wait()
+
+        patcher = mock.patch("CommonClient.server_loop", still_opening)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def live_connections(self) -> list:
+        return [task for task in asyncio.all_tasks()
+                if task.get_name() == "server loop" and not task.done()]
+
+    async def test_disconnecting_ends_it(self):
+        await self.ctx.connect_to("localhost:38281", "Soma", None)
+        opening = self.ctx.server_task
+        await asyncio.wait_for(self.ctx.leave(), timeout=2)
+        self.assertTrue(opening.cancelled())
+        self.assertEqual(self.live_connections(), [])
+        self.assertFalse(self.ctx.will_reconnect)
+
+    async def test_connecting_again_replaces_it(self):
+        await self.ctx.connect_to("localhost:38281", "Soma", None)
+        opening = self.ctx.server_task
+        await asyncio.wait_for(self.ctx.connect_to("localhost:38282", "Soma", None), timeout=2)
+        self.assertTrue(opening.cancelled())
+        self.assertEqual(self.live_connections(), [self.ctx.server_task])
+
+    async def test_two_requests_while_a_connection_closes_open_one_connection(self):
+        # Closing an open connection takes a moment. Both requests wait for it, and only one of
+        # them may then open a connection.
+        closed = asyncio.Event()
+
+        async def close() -> None:
+            await asyncio.sleep(0.05)
+            closed.set()
+
+        async def open_connection() -> None:
+            await closed.wait()
+            self.ctx.server = None  # as connection_closed() does once the socket closes
+
+        self.ctx.server = SimpleNamespace(socket=SimpleNamespace(closed=False, close=close))
+        self.ctx.server_task = asyncio.create_task(open_connection())
+        await asyncio.wait_for(asyncio.gather(
+            self.ctx.connect_to("localhost:38281", "Soma", None),
+            self.ctx.connect_to("localhost:38282", "Soma", None)), timeout=2)
+        self.assertEqual(self.live_connections(), [self.ctx.server_task])
+
+
 def following():
     """Make ``tracking`` true, as for a tracker that has rebuilt its slot's seed."""
     return mock.patch.object(TrackerContext, "tracking", new_callable=mock.PropertyMock,
