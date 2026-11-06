@@ -65,7 +65,7 @@ MAX_ITEMS_PER_TICK = 10
 
 
 class CVAOSClientLogic:
-    """Per-session state + the per-tick game logic, shared by every transport."""
+    """Per-session state and per-tick game logic, shared by both clients."""
 
     # Per-session state, (re)initialized in _reset_session_state.
     death_causes: list[str]
@@ -91,7 +91,8 @@ class CVAOSClientLogic:
         # None until the first tick reads the game.
         if not same_seed:
             self.currently_dead = None
-        # AP's timestamp on the death we last sent, so the bounce handler can recognize our own echo.
+        # AP's timestamp on the death we last sent, so the bounce handler can recognize that death
+        # when the server bounces it back.
         self.time_of_sent_death = None
         # Goal: latched True once we've reported completion, so we report it only once.
         self.goaled = False
@@ -122,35 +123,37 @@ class CVAOSClientLogic:
             self.death_causes = [data.get("cause") or f"{source} killed you without a word!"]
 
     async def _tick(self, ctx: "CommonContext", ram: AoSRAM) -> None:
-        # Per-tick orchestrator: read the run state, relay DeathLink every tick, and run the
-        # in-gameplay-only concerns (checks, tracker data, items, goal) when it is safe to read &
-        # write game memory.
+        # Read the run state and relay DeathLink every tick. The work that needs normal gameplay
+        # (checks, tracker data, items, goal) runs only when it is safe to read and write game
+        # memory.
         game_state, menu_state = await ram.get_run_state()
         in_gameplay = (game_state == addr.GameState.INGAME
                        and menu_state == addr.MENU_STATE_NORMAL)
-        # DeathLink must run even when NOT in gameplay: a death is, by definition, the game
-        # leaving normal gameplay (the death fade, then the game-over screen). Gating it behind
-        # is_in_gameplay() was the bug -- it could only catch the ~1-frame window where HP hit 0
-        # while still in normal play, which a 0.125s poll almost always skipped. The relay reads
-        # the run state again itself, in the same request as HP and the kill-request flag.
+        # DeathLink runs even outside normal gameplay, because a death takes the game out of it
+        # (the death fade, then the game-over screen). Within normal play, HP is 0 for only about
+        # one frame, so a 0.125s poll limited to normal play would almost always miss the death.
+        # The relay reads the run state again itself, in the same request as HP and the
+        # kill-request flag.
         await self._relay_deathlink(ctx, ram)
-        # RAM state to keep forced while a game is loaded (any in-game sub-state, so it is set
-        # before room transitions load entities). The game writes these only at
-        # new-game/mode-select/completion, so a per-tick poke holds without fighting it.
+        # Keep these values forced in any in-game sub-state, so they are already set when a room
+        # transition loads its entities. The game writes them only at new game, mode select and
+        # completion, so writing them each tick keeps them set.
         if game_state == addr.GameState.INGAME:
             # Mark every randomized ROM as cleared-data so cutscenes are Start-skippable.
             await ram.ensure_game_cleared()
             # Hard Mode: force the difficulty nibble so HARD_PICKUP entities spawn.
             if ctx.slot_data.get("hard_mode"):
                 await ram.ensure_hard_mode()
-        # Reading checks / injecting items is only safe in normal in-room gameplay (not paused,
-        # transitioning, in a menu, dying, or game-over), so we never read garbage or write at
-        # an unsafe time. Normal gameplay is not quite enough on its own: the pickup flags, the
-        # inventory and the received-counter all live in the save-data block, and that block reads
-        # as zeros while a file is still loading, with GAME_STATE and MENU_STATE already reporting
-        # normal play (seen live). A grant made then lands in memory the load is about to
-        # overwrite; if the load wins the counter write, the item is handed out again next tick.
-        # Max HP sits in the same block and is never 0 for a loaded file, so it tells the two apart.
+        # Reading checks and granting items is safe only in normal in-room gameplay (not paused,
+        # transitioning, in a menu, dying, or at game over), so we never read garbage or write at
+        # an unsafe time.
+        #
+        # Normal gameplay is not quite enough on its own. The pickup flags, the inventory and the
+        # received-counter all live in the save-data block, which reads as zeros while a file is
+        # still loading, even though GAME_STATE and MENU_STATE already report normal play
+        # (observed live). A grant made then lands in memory the load is about to overwrite. If
+        # the load overwrites the advanced counter, the item is given again next tick. Max HP sits
+        # in the same block and is never 0 for a loaded file, so it tells the two apart.
         if in_gameplay and await ram.get_max_hp() > 0:
             await self._send_location_checks(ctx, ram)
             await self._report_position(ctx, ram)
@@ -222,10 +225,11 @@ class CVAOSClientLogic:
 
         # Collecting another world's pickup grants Soma a junk Skull Key (rom/patch.py
         # _AP_PLACEHOLDER). AoS caps consumables at 9 and stops allowing pickups past the cap, so a
-        # hoard of Skull Keys could stall pickup detection -- and stall sending out other worlds'
-        # items. Knock the count back down each tick so there's always room for the next pickup.
-        # With the Skull Key Warp option on, also floor it at 1 so the warp item is always available
-        # (the cap clamps from above, the floor from below -- they never fight).
+        # hoard of Skull Keys could stall pickup detection, and with it the sending of other
+        # worlds' items. Lowering the count each tick leaves room for the next pickup. With the
+        # Skull Key Warp option on, the count is also kept at 1 or more, so the warp item is always
+        # available. The cap only lowers the count and the floor only raises it, so they never
+        # conflict.
         await ram.cap_skull_keys(floor=1 if ctx.slot_data.get("skull_key_warp") else 0)
 
     async def _receive_items(self, ctx: "CommonContext", ram: AoSRAM) -> None:
@@ -316,15 +320,17 @@ class CVAOSClientLogic:
         return [item for item in items if item.location != STARTING_LOCATION]
 
     async def _relay_deathlink(self, ctx: "CommonContext", ram: AoSRAM) -> None:
-        # DeathLink: enable from slot_data, broadcast Soma's death the moment the engine enters its
-        # death sub-state or the game-over screen, apply an incoming death by asking the ROM hook to
-        # run the real death routine (request_kill) during gameplay, and re-arm once Soma is alive.
+        # DeathLink: follow the setting in slot_data, and broadcast Soma's death as soon as the
+        # game enters its death sub-state or the game-over screen. Apply an incoming death during
+        # gameplay by asking the ROM hook to run the real death routine (request_kill). Once Soma
+        # is alive again, re-arm.
         #
-        # We key off the death STATE, not HP==0: every death (combat, spikes, overkill laser) routes
-        # through one damage routine that clamps HP to exactly 0 and then the player-death handler
-        # sets MENU_STATE=2 the same frame, holding it through the multi-frame fade before GAME_STATE
-        # flips to GAME_OVER. That state persists for many frames, so a 0.125s poll reliably sees it;
-        # the old HP==0-during-normal-gameplay test only had a ~1-frame window and usually missed it.
+        # Detection reads the death STATE, not HP == 0. Every death from damage (combat, spikes, an
+        # overkill laser) goes through one damage routine that clamps HP to exactly 0. In the same
+        # frame, the player-death handler sets MENU_STATE to 2, and MENU_STATE keeps that value
+        # through the multi-frame fade until GAME_STATE changes to GAME_OVER. That state lasts many
+        # frames, so a 0.125s poll reliably sees it, while HP == 0 lasts about one frame in normal
+        # gameplay.
         from CommonClient import logger
 
         # Follow the seed's DeathLink setting. update_death_link adds or removes the "DeathLink"
@@ -359,10 +365,11 @@ class CVAOSClientLogic:
             if self.currently_dead:
                 self.death_causes.clear()
 
-        # Re-arm first: once Soma is alive again in normal play and no kill is still pending, clear the
-        # latch so the next death in either direction is detected. The pending-kill guard covers the
-        # frames between requesting an incoming death and the ROM hook running it (state still NORMAL,
-        # flag still set), so we don't re-arm and then immediately re-broadcast that same death.
+        # Re-arm first: once Soma is alive again in normal play and no kill is still pending, clear
+        # the latch so the next death in either direction is detected. The pending-kill guard
+        # covers the frames between requesting an incoming death and the ROM hook running it
+        # (state still NORMAL, flag still set), so we don't re-arm and then immediately
+        # re-broadcast that same death.
         if self.currently_dead and in_gameplay and current_hp > 0 and not kill_request:
             self.currently_dead = False
 
@@ -379,13 +386,15 @@ class CVAOSClientLogic:
             self.currently_dead = True
             self.death_causes.clear()
             await ctx.send_death(f"{ctx.player_names[ctx.slot]} was slain. Dracula has won!")
-            # Record AP's timestamp so the bounce handler can filter our own echo (overwritten later).
+            # Record AP's timestamp so the bounce handler can skip the echo of this death. It is
+            # copied because ctx.last_death_link changes when another world's death arrives.
             self.time_of_sent_death = ctx.last_death_link
 
         if self.death_causes and not self.currently_dead and in_gameplay:
-            # Apply an incoming death (the bounce handler queued the cause). Only while in normal
-            # gameplay -- requesting the kill during the fade/menu is unsafe. The currently_dead gate
-            # keeps us from re-killing Soma (and from re-broadcasting) for a death already in progress.
+            # Apply an incoming death, whose cause the bounce handler queued. This happens only in
+            # normal gameplay, because requesting the kill during the fade or a menu is unsafe. The
+            # currently_dead check keeps us from killing Soma again, or re-broadcasting, for a
+            # death already in progress.
             cause = self.death_causes.pop(0)
             await ram.request_kill()
             self.currently_dead = True
@@ -395,9 +404,10 @@ class CVAOSClientLogic:
         """
         Report seed completion when the player wins their chosen Goal.
 
-        graham: Graham defeated (BOSS_FLAGS & 0x01)
-        chaos: Chaos (phase 2) defeated (GLOBAL_FLAGS & 0x4000 due to nonpersistence
-          of the Chaos phase 2 bit BOSS_FLAGS & 0x80).
+        The graham goal is won once Graham is defeated (``BOSS_FLAGS & 0x01``). The chaos goal is
+        won once Chaos's second phase is defeated, which the client reads from the good-ending
+        flag (``GLOBAL_FLAGS & 0x4000``). The Chaos phase 2 bit (``BOSS_FLAGS & 0x80``) does not
+        persist, so it cannot be used.
         """
         from CommonClient import logger
 

@@ -2,49 +2,49 @@
 Steam Advance Collection client for Castlevania: Aria of Sorrow.
 
 The Castlevania Advance Collection (Steam AppID 1552550, developer M2) runs AoS inside
-M2's proprietary emulator with no connector of any kind, so this client attaches to the
-``game.exe`` process directly (pymem / ReadProcessMemory) and backs the ``RamBackend``
-primitives with raw process-memory access. Everything game-side is the same
-``client_logic.CVAOSClientLogic`` brain the BizHawk client uses; only the transport
-differs.
+M2's proprietary emulator, which has no connector of any kind. This client therefore attaches
+to the ``game.exe`` process directly (pymem / ReadProcessMemory) and implements the
+``RamBackend`` primitives with raw process-memory reads and writes. The game logic is the same
+``client_logic.CVAOSClientLogic`` that the BizHawk client uses; only the transport differs.
 
-Anchoring (finding the emulated GBA memory inside game.exe's address space). This was
-tuned against the live process:
+Anchoring means finding the emulated GBA memory inside game.exe's address space. Both steps
+below rely on layouts observed on the live process.
 
-* ROM image: located by validating a real GBA header -- the "CASTLEVANIA2" title at +0xA0
-  backed by the Nintendo logo at +0x04 and the "A2CE" game code at +0xAC. That uniquely
-  picks the one true ROM out of the ~188 stray copies of the title string in memory.
+* ROM image: located by validating a real GBA header. The "CASTLEVANIA2" title at +0xA0 must
+  be backed by the Nintendo logo at +0x04 and the "A2CE" game code at +0xAC, which tells the
+  ROM apart from the many stray copies of the title string in memory. The ROM sits in its own
+  committed private-RW region. When the US Aria of Sorrow is absent, the same scan recognizes
+  the collection's other eight GBA ROMs by their game codes, so the error message can name the
+  game or region that is loaded instead.
+
   We then read ARCHIPELAGO_IDENTIFIER at ROM+0x670000 to confirm that the ROM is patched by a
   compatible version. Without the identifier the ROM is unpatched, and the error points at the
-  ROM installer. A different version suffix means a seed from another apworld version. The
-  ROM sits in its own committed private-RW region. When the US Aria of Sorrow is absent, the
-  same scan recognizes the collection's other eight GBA ROMs by their game codes, so the error
-  message can name the game or region that is loaded instead.
-* EWRAM: M2 heap-allocates the emulated GBA memory (no static pointer to it exists in
-  game.exe). The emulator's allocator prefixes every block with a header whose ``next`` and
-  ``prev`` words link the blocks, and the GBA-memory object is allocated right before the
-  ROM buffer, so the ROM block's ``prev`` names the GBA-memory block and EWRAM sits 0x170
-  into it. The link is checked in both directions and both block sizes must equal their
-  committed regions; this works from any screen, menus included. Failing that layout, we
-  identify the live 256 KiB EWRAM by a strong in-game content signature:
-  GAME_STATE==INGAME and MENU_STATE==NORMAL, self-consistent vitals (1<=HP<=MaxHP<=2000,
-  MP<=MaxMP), a sane area id and gold, and every consumable count 0..9 -- all holding at
-  the exact EWRAM offsets simultaneously. Live testing showed this resolves to exactly one
-  block once the ROM region is excluded (ROM data can coincidentally match). The emulator's
-  GBA-memory struct places EWRAM 0x170 into its host allocation, so we check region_base +
-  0x170 first (near-instant) and fall back to a full 0x10-stride scan only if that misses.
-  Because the signature requires normal gameplay, discovery only succeeds while the player
-  is in a room -- which is also the only time the client acts, so it simply waits otherwise.
-  If more than one block matches (the collection's rewind buffer can hold flat snapshots),
-  the live one is the block whose low memory mutates between two reads; snapshots are frozen.
-  The content signature alone is not proof: on the live process, frozen look-alike buffers
-  (HP 3/3, every count 3) pass it while the player sits in a menu, so a match is accepted
-  only if it is struct-aligned or its low memory moves.
+  ROM installer. A different version suffix means a seed from another apworld version.
+* EWRAM: M2 heap-allocates the emulated GBA memory, and no static pointer to it exists in
+  game.exe. The emulator's allocator prefixes every block with a header whose ``next`` and
+  ``prev`` words link the blocks. The GBA-memory object is allocated right before the ROM
+  buffer, so the ROM block's ``prev`` points to the GBA-memory block, and EWRAM sits 0x170
+  into it. The link is checked in both directions, and each block's recorded size must equal
+  the size of its committed region. This works from any screen, menus included.
 
-Failure handling: every pymem/OS error is wrapped in ``CollectionError``; the watcher
-drops to "detached", keeps the AP connection up, and re-attaches/re-anchors on a 5 s
-cadence (the anchor is also revalidated every couple of seconds, because switching games
-inside the collection or resetting can silently reallocate the emulated memory).
+  When that layout is not found, we identify the live 256 KiB EWRAM by an in-game content
+  signature. All of these must hold at the exact EWRAM offsets at once: GAME_STATE==INGAME
+  and MENU_STATE==NORMAL, self-consistent vitals (1<=HP<=MaxHP<=2000, MP<=MaxMP), a sane area
+  id and gold, and every consumable count 0..9. The ROM's own region is skipped, because ROM
+  data can match by chance. We check region_base + 0x170 first, where the GBA-memory struct
+  puts EWRAM, and fall back to a full 0x10-stride scan only if nothing matches there.
+
+  The signature requires normal gameplay, so this fallback succeeds only while the player is
+  in a room, and the client keeps retrying until then. The signature can also match more than
+  one block. The collection's rewind buffer can hold flat snapshots, and on the live process,
+  frozen look-alike buffers (HP 3/3, every count 3) pass the signature while the player sits
+  in a menu. Snapshots and look-alikes are frozen, so a match is accepted only if it is
+  struct-aligned or its low memory changes between two reads.
+
+Failure handling: every pymem or OS error is wrapped in ``CollectionError``. The watcher then
+drops to "detached" and keeps the AP connection up, and it tries to re-attach and re-anchor
+every 5 s. While attached, it also revalidates the ROM anchor every 2 s, because switching games
+inside the collection or resetting can silently reallocate the emulated memory.
 """
 from __future__ import annotations
 
@@ -79,9 +79,9 @@ ROM_TITLE = b"CASTLEVANIA2"
 
 # The patched ROM carries ARCHIPELAGO_IDENTIFIER at ROM+ARCHIPELAGO_IDENTIFIER_START. The
 # collection client requires a patched ROM, so once the ROM image is located by its header
-# we read the marker there to confirm patched/version.
+# we read the marker there to confirm that the ROM is patched, and by which version.
 _IDENTIFIER_BYTES = ARCHIPELAGO_IDENTIFIER.encode("ascii")
-_IDENTIFIER_PREFIX = _IDENTIFIER_BYTES[:9]  # b"CVAOS_AP_" -- shared across patch versions
+_IDENTIFIER_PREFIX = _IDENTIFIER_BYTES[:9]  # b"CVAOS_AP_", shared across patch versions
 _COMPATIBLE_BYTES = frozenset(ident.encode("ascii") for ident in COMPATIBLE_IDENTIFIERS)
 
 # GBA ROM header validation: the fixed Nintendo logo starts at ROM+0x04, and Aria of Sorrow
@@ -163,11 +163,15 @@ ERROR_BACKOFF_SECONDS = 5.0  # pause after an unexpected tick error before ticki
 
 
 class CollectionError(Exception):
-    """Transport failure talking to game.exe (process gone, read/write refused, anchor lost)."""
+    """Failure to attach to game.exe, to anchor the game's memory in it, or to access that memory.
+
+    The causes include a collection that is not running, a wrong or unpatched ROM, a game that is
+    not in normal gameplay yet, and a failed read or write. The client logs the message for the
+    player and tries again later."""
 
 
 # ---------------------------------------------------------------------------
-# Win32 region enumeration (VirtualQueryEx) -- the one piece pymem doesn't wrap nicely.
+# Win32 region enumeration (VirtualQueryEx), the one piece pymem doesn't wrap nicely.
 # ---------------------------------------------------------------------------
 
 class _Region(NamedTuple):
@@ -186,7 +190,7 @@ class _Region(NamedTuple):
 
     @property
     def writable_private(self) -> bool:
-        # MEM_PRIVATE committed RW -- where a heap-allocated EWRAM buffer must live.
+        # MEM_PRIVATE committed RW, which is where a heap-allocated EWRAM buffer must live.
         return (self.state == 0x1000 and self.mem_type == 0x20000
                 and not self.protect & 0x100 and bool(self.protect & (0x04 | 0x40)))
 
@@ -205,7 +209,9 @@ class _MEMORY_BASIC_INFORMATION(ctypes.Structure):
 
 
 def _iter_regions(process_handle: int):
-    """Walk the target's committed regions. game.exe is 32-bit, so user space ends < 4 GiB."""
+    """Yield every memory region of the target process, whatever its state.
+
+    The walk stops at 4 GiB, because game.exe is a 32-bit process."""
     kernel32 = ctypes.windll.kernel32
     mbi = _MEMORY_BASIC_INFORMATION()
     address = 0
@@ -230,8 +236,10 @@ def _main_module_path(process_handle: int) -> str:
 # ---------------------------------------------------------------------------
 
 class GameProcess:
-    """One attached game.exe: raw reads/writes plus region enumeration, all errors
-    normalized to ``CollectionError``."""
+    """An attached game.exe process.
+
+    It reads and writes raw memory and lists the process's memory regions. Attach, read, and
+    write failures are raised as ``CollectionError``."""
 
     def __init__(self, pm: "pymem.Pymem", exe_path: str) -> None:
         self.pm = pm
@@ -301,9 +309,9 @@ class RomImage(NamedTuple):
 def collection_roms_in(buf: bytes, region_base: int) -> list[tuple[int, bytes]]:
     """Return the host address and game code of every collection ROM header in ``buf``.
 
-    A header counts only when the Nintendo logo, a game code from
-    :data:`COLLECTION_GBA_ROMS`, and that code's title all sit at their header offsets.
-    Pure/testable.
+    ``region_base`` is the host address of ``buf[0]``. A header counts only when the start of
+    the Nintendo logo, a game code from :data:`COLLECTION_GBA_ROMS`, and that code's title all
+    sit at their header offsets.
     """
     found = []
     idx = buf.find(_ROM_LOGO_PREFIX)
@@ -364,8 +372,9 @@ def find_rom_image(proc: GameProcess) -> RomImage:
             # is not named in the error.
             others.update(code for base, code in roms if base == region.base + _ALLOC_HEADER)
             continue
-        # Found the one true ROM image. Confirm it carries our patch (the client can only
-        # play a patched ROM: it reads the identifier/auth and the game data expects the hooks).
+        # This region holds the US Aria of Sorrow. The client can only play a patched ROM,
+        # because it reads the identifier and auth from the ROM, and its game logic relies on
+        # the patch's hooks.
         marker = proc.read(rom_base + ARCHIPELAGO_IDENTIFIER_START, len(_IDENTIFIER_BYTES))
         if marker in _COMPATIBLE_BYTES:
             return RomImage(rom_base, region.base, region.base + region.size)
@@ -383,9 +392,12 @@ def find_rom_image(proc: GameProcess) -> RomImage:
 
 
 def ewram_signature_ok(buf: bytes, off: int) -> bool:
-    """True if ``buf`` at ``off`` looks like live AoS EWRAM in normal gameplay: the exact
-    in-room state plus self-consistent vitals, sane area/gold, and valid inventory counts.
-    Pure/testable; the load-bearing discriminator for EWRAM discovery (see module docstring)."""
+    """Return whether ``buf`` at ``off`` looks like live AoS EWRAM during normal gameplay.
+
+    The game and menu states must show the player in a room. HP and MP must be within their
+    maximums, the area id and gold must be in range, and every consumable count must be at
+    most 9. EWRAM discovery falls back to this check when the allocation links fail (see the
+    module docstring)."""
     if off < 0 or off + _SIG_SPAN > len(buf):
         return False
     if buf[off + _GAME_STATE] != int(addr.GameState.INGAME):
@@ -412,8 +424,10 @@ def ewram_signature_ok(buf: bytes, off: int) -> bool:
 
 
 def _ewram_scan_regions(proc: GameProcess, rom: RomImage):
-    """Private-RW regions big enough to hold EWRAM, excluding the ROM's own region (ROM data
-    can coincidentally satisfy the signature)."""
+    """Yield the private read-write regions big enough to hold EWRAM.
+
+    Regions that overlap the ROM's own region are skipped, because ROM data can satisfy the
+    signature by chance."""
     for region in proc.regions():
         if not region.writable_private or region.size < EWRAM_SIZE:
             continue
@@ -427,11 +441,14 @@ def _u32(data: bytes, offset: int) -> int:
 
 
 def ewram_via_allocation_links(proc: GameProcess, rom: RomImage) -> int | None:
-    """EWRAM base read off the emulator's allocation list, or None if the layout differs.
+    """Return the EWRAM base found through the emulator's allocation list, or None.
 
-    The ROM block's ``prev`` must name a private-RW region that starts exactly there, links
-    back to the ROM block, and whose recorded size equals the region's size; only then is
-    EWRAM taken ``_EWRAM_STRUCT_OFFSET`` into it. Independent of what the game is showing.
+    The ROM's block must start its region and record that region's size. Its ``prev`` link
+    must point to the start of a private read-write region whose block links back to the ROM
+    block and records its own region's size. EWRAM is then ``_EWRAM_STRUCT_OFFSET`` bytes into
+    that block. None means the layout differs or a read failed.
+
+    This works whatever the game is showing.
     """
     block = rom.base - _ALLOC_HEADER
     if block != rom.region_start:
@@ -454,10 +471,16 @@ def ewram_via_allocation_links(proc: GameProcess, rom: RomImage) -> int | None:
 
 
 def find_ewram_base(proc: GameProcess, rom: RomImage) -> int:
-    """Locate live AoS EWRAM. The allocation links settle it from any screen; otherwise the
-    content signature is tried at the emulator's struct offset (0x170) in each candidate
-    region, then by a full 0x10-stride scan. Excludes the ROM region. Multiple signature hits
-    (rewind snapshots, look-alike buffers) are settled by alignment and frame mutation."""
+    """Return the host address of the running game's EWRAM.
+
+    The allocation links are tried first, and they work from any screen. When they fail, the
+    content signature is checked at the emulator's struct offset (0x170) in each candidate
+    region outside the ROM's. A full 0x10-stride scan of those regions runs only if nothing
+    matches there.
+
+    Rewind snapshots and look-alike buffers can also match, so :func:`_live_candidates` picks
+    among the matches by alignment and by whether their memory changes. Raise CollectionError
+    when no match is left."""
     linked = ewram_via_allocation_links(proc, rom)
     if linked is not None:
         return linked
@@ -474,7 +497,8 @@ def find_ewram_base(proc: GameProcess, rom: RomImage) -> int:
             candidates.append(region.base + _EWRAM_STRUCT_OFFSET)
 
     if not candidates:
-        # Struct offset didn't match (unexpected build/state) -- full stride scan.
+        # Nothing matched at the struct offset (an unexpected build or state), so scan every
+        # region in 0x10-byte steps.
         for region in regions:
             try:
                 buf = proc.read(region.base, region.size)
@@ -503,13 +527,16 @@ def _is_struct_aligned(candidate: int) -> bool:
 
 
 def _live_candidates(proc: GameProcess, candidates: list[int]) -> list[int]:
-    """The candidates that can be the running game's EWRAM, most likely first.
+    """Return the candidates that can be the running game's EWRAM, most likely first.
 
-    A lone struct-aligned match is taken as-is. Otherwise each candidate's low memory is read
-    twice a few frames apart: the live buffer mutates every frame during play, while rewind
-    snapshots and look-alike buffers are frozen. Order: aligned and moving, then moving, then
-    aligned but frozen (a paused game). Frozen unaligned matches are dropped; on the real
-    process such blocks pass the content signature and would anchor the client on garbage.
+    A lone struct-aligned match is returned as is. Otherwise each candidate's low memory is
+    read twice, a few frames apart. The live buffer changes every frame during play, while
+    rewind snapshots and look-alike buffers are frozen.
+
+    Aligned candidates that changed come first, then unaligned ones that changed, then aligned
+    ones that did not (a paused game). Unaligned candidates that did not change are dropped,
+    because on the real process such blocks pass the content signature without being the
+    game's memory.
     """
     aligned = [c for c in candidates if _is_struct_aligned(c)]
     if len(candidates) == 1 and aligned:
@@ -541,8 +568,9 @@ class CollectionBackend:
     """``RamBackend`` implementation over an anchored game.exe.
 
     ``guarded_write`` and ``guarded_write_many`` read, compare, then write. Unlike BizHawk's
-    frame-atomic versions, they leave a small race window between the compare and the write. The
-    callers' retry-next-tick contract accepts that window (see ram/backend.py)."""
+    frame-atomic versions, they leave a small race window between the compare and the write.
+    Callers retry a failed guard on the next tick, and that retry contract (see ram/backend.py)
+    tolerates the window."""
 
     def __init__(self, proc: GameProcess, rom_base: int, ewram_base: int) -> None:
         self.proc = proc
@@ -634,8 +662,8 @@ class CVAOSCollectionContext(CommonContext):
             logger.info("Awaiting attach to the Advance Collection before authenticating.")
             return
         if self.auth is None:
-            # Same contract as the BizHawk client's set_auth: the 16 auth bytes the patch
-            # baked into ROM free space, registered server-side under connect_names.
+            # As in the BizHawk client's set_auth, the auth is the 16 bytes the patch writes into
+            # ROM free space. The world registers the same value under connect_names.
             auth_raw = self.backend.proc.read(self.backend.rom_base + AUTH_NUMBER_START, 16)
             self.auth = base64.b64encode(auth_raw).decode("ascii")
         # A seed with enemy checks also asks for this player's own items, as the BizHawk Client does.
@@ -688,7 +716,9 @@ class CVAOSCollectionContext(CommonContext):
         self.auth = None
 
     def try_attach(self) -> None:
-        """One attach+anchor attempt, rate-limited; safe to call every tick."""
+        """Try to attach to game.exe and anchor its memory, at most once per retry interval.
+
+        A call inside the interval returns at once, so this is safe to call every tick."""
         now = time.monotonic()
         if now - self._last_attach_attempt < ATTACH_RETRY_SECONDS:
             return
@@ -730,9 +760,11 @@ class CVAOSCollectionContext(CommonContext):
                 Utils.async_start(self.disconnect(allow_autoreconnect=True))
 
     def revalidate_anchor(self) -> None:
-        """Cheap periodic check that the anchored ROM is still ours -- switching games in
-        the collection or resetting can reallocate the emulated memory without killing
-        the process."""
+        """Check that the anchored ROM still carries a compatible identifier.
+
+        The check runs at most once per revalidation interval. It is needed because switching
+        games in the collection, or resetting, can reallocate the emulated memory while the
+        process keeps running. Raise CollectionError when the identifier is gone."""
         now = time.monotonic()
         if self.backend is None or now - self._last_revalidate < REVALIDATE_SECONDS:
             return
@@ -752,8 +784,9 @@ async def _watcher(ctx: CVAOSCollectionContext) -> None:
                 if ctx.backend is None:
                     continue
             ctx.revalidate_anchor()
-            # Kick authentication once both sides are up (mirrors the BizHawk watcher:
-            # server_auth bails while unattached, so it must be retried after attach).
+            # Start authentication once both the game and the server are connected, as the
+            # BizHawk watcher does. server_auth returns early while the game is not attached, so
+            # it has to be retried after attach.
             if ctx.server is not None and not ctx.server.socket.closed:
                 if ctx.slot is None and ctx.auth is None:
                     Utils.async_start(ctx.server_auth(ctx.password_requested))

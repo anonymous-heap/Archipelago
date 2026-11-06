@@ -38,8 +38,8 @@ class SoulPair(Struct, endian="little", bit_order="lsb"):
     """
     One byte of a nibble-packed soul array: two owned-counts per byte.
 
-    ``even`` is the low nibble (the even-indexed soul) and ``odd`` the high nibble. That is the
-    packing rule stated once as a declaration, so no call site shifts and masks.
+    ``even`` is the low nibble (the even-indexed soul) and ``odd`` the high nibble. Declaring
+    the nibbles as fields keeps the shifting and masking out of every call site.
     """
 
     even: u4

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Pure-Python (stdlib-only) tools for the M2 archive format used by the Steam
-release of Castlevania Advance Collection (``windata/alldata.bin`` +
-``windata/alldata.psb.m``).
+"""Read and rebuild the M2 archive of the Steam Castlevania Advance Collection.
+
+The archive is two files, ``windata/alldata.bin`` and ``windata/alldata.psb.m``.
+This module uses only the standard library, and it also runs as a plain script.
 
 This is an independent, from-scratch implementation of the file format.  The
 format itself (MDF container, MT19937-keyed XOR, PSB v3 document) was studied
@@ -14,14 +15,17 @@ Format summary
 MDF container (files with a ``.m`` suffix)
     ``b"mdf\\0"`` + u32-LE decompressed size + a zlib stream.  Every byte of
     the zlib stream (i.e. everything after the 8-byte header) is XOR'd with a
-    repeating 64-byte keystream.  The keystream is derived from
-    ``MD5(seed + basename_of_file_lowercased)`` (the basename *includes* the
-    ``.m`` suffix): the 16-byte digest is split into four little-endian u32
-    words used with MT19937 ``init_by_array``; keystream bytes are successive
-    ``genrand_uint32`` outputs packed little-endian.  The seed string for this
-    collection is ``"25G/xpvTbsb+6"``.  The original files were deflated with
-    standard zlib at level 9 (default memLevel/strategy), which this module
-    reproduces byte-exactly.
+    repeating 64-byte keystream.
+
+    The keystream comes from ``MD5(seed + name)``, where *name* is the file's
+    basename, lowercased and *including* the ``.m`` suffix.  The 16-byte
+    digest is split into four little-endian u32 words, which seed MT19937
+    through ``init_by_array``.  Successive ``genrand_uint32`` outputs, packed
+    little-endian, form the keystream.  The seed string for this collection is
+    ``"25G/xpvTbsb+6"``.
+
+    The original files were deflated with standard zlib at level 9 (default
+    memLevel and strategy), and this module reproduces them byte-exactly.
 
 alldata.bin
     Plain concatenation of member blobs, each starting at a 2048-byte-aligned
@@ -173,7 +177,7 @@ def _xor_keystream(data: bytes, key: bytes) -> bytes:
 
 def mdf_decrypt(filename: str, data: bytes, seed: str = DEFAULT_SEED,
                 key_length: int = DEFAULT_KEY_LENGTH) -> bytes:
-    """Decrypt + inflate an MDF container; returns the plain content."""
+    """Decrypt and inflate an MDF container, and return its plain content."""
     if data[:4] != MDF_MAGIC:
         raise ValueError(f"{filename!r}: not an MDF container (magic {data[:4]!r})")
     (expected_len,) = struct.unpack_from("<I", data, 4)
@@ -188,7 +192,7 @@ def mdf_decrypt(filename: str, data: bytes, seed: str = DEFAULT_SEED,
 
 def mdf_encrypt(filename: str, data: bytes, seed: str = DEFAULT_SEED,
                 key_length: int = DEFAULT_KEY_LENGTH, level: int = ZLIB_LEVEL) -> bytes:
-    """Deflate + encrypt plain content into an MDF container."""
+    """Deflate and encrypt plain content into an MDF container."""
     stream = zlib.compress(data, level)
     key = derive_keystream(filename, seed, key_length)
     return MDF_MAGIC + struct.pack("<I", len(data)) + _xor_keystream(stream, key)
@@ -360,8 +364,12 @@ class _TrieNode:
 
 
 class _KeyNameTrie:
-    """Builds the PSB key-name trie and packs node indexes the same way the
-    game's original index is packed (compact first-fit range allocation)."""
+    """The PSB key-name trie, packed the same way as the game's original index.
+
+    The child of node ``i`` for byte ``c`` is at index ``value_offsets[i] + c``,
+    and ``tree`` maps each node to its parent.  Each node's children are placed
+    together at the first base index where all of their slots are free, which
+    reproduces the original packing."""
 
     def __init__(self, names):
         self.names = sorted(set(names), key=_ordinal_key)
@@ -649,11 +657,13 @@ def psb_write(root, version: int = 3) -> bytes:
 
 
 def load_index(psb_m_path: str, index_key_name: str | None = None):
-    """Decrypt/parse ``alldata.psb.m``; returns the root object (a dict).
+    """Decrypt and parse an archive index such as ``alldata.psb.m``, and return its root dict.
 
-    *index_key_name* names the file for key derivation when it is not stored
-    under the name the game knows it by. The default is the file's own
-    basename, with an installer backup's ``.apbackup`` suffix removed."""
+    *index_key_name* is the name the key is derived from.  Pass it when the
+    file is stored under a different name from the one the game loads.  The
+    default is the file's own basename, with an installer backup's
+    ``.apbackup`` suffix removed.  An index that is not MDF-wrapped is parsed
+    as plain PSB."""
     with open(psb_m_path, "rb") as f:
         data = f.read()
     if data[:4] == MDF_MAGIC:
@@ -685,9 +695,11 @@ def _resolve_member(file_info: dict, member_name: str) -> str:
 
 def extract_member(psb_m_path: str, bin_path: str, member_name: str,
                    raw: bool = False, index_key_name: str | None = None) -> bytes:
-    """Extract one member; returns decoded plain bytes (or the stored blob if
-    *raw* is true or the member is not MDF-wrapped).  *index_key_name* is
-    passed to :func:`load_index`."""
+    """Extract one member and return its bytes.
+
+    An MDF-wrapped member is decrypted and inflated.  With ``raw=True``, or
+    when the member is not MDF-wrapped, the stored blob is returned as is.
+    *index_key_name* is passed to :func:`load_index`."""
     fi = load_index(psb_m_path, index_key_name)["file_info"]
     name = _resolve_member(fi, member_name)
     off, size = fi[name]
@@ -703,9 +715,9 @@ def extract_member(psb_m_path: str, bin_path: str, member_name: str,
 
 def unpack(psb_m_path: str, bin_path: str, out_dir: str, members=None,
            raw: bool = False, verbose: bool = False):
-    """Extract all (or *members*) entries from the archive into *out_dir*.
+    """Extract the archive's members into *out_dir*, or only those named in *members*.
 
-    By default MDF-wrapped members (``*.m``) are decrypted+inflated and
+    By default MDF-wrapped members (``*.m``) are decrypted and inflated, then
     written without the ``.m`` suffix; other members are copied as stored.
     With ``raw=True`` every member is written as stored, keeping its name.
     Returns the list of file paths written.
@@ -749,16 +761,19 @@ def replace_member(alldata_psb_m: str, alldata_bin: str, member_name: str,
                    index_key_name: str = "alldata.psb.m") -> None:
     """Rebuild the archive with one member replaced.
 
-    Every other member's stored bytes are copied through untouched; only the
-    replaced member is recompressed/re-encrypted (if it is an ``.m`` member).
-    The new ``alldata.bin`` keeps the original member order and 2048-byte
-    alignment, and the regenerated encrypted index is written to *out_psb_m*.
+    Every other member's stored bytes are copied through untouched.  The
+    replacement content is compressed and encrypted if the member is an ``.m``
+    member, and stored as given otherwise.  The new ``alldata.bin`` keeps the
+    original member order and 2048-byte alignment, and the regenerated
+    encrypted index is written to *out_psb_m*.
     Replacing a member with content identical to the original reproduces both
     files byte-for-byte.
 
     *index_key_name* is the filename used to derive the index's encryption
     key.  It must match the name the file will have when the game loads it
-    (``alldata.psb.m``), NOT the temporary output filename.
+    (``alldata.psb.m``), NOT the temporary output filename.  The source index
+    is decrypted with the same name, so it may be a renamed copy such as a
+    backup.
 
     Both outputs are written to temporary files first and moved into place
     only once the rebuild is complete, so the outputs may be the inputs
@@ -778,7 +793,7 @@ def replace_member(alldata_psb_m: str, alldata_bin: str, member_name: str,
         new_blob = bytes(new_plain_bytes)
 
     order = sorted(fi.items(), key=lambda kv: kv[1][0])
-    new_file_info = dict(fi)  # keep original dict for non-layout keys
+    new_file_info = dict(fi)  # _rebuild_to overwrites every entry with its new offset and size
     chunk = 1 << 20
     bin_tmp, psb_tmp = out_bin + ".tmp", out_psb_m + ".tmp"
     keep: set[str] = set()

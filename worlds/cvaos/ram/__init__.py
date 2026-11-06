@@ -1,13 +1,13 @@
 """
 Live-memory (EWRAM) access for the Aria of Sorrow clients.
 
-- ``addresses`` — the AoS EWRAM map: ``Entry`` declarations on the EWRAM address plane
-  (``ewram``), plus ``GameState``, the bit masks, and the ``INVENTORY`` table. Pure
-  declarations; importable without BizHawk.
-- ``AoSRAM`` — async typed get/set helpers over those entries for one transport backend.
-- ``RamBackend`` / ``BizHawkBackend`` — the transport interface ``AoSRAM`` runs on, and the
+- ``addresses`` is the AoS EWRAM map: ``Entry`` declarations on the EWRAM address plane
+  (``ewram``), plus ``GameState``, the bit masks, and the ``INVENTORY`` table. It holds only
+  declarations, so it imports without BizHawk.
+- ``AoSRAM`` provides async typed get/set helpers over those entries for one transport backend.
+- ``RamBackend`` is the transport interface ``AoSRAM`` runs on, and ``BizHawkBackend`` is the
   BizHawk connector's implementation of it.
-- ``PlayerVitals`` / ``EquippedGear`` / ``SoulPair`` — bytemaker structs for the record
+- ``PlayerVitals``, ``EquippedGear`` and ``SoulPair`` are bytemaker structs for the record
   blocks and the nibble-packed soul bytes the entries decode.
 
 Every address here was verified against the USA ROM. ``addresses`` declares each one by its

@@ -59,7 +59,8 @@ class AoSRAM:
     # --- entry-shaped helpers -------------------------------------------------
     async def _fetch(self, entry: Entry, domain: str = EWRAM) -> Any:
         """
-        Read and decode one entry: ``request()`` says where and how much, ``parse()`` what it means.
+        Read and decode one entry. ``request()`` gives the offset and size, and ``parse()`` decodes
+        the bytes.
         """
         offset, size = entry.request()
         return entry.parse(await self.read(offset, size, domain))
@@ -100,11 +101,12 @@ class AoSRAM:
     # --- gameplay state -----------------------------------------------------
     async def get_run_state(self) -> tuple[int, int]:
         """
-        ``(GAME_STATE, MENU_STATE)`` in a single round-trip. GAME_STATE is a
-        ``GameState`` value (INGAME / GAME_OVER / ...); MENU_STATE is the in-room
-        sub-state (NORMAL / ROOM_TRANSITION / PAUSE / SHOP, plus the death-fade
-        value ``MENU_STATE_DEATH``). The client tick reads both even when not in
-        gameplay, and derives ``is_in_gameplay`` itself.
+        Return ``(GAME_STATE, MENU_STATE)`` in a single round-trip.
+
+        GAME_STATE is a ``GameState`` value (INGAME, GAME_OVER, ...). MENU_STATE is the in-room
+        sub-state, one of the ``MENU_STATE_*`` values such as NORMAL, PAUSE or the death fade.
+        The client tick reads both even when not in gameplay, and makes the ``is_in_gameplay``
+        test itself.
         """
         state, menu = await self.read_group(addr.GAME_STATE, addr.MENU_STATE)
         return state, menu
@@ -123,19 +125,21 @@ class AoSRAM:
 
     async def is_in_gameplay(self) -> bool:
         """
-        True only when it is safe to read checks / inject items: normal in-room
-        gameplay, not paused / transitioning / in a menu / game-over (sec. 5b).
+        True in normal in-room gameplay: not paused, transitioning, in a menu, or at game over.
+
+        This alone does not make it safe to read checks or grant items. The save-data block reads
+        as zeros while a file is still loading, so the client tick also requires a nonzero max HP.
         """
         game_state, menu_state = await self.get_run_state()
         return game_state == addr.GameState.INGAME and menu_state == addr.MENU_STATE_NORMAL
 
-    # --- hard mode ----------------------------------------------------------
+    # --- hard mode and cleared data -----------------------------------------
     async def ensure_hard_mode(self) -> bool:
         """
         Force the difficulty nibble of the game-mode byte to Hard, preserving the character
-        nibble. Returns True if a write was needed. The game only writes this byte at
-        new-game / mode-select, so re-applying it per tick holds without fighting the game;
-        damage scaling, soul-drop rates, and the HARD_PICKUP spawn gate read it live.
+        nibble. Returns True if a write was needed. The game writes this byte only at new game
+        and mode select, so writing it each tick keeps it set. Damage scaling, soul-drop rates
+        and the HARD_PICKUP spawn gate all read it live.
         """
         mode: int = await self._fetch(addr.GAME_MODE)
         if (mode & addr.GAME_MODE_DIFFICULTY_MASK) == addr.GAME_MODE_HARD:
@@ -145,10 +149,10 @@ class AoSRAM:
 
     async def ensure_game_cleared(self) -> bool:
         """
-        Mark the file as cleared-data (cutscenes become Start-skippable) by ORing the cleared
-        flags' low byte to the beaten value. Returns True if a write was needed. The game writes
-        this only on game completion, so re-applying it per tick holds; the flags live in the low
-        byte of the 0x02000060 word.
+        Mark the file as cleared-data (cutscenes become Start-skippable) by ORing the beaten value
+        into the cleared flags. Returns True if a write was needed. The game writes these flags
+        only on completion, so writing them each tick keeps them set. They are the low byte of the
+        0x02000060 word.
         """
         flags: int = await self._fetch(addr.GAME_CLEARED_FLAGS)
         if (flags & addr.GAME_CLEARED_VALUE) == addr.GAME_CLEARED_VALUE:
@@ -174,11 +178,12 @@ class AoSRAM:
     @staticmethod
     def _flag_id(byte_index: int, bit: int) -> int:
         """
-        The collected-pickup flag id for ``bit`` of byte ``byte_index`` of the 0x02000360
-        bitfield -- the single home of the bit-numbering convention. LSB-first within each byte
-        (byte 0 = ids 0-7, bit 0 = the 0x01 bit). The game tests these flags as
-        ``unk_360[id >> 5] & (1 << (id & 0x1F))``, i.e.
-        LSB-first little-endian u32 -- identical to this per-byte form. For MSB-first, change to
+        The collected-pickup flag id for ``bit`` of byte ``byte_index``.
+
+        This is the only definition of the bit numbering for the 0x02000360 bitfield. Ids are
+        LSB-first within each byte, so byte 0 holds ids 0-7 and bit 0 is the 0x01 bit. The game
+        tests a flag as ``unk_360[id >> 5] & (1 << (id & 0x1F))``, an LSB-first little-endian
+        u32, which numbers the bits the same way. For MSB-first numbering, change this to
         ``byte_index * 8 + (7 - bit)``.
         """
         return byte_index * 8 + bit
@@ -194,8 +199,10 @@ class AoSRAM:
     @staticmethod
     def pickup_flag_ids(flag_bytes: bytes) -> set[int]:
         """
-        Set of collected-pickup flag ids whose bit is set. Maps each id through
-        ``flag_offset -> ptr_address`` to get AP location ids; bit-numbering lives in ``_flag_id``.
+        Return the collected-pickup flag ids whose bit is set in ``flag_bytes``.
+
+        Each id is a pickup's ``flag_offset``, which the client maps to an AP location id.
+        ``_flag_id`` defines the bit numbering.
         """
         ids: set[int] = set()
         for byte_index, value in enumerate(flag_bytes):
@@ -204,7 +211,7 @@ class AoSRAM:
                     ids.add(AoSRAM._flag_id(byte_index, bit))
         return ids
 
-    # --- typed structs ------------------------------------------
+    # --- player state -------------------------------------------------------
     async def get_vitals(self) -> PlayerVitals:
         """
         The full HP/MP block, typed (``.current_hp`` etc. are plain ints).
@@ -219,11 +226,12 @@ class AoSRAM:
 
     async def get_current_hp(self) -> int:
         """
-        Current HP as a SIGNED s16 -- the engine stores and tests it signed, and an
-        overkill hit can leave it briefly negative before being clamped to 0, so a
-        ``> 0`` test (used to confirm a real respawn) must read it signed. The signedness
-        comes from the ``current_hp`` field's declaration. See `get_vitals` for the whole
-        typed block.
+        Current HP as a SIGNED s16.
+
+        The engine stores and tests HP signed, and an overkill hit can leave it briefly negative
+        before it is clamped to 0. A ``> 0`` test, such as the one that confirms a real respawn,
+        must therefore read it signed. The signedness comes from the ``current_hp`` field's
+        declaration. See `get_vitals` for the whole typed block.
         """
         return await self._fetch(addr.CURRENT_HP)
 
@@ -236,22 +244,28 @@ class AoSRAM:
 
     async def get_max_hp(self) -> int:
         """
-        Lean single-field read for the DeathLink poll. See `get_vitals` for the
-        whole typed block.
+        Max HP, which is never 0 once a save file has loaded.
+
+        The client tick reads it to tell a loaded file from one that is still loading. See
+        `get_vitals` for the whole typed block.
         """
         return await self._fetch(addr.MAX_HP)
 
+    # --- DeathLink ----------------------------------------------------------
     async def request_kill(self) -> None:
         """
-        Applies an incoming DeathLink by asking the ROM hook to run the game's *real* death routine:
-        set the kill-request flag; the hook (rom/deathlink_hook.py) calls the death handler the next
-        frame and clears the flag. Deterministic and regen-proof, unlike ``kill_player``. Requires a
-        ROM patched with the hook (DeathLink-enabled seeds, identifier >= CVAOS_AP_V0.2).
+        Applies an incoming DeathLink by asking the ROM hook to run the game's *real* death routine.
+
+        This sets the kill-request flag. The hook (rom/deathlink_hook.py) checks the flag on every
+        frame that updates Soma. If he is not already dying, the hook clears the flag and calls the
+        death handler. Otherwise it leaves the flag set. HP regeneration cannot undo this kill,
+        unlike the HP change ``kill_player`` makes. This method requires a ROM patched with the
+        hook, which only DeathLink seeds have.
         """
         await self._store(addr.KILL_REQUEST, 1)
 
     async def get_kill_request(self) -> bool:
-        """True while a DeathLink kill-request is still pending (the ROM hook hasn't consumed it yet)."""
+        """True while the kill-request flag is set, so the ROM hook has not run the kill yet."""
         return bool(await self._fetch(addr.KILL_REQUEST))
 
     async def clear_kill_request(self) -> None:
@@ -260,9 +274,11 @@ class AoSRAM:
 
     async def kill_player(self) -> None:
         """
-        Legacy DeathLink kill: zero current HP and let the engine's per-frame HP check notice. Racy
-        (HP regen can cancel it; skipped in some states). Kept as a fallback; ``request_kill`` is the
-        current path for hook-patched ROMs.
+        Set current HP to 0, which kills Soma only when he next takes damage.
+
+        The game has no per-frame HP check, and HP regeneration can undo the change before the
+        next hit. Only tests call this method. The clients apply a DeathLink with
+        ``request_kill``, which runs the death routine through the ROM hook.
         """
         await self._store(addr.CURRENT_HP, 0)
 
@@ -275,23 +291,25 @@ class AoSRAM:
 
     async def has_defeated(self, boss_flag: int) -> bool:
         """
-        ``boss_flag`` is one of the ``addr.BOSS_FLAG_*`` bit masks.
+        True when the boss flags have ``boss_flag`` set, one of the ``addr.BOSS_FLAG_*`` masks.
         """
         return bool(await self.get_boss_flags() & boss_flag)
 
     async def has_good_ending(self) -> bool:
         return bool(await self.get_global_flags() & addr.GLOBAL_FLAG_GOOD_ENDING)
 
+    # --- received-items counter ---------------------------------------------
     async def get_received_count(self) -> int:
         return await self._fetch(addr.AP_RECEIVED_COUNT)
 
     async def set_received_count(self, count: int, expected: int) -> bool:
         """
-        Advances the saved received-items counter to ``count``, guarded on its prior value
-        ``expected`` so the client never blind-stomps the word. The counter lives on a verified-dead
-        saved byte that only the client writes (see addr.AP_RECEIVED_COUNT), so the guard is
-        belt-and-suspenders: returns ``False`` only if the word changed underneath us, in which case
-        the caller re-reads and retries next tick instead of advancing.
+        Advances the saved received-items counter to ``count`` if it still holds ``expected``.
+
+        The counter sits in two saved bytes the game never uses (see ``addr.AP_RECEIVED_COUNT``).
+        Only the client writes it, so the guard is only a precaution. Returns ``False`` only if
+        the counter changed underneath us, in which case the caller re-reads and retries next
+        tick instead of advancing.
         """
         return await self.guarded_write_many([self.received_count_write(count, expected)])
 
@@ -343,12 +361,13 @@ class AoSRAM:
         ``category`` is an item_info category string (``"consumable"``,
         ``"weapon"``, ``"blue_soul"``, ...) and ``index`` is the item's id within
         that category (its ``item_info`` id, i.e. the EWRAM array index; this is NOT
-        the pickup ``var_b`` for souls). AoS caps every owned-count -- consumables,
-        equipment, and souls alike -- at ``cap`` (9); the game accepts a pickup at the
-        cap but won't count it past 9, and we mirror that. A received item that would
-        exceed the cap is dropped and logged rather than treated as a lost race. Returns
-        ``False`` only if a guarded write lost a race, in which case nothing was written and
-        the caller retries next tick.
+        the pickup ``var_b`` for souls).
+
+        AoS caps every owned-count at 9, the default ``cap``, for consumables, equipment and
+        souls alike. The game accepts a pickup at the cap but won't count it past 9, and this
+        method does the same: a received item that would exceed the cap is dropped and logged rather
+        than treated as a lost race. Returns ``False`` only if a guarded write lost a race, in
+        which case nothing was written and the caller retries next tick.
 
         ``together_with`` holds other guarded writes to make in the same step as the item's own,
         so either all of them happen or none do. They are made even when the item is already at
@@ -364,8 +383,8 @@ class AoSRAM:
 
         if array.nibble_packed:
             # Two counts share the byte: read the pair, bump one nibble, and guard on the whole
-            # byte so the neighbour's count rides along untouched. At the cap the byte is written
-            # back unchanged, as in the byte-array case below.
+            # byte so the neighbour's count is preserved. At the cap the byte is written back
+            # unchanged, as in the byte-array case below.
             # The cap applies to the soul's total over both lists, and the soul goes into the
             # first list, as the game's own add does.
             slot = array.entry.item(index // 2)
@@ -454,18 +473,19 @@ class AoSRAM:
 
     async def cap_skull_keys(self, *, limit: int = 1, floor: int = 0) -> None:
         """
-        Clamp the Skull Key count into ``[floor, limit]``, race-safely.
+        Clamp the Skull Key count into ``[floor, limit]``.
 
         Every pickup that belongs to another world grants Soma a Skull Key locally
-        (rom/patch.py ``_AP_PLACEHOLDER``); the count is junk to AP, since the location check
-        rides the pickup save flag, not the grant. But AoS caps every consumable at 9 and won't
-        count a pickup past the cap, so a player who lets Skull Keys pile up could stop registering
-        pickups -- and stop sending other worlds their items. So we knock the count back down to
-        ``limit`` whenever it climbs above, always leaving headroom to collect the next pickup.
+        (rom/patch.py ``_AP_PLACEHOLDER``). The count means nothing to AP, since the location
+        check comes from the pickup's save flag rather than the grant. But AoS caps every
+        consumable at 9 and won't count a pickup past the cap, so a player who lets Skull Keys
+        pile up could stop registering pickups, and so stop sending other worlds their items.
+        This lowers the count to ``limit`` whenever the count is higher, which always leaves room
+        for the next pickup.
 
         With the Skull Key warp feature on, the caller passes ``floor=1`` so the count never drops
-        below 1 either -- keeping the warp item always available. The write is unguarded: the value
-        is meaningless to AP, so a lost race just self-corrects next tick.
+        below 1 either, which keeps the warp item available. The write is unguarded: the value
+        means nothing to AP, so a lost race is corrected on the next tick.
         """
         slot = addr.INVENTORY["consumable"].entry.item(addr.SKULL_KEY_CONSUMABLE_INDEX)
         current: int = await self._fetch(slot)

@@ -1,10 +1,10 @@
 """
 Transport backends for ``AoSRAM``.
 
-``AoSRAM`` used to talk to BizHawk directly. The Steam Castlevania Advance Collection runs the
-game in an emulator with no connector, so a client for it has to reach game memory another way
-(attaching to the game process). The transport primitives therefore live behind a small backend
-interface, and ``AoSRAM`` runs on whichever backend the client hands it:
+The BizHawk Client reaches game memory through BizHawk's connector. The Steam Castlevania Advance
+Collection runs the game in an emulator with no connector, so its client attaches to the game
+process instead. The transport primitives therefore live behind a small backend interface, and
+``AoSRAM`` runs on whichever backend the client hands it:
 
 * ``read_many([(offset, size, domain)]) -> [bytes]``: batched read. A batch should be a
   consistent snapshot when the transport can provide one (BizHawk executes the whole batch
@@ -63,8 +63,10 @@ class RamBackend(Protocol):
 
 
 class BizHawkBackend:
-    """The original transport: the BizHawk lua connector, one socket round-trip per call,
-    with the connector's batch/frame atomicity guarantees."""
+    """The transport over the BizHawk Lua connector, one socket round-trip per call.
+
+    The connector runs each batch between two emulated frames, so a batch is atomic.
+    """
 
     def __init__(self, bizhawk_ctx: "BizHawkContext") -> None:
         self.ctx = bizhawk_ctx

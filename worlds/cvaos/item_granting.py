@@ -1,10 +1,11 @@
 """
-Encoding and granting received items for the Aria of Sorrow BizHawk client.
+Encoding and granting received items for the Aria of Sorrow clients.
 
 Every cvaos AP item code is a packed integer. ``pack`` builds one at generation time
 (worlds/cvaos/items.py); ``resolve`` unpacks a received code into a ``ReceiveAction``, and
-``grant`` performs it through the RAM accessors. This module owns the wire encoding and is the
-single place that knows how an incoming item becomes a game-state change.
+``grant`` performs it through the RAM accessors. This module defines the encoding and applies
+received items, with one exception. A Progressive Movement copy changes nothing here, because
+the client grants the stage souls by counting the copies (client_logic).
 
 Bit layout (MSB->LSB, 53 bits, because AP requires ``0 < id < 2**53`` for JS clients):
 
@@ -12,16 +13,16 @@ Bit layout (MSB->LSB, 53 bits, because AP requires ``0 < id < 2**53`` for JS cli
     [48]    set_flag   (1)  also set an EWRAM flag bit?
     [47:40] unused     (8)  reserved for growth
     [39:28] id/value  (12)  item -> item_info.item_number; money -> gold value
-    [27:22] retired    (6)  always 0. Older versions gave each copy of an item its own name,
-                            and this field told those copies' codes apart. Seeds from those
-                            versions still carry it, so it is never reused (canonical_code)
+    [27:22] retired    (6)  always 0 in new codes. Codes from older seeds use it to tell
+                            copies of one item apart, so it is never reused (canonical_code)
     [21:4]  flag off  (18)  EWRAM byte offset (when set_flag)
     [3:1]   flag bit   (3)  bit index 0-7 (when set_flag)
     [0]     flag value (1)  value to set that bit to (when set_flag)
 
-Extending later: ``other_item`` already routes like ``pickup``; ``event``/``to_be_implemented``
-are reserved (``grant`` logs + skips them). Maps will set their reveal flag via ``set_flag``
-once the offsets are known (see the TODO in items.py).
+``other_item`` is granted the same way as ``pickup``. ``event`` and ``to_be_implemented`` are
+reserved, so ``grant`` logs and skips them. Castle Maps are plain item transfers for now, and
+could set their reveal flags through ``set_flag`` once those offsets are known (see the TODO in
+items.py).
 """
 from __future__ import annotations
 
@@ -96,8 +97,10 @@ def canonical_code(code: int) -> int:
 
 
 def resolve(code: int) -> "ReceiveAction | None":
-    """Unpack a received AP code. Returns ``None`` for an undefined category (the caller should
-    log + skip). The retired field is ignored, so a code from an older seed grants the same item.
+    """Unpack a received AP code into a ``ReceiveAction``.
+
+    Returns ``None`` for an undefined category, which the caller logs and skips. The retired field
+    is ignored, so a code from an older seed grants the same item.
     """
     try:
         category = TransferCategory((code >> _CATEGORY_SHIFT) & _CATEGORY_MASK)
@@ -115,8 +118,9 @@ def resolve(code: int) -> "ReceiveAction | None":
 
 async def grant(ram: "AoSRAM", action: ReceiveAction, *, new_soul_pause: bool = True,
                 together_with: Sequence["GuardedWrite"] = ()) -> bool:
-    """Apply a resolved action through the RAM accessors. Returns ``False`` only if a guarded
-    write lost a race, and the caller then retries next tick.
+    """Apply a resolved action through the RAM accessors.
+
+    Returns ``False`` only if a guarded write lost a race, and the caller then retries next tick.
 
     ``together_with`` holds other guarded writes to make in the same step as the transfer, so
     either all of them happen or none do. The client passes the received-counter's advance here,
@@ -127,11 +131,11 @@ async def grant(ram: "AoSRAM", action: ReceiveAction, *, new_soul_pause: bool = 
     own is announced with the game's stop-the-action first-soul box, or with the short banner a
     duplicate gets. It only shapes the announcement, never the grant.
     """
-    # ORDER MATTERS: set the flag (idempotent, a no-op when the bit already has the target value)
-    # FIRST, and make the transfer LAST, in the same batch as the received-counter's advance.
-    # Nothing after that batch is retried, so the flag has to be set before it. If the flag write
-    # loses its guarded race we return before any transfer; if the transfer loses, re-setting the
-    # flag next tick is harmless. Do not reorder.
+    # ORDER MATTERS: set the flag FIRST, and make the transfer LAST, in the same batch as the
+    # received-counter's advance. Nothing after that batch is retried, so the flag has to be set
+    # before it. If the flag write loses its guarded race, we return before any transfer. If the
+    # transfer loses, setting the flag again next tick is harmless, because setting a bit that
+    # already has the target value changes nothing. Do not reorder.
     if action.set_flag:
         if not await ram.set_flag_bit(action.flag_offset, action.flag_bit, action.flag_value):
             return False
@@ -151,8 +155,9 @@ async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction, new_soul_pause: 
         info = _by_item_number[action.id_or_value]
         granted = await ram.give_item(info.item_category, info.id, together_with=together_with)
         if granted:
-            # Cosmetic, and only after the item is really in the inventory. announce_* never
-            # raises and never blocks, so it cannot turn a delivered item into a retry.
+            # The announcement is cosmetic, and runs only once the item is in the inventory.
+            # announce_* never raises and never waits for the mailbox, so it cannot turn a
+            # delivered item into a retry.
             from . import announce
             await announce.announce_item_number(ram, action.id_or_value,
                                                 new_soul_pause=new_soul_pause)
@@ -172,8 +177,8 @@ async def _grant_transfer(ram: "AoSRAM", action: ReceiveAction, new_soul_pause: 
         from . import announce
         await announce.announce_flag(ram, action.flag_offset, action.flag_bit)
         return True
-    # EVENT / TO_BE_IMPLEMENTED: reserved, not yet grantable. Skip loudly (never silently), but
-    # still make the together_with writes so the received-counter moves past it.
+    # EVENT and TO_BE_IMPLEMENTED are reserved and grant nothing. Log a warning and skip the item,
+    # but still make the together_with writes so the received-counter moves past it.
     from CommonClient import logger
     logger.warning("CVAoS: received reserved category %s; skipping.", category.name)
     return await ram.guarded_write_many(together_with)

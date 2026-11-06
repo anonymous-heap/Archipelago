@@ -1,8 +1,8 @@
 """
-Aria of Sorrow live-memory map (EWRAM) for the BizHawk client.
+Aria of Sorrow live-memory map (EWRAM) for the clients.
 
 Every location is an ``Entry`` on the EWRAM address plane, declared by its full GBA address.
-BizHawk's ``"EWRAM"`` memory domain wants offsets from the EWRAM base ``0x02000000``, and
+BizHawk's ``"EWRAM"`` memory domain takes offsets from the EWRAM base ``0x02000000``, and
 ``entry.request()`` returns exactly that ``(offset, nbytes)`` pair, so the subtraction lives in
 the ``Space`` rather than beside every constant. Fields of the two record blocks
 (``PlayerVitals``, ``EquippedGear``) are addressed through their layout, so the per-field
@@ -49,7 +49,8 @@ GAME_CLEARED_FLAGS = ewram.entry(0x02000060, u8, name="game_cleared_flags")
 GAME_CLEARED_VALUE = 0x03          # bits 0+1 set == game beaten once
 
 
-# Game modes, named after the decomp's GAME_MODE_* enum (constants/main.h); 0x03 is unnamed there too.
+# Game modes, named after the decomp's GAME_MODE_* enum (constants/main.h), which also leaves
+# 0x03 unnamed.
 class GameState(IntEnum):
     KONAMI_LOGO = 0x00
     TITLE = 0x01
@@ -60,14 +61,15 @@ class GameState(IntEnum):
     INTRO_CUTSCENE = 0x07
 
 
+# Saving does not leave MENU_STATE_NORMAL, so the save prompt and the save write happen while the
+# client may still grant items.
 MENU_STATE_NORMAL = 0x01            # in-room, not transitioning/paused/shopping
 MENU_STATE_DEATH = 0x02             # death/game-over fade sub-state (drives DeathLink detection)
 MENU_STATE_ROOM_TRANSITION = 0x03
-MENU_STATE_MAP_SCREEN = 0x04        # the Select map (observed live). Saving does not leave NORMAL: the save
-                                    # prompt and the save write happen while the client may still grant items.
+MENU_STATE_MAP_SCREEN = 0x04        # the Select map (observed live)
 MENU_STATE_PAUSE = 0x06
 MENU_STATE_WARP_MAP = 0x07          # warp-room map screen (observed live in the collection)
-MENU_STATE_ITEM_WARP = 0x08         # warp in progress after using the Skull Key from the pause menu (observed live)
+MENU_STATE_ITEM_WARP = 0x08         # a Skull Key warp from the pause menu (observed live)
 MENU_STATE_SHOP = 0x09
 
 
@@ -77,8 +79,9 @@ PICKUP_FLAGS = ewram.entry(0x02000360, Buffer.of(nbytes=0x14), name="pickup_flag
 PICKUP_FLAGS_LEN = PICKUP_FLAGS.size
 
 # --- Location detection: the Enemy List's defeated bits (enemy checks) ---
-# 0x020133A0, 16 bytes: one bit per enemy type, bit ``id & 7`` of byte ``id >> 3``. The game's death
-# routine sets a type's bit the first time any enemy of that type is defeated, and the save keeps it.
+# 0x020133A0, 16 bytes: one bit per enemy type, bit ``id & 7`` of byte ``id >> 3``. The game's
+# death routine sets a type's bit the first time any enemy of that type is defeated, and the save
+# keeps it.
 ENEMY_DEFEATED = ewram.entry(0x020133A0, Buffer.of(nbytes=0x10), name="enemy_defeated")
 
 
@@ -96,7 +99,7 @@ EXPLORED_MAP = ewram.entry(0x020000B4, Buffer.of(nbytes=0x280), name="explored_m
 CASTLE_MAPS = ewram.entry(0x020132B1, Buffer.of(nbytes=3), name="castle_maps")
 BOSS_FLAGS = ewram.entry(0x0200037E, u16, name="boss_flags")
 GLOBAL_FLAGS = ewram.entry(0x0200042C, u32, name="global_flags")
-CURRENT_AREA = ewram.entry(0x0200009E, u8, name="current_area")          # Phase 6 (area-aware DeathLink)
+CURRENT_AREA = ewram.entry(0x0200009E, u8, name="current_area")
 CURRENT_ROOM = ewram.entry(0x0200009F, u8, name="current_room")
 # Soma's position in the room is the camera's position (background layer 1's scroll) plus his
 # position on screen, as GetEntityRoomXPositionInteger computes it. PLAYER_SCREEN_X and _Y are
@@ -109,7 +112,8 @@ CURRENT_SAVE_SLOT = ewram.entry(0x02000428, u8, name="current_save_slot")
 
 BOSS_FLAG_GRAHAM = 0x0001          # bad-ending final boss
 BOSS_FLAG_DEATH = 0x0002
-BOSS_FLAG_CHAOS = 0x0080           # true-ending final boss, fallback if global doesn't work
+BOSS_FLAG_CHAOS = 0x0080           # true-ending final boss; does not persist, so the goal reads
+                                   # GLOBAL_FLAG_GOOD_ENDING instead
 GLOBAL_FLAG_GOOD_ENDING = 0x00004000
 
 
@@ -137,12 +141,13 @@ GOLD_CAP = 999_999
 SOULS_COLLECTED = ewram.entry(0x02013264, u16, name="souls_collected")
 SOULS_COLLECTED_CAP = 999
 
-# pad_1328A: verified-dead, saved, zeroed-on-new-game.
+# The number of received items given so far, which only the client writes. It lives in pad_1328A,
+# two bytes the game never uses (verified), which are saved with the file and zeroed on a new game.
 AP_RECEIVED_COUNT = ewram.entry(0x0201328A, u16, name="ap_received_count")
 
-# DeathLink kill-request flag: the client writes 1; the ROM hook (rom/deathlink_hook.py) calls the
-# game's real death routine and clears it. pad_1324C, verified dead live (mGBA) -- never written by
-# the engine across combat / menus / shop / save / load.
+# DeathLink kill-request flag. The client writes 1, and the ROM hook (rom/deathlink_hook.py)
+# clears it when it runs the game's real death routine. It lives in pad_1324C. Live testing in mGBA
+# showed that the engine never writes that byte during combat, menus, the shop, saving or loading.
 KILL_REQUEST = ewram.entry(0x0201324C, u8, name="kill_request")
 
 
@@ -194,13 +199,14 @@ INVENTORY: dict[str, InventoryArray] = {
 }
 # Money (subtype 1) is not an inventory array; it adds to CURRENT_GOLD.
 
-# The Ability menu's On/Off switch for each ability soul: bit i of byte i // 8 is soul i. The player
-# code checks a soul's bit before using its ability (sub_08032AB8), and the game's pickup sets the bit
-# when it adds a soul's first copy (sub_08032ADC).
+# The Ability menu's On/Off switch for each ability soul: bit i of byte i // 8 is soul i. The
+# player code checks a soul's bit before using its ability (sub_08032AB8), and the game's pickup
+# sets the bit when it adds a soul's first copy (sub_08032ADC).
 ABILITY_ENABLED = ewram.entry(0x02013396, u8, count(2), name="ability_enabled")
 
-# Index within the "consumable" array of the Skull Key -- the placeholder AoS grants Soma whenever he
-# collects a pickup that belongs to another world (rom/patch.py ``_AP_PLACEHOLDER``). Its owned-count
-# is meaningless to AP (the location check rides the pickup save flag, not the grant), but it shares
-# the consumable cap of 9, so the client keeps it low to leave headroom for the next pickup.
+# Index of the Skull Key within the "consumable" array. Collecting a pickup that belongs to another
+# world gives Soma a Skull Key as a placeholder (rom/patch.py ``_AP_PLACEHOLDER``). Its owned-count
+# means nothing to AP, because the location check comes from the pickup's save flag rather than the
+# grant. It shares the consumable cap of 9, though, so the client keeps the count low to leave room
+# for the next pickup.
 SKULL_KEY_CONSUMABLE_INDEX = 25

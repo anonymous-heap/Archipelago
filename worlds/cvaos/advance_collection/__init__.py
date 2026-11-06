@@ -1,7 +1,7 @@
 """Tooling for the Steam Castlevania Advance Collection.
 
-Making this directory a package lets the world import the archive tool and the
-ROM installer (``worlds.cvaos.advance_collection.cac_archive`` / ``.install``).
-``cac_archive.py`` stays runnable as a plain script, because it uses no
+The package holds the archive tool (``cac_archive``), the ROM installer
+(``install``), and the search for the collection in the player's Steam libraries
+(``steam``). ``cac_archive.py`` also runs as a plain script, because it uses no
 relative imports.
 """

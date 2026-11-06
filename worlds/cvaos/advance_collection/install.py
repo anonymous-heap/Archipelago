@@ -1,42 +1,43 @@
 """
 Install a patched CVAoS ROM into the Steam Castlevania Advance Collection.
 
-The collection keeps every ROM inside ``windata/alldata.bin`` (payload) plus
-``windata/alldata.psb.m`` (encrypted index) — see ``cac_archive.py``.
-"Installing" a randomized ROM therefore means rebuilding that pair with the
-AoS member replaced. This module is the friendly wrapper around
-``cac_archive.replace_member`` behind the "CVAoS Collection ROM Installer"
-Launcher component. It finds the collection from the hash-validated
-``CVAOSSettings.collection_exe`` path. When the file at that path is missing
-or has another hash, it looks in every Steam library (``steam.py``), and asks
-for game.exe with a browse dialog only when the collection isn't in any of
-them. Either answer is saved in host.yaml.
-
-Safety model, in order:
-
-* the patched ROM is validated before anything is touched: exact 8 MiB, AoS
-  header, a compatible ``CVAOS_AP_V0.x`` marker at 0x670000, and M2's two
-  additions, the replacement graphic at 0x660000 and the audio bridge at
-  0x700000 (a ROM patched from a cart dump instead of the collection-extracted
-  base lacks both and would silently break the collection);
-* refuses while the collection is running (best effort via the client's own
-  process attach; Windows file locks are the backstop);
-* pristine ``*.apbackup`` copies of both windata files are made ONCE, ever —
-  installing later seeds never overwrites them, so ``restore_backup`` always
-  returns to stock, and once they exist the base ROM is extracted from them
-  rather than from the live archive (which then holds the installed seed);
-* the rebuilt pair is staged in a scratch subdirectory using the real
-  filenames (the MDF key is derived from the lowercased basename), verified by
-  re-extracting the member, and only then moved over the live files with
-  ``os.replace``.
-
-Steam's "Verify integrity of game files" restores M2's stock files; the fix is
-simply to run the installer again (the backups stay valid).
+The collection keeps every ROM inside ``windata/alldata.bin`` (the payload) and
+``windata/alldata.psb.m`` (an encrypted index), whose format ``cac_archive.py`` describes.
+Installing a randomized ROM therefore means rebuilding that pair with the AoS member replaced.
+This module wraps ``cac_archive.replace_member`` for the "CVAoS Collection ROM Installer"
+Launcher component.
 
 The install input may be a patched ``.gba`` or the ``.apcvaos`` patch itself. The installer
 applies a patch first, so a player handed only the patch file never has to handle an
 intermediate ROM. The patch is applied to the stock ROM of the collection being installed into,
 whatever target the seed was generated for.
+
+The Launcher component finds the collection from the hash-validated
+``CVAOSSettings.collection_exe`` path. When the file at that path is missing or has another
+hash, it looks in every Steam library (``steam.py``), and it asks for game.exe with a browse
+dialog only when the collection isn't in any of them. A path from the search or the dialog is
+saved in host.yaml.
+
+An install protects the collection's files in four steps, in this order:
+
+* The patched ROM is validated before anything is touched. It must be exactly 8 MiB, with an
+  AoS header and a compatible ``CVAOS_AP_V0.x`` marker at 0x670000. It must also contain M2's
+  two additions, the replacement graphic at 0x660000 and the audio bridge at 0x700000. A ROM
+  patched from a cart dump instead of the collection's own ROM lacks both, and it would break
+  the collection without any error.
+* The installer stops with an error while the collection is running. That check attaches to
+  the process the way the client does. It is only best effort, so Windows file locks are the
+  fallback.
+* Pristine ``*.apbackup`` copies of both windata files are made once, and only while the live
+  archive still holds the stock AoS ROM. Later installs never overwrite them, so
+  ``restore_backup`` always returns to stock. Once the backups exist, the base ROM is
+  extracted from them rather than from the live archive, which then holds the installed seed.
+* The rebuilt pair is staged in a scratch subfolder under the real file names, and verified by
+  re-extracting the AoS member. Only then are both files moved over the live ones with
+  ``os.replace``.
+
+Steam's "Verify integrity of game files" restores M2's stock files, which removes the installed
+seed. Running the installer again puts it back, and the backups stay valid.
 
 CLI (from the Archipelago repo root)::
 
@@ -73,13 +74,15 @@ _AP_MARKER_PREFIX = b"CVAOS_AP_"   # shared by every patch version's identifier
 # in CommonClient, which the installer doesn't need).
 _ROM_TITLE = b"CASTLEVANIA2"
 _ROM_TITLE_OFFSET = 0xA0
-# M2's two additions, present only in the collection-extracted base ROM. Declared once on the
-# cart space (rom/address_space.py) and used here as file-offset (start, end) pairs.
+
+
 def _file_range(region: Entry) -> tuple[int, int]:
     start, size = region.bind(gba_space()).request()
     return start, start + size
 
 
+# M2's two additions, present only in the collection-extracted base ROM. They are declared once
+# on the cart space (rom/address_space.py) and used here as file-offset (start, end) pairs.
 _M2_GRAPHIC = _file_range(M2_GRAPHIC)
 _M2_AUDIO_BRIDGE = _file_range(M2_AUDIO_BRIDGE)
 
@@ -123,13 +126,15 @@ def _stock_archive_pair(windata: str) -> tuple[str, str]:
 
 
 def extract_base_rom_bytes(exe_path: str) -> bytes:
-    """Pull the collection's stock AoS ROM out of ``windata/`` next to *exe_path*.
+    """Return the collection's stock AoS ROM, extracted from ``windata/`` next to *exe_path*.
 
-    This is the base ROM AP patches against for collection play — it carries M2's
-    audio bridge, unlike a cart dump. Lets the world source its base ROM from the
-    installed collection instead of asking the user to run ``cac_archive extract`` by hand.
-    Once a seed has been installed the live archive holds that seed, so the pristine
-    backups are read instead; a patched ROM with no backups to fall back on is refused.
+    This is the base ROM that AP patches for collection play. Unlike a cart dump, it carries
+    M2's audio bridge. The world calls this to read its base ROM from the installed collection,
+    so the player never has to run ``cac_archive extract`` by hand.
+
+    Once a seed has been installed, the live archive holds that seed, so the pristine backups
+    are read instead. If the ROM this extracts is already patched, whether from the live archive
+    or from the backups, this raises InstallError.
     """
     windata = windata_dir_from_exe(exe_path)
     psb_m, bin_path = _stock_archive_pair(windata)
@@ -168,7 +173,8 @@ def extract_base_rom_to(out_path: str, exe_path: str, log: Log = print) -> str:
 
 
 def validate_patched_rom(rom_bytes: bytes) -> None:
-    """Reject anything that is not an AC-based, AP-patched AoS ROM (before touching files)."""
+    """Raise InstallError unless ``rom_bytes`` is an AoS ROM that a compatible version of this
+    world patched from the collection's own ROM."""
     if len(rom_bytes) != ROM_SIZE:
         raise InstallError(
             f"ROM is {len(rom_bytes)} bytes, expected exactly {ROM_SIZE} (8 MiB). "
@@ -213,10 +219,10 @@ def collection_running() -> bool:
 # ---------------------------------------------------------------------------
 
 def ensure_backup(windata: str, log: Log = print) -> bool:
-    """Create pristine *.apbackup copies of both archive files, exactly once.
+    """Create pristine ``*.apbackup`` copies of both archive files, exactly once.
 
-    Returns True if the backups were created by this call. A mixed state (only
-    one backup present) aborts: the pair must stay consistent with each other.
+    Returns True if the backups were created by this call. If only one backup exists, this
+    raises InstallError, because the two backups are only valid as a pair.
     """
     have = {name: os.path.isfile(os.path.join(windata, name + BACKUP_SUFFIX))
             for name in WINDATA_FILES}
@@ -370,8 +376,9 @@ def _matches_backup(windata: str, name: str) -> bool:
 
 
 def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
-    """Install *rom_path* — a patched ``.gba`` **or** a ``.apcvaos`` patch (applied first) —
-    as the collection's AoS ROM. Returns a user-facing summary."""
+    """Install *rom_path* as the collection's AoS ROM, and return a summary for the user.
+
+    *rom_path* may be a patched ``.gba`` or a ``.apcvaos`` patch, which is applied first."""
     windata = windata_dir_from_exe(exe_path)
     if rom_path.lower().endswith(".apcvaos"):
         rom_bytes = _apply_patch_file(rom_path, exe_path, log)
@@ -395,8 +402,9 @@ def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
         raise InstallError(f"Not enough free disk space on the game drive: the install "
                            f"needs ~{needed >> 20} MiB, {free >> 20} MiB free.")
 
-    # Stage under the real filenames: the MDF key is derived from the basename, and
-    # os.replace within the same directory is atomic on the same volume.
+    # Stage under the real filenames. The rebuild is given the index's key name explicitly, but
+    # the verification below derives the key from the staged file's own name, as the game does.
+    # The staging folder is inside windata/, so each os.replace stays on one volume and is atomic.
     staging = os.path.join(windata, f"_ap_staging_{os.getpid()}")
     # A killed install leaves its staging folder behind, holding up to a full archive copy.
     for entry in os.listdir(windata):
@@ -416,9 +424,10 @@ def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
         if cac_archive.extract_member(out_psb, out_bin, AOS_MEMBER) != rom_bytes:
             raise InstallError("Verification failed: the rebuilt archive does not round-trip "
                                "the ROM. Nothing was changed. Please report this bug.")
-        # The AoS member is MDF-compressed, so its stored size (and every later member's
-        # offset) changes with the ROM's content: the two files only agree as a pair. Payload
-        # first, so the disagreement window is the single os.replace of the index.
+        # The AoS member is MDF-compressed, so its stored size, and with it every later member's
+        # offset, changes with the ROM's content. The two files are therefore only valid as a
+        # pair. The payload is replaced first, so they disagree only until the index's
+        # os.replace.
         os.replace(out_bin, live_bin)
         try:
             os.replace(out_psb, live_psb)
@@ -475,8 +484,8 @@ def _exe_path_from_settings() -> str | None:
     """Return the collection's game.exe path, asking for it when it can't be found.
 
     The path comes from host.yaml, or from the player's Steam libraries (find_collection_exe).
-    AP never asks for ``collection_exe`` itself, because the setting is optional, so without
-    this prompt a collection the search misses would end in a "no windata" error. The chosen file
+    AP never asks for ``collection_exe`` itself, because the setting is optional. Without this
+    prompt, a collection the search misses would end in a "no windata" error. The chosen file
     must match the collection's game.exe hash, and a mismatch raises ``ValueError``. A path that
     was found or chosen is saved to host.yaml. Returns None when the player cancels the dialog.
     """
