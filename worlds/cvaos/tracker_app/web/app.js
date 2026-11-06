@@ -103,9 +103,10 @@ function explored() {
 }
 
 // The areas Soma has been to, or null to treat them all as known. While unexplored cells are
-// hidden, he has been to an area once he has visited or remembers a cell in it, is in it, or has
-// checked a location that can only be checked in it. The game never marks the Chaotic Realm as explored, so once he has
-// left the Realm, a location checked there is the only sign that he was in it.
+// hidden, he has been to an area once he is in it, or has visited or remembers a cell in it.
+// Checking a location that can be checked only in one area also shows that he has been there.
+// The game never marks the Chaotic Realm as explored, so once he has left the Realm, a location
+// checked there is the only sign that he was in it.
 function knownAreas() {
   const cells = explored();
   if (page.reveal || !cells) return null;
@@ -143,7 +144,8 @@ function keepFocusOnAKnownArea() {
 
 // A location's title and subtitle. A name such as "Terrace [503 CASTLE MAP 3]" is a place, then
 // the room and the item the game originally has there. The title is the place, and the subtitle
-// gives the area, the room and that item.
+// gives the area, the room and that item. Any other name, such as a defeat location's, becomes the
+// whole title, and the subtitle lists the areas of the location's spots.
 function describeLocation(location) {
   const match = /^(.*?) \[(\S+) (.*)\]$/.exec(location.name);
   const area = [...new Set(location.spots.map((spot) => areaName(spot.area)))].join(", ");
@@ -339,8 +341,8 @@ function setUpPanAndZoom() {
 
 // --- What is shown --------------------------------------------------------------------------
 
-// The cells to draw, or null for all of them. Cells Soma hasn't explored, and that no Castle Map
-// he holds shows, stay hidden unless the full map is revealed. The game never marks the Chaotic
+// The cells to draw, or null for all of them. Unless the full map is revealed, a cell stays hidden
+// until Soma explores it or a Castle Map he holds shows it. The game never marks the Chaotic
 // Realm as explored, so it is drawn whole, but only while it is in focus or Soma is in it. With
 // countRealm, the Realm's cells count as shown once Soma has been there, whatever the focus. The
 // panels count locations this way, so that their numbers don't change with the focus.
@@ -384,8 +386,8 @@ function spotShown(spot, visible, visited) {
   return (!visible || visible.has(cell)) && drawnInFull(cell, visited);
 }
 
-// The spots of a location that show, among those in an area ``inArea`` accepts. A location shows in
-// the sidebar and in the counts when any of its spots does. A defeat location has a spot in each
+// The spots of a location that show, among those in an area that inArea accepts. A location shows
+// in the sidebar and in the counts when any of its spots does. A defeat location has a spot in each
 // room where its enemy appears, and it counts once however many of them show.
 function shownSpots(location, visible, visited, inArea = () => true) {
   return location.spots.filter((spot) => inArea(spot.area) && spotShown(spot, visible, visited));
@@ -468,8 +470,8 @@ function somaPoint() {
   return { x: origin[0] + x / page.map.room_cell[0], y: origin[1] + y / page.map.room_cell[1], room };
 }
 
-// Where to draw Soma's dot: where he stands, or, with "Center Soma's indicator" on, the middle of
-// his cell, as the in-game map marks him.
+// Where to draw Soma's dot: where he stands, or the middle of his cell when "Center Soma's
+// indicator" is on, as the in-game map marks him.
 function somaMarker(soma) {
   if (!page.centerMarker) return { x: soma.x, y: soma.y };
   return { x: Math.floor(soma.x) + 0.5, y: Math.floor(soma.y) + 0.5 };
@@ -521,7 +523,7 @@ function renderRoute() {
     points.unshift([marker.x, marker.y]);  // the line starts at Soma's dot, wherever it is drawn
   }
   // A defeat location has a spot in each room where its enemy appears, and the route leads to one
-  // of them. It ends at the spot nearest its last point.
+  // of them. The line ends at the spot nearest the route's last point.
   const target = locationsById.get(route.target);
   const last = points[points.length - 1];
   const end = target && (last ? nearestSpot(target, last) : target.spots[0]);
@@ -865,10 +867,10 @@ function openSocket() {
       return;
     }
     // While the tracker reconnects or rebuilds the seed, its snapshots carry no explored map or
-    // position. For the same slot on the same server, the page keeps the last ones it had, rather
-    // than show the whole castle, with every area's name and hidden door, until new ones arrive.
-    // Once the tracker is tracking, a snapshot without them means the client hasn't sent them
-    // yet, so nothing is kept.
+    // position. For the same slot on the same server, the page keeps the last ones it had until
+    // new ones arrive. Without them, the page would show the whole castle, with every area's name
+    // and hidden door. Once the tracker is tracking, a snapshot without them means the client
+    // hasn't sent them yet, so nothing is kept.
     const snapshot = message.snapshot;
     const last = page.snapshot;
     if (!snapshot.exploration && !snapshot.tracking && last.exploration
@@ -878,9 +880,9 @@ function openSocket() {
     }
     page.gone = false;
     onSnapshot(snapshot);
-    // The connect dialog opens by itself only if, at the page's first snapshot, the tracker isn't
-    // connected or connecting to a room. It stays shut when a connection ends later, as before a
-    // reconnect or after "Disconnect".
+    // The connect dialog opens by itself only at the page's first snapshot, and only when the
+    // tracker isn't connected or connecting to a room. It stays shut when a connection ends later,
+    // as before a reconnect or after "Disconnect".
     if (!page.askedToConnect) {
       page.askedToConnect = true;
       if (!snapshot.connected && !snapshot.following && snapshot.status === "Not connected") {
@@ -940,7 +942,7 @@ function setUpControls() {
     box.addEventListener("change", () => {
       page[name] = box.checked;
       prefs.set(name, box.checked);
-      applyLook();  // first, because the walls and Soma's cell are drawn with its wall width
+      applyLook();  // first, because drawing the walls and Soma's cell uses the look's wall width
       renderMap();
       renderSoma();
       fitWhenTheShownMapChanges();  // "Reveal full map" can change which part is fitted

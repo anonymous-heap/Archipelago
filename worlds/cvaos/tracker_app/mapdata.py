@@ -2,8 +2,9 @@
 The castle map as the tracker page draws it, sent once as /map.json.
 
 All positions here are in map cells: cell (x, y) covers x to x + 1 across and y to y + 1 down, as
-in the game's map grid (data/map_info). The page draws the rooms, walls and doors from this data,
-and puts each location's pin where its pickup is.
+in the game's map grid (data/map_info). The page draws the rooms, walls and doors from this data.
+It also puts a pin where each pickup is, and one in each room where a defeat location's enemy
+appears.
 """
 from __future__ import annotations
 
@@ -61,7 +62,9 @@ def _locations() -> list[dict]:
 
     A pickup has one spot. A defeat location has one in each room where its enemy appears, as
     tracker_map.defeat_pins places them. A location's own room, area, x and y are its first spot's.
-    The page hides a location in a seed without it, as it hides any location the seed lacks.
+
+    The list is the same for every seed. The page hides each location that the seed lacks, such as
+    every defeat location when enemy checks are off.
     """
     locations = []
     for pickup in sorted(pickup_info_collection, key=lambda p: p.ptr_address):

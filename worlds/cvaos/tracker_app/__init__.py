@@ -213,9 +213,9 @@ async def serve_or_hand_over(server: TrackerServer, options: argparse.Namespace)
         if await ask_running_tracker(port, options, take=True) == "opened":
             opened(port)
             return None
-    # Other programs hold every one of these ports, or Windows has reserved them, so the tracker
-    # takes any free port. The page's saved settings belong to its usual port, so on this port the
-    # page opens without them.
+    # Every one of these ports is held by another program or by a tracker for another room or
+    # slot, or is reserved by Windows. So the tracker takes any free port. The page's saved
+    # settings belong to its usual port, so on this port the page opens without them.
     taken = f"Port {ports[0]} is" if len(ports) == 1 else f"Ports {ports[0]} to {ports[-1]} are all"
     logger.warning("%s taken, so the tracker uses another free port", taken)
     return await server.start("127.0.0.1", 0)

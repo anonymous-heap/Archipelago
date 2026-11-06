@@ -4,13 +4,16 @@ Map data for Universal Tracker's map tab.
 UT shows the maps in ``tracker/``, with a pin for every location and a marker for Soma.
 :func:`write` generates every file there from this world's own data. The images are schematics
 drawn from the castle's cell grid and edge table (``data/map_info``), so no game art is shipped.
-Each pin is placed from its pickup's room and position.
 
 There is a map of the whole castle, one of the Chaotic Realm, and one for each area of the castle.
 An area's map shows the rest of the castle dimmed around it. A room's area is the first digit of its
 identifier. Each map uses 24 image pixels per map cell, and a cell covers 256 by 256 pixels of a
-room, as it does in the game's own map-cell routine (sub_0804F7A4). UT shows a pin only for a
-location the server has, so the Hard Mode pickups appear only in seeds that have them.
+room, as it does in the game's own map-cell routine (sub_0804F7A4).
+
+A pickup's pin is placed from its room and its position in that room. A defeat location has a pin
+in each room where its enemy appears, placed by :func:`defeat_pins`. UT shows a pin only for a
+location the server has, so the Hard Mode pickups and the defeat locations appear only in seeds
+that have them.
 
 The client keeps Soma's room and position in data storage. UT reads them from
 :data:`MAP_CELL_KEY`, which changes only when he enters another map cell. :func:`position_icon`
@@ -48,7 +51,8 @@ LOCATIONS_FILE = "locations.json"
 MARKER_FILE = "marker.png"
 
 # Soma's position, kept in data storage by the client as [room, x, y]: the room's identifier and
-# his position in it, in pixels. The client updates it as he moves, and the tracker's map reads it.
+# his position in it, in pixels. The client updates it as he moves, and the browser tracker's map
+# reads it.
 POSITION_KEY = "cvaos_position_{team}_{player}"
 # The same value, updated only when Soma enters another map cell. UT's map reads this key, because
 # it marks only the cell and reloads its map whenever the key changes. UT fills in the team and
@@ -239,7 +243,7 @@ PIN_SPACING = 0.5
 
 
 # The offsets tried for a pin that would cover another, nearest first: points an eighth of a cell
-# apart, up to a cell and a half away.
+# apart, up to a cell and a half away in each direction.
 _OFFSETS = sorted(((dx / 8, dy / 8) for dx in range(-12, 13) for dy in range(-12, 13)),
                   key=lambda offset: (math.hypot(*offset), offset))
 
@@ -255,8 +259,8 @@ def defeat_pins() -> tuple[tuple[str, tuple[tuple[str, tuple[float, float]], ...
     A pin moves when it would come within PIN_SPACING of another pin and hide part of it. The other
     pins are the pickups', the defeat pins already placed, and the starting spots of those still
     to come. The pin then moves to the nearest spot that is clear of them all and keeps the whole
-    pin inside its room. In a room too crowded for that, it goes where it comes closest to being
-    clear.
+    pin inside its room, up to a cell and a half away along each axis. In a room too crowded for
+    that, it moves to the spot within those limits where the nearest other pin is farthest away.
     """
     starts = []
     for enemy in checkable_types():
@@ -342,7 +346,8 @@ def position_icon(map_id, value):
         if room_identifier not in tracker.rooms:
             return None
         room = rooms_by_identifier[room_identifier]
-        # The game's map-cell routine adds his whole cells within the room to the room's own cell.
+        # As in the game's map-cell routine, Soma's cell is the room's top-left cell offset by his
+        # position in the room, counted in whole cells.
         centre = (int(room.x) + cell_x + 0.5, int(room.y) + cell_y + 0.5)
         return (*pin(tracker.origin, centre), MARKER_FILE)
     except (TypeError, ValueError, KeyError):

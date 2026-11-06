@@ -173,8 +173,8 @@ h2 {
 .map-pane { position: relative; min-width: 0; min-height: 0; background: var(--map-bg); }
 
 /* The "In-game look": the game map's palette (at 0x081183D0 in the ROM), and walls 1 pixel thick
-   in a cell 4 pixels across. As in the game, every shown room that Soma hasn't visited is one
-   grey, with grey walls, save and warp rooms included. */
+   in a cell 4 pixels across. As in the game, a shown room that Soma hasn't visited is drawn in one
+   grey with grey walls, even when it is a save or warp room. */
 .map-pane.game-look {
   --map-bg: #29007b;
   --room: #0000e6;
@@ -202,7 +202,7 @@ h2 {
 .edge { fill: none; stroke-width: var(--wall-width); stroke-linecap: square; }
 .edge.wall { stroke: var(--wall); }
 .edge.door { stroke: var(--door); stroke-linecap: butt; }
-/* Walls and doors outside the highlighted area, and those of greyed-out rooms, are drawn in solid
+/* Walls and doors outside the focused area, and those of greyed-out rooms, are drawn in solid
    darker colours. */
 .edge.wall.unfocused { stroke: var(--wall-dim); }
 .edge.door.unfocused { stroke: var(--door-dim); }

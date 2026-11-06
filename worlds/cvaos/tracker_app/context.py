@@ -111,7 +111,7 @@ class TrackerContext(CommonContext):
         # and a launch) could otherwise each open a connection.
         self._connection_change = asyncio.Lock()
 
-    # --- connecting -----------------------------------------------------------------------------
+    # --- connecting ----------------------------------------------------------------------------
 
     async def server_auth(self, password_requested: bool = False) -> None:
         # This runs inside the connection's task, and disconnect() waits for that task to end.
@@ -129,7 +129,7 @@ class TrackerContext(CommonContext):
         await self.send_connect(game="")
 
     async def connect_to(self, address: str, slot_name: str, password: str | None) -> None:
-        """Connect to the server at ``address`` and track ``slot_name``, unless shutting down."""
+        """Connect to ``address`` and track ``slot_name``, unless the tracker is shutting down."""
         if self.exit_event.is_set():
             return
         async with self._connection_change:
@@ -142,7 +142,7 @@ class TrackerContext(CommonContext):
             self.username = slot_name  # CommonContext reconnects on its own only when this is set
             self.password = password or None
             await self.connect(address)
-            # After connect(), since ending the previous connection sets the status to
+            # The status is set after connect(), because ending the previous connection sets it to
             # "Not connected".
             self.set_status(f"Connecting to {address}")
 
@@ -154,14 +154,15 @@ class TrackerContext(CommonContext):
     async def disconnect(self, allow_autoreconnect: bool = False) -> None:
         # CommonContext closes the socket only once the connection is open, and then waits for the
         # connection's task. A connection still opening has no socket to close, so that wait would
-        # last until the connection opened and later closed. It is cancelled instead.
+        # last until the connection opened and later closed. Cancelling that connection's task
+        # first avoids the wait.
         if not allow_autoreconnect:
             self.disconnected_intentionally = True  # so the cancelled task doesn't reconnect
         await self._cancel_opening_connection()
         await super().disconnect(allow_autoreconnect)
 
     async def _cancel_opening_connection(self) -> None:
-        """Cancel the connection's task while the connection is still opening.
+        """Cancel the connection's task if the connection is still opening.
 
         Left running, that task logs in if the connection succeeds, and CommonContext would wait
         for it until the connection later closed.
@@ -301,7 +302,7 @@ class TrackerContext(CommonContext):
     def reset_server_state(self) -> None:
         super().reset_server_state()
         if not hasattr(self, "core"):
-            return  # CommonContext.__init__ calls this before the tracker's own state exists
+            return  # in case this runs before __init__ has created the tracker's own state
         self.core.disconnect()
         self.result = None
         self.route = None  # planned again once the seed is rebuilt, to the same target
@@ -449,7 +450,8 @@ class TrackerContext(CommonContext):
         location = world.get_location(world.location_id_to_name[self.route_target])
         position = self.position()
         self.route_room = position[0] if position is not None else None
-        # From the door Soma came in by, which he can get back to wherever he has gone since.
+        # The route starts at the door Soma came in by, because he can get back to it from wherever
+        # he has gone in the room since.
         start_point = self.entry_point if self.route_room == self.entry_room else None
         states = [state for state in (self.result.state, self.result.glitches_state)
                   if state is not None]
@@ -485,8 +487,9 @@ class TrackerContext(CommonContext):
         else:
             goal = "no"
         # The pool's progression items, and any Soma has from elsewhere, such as a start inventory.
-        # Item smoothing holds some progression out of the pool to place it itself, such as the
-        # Ancient Books and the mobility souls, so those come from get_pre_fill_items.
+        # Item smoothing places some progression items itself, such as the Ancient Books and the
+        # mobility souls. It holds them out of the pool until pre_fill. The rebuilt world stops
+        # before pre_fill, so those items come from get_pre_fill_items.
         in_pool = {item.name for item in (*world.multiworld.itempool, *world.get_pre_fill_items())
                    if item.player == world.player and item.advancement}
         progression = sorted((in_pool | set(self.result.prog_items)) - {UT_TRICKS_ITEM})

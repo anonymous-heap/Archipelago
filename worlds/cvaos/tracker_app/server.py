@@ -29,7 +29,7 @@ TrackerContext.hand_over):
 
 The server answers only its own page. Any web site open in the browser could otherwise reach it,
 read the slot and the room's chat, and point the tracker at another server or stop it. So every
-request must name this server as its Host, which also defeats DNS rebinding. The websocket also
+request must name this server as its Host, which defeats DNS rebinding. The websocket also
 needs the page's own Origin, which a browser always sends and a site can't forge.
 """
 from __future__ import annotations
@@ -73,9 +73,9 @@ socket_logger = logging.getLogger("websockets.server.cvaos_tracker")
 socket_logger.setLevel(logging.WARNING)  # each HTTP answer is also logged as a rejection, at INFO
 socket_logger.addFilter(QuietHttp())
 
-# Each of the page's files, with its content type. Guessing the type would read the Windows
-# registry, which another program may have changed. A browser ignores a stylesheet that isn't
-# served as text/css.
+# Each of the page's files, with its content type. The types are written out rather than
+# guessed, because guessing reads the Windows registry, which another program may have changed.
+# A wrong type can break the page, since a browser ignores a stylesheet not served as text/css.
 PAGE_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
@@ -92,7 +92,7 @@ IDLE_STOP = 1800.0
 IDLE_CHECK = 15.0  # seconds between looks at whether a page is open
 
 APP = "cvaos-tracker"
-PROTOCOL = 1  # raise it when the page and the server would no longer understand each other
+PROTOCOL = 1  # raise it when a message changes in a way that other versions can't read
 
 
 @functools.cache
