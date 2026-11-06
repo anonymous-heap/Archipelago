@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from unittest import mock
 
 from ..ram import addresses as addr
 from ..rom import custom_pickups as cp
@@ -69,8 +70,6 @@ class PlacementTest(unittest.TestCase):
     def test_trampoline_fits_its_reservation_and_is_clear_of_m2(self):
         self.assertLessEqual(len(sgh._TRAMPOLINE), 0x80)
         self.assertIsNone(m2_region_hit(TRAMP, 0x80))
-        # the previous hook blob (inventory menu, 0x670500 + 212 bytes) ends before us
-        self.assertGreaterEqual(TRAMP, 0x670500 + 212)
 
     def test_descriptions_sit_between_the_trampoline_and_the_icon_table(self):
         trampoline_end = sgh.GUARANTEE_TRAMPOLINE.addr + sgh.GUARANTEE_TRAMPOLINE.size
@@ -245,32 +244,44 @@ class DescriptionTest(unittest.TestCase):
             sgh.build_description_writes(bytes(rom))
 
 
+# rom_config.json with every optional feature off. run_apply_rom_features overrides entries of it.
+FEATURES_OFF = {"skull_key_warp": False, "ancient_book_soul_drops": False,
+                "forbidden_area_pickup": False, "soul_shuffle_plan": {},
+                "multiply_soul_drop_rates": False, "single_jump_divekick": False,
+                "classicvania_movement": False, "oops_all_whips": False}
+
+# The builders, as (module, function), that need more of a real base ROM than a test fixture has.
+STUBBED_BUILDERS = (("soul_guarantee_hook", "build_writes"), ("soul_shuffle", "build_writes"),
+                    ("soul_drop_rates", "build_writes"), ("received_item_box", "build_writes"),
+                    ("custom_pickups", "build_writes_from_rom"), ("inventory_menu", "build_writes"))
+
+
+def run_apply_rom_features(test: unittest.TestCase, rom: bytes, **config) -> dict[str, mock.Mock]:
+    """Run apply_rom_features on ``rom``, with ``config`` overriding entries of FEATURES_OFF.
+
+    The config is passed as JSON, the way rom_config.json stores it. Each builder in
+    STUBBED_BUILDERS is replaced by a stub that writes nothing, until ``test`` ends. Returns each
+    stub by its module's name, so a test can check the arguments that builder received.
+    """
+    from ..rom import patch as rp
+    caller = mock.Mock(get_file=lambda name: json.dumps({**FEATURES_OFF, **config}).encode())
+    stubs = {}
+    for module, function in STUBBED_BUILDERS:
+        patcher = mock.patch.object(getattr(rp, module), function, return_value={})
+        stubs[module] = patcher.start()
+        test.addCleanup(patcher.stop)
+    rp.CVAOSPatchExtension.apply_rom_features(caller, rom, "rom_config.json")
+    return stubs
+
+
 class PatchPipelineTest(unittest.TestCase):
     """apply_rom_features installs the book descriptions only when Ancient Book Soul Drops is on,
     and installs them before the Item-Use menu extension copies the string-pointer array."""
 
     def _rom_seen_by_the_menu_extension(self, books_on: bool) -> bytes:
-        from unittest import mock
-
-        from ..rom import patch as rp
-        config = {"skull_key_warp": False, "ancient_book_soul_drops": books_on,
-                  "forbidden_area_pickup": False, "soul_shuffle_plan": {},
-                  "multiply_soul_drop_rates": False, "single_jump_divekick": False,
-                  "classicvania_movement": False, "oops_all_whips": False}
-        caller = mock.Mock(get_file=lambda name: json.dumps(config).encode())
-        seen: list[bytes] = []
-        stubs = [mock.patch.object(rp.soul_guarantee_hook, "build_writes", return_value={}),
-                 mock.patch.object(rp.soul_drop_rates, "build_writes", return_value={}),
-                 mock.patch.object(rp.received_item_box, "build_writes", return_value={}),
-                 mock.patch.object(rp.custom_pickups, "build_writes_from_rom", return_value={}),
-                 mock.patch.object(rp.inventory_menu, "build_writes",
-                                   side_effect=lambda rom: seen.append(rom) or {})]
-        for stub in stubs:
-            stub.start()
-            self.addCleanup(stub.stop)
-        rp.CVAOSPatchExtension.apply_rom_features(caller, bytes(rom_with_descriptions()),
-                                                  "rom_config.json")
-        return seen[0]
+        stubs = run_apply_rom_features(self, bytes(rom_with_descriptions()),
+                                       ancient_book_soul_drops=books_on)
+        return stubs["inventory_menu"].call_args.args[0]
 
     def test_the_menu_extension_copies_the_repointed_descriptions(self):
         rom = self._rom_seen_by_the_menu_extension(books_on=True)

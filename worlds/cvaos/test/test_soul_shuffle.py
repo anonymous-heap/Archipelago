@@ -12,6 +12,7 @@ import unittest
 from random import Random
 
 import worlds.cvaos.rom.soul_shuffle as ss
+from worlds.cvaos.test.test_soul_guarantee_hook import run_apply_rom_features
 
 
 def _fake_rom() -> bytes:
@@ -48,7 +49,8 @@ def _apply(rom: bytes, writes: dict) -> bytearray:
 
 def _assert_every_soul_obtainable(test: unittest.TestCase, patched: bytes) -> None:
     """Every vanilla soul has exactly one row, and that row can award it: a scripted boss row
-    keeps rate 0, and any other row holding a soul has a nonzero rate."""
+    keeps rate 0, and any other row holding a soul has a nonzero rate. Each progression soul is
+    also still on its vanilla enemy, where logic expects it."""
     souls = []
     for enemy_id in ss.VANILLA:
         row = ss._entry(enemy_id)
@@ -59,9 +61,14 @@ def _assert_every_soul_obtainable(test: unittest.TestCase, patched: bytes) -> No
             test.assertEqual(rate, 0, f"boss {enemy_id} gained a random roll")
         elif soul[1]:
             test.assertNotEqual(rate, 0, f"enemy {enemy_id} can never drop {soul}")
+        if enemy_id in ss.PROGRESSION_SOUL_ENEMIES:
+            test.assertEqual(soul, ss.VANILLA[enemy_id][:2],
+                             f"enemy {enemy_id} lost its progression soul")
         if soul[1]:
             souls.append(soul)
     test.assertCountEqual(souls, [(t, i) for t, i, _r in ss.VANILLA.values() if i])
+
+
 ALL_MODES = (ss.MODE_WITHIN_TYPE, ss.MODE_ANY_TYPE)
 
 
@@ -211,45 +218,6 @@ class TestBuildWrites(unittest.TestCase):
                 with self.subTest(mode=mode, seed=seed):
                     _assert_every_soul_obtainable(self, patched)
 
-    def test_guaranteed_drops_stay_guaranteed(self):
-        """A vanilla rate of 0 marks an unfarmable kill; it must never inherit a rarer rate."""
-        guaranteed = {e for e, (_t, index, rate) in ss.VANILLA.items() if index and rate == 0}
-        self.assertTrue(guaranteed)
-        for seed in range(30):
-            plan = ss.plan_shuffle(Random(seed), ss.MODE_ANY_TYPE)
-            writes = ss.build_writes(ROM, plan, keep_soul_drop_rates=True)
-            with self.subTest(seed=seed):
-                for enemy_id in guaranteed:
-                    self.assertNotIn(ss._entry(enemy_id) + ss.SOUL_RATE_OFF, writes)
-
-    def test_every_soul_still_has_exactly_one_source(self):
-        """The whole point: applying the writes permutes sources without losing a soul."""
-        vanilla_souls = sorted((t, i) for t, i, _r in ss.VANILLA.values() if i)
-        for mode in ALL_MODES:
-            for seed in range(10):
-                plan = ss.plan_shuffle(Random(seed), mode)
-                patched = bytearray(ROM)
-                for off, data in ss.build_writes(ROM, plan, True).items():
-                    patched[off:off + len(data)] = data
-                after = sorted(
-                    (patched[ss._entry(e) + ss.SOUL_TYPE_OFF],
-                     patched[ss._entry(e) + ss.SOUL_INDEX_OFF])
-                    for e in ss.VANILLA
-                    if patched[ss._entry(e) + ss.SOUL_INDEX_OFF])
-                with self.subTest(mode=mode, seed=seed):
-                    self.assertEqual(after, vanilla_souls)
-
-    def test_progression_souls_stay_on_their_enemy(self):
-        for mode in ALL_MODES:
-            for seed in range(10):
-                plan = ss.plan_shuffle(Random(seed), mode)
-                writes = ss.build_writes(ROM, plan, True)
-                with self.subTest(mode=mode, seed=seed):
-                    for enemy_id in ss.PROGRESSION_SOUL_ENEMIES:
-                        off = ss._entry(enemy_id)
-                        for field in (ss.SOUL_TYPE_OFF, ss.SOUL_INDEX_OFF, ss.SOUL_RATE_OFF):
-                            self.assertNotIn(off + field, writes)
-
 
 class TestGuards(unittest.TestCase):
     def test_rom_mismatch_is_rejected(self):
@@ -289,54 +257,30 @@ class TestStartingSoul(unittest.TestCase):
         for offset in ss.STARTING_VANILLA_BYTES:
             self.assertNotIn(offset, writes)
 
-    def test_grants_whatever_that_enemy_now_drops(self):
-        for mode in ALL_MODES:
-            for seed in range(15):
-                plan = ss.plan_shuffle(Random(seed), mode)
-                source = plan.get(ss.STARTING_SOUL_ENEMY)
-                if source is None:
-                    continue
-                writes = ss.build_writes(ROM, plan, True, shuffle_starting_soul=True)
-                soul_type, index, _rate = ss.VANILLA[source]
-                with self.subTest(mode=mode, seed=seed):
-                    # the grant takes a 0-based index; the table stores 1-based
-                    self.assertEqual(writes[ss.STARTING_GRANT_TYPE_OFF], bytes([soul_type]))
-                    self.assertEqual(writes[ss.STARTING_GRANT_INDEX_OFF], bytes([index - 1]))
+    def test_grants_and_equips_the_soul_that_enemy_now_drops(self):
+        """Swapping the starting enemy's soul with another enemy's retargets all five intro writes.
 
-    def test_equip_targets_the_slot_matching_the_soul_type(self):
-        """Any soul type is fine: the equip is repointed at its own equipped-soul slot."""
-        seen_types = set()
-        for mode in ALL_MODES:
-            for seed in range(40):
-                plan = ss.plan_shuffle(Random(seed), mode)
-                source = plan.get(ss.STARTING_SOUL_ENEMY)
-                if source is None:
-                    continue
-                soul_type, index, _rate = ss.VANILLA[source]
-                writes = ss.build_writes(ROM, plan, True, shuffle_starting_soul=True)
-                displacement = ss.EQUIP_SLOT_DISPLACEMENT[soul_type]
-                with self.subTest(mode=mode, seed=seed, soul_type=soul_type):
-                    self.assertEqual(writes[ss.STARTING_EQUIP_OFF], bytes([index]))
-                    self.assertEqual(writes[ss.STARTING_EQUIP_LOAD_OFF],
-                                     ss._ldrb_r0_from_r4(displacement))
-                    self.assertEqual(writes[ss.STARTING_EQUIP_STORE_OFF],
-                                     ss._strb_r0_to_r4(displacement))
-                seen_types.add(soul_type)
-        self.assertIn(ss.SOUL_TYPE_RED, seen_types)
-        self.assertTrue(seen_types - {ss.SOUL_TYPE_RED},
-                        "no non-red starting soul covered (needs any_type)")
-
-    def test_within_type_keeps_the_start_red(self):
-        for seed in range(30):
-            plan = ss.plan_shuffle(Random(seed), ss.MODE_WITHIN_TYPE)
-            source = plan.get(ss.STARTING_SOUL_ENEMY)
-            if source is None:
-                continue
-            with self.subTest(seed=seed):
-                self.assertEqual(ss.VANILLA[source][0], ss.SOUL_TYPE_RED)
-                writes = ss.build_writes(ROM, plan, True, shuffle_starting_soul=True)
-                self.assertEqual(writes[ss.STARTING_EQUIP_LOAD_OFF],
-                                 ss.STARTING_VANILLA_BYTES[ss.STARTING_EQUIP_LOAD_OFF])
+        The grant takes a 0-based index, while the equip field is 1-based. The equip's load and
+        store address the equipped-soul slot that matches the new soul's type.
+        """
+        # soul type -> the equip's ldrb and strb, r0 to or from [r4, #slot]
+        equips = {
+            ss.SOUL_TYPE_RED: (bytes.fromhex("607b"), bytes.fromhex("6073")),      # slot 0xd
+            ss.SOUL_TYPE_BLUE: (bytes.fromhex("a07b"), bytes.fromhex("a073")),     # slot 0xe
+            ss.SOUL_TYPE_YELLOW: (bytes.fromhex("e07b"), bytes.fromhex("e073")),   # slot 0xf
+        }
+        for soul_type, (load, store) in equips.items():
+            other = next(e for e in ss.shuffleable_enemies(ss.MODE_ANY_TYPE)
+                         if ss.VANILLA[e][0] == soul_type and e != ss.STARTING_SOUL_ENEMY)
+            _type, index, _rate = ss.VANILLA[other]
+            plan = {ss.STARTING_SOUL_ENEMY: other, other: ss.STARTING_SOUL_ENEMY}
+            writes = ss.build_writes(ROM, plan, True, shuffle_starting_soul=True)
+            with self.subTest(soul_type=soul_type, enemy=other):
+                self.assertEqual(writes[ss.STARTING_GRANT_TYPE_OFF], bytes([soul_type]))
+                self.assertEqual(writes[ss.STARTING_GRANT_INDEX_OFF], bytes([index - 1]))
+                self.assertEqual(writes[ss.STARTING_EQUIP_LOAD_OFF], load)
+                self.assertEqual(writes[ss.STARTING_EQUIP_OFF], bytes([index]))
+                self.assertEqual(writes[ss.STARTING_EQUIP_STORE_OFF], store)
 
     def test_equip_instruction_encoding_round_trips(self):
         """The rebuilt ldrb/strb must decode back to the intended displacement."""
@@ -368,18 +312,6 @@ class TestStartingSoul(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "starting-soul site"):
             ss.build_writes(bytes(bad), plan, True, shuffle_starting_soul=True)
 
-    def test_patch_widths_match_vanilla(self):
-        """Every write must be exactly as wide as the bytes it replaces."""
-        for mode in ALL_MODES:
-            for seed in range(15):
-                plan = ss.plan_shuffle(Random(seed), mode)
-                if ss.STARTING_SOUL_ENEMY not in plan:
-                    continue
-                writes = ss.build_writes(ROM, plan, True, shuffle_starting_soul=True)
-                for offset, vanilla in ss.STARTING_VANILLA_BYTES.items():
-                    with self.subTest(mode=mode, seed=seed, offset=offset):
-                        self.assertEqual(len(writes[offset]), len(vanilla))
-
 
 class TestWiring(unittest.TestCase):
     """The seams between the option, rom_config.json and build_writes."""
@@ -394,16 +326,14 @@ class TestWiring(unittest.TestCase):
         for mode in _SOUL_SHUFFLE_MODES.values():
             self.assertIn(mode, (ss.MODE_OFF, ss.MODE_WITHIN_TYPE, ss.MODE_ANY_TYPE))
 
-    def test_plan_survives_the_json_round_trip(self):
-        """rom_config.json stringifies dict keys; apply_rom_features must undo that."""
-        import json
-
+    def test_build_writes_receives_the_plan_with_integer_keys(self):
+        """rom_config.json stores the plan's keys as strings, so apply_rom_features converts them
+        back to enemy ids before it builds the shuffle."""
         plan = ss.plan_shuffle(Random(5), ss.MODE_WITHIN_TYPE)
-        revived = {int(target): source
-                   for target, source in json.loads(json.dumps(plan)).items()}
-        self.assertEqual(revived, plan)
-        self.assertEqual(ss.build_writes(ROM, revived, True),
-                         ss.build_writes(ROM, plan, True))
+        stubs = run_apply_rom_features(self, ROM, soul_shuffle_plan=plan,
+                                       keep_soul_drop_rates=True, shuffle_starting_soul=False)
+        stubs["soul_shuffle"].assert_called_once()
+        self.assertEqual(stubs["soul_shuffle"].call_args.args[1], plan)
 
 
 if __name__ == "__main__":

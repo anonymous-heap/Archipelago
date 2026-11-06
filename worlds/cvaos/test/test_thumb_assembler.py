@@ -21,15 +21,15 @@ from worlds.cvaos.rom import thumb_assembler as asm
 
 ROM_DIR = os.path.dirname(received_item_box.__file__)
 
-#: (source file, the GBA address it is linked at, the blob its module ships).
-HOOKS = (
-    ("received_item_box.s", received_item_box.HOOK_BODY_GBA, received_item_box._HOOK_BODY),
-    ("custom_pickups.s", custom_pickups.CUSTOMHOOK_BASE_GBA, custom_pickups.CUSTOMHOOK_BLOB),
-    ("skull_key_warp.s", skull_key_warp.WARPHOOK_BASE_GBA, skull_key_warp.WARPHOOK_BLOB),
-    ("deathlink_hook.s", deathlink_hook.DEATHLINK_TRAMPOLINE.addr, deathlink_hook._TRAMPOLINE),
-    ("soul_guarantee_hook.s", soul_guarantee_hook.GUARANTEE_TRAMPOLINE.addr,
-     soul_guarantee_hook._TRAMPOLINE),
-)
+#: source file -> (the GBA address it is linked at, the blob its module ships).
+HOOKS = {
+    "received_item_box.s": (received_item_box.HOOK_BODY_GBA, received_item_box._HOOK_BODY),
+    "custom_pickups.s": (custom_pickups.CUSTOMHOOK_BASE_GBA, custom_pickups.CUSTOMHOOK_BLOB),
+    "skull_key_warp.s": (skull_key_warp.WARPHOOK_BASE_GBA, skull_key_warp.WARPHOOK_BLOB),
+    "deathlink_hook.s": (deathlink_hook.DEATHLINK_TRAMPOLINE.addr, deathlink_hook._TRAMPOLINE),
+    "soul_guarantee_hook.s": (soul_guarantee_hook.GUARANTEE_TRAMPOLINE.addr,
+                              soul_guarantee_hook._TRAMPOLINE),
+}
 
 
 def has_keystone() -> bool:
@@ -43,7 +43,7 @@ def has_keystone() -> bool:
 @unittest.skipUnless(has_keystone(), "keystone is not installed (pip install keystone-engine)")
 class SourceMatchesBlobTest(unittest.TestCase):
     def test_every_blob_is_what_its_own_source_assembles_to(self):
-        for name, base, blob in HOOKS:
+        for name, (base, blob) in HOOKS.items():
             with self.subTest(source=name):
                 built = asm.assemble_file(os.path.join(ROM_DIR, name), base)
                 self.assertEqual(
@@ -52,74 +52,56 @@ class SourceMatchesBlobTest(unittest.TestCase):
                 )
 
     def test_every_hook_has_a_source(self):
-        # A blob whose .s was never written, or was deleted, would otherwise go unnoticed: one of
-        # these files did go missing once.
-        for name, _base, _blob in HOOKS:
-            with self.subTest(source=name):
-                self.assertTrue(os.path.isfile(os.path.join(ROM_DIR, name)))
+        # The .s files in rom/ must be exactly the sources HOOKS lists. A missing file means a
+        # blob has no source, and an extra file means a source whose blob is never compared.
         sources = {f for f in os.listdir(ROM_DIR) if f.endswith(".s")}
-        self.assertEqual(sources, {name for name, _b, _x in HOOKS}, "an .s file is untested")
+        self.assertEqual(sources, set(HOOKS))
 
     def test_a_trampoline_bakes_its_own_resume_address(self):
         # The trampolines return through a label of their own, so their bytes depend on where
         # they are linked. That is why each module pins the address it was built for.
-        name, base, blob = HOOKS[3]                       # deathlink_hook.s
-        moved = asm.assemble_file(os.path.join(ROM_DIR, name), base + 0x40)
+        base, blob = HOOKS["deathlink_hook.s"]
+        moved = asm.assemble_file(os.path.join(ROM_DIR, "deathlink_hook.s"), base + 0x40)
         self.assertEqual(len(moved), len(blob))
         self.assertNotEqual(moved, blob)
 
     def test_the_announcement_hook_does_not(self):
         # Its pool holds addresses of things elsewhere in the ROM, none of its own, so the same
         # bytes are valid at any word-aligned address. The .s says so; this checks it.
-        name, base, blob = HOOKS[0]                       # received_item_box.s
+        base, blob = HOOKS["received_item_box.s"]
+        source = os.path.join(ROM_DIR, "received_item_box.s")
         for delta in (0x200, 0x1000, -0x100):
             with self.subTest(delta=delta):
-                self.assertEqual(asm.assemble_file(os.path.join(ROM_DIR, name), base + delta), blob)
+                self.assertEqual(asm.assemble_file(source, base + delta), blob)
 
 
 class AssemblerRefusesBadInputTest(unittest.TestCase):
     """A silently mis-assembled hook is worse than one that fails to build, so the cases this
     assembler does not implement have to raise. None of these reach keystone."""
 
-    def assemble(self, source: str, base: int = 0x08670000) -> bytes:
-        return asm.assemble(source, base)
+    BASE = 0x08670000
 
-    def test_an_unimplemented_directive_is_refused(self):
-        with self.assertRaises(asm.AsmError):
-            self.assemble(".thumb\n.macro foo\n")
+    # (the problem, the source, its base address, a fragment of the error message)
+    CASES = (
+        ("unimplemented directive", ".thumb\n.macro foo\n", BASE,
+         "unimplemented directive .macro"),
+        ("undefined symbol", "    ldr r0, =NOWHERE\n    .pool\n", BASE, "NOWHERE"),
+        ("circular .equ", ".equ A, B\n.equ B, A\n    ldr r0, =A\n    .pool\n", BASE, "circular"),
+        ("literal with no pool", "    ldr r0, =0x1234\n", BASE, "pool"),
+        ("duplicate label", ".Lx:\n.Lx:\n", BASE, "defined twice"),
+        ("out-of-range branch", ".Lstart:\n" + "    .hword 0\n" * 200 + "    beq .Lstart\n", BASE,
+         "out of range"),
+        ("misaligned base", "    .hword 0\n", BASE + 1, "not halfword aligned"),
+        ("label that is also an .equ", ".equ Dup, 1\nDup:\n    .hword 0\n", BASE,
+         "both a label and an .equ"),
+    )
 
-    def test_an_undefined_symbol_is_named_in_the_error(self):
-        with self.assertRaises(asm.AsmError) as caught:
-            self.assemble("    ldr r0, =NOWHERE\n    .pool\n")
-        self.assertIn("NOWHERE", str(caught.exception))
-
-    def test_a_circular_equ_is_refused_rather_than_recursing(self):
-        with self.assertRaises(asm.AsmError) as caught:
-            self.assemble(".equ A, B\n.equ B, A\n    ldr r0, =A\n    .pool\n")
-        self.assertIn("circular", str(caught.exception))
-
-    def test_a_literal_with_no_pool_is_refused(self):
-        with self.assertRaises(asm.AsmError) as caught:
-            self.assemble("    ldr r0, =0x1234\n")
-        self.assertIn("pool", str(caught.exception))
-
-    def test_a_duplicate_label_is_refused(self):
-        with self.assertRaises(asm.AsmError):
-            self.assemble(".Lx:\n.Lx:\n")
-
-    def test_an_out_of_range_branch_is_refused(self):
-        source = ".Lstart:\n" + "    .hword 0\n" * 200 + "    beq .Lstart\n"
-        with self.assertRaises(asm.AsmError) as caught:
-            self.assemble(source)
-        self.assertIn("out of range", str(caught.exception))
-
-    def test_a_misaligned_base_is_refused(self):
-        with self.assertRaises(asm.AsmError):
-            self.assemble("    .hword 0\n", base=0x08670001)
-
-    def test_a_label_cannot_also_be_an_equ(self):
-        with self.assertRaises(asm.AsmError):
-            self.assemble(".equ Dup, 1\nDup:\n    .hword 0\n")
+    def test_bad_input_raises_and_names_the_problem(self):
+        for problem, source, base, fragment in self.CASES:
+            with self.subTest(problem):
+                with self.assertRaises(asm.AsmError) as caught:
+                    asm.assemble(source, base)
+                self.assertIn(fragment, str(caught.exception))
 
 
 if __name__ == "__main__":

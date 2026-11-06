@@ -62,9 +62,9 @@ class TestScaledRate(unittest.TestCase):
         byte value n -- so the contract is "land on the nearest one", not "hit the request
         exactly". This checks the choice against an exhaustive search of every byte.
 
-        It also captures the ceiling implicitly: byte 0 is excluded from the search because the
-        death routine skips the roll for it, so for a rate of 1 nothing is more common than the
-        rate itself and every request resolves to 1.
+        It also covers the ceiling. Byte 0 is excluded from the search because the death routine
+        skips the roll for it, so byte 1 gives the largest multiplier a rate can reach,
+        ``(rate + 4) / 5``. A request above that ceiling resolves to 1.
         """
         for percent in (120, 150, 200, 400, 1000):
             for rate in SAMPLE_RATES:
@@ -80,24 +80,14 @@ class TestScaledRate(unittest.TestCase):
                         abs(_chance(best) / _chance(rate) - wanted),
                         places=9)
 
-    def test_ceiling_is_reached_when_the_request_exceeds_it(self):
-        """Floors at 1 once the request passes what the rate can express (0 would be no drop)."""
-        for percent in (120, 200, 400, 1000):
-            for rate in SAMPLE_RATES:
-                if rate == 0:
-                    continue
-                ceiling = (rate + sdr.RATE_CHANCE_BIAS) / (1 + sdr.RATE_CHANCE_BIAS)
-                with self.subTest(percent=percent, rate=rate):
-                    if percent / 100 > ceiling:
-                        self.assertEqual(sdr.scaled_rate(rate, percent), 1)
-
-    def test_default_multiplier_keeps_the_rare_tail_farmable_not_guaranteed(self):
-        """At 1.2x the souls that matter still need farming, and no soul is ever switched off."""
-        for rate in SAMPLE_RATES:
-            if rate == 0:
-                continue
-            with self.subTest(rate=rate):
-                self.assertGreater(sdr.scaled_rate(rate, 120), 0)
+    def test_a_nonzero_rate_never_scales_to_zero(self):
+        # 0 is not "very common": the death routine skips the roll for it entirely
+        # (rom/soul_guarantee_hook.py), so the multiplier must never produce it.
+        rates = [rate for rate in SAMPLE_RATES if rate] + [2, 5, 0xFF]
+        for rate in rates:
+            for percent in (120, 150, 200, 400, 1000):
+                with self.subTest(rate=rate, percent=percent):
+                    self.assertGreaterEqual(sdr.scaled_rate(rate, percent), 1)
 
     def test_never_makes_a_soul_rarer(self):
         for percent in (120, 150, 200, 400, 1000):
@@ -128,7 +118,6 @@ class TestScaledRate(unittest.TestCase):
         """1.2x should move a typical rate without collapsing it to guaranteed."""
         self.assertEqual(sdr.scaled_rate(20, 120), 16)
         self.assertEqual(sdr.scaled_rate(50, 120), 41)
-        self.assertGreater(sdr.scaled_rate(7, 120), 0)
 
 
 class TestMultiplierWrites(unittest.TestCase):
@@ -137,6 +126,8 @@ class TestMultiplierWrites(unittest.TestCase):
         self.assertEqual(sdr.build_multiplier_writes(rom, 100), {})
 
     def test_covers_every_enemy_with_a_scalable_rate(self):
+        """Every enemy's rate is scaled as the ROM holds it. The fake table holds 20 for every
+        enemy, unlike the vanilla table, so this also shows that the rates are read from the ROM."""
         rom = _fake_rom(lambda e: 20)
         writes = sdr.build_multiplier_writes(rom, 200)
         self.assertEqual(len(writes), sdr.ENEMY_COUNT)
@@ -149,14 +140,6 @@ class TestMultiplierWrites(unittest.TestCase):
         for enemy_id in range(sdr.ENEMY_COUNT):
             with self.subTest(enemy=enemy_id):
                 self.assertEqual(sdr._rate_offset(enemy_id) in writes, enemy_id % 2 == 0)
-
-    def test_reads_current_rates_not_vanilla(self):
-        """It must compose with earlier edits, so it scales what is actually in the ROM."""
-        rom = _fake_rom(lambda e: 5)
-        writes = sdr.build_multiplier_writes(rom, 200)
-        expected = sdr.scaled_rate(5, 200)
-        self.assertEqual(writes[sdr._rate_offset(0)], bytes([expected]))
-        self.assertNotEqual(expected, sdr.scaled_rate(20, 200))
 
     def test_composes_with_the_overrides(self):
         """Running the multiplier after build_writes scales the boosted rates too."""
@@ -180,33 +163,16 @@ class TestMultiplierWrites(unittest.TestCase):
 
 
 class TestOptionWiring(unittest.TestCase):
-    def test_option_default_matches_the_requested_1_2x(self):
-        from worlds.cvaos.options import MultiplySoulDropRates, SoulDropRateMultiplier
+    def test_multiplier_option_defaults_range_and_presets(self):
+        from worlds.cvaos.options import MultiplySoulDropRates, SoulDropRateMultiplier as opt
 
-        self.assertEqual(SoulDropRateMultiplier.default, 120)
         self.assertEqual(MultiplySoulDropRates.default, 0)
-
-    def test_named_presets_are_in_range_and_include_vanilla(self):
-        from worlds.cvaos.options import SoulDropRateMultiplier as opt
-
+        self.assertEqual(opt.default, 120)
+        self.assertGreaterEqual(opt.range_start, 100, "a multiplier below 100% makes souls rarer")
         self.assertEqual(opt.special_range_names["vanilla"], 100)
         for name, value in opt.special_range_names.items():
             with self.subTest(preset=name):
                 self.assertTrue(opt.range_start <= value <= opt.range_end)
-
-    def test_range_never_makes_souls_rarer(self):
-        from worlds.cvaos.options import SoulDropRateMultiplier as opt
-
-        self.assertGreaterEqual(opt.range_start, 100)
-
-class RateFloorTest(unittest.TestCase):
-    def test_a_nonzero_rate_never_scales_to_zero(self):
-        # 0 is not "very common": the death routine skips the roll for it entirely
-        # (rom/soul_guarantee_hook.py), so the multiplier must never produce it.
-        for rate in (1, 2, 5, 32, 0xFF):
-            for percent in (150, 200, 400, 1000):
-                with self.subTest(rate=rate, percent=percent):
-                    self.assertGreaterEqual(sdr.scaled_rate(rate, percent), 1)
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from the raw block.
 """
 from __future__ import annotations
 
-from .._bytemaker_compat import Struct, s16, sizeof, u4, u8, u16
+from .._bytemaker_compat import Struct, s16, u4, u8, u16
 
 
 class PlayerVitals(Struct, endian="little"):
@@ -44,8 +44,3 @@ class SoulPair(Struct, endian="little", bit_order="lsb"):
 
     even: u4
     odd: u4
-
-
-# Byte sizes of each struct, for the read that precedes a parse.
-VITALS_SIZE = sizeof(PlayerVitals)
-EQUIPPED_GEAR_SIZE = sizeof(EquippedGear)

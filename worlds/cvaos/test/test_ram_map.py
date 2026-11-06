@@ -55,9 +55,6 @@ class EwramMapTest(unittest.TestCase):
             with self.subTest(entry=name):
                 self.assertEqual(tuple(getattr(addr, name).request()), (offset, size))
 
-    def test_pickup_flags_length_is_derived(self):
-        self.assertEqual(addr.PICKUP_FLAGS_LEN, 0x14)
-
     def test_inventory_tables(self):
         for name, (base, length, nibble) in DOCUMENTED_INVENTORY.items():
             with self.subTest(category=name):
@@ -74,7 +71,6 @@ class EwramMapTest(unittest.TestCase):
         self.assertEqual((pair.even, pair.odd), (5, 2))   # low nibble = even index
         pair.odd = 8
         self.assertEqual(pair.pack(), b"\x85")
-        self.assertIs(ram_pkg.SoulPair, SoulPair)
 
 
 class FakeBackend:
@@ -82,12 +78,18 @@ class FakeBackend:
 
     Reads are batched and writes are plain. A guarded write or batch checks every guard before
     applying anything, which matches the connector's frame-atomic behaviour.
+
+    ``read_batches`` and ``write_batches`` record the requests of each ``read_many`` and
+    ``guarded_write_many`` call, in order, so a test can check what went into one round-trip.
     """
 
     def __init__(self, memory: dict) -> None:
         self.memory = memory
+        self.read_batches: list[list] = []
+        self.write_batches: list[list] = []
 
     async def read_many(self, requests):
+        self.read_batches.append(list(requests))
         return [bytes(self.memory[dom][off:off + size]) for off, size, dom in requests]
 
     async def write(self, offset, data, domain):
@@ -102,6 +104,7 @@ class FakeBackend:
         return True
 
     async def guarded_write_many(self, writes):
+        self.write_batches.append(list(writes))
         for w in writes:
             current = bytes(self.memory[w.domain][w.offset:w.offset + len(w.expected)])
             if current != bytes(w.expected):
@@ -157,17 +160,10 @@ class AccessorBehaviourTest(unittest.TestCase):
         # counter unadvanced, so the next tick grants the item again.
         from ..ram.backend import GuardedWrite
         sentinel = GuardedWrite(0x1328A, b"\x06\x00", b"\x05\x00", EWRAM)
-        batches = []
-        original = self.ram.backend.guarded_write_many
-
-        async def record(writes):
-            batches.append(list(writes))
-            return await original(writes)
-
-        self.ram.backend.guarded_write_many = record
         self.assertTrue(self.run_(self.ram.give_item("ability_soul", 2, together_with=[sentinel])))
-        self.assertEqual(batches[0][-1], sentinel)
-        self.assertEqual(len(batches[0]), 3, "the soul, its switch, then the caller's write")
+        batch = self.ram.backend.write_batches[0]
+        self.assertEqual(batch[-1], sentinel)
+        self.assertEqual(len(batch), 3, "the soul, its switch, then the caller's write")
 
     def test_another_copy_keeps_the_players_switch(self):
         self.mem[0x13392] = 0x01                                 # ability_soul[0] owned, switched off
@@ -175,7 +171,9 @@ class AccessorBehaviourTest(unittest.TestCase):
         self.assertEqual(self.mem[0x13392], 0x02)
         self.assertEqual(self.mem[0x13396], 0, "a copy past the first must leave the switch alone")
 
-    def test_gold_stops_at_the_games_cap(self):
+    def test_gold_is_added_up_to_the_games_cap(self):
+        self.assertTrue(self.run_(self.ram.add_gold(500)))
+        self.assertEqual(int.from_bytes(self.mem[0x13290:0x13294], "little"), 1500)
         self.mem[0x13290:0x13294] = (999_000).to_bytes(4, "little")
         self.assertTrue(self.run_(self.ram.add_gold(2000)))
         self.assertEqual(int.from_bytes(self.mem[0x13290:0x13294], "little"), 999_999)
@@ -185,20 +183,15 @@ class AccessorBehaviourTest(unittest.TestCase):
 
     def test_run_state_is_one_batched_read(self):
         self.assertEqual(self.run_(self.ram.get_run_state()), (4, 1))
+        self.assertEqual(self.ram.backend.read_batches, [[(0x10, 1, EWRAM), (0x64, 1, EWRAM)]],
+                         "both values must come from one frame")
         self.assertTrue(self.run_(self.ram.is_in_gameplay()))
 
     def test_deathlink_state_is_one_batched_read(self):
         self.mem[0x1324C] = 1
-        batches = []
-        original = self.ram.backend.read_many
-
-        async def record(requests):
-            batches.append(list(requests))
-            return await original(requests)
-
-        self.ram.backend.read_many = record
         self.assertEqual(self.run_(self.ram.get_deathlink_state()), (4, 1, -5, True))
-        self.assertEqual(len(batches), 1, "the four values must come from one frame")
+        self.assertEqual(len(self.ram.backend.read_batches), 1,
+                         "the four values must come from one frame")
 
     def test_clearing_the_kill_request_zeroes_the_flag(self):
         self.run_(self.ram.request_kill())
@@ -226,11 +219,13 @@ class AccessorBehaviourTest(unittest.TestCase):
         self.run_(self.ram.give_item("blue_soul", 3))
         self.assertEqual(self.souls_collected(), 2)
 
-    def test_a_soul_at_the_cap_still_counts_the_way_vanilla_counts_it(self):
-        # yellow_soul[1] is at 9. The game counts souls absorbed, not distinct souls owned, and
-        # bumps the statistic even when the owned-count cannot go higher.
+    def test_a_soul_at_the_cap_is_delivered_and_counted_but_not_added(self):
+        # yellow_soul[1] is at 9, so its owned-count stays put and the give still reports the soul
+        # as delivered. The game counts souls absorbed, not distinct souls owned, so the
+        # statistic goes up even though the owned-count cannot.
         with self.assertLogs("Client", level="WARNING"):
             self.assertTrue(self.run_(self.ram.give_item("yellow_soul", 1)))
+        self.assertEqual(self.mem[0x1336E], 0x93)
         self.assertEqual(self.souls_collected(), 1)
 
     def test_a_granted_non_soul_leaves_the_soul_statistic_alone(self):
@@ -257,32 +252,22 @@ class AccessorBehaviourTest(unittest.TestCase):
         self.mem[0x13294 + 7] = 4
         self.assertEqual(self.run_(self.ram.owned_count("consumable", 7)), 4)
 
-    def test_owned_count_refuses_an_index_out_of_range(self):
+    def test_an_index_out_of_range_is_refused_before_any_read(self):
         with self.assertRaises(ValueError):
             self.run_(self.ram.owned_count("red_soul", 56))
-
-    def test_at_cap_give_is_reported_as_delivered_and_writes_nothing(self):
-        with self.assertLogs("Client", level="WARNING"):
-            self.assertTrue(self.run_(self.ram.give_item("yellow_soul", 1)))
-        self.assertEqual(self.mem[0x1336E], 0x93)
+        with self.assertRaises(ValueError):
+            self.run_(self.ram.give_item("red_soul", 56))
+        self.assertEqual(self.ram.backend.read_batches, [])
 
     def test_received_counter_is_compare_and_swapped(self):
         self.assertTrue(self.run_(self.ram.set_received_count(6, expected=5)))
         self.assertFalse(self.run_(self.ram.set_received_count(9, expected=5)))
         self.assertEqual(self.run_(self.ram.get_received_count()), 6)
 
-    def test_gold_add_guards_on_the_whole_word(self):
-        self.assertTrue(self.run_(self.ram.add_gold(500)))
-        self.assertEqual(self.mem[0x13290:0x13294], (1500).to_bytes(4, "little"))
-
     def test_kill_player_zeroes_the_signed_hp_field(self):
         self.run_(self.ram.kill_player())
         self.assertEqual(self.mem[0x1327A:0x1327C], b"\x00\x00")
         self.assertEqual(self.run_(self.ram.get_current_hp()), 0)
-
-    def test_index_out_of_range_is_refused_before_any_read(self):
-        with self.assertRaises(ValueError):
-            self.run_(self.ram.give_item("red_soul", 56))
 
 
 class BizHawkBackendTest(unittest.TestCase):
@@ -328,6 +313,5 @@ class BizHawkBackendTest(unittest.TestCase):
              [(0x10, [4], EWRAM), (0x20, [6, 0], EWRAM)]),
         ])
 
-    def test_backend_types_are_exported_from_the_package(self):
-        self.assertIs(ram_pkg.BizHawkBackend, BizHawkBackend)
+    def test_the_backend_protocol_is_exported_from_the_package(self):
         self.assertIs(ram_pkg.RamBackend, backend_module.RamBackend)

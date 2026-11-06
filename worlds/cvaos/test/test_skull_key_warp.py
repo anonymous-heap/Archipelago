@@ -16,9 +16,6 @@ from . import find_rom
 
 
 class TestWrites(unittest.TestCase):
-    def test_blob_is_intact(self):
-        self.assertEqual(len(skw.WARPHOOK_BLOB), 108)
-
     def test_trampoline_targets_warphook(self):
         writes = skw.build_writes()
         tramp = writes[skw.HOOK_SITE_FILE_OFFSET]

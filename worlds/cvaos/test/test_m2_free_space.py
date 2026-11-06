@@ -27,6 +27,42 @@ from ..rom.address_space import M2_AUDIO_BRIDGE, M2_EWRAM, M2_GRAPHIC, gba_space
 from ..rom.entity import GBA_ROM_BASE
 
 
+def free_rom_spans() -> list[tuple[str, int, int]]:
+    """Every AP placement in free ROM, as ``(name, file offset, length)``.
+
+    A placement with a declared reservation is listed at its reserved size, because its blob may
+    grow to fill it. custom_pickups and inventory_menu read the base ROM (icon sprites, text
+    tables) to build their writes, so their spans come from the constants and the ROM-free parts
+    of each payload.
+    """
+    return [
+        ("identifier", patch.ARCHIPELAGO_IDENTIFIER_START, len(patch.ARCHIPELAGO_IDENTIFIER)),
+        ("auth number", patch.AUTH_NUMBER_START, 16),
+        ("deathlink trampoline", dh.DEATHLINK_TRAMPOLINE.addr - GBA_ROM_BASE,
+         dh.DEATHLINK_TRAMPOLINE.size),
+        ("Skull Key warp hook", skw.WARPHOOK_BASE_FILE_OFFSET, len(skw.WARPHOOK_BLOB)),
+        ("Skull Key description", skw.DESC_STRING_FILE_OFFSET,
+         len(skw.build_writes()[skw.DESC_STRING_FILE_OFFSET])),
+        ("custom-pickup dispatcher", cp.CUSTOMHOOK_BASE_GBA - GBA_ROM_BASE, len(cp.CUSTOMHOOK_BLOB)),
+        ("custom-pickup descriptor table", cp.CUSTOM_DESC_TABLE_GBA - GBA_ROM_BASE,
+         len(cp._desc_table(cp._registry()))),
+        ("menu blob", im.MENU_BLOB_GBA - GBA_ROM_BASE, len(im.MENU_BLOB)),
+        ("soul guarantee trampoline", sgh.GUARANTEE_TRAMPOLINE.addr - GBA_ROM_BASE,
+         sgh.GUARANTEE_TRAMPOLINE.size),
+        ("Ancient Book descriptions", sgh.BOOK_DESCRIPTIONS.addr - GBA_ROM_BASE,
+         sgh.BOOK_DESCRIPTIONS.size),
+        # The extended icon table holds at least MAX_SHADOW_SLOT + 1 entries of
+        # CONSUMABLE_ENTRY_SIZE bytes.
+        ("extended icon table", cp.CUSTOM_ICON_TABLE_GBA - GBA_ROM_BASE, 0x2C0),
+        # inventory_menu sizes its relocated tables from the base ROM, so only their first bytes
+        # are listed.
+        ("EXT_NAME_TABLE_GBA", im.EXT_NAME_TABLE_GBA - GBA_ROM_BASE, 1),
+        ("EXT_DESC_TABLE_GBA", im.EXT_DESC_TABLE_GBA - GBA_ROM_BASE, 1),
+        ("EXT_STRINGPTR_GBA", im.EXT_STRINGPTR_GBA - GBA_ROM_BASE, 1),
+        ("NEW_STRINGS_GBA", im.NEW_STRINGS_GBA - GBA_ROM_BASE, 1),
+    ]
+
+
 class M2RegionsTest(unittest.TestCase):
     def test_regions_match_the_measured_ranges(self):
         geometry = gba_space()
@@ -61,9 +97,17 @@ class M2FreeSpaceTest(unittest.TestCase):
         region = m2_region_hit(offset, length)
         self.assertIsNone(region, f"{what} at 0x{offset:06X}+0x{length:X} lands in {region!r}")
 
-    def test_metadata_block_is_clear(self):
-        self._assert_clear(patch.ARCHIPELAGO_IDENTIFIER_START, len(patch.ARCHIPELAGO_IDENTIFIER), "identifier")
-        self._assert_clear(patch.AUTH_NUMBER_START, 16, "auth number")
+    def test_free_rom_spans_are_clear(self):
+        for name, offset, length in free_rom_spans():
+            with self.subTest(span=name):
+                self._assert_clear(offset, length, name)
+
+    def test_free_rom_spans_do_not_overlap(self):
+        spans = sorted(free_rom_spans(), key=lambda span: span[1])
+        for (name, offset, length), (next_name, next_offset, _length) in zip(spans, spans[1:]):
+            with self.subTest(span=name):
+                self.assertLessEqual(offset + length, next_offset,
+                                     f"{name} at 0x{offset:06X}+0x{length:X} runs into {next_name}")
 
     def test_rom_free_write_sets_are_clear(self):
         site = sgh.HOOK_SITE.addr - GBA_ROM_BASE
@@ -78,18 +122,3 @@ class M2FreeSpaceTest(unittest.TestCase):
             for offset, data in writes.items():
                 with self.subTest(feature=name, offset=hex(offset)):
                     self._assert_clear(offset, len(data), name)
-
-    def test_rom_reading_writers_placements_are_clear(self):
-        # custom_pickups and inventory_menu read the base ROM (icon sprites, text tables) to build their
-        # writes, so their placements are checked from the constants and the ROM-free parts of the payload.
-        self._assert_clear(cp.CUSTOMHOOK_BASE_GBA - GBA_ROM_BASE, len(cp.CUSTOMHOOK_BLOB), "custom-pickup dispatcher")
-        self._assert_clear(cp.CUSTOM_DESC_TABLE_GBA - GBA_ROM_BASE, len(cp._desc_table(cp._registry())),
-                           "custom-pickup descriptor table")
-        # The extended icon table holds at least MAX_SHADOW_SLOT + 1 entries of CONSUMABLE_ENTRY_SIZE bytes.
-        self._assert_clear(cp.CUSTOM_ICON_TABLE_GBA - GBA_ROM_BASE, 0x2C0, "extended icon table")
-        self._assert_clear(im.MENU_BLOB_GBA - GBA_ROM_BASE, len(im.MENU_BLOB), "menu blob")
-        self._assert_clear(sgh.BOOK_DESCRIPTIONS.addr - GBA_ROM_BASE, sgh.BOOK_DESCRIPTIONS.size,
-                           "Ancient Book descriptions")
-        for name in ("EXT_NAME_TABLE_GBA", "EXT_DESC_TABLE_GBA", "EXT_STRINGPTR_GBA", "NEW_STRINGS_GBA"):
-            with self.subTest(table=name):
-                self._assert_clear(getattr(im, name) - GBA_ROM_BASE, 1, name)

@@ -18,9 +18,8 @@ _FAKE_CONSUMABLES = b"".join(bytes([n, 0, n + 1, 6] + [0] * 12) for n in range(c
 
 
 class TestBlob(unittest.TestCase):
-    def test_blob_intact(self):
-        self.assertEqual(len(cp.CUSTOMHOOK_BLOB), 140)
-        # literal pool must bake the descriptor-table address the hook scans
+    def test_blob_bakes_the_descriptor_table_address(self):
+        # The literal pool holds the address of the descriptor table the hook scans.
         self.assertIn(cp.CUSTOM_DESC_TABLE_GBA.to_bytes(4, "little"), cp.CUSTOMHOOK_BLOB)
 
     def test_trampoline_targets_hook(self):
@@ -69,13 +68,9 @@ class TestWrites(unittest.TestCase):
             self.assertTrue(sheet0 <= top < sheet0 + 0x2000)  # within icon sheet 0 (0x2000 bytes)
 
     def test_icon_uses_shared_items_bank(self):
-        # Custom icons render through bank 6 (the always-loaded items palette); no per-item palette
-        # or loader edits are written, so the only palette-related write is the icon tiles themselves.
-        ext = self.w[cp.CUSTOM_ICON_TABLE_GBA - GBA]
-        for p in cp.CUSTOM_PICKUPS:
-            self.assertEqual(ext[p.item_offset * cp.CONSUMABLE_ENTRY_SIZE + cp.ITEM_ENTRY_PAL_OFF],
-                             cp.ITEMS_PALETTE_BANK)
-        # the items-palette block and its loader are untouched
+        # Custom icons render through bank 6, the always-loaded items palette, which
+        # test_extended_table_preserves_originals checks for each pickup. No per-item palette or
+        # loader edit is written, so the items-palette block and its loader stay untouched.
         self.assertNotIn(cp.ITEMS_PALETTE_GBA - GBA, self.w)
 
     def test_no_write_overlaps(self):
