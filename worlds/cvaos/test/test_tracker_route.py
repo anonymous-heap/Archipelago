@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import unittest
 
+from BaseClasses import Entrance
+
 from .. import CVAOSWorld
 from ..regions import UT_TRICKS_ITEM
-from ..tracker_route import DOOR_POINTS, describe_route, plan_route
+from ..tracker_route import DOOR_POINTS, describe_route, plan_route, route_steps
 from .test_universal_tracker import generate, reachable, regenerate_from, state_with
 
 TERRACE = "Terrace [503 CASTLE MAP 3]"
@@ -67,6 +69,52 @@ class DescribeRouteTest(unittest.TestCase):
                          describe_route(world, "lucky charm", state))
         # UT shows this docstring in its command help.
         self.assertTrue(CVAOSWorld.get_logical_path.__doc__)
+
+
+class GateRouteTest(unittest.TestCase):
+    """Routes through the gates whose rules are written in code rather than the routing CSVs."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.multiworld = generate({})
+        cls.world = cls.multiworld.worlds[1]
+        cls.state = cls.multiworld.get_all_state()
+
+    def needs_in(self, room: str, location_name: str, start_room: str) -> list[str]:
+        """Return what a route from ``start_room`` to the location names for ``room``."""
+        location = self.world.get_location(location_name)
+        route = plan_route(self.world, location, self.state, start_room)
+        steps = route_steps(self.state, route.entrances)
+        return next(needed for step_room, needed in steps if step_room == room)
+
+    def test_a_route_down_from_the_study_names_the_sealswitch(self):
+        # Room A01 lies between the Study's room 20D and the Forbidden Area's room A02.
+        self.assertEqual(self.needs_in("A01", "Treasure Chamber [A06 Joyeuse]", "20D"),
+                         ["Study Sealswitch"])
+
+    def test_a_route_up_from_the_forbidden_area_names_the_sealswitch_and_a_way_up(self):
+        self.assertEqual(self.needs_in("A01", "Behind Tunnel [20E Ancient Book 1]", "A02"),
+                         ["Study Sealswitch", "Malphas"])
+
+    def test_a_route_into_the_chaotic_realm_names_what_the_true_ending_needs(self):
+        # Every route into the Chaotic Realm crosses the door from 507 to 506, and every route
+        # into room 900 crosses the door from 904. Both doors have the same rule.
+        needs = ("(the three Ancient Books, Giant Bat, a Flame Demon soul, a Succubus soul,"
+                 " beating Graham)")
+        crossings = {"Marble Annex [B18 Super Potion (E)]": ("507", "506"),
+                     "Balcony Center Item [900 Black Panther]": ("904", "900")}
+        for location_name, (room, next_room) in crossings.items():
+            with self.subTest(location_name):
+                route = lines(describe_route(self.world, location_name, self.state))
+                self.assertIn(f"{room} {needs} > {next_room}", "\n".join(route))
+
+    def test_every_rule_a_route_can_cross_names_what_it_needs(self):
+        # An entrance without a rule needs nothing, and no route crosses a rule that never passes.
+        unnamed = [entrance.name for entrance in self.multiworld.get_entrances(1)
+                   if entrance.access_rule is not Entrance.access_rule
+                   and entrance.access_rule(self.state)
+                   and not hasattr(entrance.access_rule, "uses")]
+        self.assertEqual(unnamed, [])
 
 
 class PlanRouteTest(unittest.TestCase):

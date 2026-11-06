@@ -614,6 +614,8 @@ def _chaotic_realm_gate(world: CVAOSWorld):
             and can_reach_room(state, world, "904")
         )
 
+    rule.uses = lambda state: ("the three Ancient Books", "Giant Bat", "a Flame Demon soul",
+                               "a Succubus soul", "beating Graham")
     return rule
 
 
@@ -632,7 +634,8 @@ def _chaotic_realm_gate_deps(world: CVAOSWorld) -> list[str]:
 # Bespoke, non-ability access rules on specific *directional* transdoor crossings, keyed by
 # (from_entrance, to_entrance). Consulted in create_regions' transdoor loop. ``RULES`` values
 # are factories returning the access-rule callable; ``DEPS`` values return the region names
-# that rule reads, for indirect-condition registration.
+# that rule reads, for indirect-condition registration. Like the CSV rules, each access rule has a
+# ``uses`` attribute, so Universal Tracker's routes name what the crossing needs (tracker_route).
 SPECIAL_TRANSDOOR_RULES: dict[tuple[str, str], object] = {
     ("507:506", "506:507"): _chaotic_realm_gate,   # 507 -> 506: toward Chaos (B14)
     ("904:900", "900:904"): _chaotic_realm_gate,   # 904 -> 900: floor-break into the realm pocket
@@ -658,7 +661,12 @@ def _forbidden_area_forward_gate(world: CVAOSWorld, _csv_rule):
     if world.options.forbidden_area_button.value in use_csv_logic_options:
         return None
     player = world.player
-    return lambda state: state.has("Study Sealswitch", player)
+
+    def rule(state: CollectionState) -> bool:
+        return state.has("Study Sealswitch", player)
+
+    rule.uses = lambda state: ("Study Sealswitch",)
+    return rule
 
 
 def _forbidden_area_reverse_gate(world: CVAOSWorld, csv_rule):
@@ -673,16 +681,21 @@ def _forbidden_area_reverse_gate(world: CVAOSWorld, csv_rule):
     if world.options.forbidden_area_button.value == ForbiddenAreaButton.option_off:
         return None
     player = world.player
-    if csv_rule is None:
-        return lambda state: state.has("Study Sealswitch", player)
-    return lambda state: state.has("Study Sealswitch", player) and csv_rule(state)
+    csv_uses = getattr(csv_rule, "uses", lambda state: ())
+
+    def rule(state: CollectionState) -> bool:
+        return state.has("Study Sealswitch", player) and (csv_rule is None or csv_rule(state))
+
+    rule.uses = lambda state: ("Study Sealswitch", *csv_uses(state))
+    return rule
 
 
 # Bespoke per-direction access rules on specific WITHIN-ROOM crossings, keyed by
 # (room_id, from_room, to_room). Consulted in create_regions' within-room routing loop. A factory
 # takes the world and the CSV-derived rule, and returns the replacement access-rule callable, or
 # None to keep the CSV rule. (has-item rules need no indirect-condition registration, unlike the
-# can_reach transdoor gates.)
+# can_reach transdoor gates.) A replacement rule has a ``uses`` attribute, like the CSV rule it
+# replaces, so Universal Tracker's routes name what the crossing needs (tracker_route).
 SPECIAL_ROOM_ENTRANCE_RULES: dict[tuple[str, str, str], object] = {
     ("A01", "20D", "A02"): _forbidden_area_forward_gate,
     ("A01", "A02", "20D"): _forbidden_area_reverse_gate,
