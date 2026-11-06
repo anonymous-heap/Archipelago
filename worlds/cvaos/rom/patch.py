@@ -14,10 +14,8 @@ import contextlib
 import hashlib
 import json
 import logging
-import os
 from typing import TYPE_CHECKING, Dict, List
 
-from BaseClasses import ItemClassification
 from settings import get_settings
 from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTokenTypes
 
@@ -27,7 +25,8 @@ from ..constants import AC_USA_ROM_MD5, USA_ROM_MD5
 from ..items import ENEMY_ITEM, FORBIDDEN_AREA_SWITCH, item_table
 from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
                inventory_menu, oops_all_whips, received_item_box, single_jump_divekick,
-               skull_key_warp, soul_drop_rates, soul_guarantee_hook, soul_shuffle)
+               skull_key_pickup, skull_key_warp, soul_drop_rates, soul_guarantee_hook,
+               soul_shuffle)
 from .entity import GBA_ROM_BASE, PICKUP, AoSPickupEntity
 from .._bytemaker_compat import offset_of
 from ..options import (ForbiddenAreaButton, SoulShuffle, TARGET_ADVANCE_COLLECTION,
@@ -338,6 +337,12 @@ class CVAOSPatchExtension(APPatchExtension):
         # since it registers a slot in the shared update-hook framework (rom/xanthus_framework.py),
         # which is idempotent.
         apply(received_item_box.build_writes(bytes(working)))
+
+        # Skull Key pickups at the cap (rom/skull_key_pickup.py): the game refuses a consumable
+        # pickup while the player holds 9, and this patch exempts the Skull Key. It is always
+        # applied, because every other world's item appears as a Skull Key and has to stay
+        # collectable at any count.
+        apply(skull_key_pickup.build_writes())
 
         # Custom-pickup framework (rom/custom_pickups.py): collect hook, extended consumable-icon
         # table, and the custom icons' tiles.

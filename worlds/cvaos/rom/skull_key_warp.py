@@ -34,7 +34,8 @@ Gating lives with the caller: ``rom/patch.py`` applies these writes when the "Sk
 is set, and the client floors the count when ``slot_data["skull_key_warp"]`` is set. This module
 just builds the bytes. The Skull Key is also the AP placeholder for remote pickups
 (``rom/patch.py`` ``_AP_PLACEHOLDER``); with the option on, those placeholders double as usable
-warps, which is harmless (the client's count clamp keeps pickup detection working).
+warps, which is harmless, because rom/skull_key_pickup.py lets Soma collect a Skull Key at any
+count.
 """
 from __future__ import annotations
 

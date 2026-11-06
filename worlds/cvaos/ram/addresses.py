@@ -207,6 +207,6 @@ ABILITY_ENABLED = ewram.entry(0x02013396, u8, count(2), name="ability_enabled")
 # Index of the Skull Key within the "consumable" array. Collecting a pickup that belongs to another
 # world gives Soma a Skull Key as a placeholder (rom/patch.py ``_AP_PLACEHOLDER``). Its owned-count
 # means nothing to AP, because the location check comes from the pickup's save flag rather than the
-# grant. It shares the consumable cap of 9, though, so the client keeps the count low to leave room
-# for the next pickup.
+# grant. rom/skull_key_pickup.py lets a Skull Key pickup be collected at the cap of 9, and the
+# client keeps the count low as well.
 SKULL_KEY_CONSUMABLE_INDEX = 25

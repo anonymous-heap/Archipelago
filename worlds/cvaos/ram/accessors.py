@@ -364,10 +364,14 @@ class AoSRAM:
         the pickup ``var_b`` for souls).
 
         AoS caps every owned-count at 9, the default ``cap``, for consumables, equipment and
-        souls alike. The game accepts a pickup at the cap but won't count it past 9, and this
-        method does the same: a received item that would exceed the cap is dropped and logged rather
-        than treated as a lost race. Returns ``False`` only if a guarded write lost a race, in
-        which case nothing was written and the caller retries next tick.
+        souls alike. The game refuses a consumable, weapon or armor pickup at the cap, so the
+        pickup stays on the floor. The one exception this world adds is the Skull Key, which
+        rom/skull_key_pickup.py lets the player collect at the cap without counting it.
+
+        A received item has no pickup to leave behind, so this method drops a copy that would
+        exceed the cap and logs it, rather than treating it as a lost race. Returns ``False``
+        only if a guarded write lost a race, in which case nothing was written and the caller
+        retries next tick.
 
         ``together_with`` holds other guarded writes to make in the same step as the item's own,
         so either all of them happen or none do. They are made even when the item is already at
@@ -450,9 +454,9 @@ class AoSRAM:
 
     @staticmethod
     def _report_at_cap(category: str, index: int, cap: int) -> None:
-        # Already at the cap: AoS accepts the pickup but won't count it past 9, so a received copy
-        # has nowhere to go. Log it (a real drop, not a race) rather than swallow it silently.
-        # give_item still makes its together_with writes, so the received-counter moves past it.
+        # Already at the cap, so a received copy has nowhere to go. Log it, since it is a real drop
+        # and not a lost race. give_item still makes its together_with writes, so the
+        # received-counter moves past it.
         from CommonClient import logger
         logger.warning("CVAoS: %s slot %d already at cap %d; received item dropped.",
                        category, index, cap)
@@ -477,11 +481,11 @@ class AoSRAM:
 
         Every pickup that belongs to another world grants Soma a Skull Key locally
         (rom/patch.py ``_AP_PLACEHOLDER``). The count means nothing to AP, since the location
-        check comes from the pickup's save flag rather than the grant. But AoS caps every
-        consumable at 9 and won't count a pickup past the cap, so a player who lets Skull Keys
-        pile up could stop registering pickups, and so stop sending other worlds their items.
-        This lowers the count to ``limit`` whenever the count is higher, which always leaves room
-        for the next pickup.
+        check comes from the pickup's save flag rather than the grant. The game refuses a
+        consumable pickup while its count is 9, but rom/skull_key_pickup.py exempts the Skull
+        Key. These pickups therefore stay collectable at any count, even with no client running.
+        This method only keeps the junk count low, by lowering it to ``limit`` whenever it is
+        higher.
 
         With the Skull Key warp feature on, the caller passes ``floor=1`` so the count never drops
         below 1 either, which keeps the warp item available. The write is unguarded: the value

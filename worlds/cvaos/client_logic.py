@@ -224,12 +224,12 @@ class CVAOSClientLogic:
             await ctx.send_msgs([{"cmd": "LocationChecks", "locations": sorted(new_checks)}])
 
         # Collecting another world's pickup grants Soma a junk Skull Key (rom/patch.py
-        # _AP_PLACEHOLDER). AoS caps consumables at 9 and stops allowing pickups past the cap, so a
-        # hoard of Skull Keys could stall pickup detection, and with it the sending of other
-        # worlds' items. Lowering the count each tick leaves room for the next pickup. With the
-        # Skull Key Warp option on, the count is also kept at 1 or more, so the warp item is always
-        # available. The cap only lowers the count and the floor only raises it, so they never
-        # conflict.
+        # _AP_PLACEHOLDER). The game refuses a consumable pickup while its count is 9, but
+        # rom/skull_key_pickup.py exempts the Skull Key, so these pickups stay collectable at any
+        # count, even offline. Lowering the count each tick only keeps the junk keys from piling
+        # up. With the Skull Key Warp option on, the count is also kept at 1 or more, so the warp
+        # item is always available. The cap only lowers the count and the floor only raises it, so
+        # they never conflict.
         await ram.cap_skull_keys(floor=1 if ctx.slot_data.get("skull_key_warp") else 0)
 
     async def _receive_items(self, ctx: "CommonContext", ram: AoSRAM) -> None:
