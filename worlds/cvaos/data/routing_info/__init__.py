@@ -279,8 +279,9 @@ def _load_transdoor_connections() -> tuple[TransdoorConnection, ...]:
         ))
 
     # Apply the overrides: a row with does_exist=FALSE removes that crossing, and a row with
-    # is_override=TRUE adds one.
-    override_reader = open_csv_if_exists(__name__, "override_transdoor_entrance_connections.csv")
+    # is_override=TRUE adds one. A row that does neither restates a crossing and has no effect.
+    override_file = "override_transdoor_entrance_connections.csv"
+    override_reader = open_csv_if_exists(__name__, override_file)
     if override_reader is not None:
         removals: set[tuple[str, str]] = set()
         additions: list[TransdoorConnection] = []
@@ -289,10 +290,21 @@ def _load_transdoor_connections() -> tuple[TransdoorConnection, ...]:
                 continue
             from_e = row["from_entrance"].strip()
             to_e = row["to_entrance"].strip()
-            if not _truthy(row.get("does_exist")):
+            removes = not _truthy(row.get("does_exist"))
+            adds = _truthy(row.get("is_override"))
+            if removes or adds:
+                # A row that changes the table has to name each door exactly. An untagged name
+                # for a room pair with two doors would match no crossing and do nothing.
+                _reject_ambiguous(from_e, override_file)
+                _reject_ambiguous(to_e, override_file)
+            if removes:
                 removals.add((from_e, to_e))
-            if _truthy(row.get("is_override")):
+            if adds:
                 additions.append(TransdoorConnection(from_entrance=from_e, to_entrance=to_e))
+        unmatched = removals - {(c.from_entrance, c.to_entrance) for c in out}
+        if unmatched:
+            raise ValueError(f"{override_file}: these removals match no crossing in "
+                             f"default_transdoor_entrance_connections.csv: {sorted(unmatched)}")
         out = [c for c in out if (c.from_entrance, c.to_entrance) not in removals]
         out.extend(additions)
 
