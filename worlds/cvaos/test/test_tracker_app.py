@@ -187,6 +187,13 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
                           "hidden_doors": [2], "castle_maps": [], "revealed": []})
         self.assertGreater(self.changes, 0)
 
+    async def test_a_position_that_is_not_a_room_and_two_numbers_is_ignored(self):
+        # Any client in the room can write the position key.
+        for value in ([None, 100, 50], ["003", "100", 50], ["003", 100], "003"):
+            with self.subTest(value=value):
+                self.store(self.ctx.position_key, value)
+                self.assertIsNone(self.ctx.snapshot()["position"])
+
     async def test_a_castle_map_reveals_its_areas(self):
         explored = Exploration(frozenset(), frozenset(), frozenset(), frozenset({3}))
         self.store(self.ctx.exploration_key, exploration.encode(explored))

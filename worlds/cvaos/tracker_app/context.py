@@ -367,8 +367,11 @@ class TrackerContext(CommonContext):
         """
         value = self.stored_data.get(self.position_key) if self.slot is not None else None
         try:
-            tracker_map.cell_of(value)
+            room, x, y = value
         except (TypeError, ValueError):
+            return None
+        # Any client in the room can write this key, and the page reads the room id as text.
+        if not (isinstance(room, str) and room and isinstance(x, int) and isinstance(y, int)):
             return None
         return value
 
