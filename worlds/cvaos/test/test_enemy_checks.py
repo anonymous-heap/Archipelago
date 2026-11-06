@@ -10,7 +10,7 @@ from collections import Counter
 from types import SimpleNamespace
 from unittest import mock
 
-from BaseClasses import CollectionState, ItemClassification, MultiWorld
+from BaseClasses import CollectionState, Entrance, ItemClassification, MultiWorld
 from test.general import setup_multiworld
 
 from .. import CVAOSWorld, item_smoothing
@@ -183,6 +183,33 @@ class LogicTest(unittest.TestCase):
                 self.assertTrue(entrances)
                 self.assertEqual([entrance.name for entrance in entrances
                                   if entrance not in watched], [])
+
+    def test_a_route_to_a_defeat_names_what_it_needs(self):
+        # Universal Tracker's routes list each step's uses.
+        state = CollectionState(self.multiworld)
+        defeat_entrances = [entrance for region in self.multiworld.get_regions(1)
+                            for entrance in region.exits
+                            if entrance.connected_region.name.startswith("Defeat: ")]
+        everything = self.multiworld.get_all_state(False)
+        for entrance in defeat_entrances:
+            # A way that needs nothing keeps the default rule, and no route crosses a way that
+            # nothing opens.
+            if (entrance.access_rule is Entrance.access_rule
+                    or not entrance.access_rule(everything)):
+                continue
+            with self.subTest(entrance=entrance.name):
+                self.assertTrue(hasattr(entrance.access_rule, "uses"))
+        options = self.multiworld.worlds[1].options
+        fallback_only = next(enemy.name for enemy in enemy_check_types(options)
+                             if not has_recorded_route(enemy.name))
+        entrance = next(entrance for entrance in defeat_entrances
+                        if entrance.connected_region.name == f"Defeat: {fallback_only}")
+        self.assertEqual(tuple(entrance.access_rule.uses(state)), FALLBACK_SOULS)
+        room_710 = {f"#{placement.enemy_number}" for placement in enemy_placements
+                    if placement.room == "710"}
+        entrance = next(entrance for entrance in defeat_entrances
+                        if entrance.name.rsplit(" ", 1)[-1] in room_710)
+        self.assertIn("beating the boss in room 725", entrance.access_rule.uses(state))
 
 
 class PriorityCapTest(unittest.TestCase):

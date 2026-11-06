@@ -371,16 +371,24 @@ def _create_enemy_checks(world: CVAOSWorld, entrance_regions_by_room: dict[str, 
         return
     multiworld, player = world.multiworld, world.player
 
+    # Each rule names what it needs in ``uses``, as the routing rules do, for Universal Tracker's
+    # routes (tracker_route).
     def fallback(state: CollectionState) -> bool:
         return state.has_all(FALLBACK_SOULS, player)
+
+    fallback.uses = lambda state: FALLBACK_SOULS
 
     def after_boss(rule: Callable[[CollectionState], bool] | None,
                    boss_room: str | None) -> Callable[[CollectionState], bool] | None:
         if boss_room is None:
             return rule
-        if rule is None:
-            return lambda state: can_reach_room(state, world, boss_room)
-        return lambda state: rule(state) and can_reach_room(state, world, boss_room)
+
+        def gated(state: CollectionState) -> bool:
+            return (rule is None or rule(state)) and can_reach_room(state, world, boss_room)
+
+        rule_uses = getattr(rule, "uses", lambda state: ())
+        gated.uses = lambda state: (*rule_uses(state), f"beating the boss in room {boss_room}")
+        return gated
 
     for enemy in types:
         region = Region(f"Defeat: {enemy.name}", player, multiworld)
