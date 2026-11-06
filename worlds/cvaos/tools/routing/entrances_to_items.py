@@ -1,29 +1,39 @@
 """
-The entrance graph extended with pickup nodes.
+The entrance graph extended with pickup and enemy nodes.
 
-A pickup node is written "PICKUP:N", where N is the pickup number. Each row of
-``symmetric_entrance_to_pickup_region_requirements.csv`` names one or more entrance nodes in the
-pickup's room, and each of those nodes gets two edges with the row's requirement masks: one to the
-pickup node and one back. The searches in :class:`~.entrances.RoutingQueries` work on the
-extended graph as well.
+A pickup node is written "PICKUP:N", where N is the pickup number, and the graph has one for every
+pickup. An enemy node is written "ENEMY:N", where N is the enemy number. The graph has one for
+each placement that ``regions.py`` gives an enemy region: a placement of ``LOGIC_ENEMY_TYPES``
+that respawns, so its soul can be farmed.
+
+Each routing row for a pickup or an enemy becomes one edge, from the door that the row names to
+the pickup or enemy node, with the row's requirement masks. As in ``regions.py``, the edge leads
+only toward the pickup or enemy. The CSVs call these rows symmetric, but an edge back to the door
+would let a search walk from one door of a room to another through a pickup, which generation
+does not allow.
+
+The searches in :class:`~.entrances.RoutingQueries` work on the extended graph as well.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
+from typing import Iterable, List, Optional, Set, Tuple
 
 from ...data import (
+    EntranceToEnemyRegionInfo,
     EntranceToPickupRegionInfo,
-    entrance_to_entrance_info_collection,
+    entrance_info_collection,
+    entrance_to_enemy_region_info_collection,
     entrance_to_pickup_region_info_collection,
+    enemy_meta_by_number,
+    pickup_info_collection,
 )
+from ...regions import LOGIC_ENEMY_TYPES, ONE_TIME_ENEMY_NUMBERS
 from .entrances import (
     Edge,
-    MaskUtils,
     RouteOption,
+    RoutingGraph,
+    RoutingGraphBuilder,
     RoutingQueries,
-    RoutingGraph as EntranceRoutingGraph,
-    RoutingGraphBuilder as EntranceRoutingGraphBuilder,
 )
 
 NodeId = str
@@ -50,108 +60,84 @@ class PickupNodeId:
         return int(node_id[len(PickupNodeId._PREFIX) :])
 
 
-Adjacency = Dict[NodeId, List[Edge]]
-FromToKey = Tuple[NodeId, NodeId]
-
-
-@dataclass(frozen=True, slots=True)
-class RoutingGraph:
+class EnemyNodeId:
     """
-    Minimal graph container compatible with RoutingQueries.
+    Helpers for representing enemy regions as graph nodes.
+
+    ``data.enemy_meta_by_number`` gives the enemy type, specifier and room for a node's number.
     """
 
-    adj: Adjacency
-    by_connection_number: Mapping[int, Tuple[NodeId, Edge]]
-    by_from_to: Mapping[FromToKey, Tuple[Edge, ...]]
+    _PREFIX = "ENEMY:"
 
-    def edges_from(self, node: NodeId) -> Sequence[Edge]:
-        return self.adj.get(node, ())
-
-    def has_node(self, node: NodeId) -> bool:
-        return node in self.adj
-
-    def lookup_by_connection_number(self, connection_number: int) -> Tuple[NodeId, Edge]:
-        return self.by_connection_number[connection_number]
-
-    def lookup_edges(self, from_node: NodeId, to_node: NodeId) -> Sequence[Edge]:
-        return self.by_from_to.get((from_node, to_node), ())
-
-
-class RoutingGraphBuilder:
     @staticmethod
-    def from_requirements(
-        requirements: Iterable[EntranceToPickupRegionInfo],
-        *,
-        include_combos: bool = True,
-        minimize: bool = True,
-        strict_combo_tokens: bool = True,
-        include_entrance_network: bool = True,
-    ) -> RoutingGraph:
-        if include_entrance_network:
-            base_graph: EntranceRoutingGraph = EntranceRoutingGraphBuilder.from_requirements(
-                entrance_to_entrance_info_collection,
-                include_combos=include_combos,
-                minimize=minimize,
-                strict_combo_tokens=strict_combo_tokens,
-            )
-            adjacency: Adjacency = {node: list(edges) for node, edges in base_graph.adj.items()}
-            by_connection_number: Dict[int, Tuple[NodeId, Edge]] = dict(base_graph.by_connection_number)
-            by_from_to: Dict[FromToKey, List[Edge]] = {
-                key: list(edges) for key, edges in base_graph.by_from_to.items()
-            }
-            connection_counter = (max(by_connection_number.keys()) + 1) if by_connection_number else 1
-        else:
-            adjacency = {}
-            by_connection_number = {}
-            by_from_to = {}
-            connection_counter = 1
+    def make(enemy_number: int) -> NodeId:
+        return f"{EnemyNodeId._PREFIX}{int(enemy_number)}"
 
-        for req in requirements:
-            masks = req.get_requirement_bitmasks(
-                include_combos=include_combos,
-                minimize=minimize,
-                strict_combo_tokens=strict_combo_tokens,
-            )
+    @staticmethod
+    def is_enemy(node_id: NodeId) -> bool:
+        return node_id.startswith(EnemyNodeId._PREFIX)
 
-            if not masks:
-                continue
+    @staticmethod
+    def number(node_id: NodeId) -> int:
+        return int(node_id[len(EnemyNodeId._PREFIX) :])
 
-            entrance_node = req.entrance_identifier
-            pickup_node = PickupNodeId.make(req.pickup_number)
 
-            for from_node, to_node in (
-                (entrance_node, pickup_node),
-                (pickup_node, entrance_node),  # symmetric: to and from the pickup region
-            ):
-                edge = Edge(
-                    to_node=to_node,
-                    connection_number=connection_counter,
-                    req_masks=tuple(int(m) for m in masks),
-                    variant=req.variant,
-                )
+def logic_enemy_numbers() -> Tuple[int, ...]:
+    """Return the enemy numbers that get an enemy node, which are those with an enemy region."""
+    return tuple(
+        number for number, (enemy_name, _, _) in enemy_meta_by_number.items()
+        if enemy_name in LOGIC_ENEMY_TYPES and number not in ONE_TIME_ENEMY_NUMBERS
+    )
 
-                adjacency.setdefault(from_node, []).append(edge)
-                adjacency.setdefault(to_node, adjacency.get(to_node, []))
-                by_connection_number[connection_counter] = (from_node, edge)
-                by_from_to.setdefault((from_node, to_node), []).append(edge)
-                connection_counter += 1
 
-        frozen_by_from_to: Dict[FromToKey, Tuple[Edge, ...]] = {
-            key: tuple(edges) for key, edges in by_from_to.items()
-        }
+def add_pickups_and_enemies(
+    graph: RoutingGraph,
+    pickup_rows: Iterable[EntranceToPickupRegionInfo] = entrance_to_pickup_region_info_collection,
+    enemy_rows: Iterable[EntranceToEnemyRegionInfo] = entrance_to_enemy_region_info_collection,
+) -> RoutingGraph:
+    """
+    Return ``graph`` with the pickup and enemy nodes and their edges added.
 
-        return RoutingGraph(
-            adj=adjacency,
-            by_connection_number=by_connection_number,
-            by_from_to=frozen_by_from_to,
-        )
+    A row is skipped when its door is not in ``entrance_info``, or when its pickup or enemy has
+    no node, which is what ``regions.py`` does. A row with no requirement mask has no
+    requirement.
+    """
+    doors = {door.door_identifier_unique for door in entrance_info_collection}
+    pickup_nodes = {pickup.pickup_number: PickupNodeId.make(pickup.pickup_number)
+                    for pickup in pickup_info_collection}
+    enemy_nodes = {number: EnemyNodeId.make(number) for number in logic_enemy_numbers()}
+
+    edges: List[Tuple[NodeId, Edge]] = []
+    rows = [(row, pickup_nodes.get(row.pickup_number)) for row in pickup_rows]
+    rows += [(row, enemy_nodes.get(row.enemy_number)) for row in enemy_rows]
+    for row, target in rows:
+        if target is None or row.entrance_identifier not in doors:
+            continue
+        masks = tuple(int(mask) for mask in row.get_requirement_bitmasks()) or (0,)
+        edges.append((row.entrance_identifier, Edge(
+            to_node=target,
+            connection_number=None,
+            req_masks=masks,
+            variant=getattr(row, "variant", None),
+        )))
+
+    return graph.with_edges([*pickup_nodes.values(), *enemy_nodes.values()], edges)
+
+
+def default_graph(*, open_gates: bool = False) -> RoutingGraph:
+    """
+    Return the extended graph built from the bundled routing data.
+
+    ``open_gates`` is passed to :meth:`RoutingGraphBuilder.from_requirements`.
+    """
+    return add_pickups_and_enemies(RoutingGraphBuilder.from_requirements(open_gates=open_gates))
 
 
 def reachable_pickup_numbers_from_entrance(
     graph: RoutingGraph, start_entrance: NodeId, have_mask: ReqMask
 ) -> Set[int]:
     """
-    Return pickup numbers reachable from the given entrance under have_mask.
+    Return the numbers of the pickups reachable from ``start_entrance`` under ``have_mask``.
     """
     reachable_nodes = RoutingQueries.reachable_entrance_nodes(graph, start_entrance, have_mask)
     return {
@@ -170,54 +156,12 @@ def pickup_route_options(
     limit: Optional[int] = None,
 ) -> Tuple[RouteOption, ...]:
     """
-    Wrapper around RoutingQueries.route_options with a pickup target.
+    Return :meth:`RoutingQueries.route_options` for reaching the pickup ``pickup_number``.
     """
-    pickup_node = PickupNodeId.make(pickup_number)
     return RoutingQueries.route_options(
         graph,
         start_entrance,
-        pickup_node,
+        PickupNodeId.make(pickup_number),
         have_mask=have_mask,
         limit=limit,
     )
-
-
-# Convenience: build a graph from the bundled symmetric entrance->pickup data.
-def default_graph(
-    *,
-    include_combos: bool = True,
-    minimize: bool = True,
-    strict_combo_tokens: bool = True,
-) -> RoutingGraph:
-    return RoutingGraphBuilder.from_requirements(
-        entrance_to_pickup_region_info_collection,
-        include_combos=include_combos,
-        minimize=minimize,
-        strict_combo_tokens=strict_combo_tokens,
-    )
-
-
-# ------------------------------------------------------------
-# Convenience test/demo
-# ------------------------------------------------------------
-
-def test_print_route_from_000_003_to_pickup_42() -> None:
-    """
-    Finds one minimal requirement set to reach pickup 42 from entrance 000:003
-    and prints the route with its required abilities.
-    """
-    graph = default_graph()
-    start = "000:003"
-    pickup_number = 42
-
-    options = pickup_route_options(graph, start, pickup_number, limit=1)
-    assert options, "No route options found from 000:003 to pickup 42"
-
-    option = options[0]
-    print(f"Required abilities: {MaskUtils.format(option.required_mask)}")
-    for step in option.steps:
-        print(
-            f"{step.edge_from} -> {step.edge_to} "
-            f"(conn={step.connection_number}, variant={step.variant}) "
-            f"requires {MaskUtils.format(step.chosen_edge_req_mask)}"
-        )

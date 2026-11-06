@@ -46,19 +46,9 @@ gates the crossing into 009.
 Building `_arrivals_by_room` from `from_entrance` instead of `to_entrance` would attach a room's
 pickups to the *neighbour's* side of each door, placing them in front of any gate on the crossing.
 
-It would also cause a worse problem in the route solvers, because their extended graph links each
-pickup to its entrance nodes in both directions. Suppose a pickup in room 009 gained edges to both
-`"009:006"` and `"006:009"`, and the door between 006 and 009 were one-way in the 006 → 009
-direction. A search reaching the pickup legitimately from inside room 009 would then expand to
-`"006:009"`, and from there to every within-room route in room 006 that departs from the 009-side
-door. The pickup node would act as a shortcut around the one-way door:
-
-```
-start → ... → "009:006" → PICKUP:N → "006:009" → (room 006 entrance nodes)
-```
-
-Expanding from the arrival side prevents this, because every node it produces is already inside the
-pickup's own room.
+Generation and the route solvers both give a pickup edges that lead only toward it, so a pickup
+attached to the wrong side cannot connect two doors. The harm is the misplaced gate: the pickup
+would count as reachable from the neighbour's side, without crossing the door into its room.
 
 ### A direction-insensitive door identifier
 

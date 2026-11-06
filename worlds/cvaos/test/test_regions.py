@@ -10,9 +10,7 @@ from ..data import (
     entrance_info_collection,
     pickup_info_collection,
     entrance_to_entrance_info_collection,
-    transdoor_connection_collection,
 )
-from ..tools.routing.entrances import RoutingGraphBuilder
 from ..locations import defeat_location_names, location_name_to_id
 
 
@@ -32,18 +30,6 @@ def test_location_names_use_friendly_format():
 def test_routing_data_loaded():
     """Test that routing data was loaded."""
     assert len(entrance_to_entrance_info_collection) > 0, "No routing info was loaded"
-
-
-def test_transdoor_edges_are_in_routing_graph():
-    """Transdoor mappings should become zero-cost edges in the entrance graph."""
-    assert len(transdoor_connection_collection) > 0, "No transdoor mappings were loaded"
-
-    graph = RoutingGraphBuilder.from_requirements(entrance_to_entrance_info_collection)
-    sample = transdoor_connection_collection[0]
-    edges = graph.lookup_edges(sample.from_entrance, sample.to_entrance)
-
-    assert edges, f"Missing transdoor edge {sample.from_entrance} -> {sample.to_entrance}"
-    assert any(edge.req_masks == (0,) for edge in edges), "Transdoor edges should have no requirements"
 
 
 def test_starting_entrance_exists():

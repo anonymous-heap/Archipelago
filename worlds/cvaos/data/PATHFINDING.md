@@ -51,7 +51,7 @@ A parsed row from `routing_info/symmetric_entrance_to_pickup_region_requirements
 The `entrance_identifier` is resolved by `_entrance_identifiers_from_cell()`. When `dest_room_identifier` names specific rooms it builds `f"{room_id}:{neighbor}"` for each, keeping only those that exist as a transdoor `from_entrance`. When the cell is `"Any"` it expands through `_arrivals_by_room`, which holds the doors on the pickup's own side of every crossing into that room.
 
 **EntranceToEnemyRegionInfo**
-The same for one enemy placement, from `routing_info/symmetric_entrance_to_enemy_region_requirements.csv`, keyed by `enemy_number`. Generation uses it; the route solvers do not.
+The same for one enemy placement, from `routing_info/symmetric_entrance_to_enemy_region_requirements.csv`, keyed by `enemy_number`. Generation and the route solvers both use it.
 
 ---
 
@@ -60,11 +60,11 @@ The same for one enemy placement, from `routing_info/symmetric_entrance_to_enemy
 **Entrance node** (`"ROOM_A:ROOM_B"`)
 A directed graph node for **the door in room A that leads to room B**, so you are standing in room A. Built by `EntranceId.make(room_a, room_b)`. Crossing that door moves you to `"B:A"`, the matching node on the far side. The node records which side of the doorway you are on as well as which doorway it is, because a `RoutingInfo` row says which *other* doors of a room you can reach from a given starting door, and that depends on where in the room you entered.
 
-**Pseudo start node** (`"__START__@ROOM"`)
-A synthetic node for "standing somewhere in this room" without being at any specific doorway, such as a spawn position. `EntranceId.pseudo_start_node()` builds one, but no graph builder adds it.
-
 **Pickup node** (`"PICKUP:N"`)
 A graph node representing collectible item number N. Built by `PickupNodeId.make(pickup_number)`. Only present in the extended graph produced by `../tools/routing/entrances_to_items.py`, not in the entrance-only graph.
+
+**Enemy node** (`"ENEMY:N"`)
+A graph node for enemy placement N. Built by `EnemyNodeId.make(enemy_number)`. The extended graph has one for each placement that `regions.py` gives an enemy region: a placement of an enemy type that logic uses, which respawns so its soul can be farmed.
 
 ---
 
@@ -74,16 +74,14 @@ A graph node representing collectible item number N. Built by `PickupNodeId.make
 A directed connection between two graph nodes. Carries:
 - `to_node`: destination node ID
 - `req_masks`: minimized tuple of ReqMasks (alternatives)
-- `connection_number`: unique sequential int for lookup
-- `variant`: optional int distinguishing alternative routes
+- `connection_number`: the routing row the edge comes from, or `None` for an edge that no routing row describes, such as a door crossing
+- `variant`: optional int distinguishing alternative routes, also `None` for such an edge
 
 **Entrance graph** (`../tools/routing/entrances.py`)
-Adjacency-list graph where every node is an entrance node. Built by `RoutingGraphBuilder.from_requirements()` from `entrance_to_entrance_info_collection` and the transdoor connections. Each transdoor row becomes an edge with no requirement, from `from_entrance` to `to_entrance`. Each `RoutingInfo` row with at least one ReqMask becomes one directed edge, `"from_room:room_id" → "room_id:to_room"`, which starts on the far side of the entry door.
-
-Generation reads the same row differently. `regions.py` starts it at `"room_id:from_room"`, the door inside `room_id`, as described under **RoutingInfo** above. So the solver and generation do not agree on a row's source node; see [FILE_DESCRIPTIONS.md](FILE_DESCRIPTIONS.md).
+Adjacency-list graph where every node is an entrance node, built by `RoutingGraphBuilder.from_requirements()` with the same nodes and edges as `regions.py`. Each transdoor crossing becomes an edge with no requirement, from `from_entrance` to `to_entrance`. The two crossings into the true ending are left out unless `open_gates` is set, because their gates need more than abilities. Each `RoutingInfo` row becomes one directed edge within `room_id`, `"room_id:from_room" → "room_id:to_room"`, and a row with no ReqMask is open. A row is skipped when either door is not a node. The routes in `regions.SPECIAL_ROOM_ROUTING` add the edges between portal nodes and doors.
 
 **Extended graph** (`../tools/routing/entrances_to_items.py`)
-The entrance graph plus pickup nodes. Constructed by copying the entrance graph then layering in bidirectional edges between each entrance node and its reachable pickup nodes (from `EntranceToPickupRegionInfo`). Used for answering "can I reach item X, and what do I need?"
+The entrance graph plus pickup and enemy nodes. Constructed by copying the entrance graph, then adding one edge from each entrance node that a pickup or enemy row names to that pickup's or enemy's node (from `EntranceToPickupRegionInfo` and `EntranceToEnemyRegionInfo`). As in `regions.py`, the edge leads only toward the pickup or enemy, so a search cannot walk from one door to another through one. Used for answering "can I reach item X, and what do I need?"
 
 ---
 
