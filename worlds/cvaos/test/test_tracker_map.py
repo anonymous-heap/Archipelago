@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import math
-import os
 import pkgutil
 import unittest
 from collections import Counter
@@ -22,6 +21,7 @@ from ..data.room_info import by_identifier as rooms_by_identifier
 from ..enemy_checks import checkable_types, defeat_location_name, pin_rooms, placements_of
 from ..locations import location_name_to_id
 from ..tracker_map import BRIGHT, cell_position
+from . import find_rom
 
 
 def ut_bytes(name: str) -> bytes:
@@ -47,13 +47,6 @@ def plain_room(x: int, y: int) -> bool:
     """Whether a map cell holds a room that is neither a save room nor a warp room."""
     value = map_info.cell(x, y)
     return value != map_info.EMPTY and not value & (map_info.SAVE_ROOM | map_info.WARP_ROOM)
-
-
-def find_rom() -> str | None:
-    name = "Castlevania - Aria of Sorrow (USA)/Castlevania - Aria of Sorrow (USA).gba"
-    candidates = [os.environ.get("CVAOS_USA_ROM", ""), "/mnt/c/Users/belmo/Downloads/" + name,
-                  os.path.join(os.path.expanduser("~"), "Downloads", name)]
-    return next((path for path in candidates if path and os.path.exists(path)), None)
 
 
 class TrackerMapTest(unittest.TestCase):

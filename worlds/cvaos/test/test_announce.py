@@ -16,6 +16,7 @@ from worlds.cvaos.ram.addresses import EWRAM
 from worlds.cvaos.rom import received_item_box as box
 
 from .test_ram_map import FakeBackend
+from . import find_rom
 
 ROM = announce.ROM_DOMAIN
 MB = announce.MAILBOX_OFFSET
@@ -226,7 +227,6 @@ class AnnounceGoldTest(unittest.TestCase):
         from worlds.cvaos import item_granting
         from worlds.cvaos.items import item_table
 
-        from .test_tracker_map import find_rom
         path = find_rom()
         if path is None:
             self.skipTest("base ROM not found (set CVAOS_USA_ROM)")

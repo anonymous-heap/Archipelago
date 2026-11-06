@@ -3,30 +3,16 @@ Tests for the Skull Key -> warp ROM hook (rom/skull_key_warp.py).
 
 The pure-byte tests always run. The emulation test executes the injected routine
 together with the *real* ROM helper functions under Unicorn; it is skipped unless
-both ``unicorn`` is installed and a USA base ROM is reachable (env ``CVAOS_ROM`` or
-the path configured in host.yaml).
+both ``unicorn`` is installed and a USA base ROM is reachable (see ``find_rom`` in this
+test package).
 """
 from __future__ import annotations
 
-import os
 import struct
 import unittest
 
 from ..rom import skull_key_warp as skw
-
-
-def _find_rom() -> str | None:
-    env = os.environ.get("CVAOS_ROM")
-    if env and os.path.isfile(env):
-        return env
-    try:
-        from settings import get_settings
-        path = get_settings().cvaos_options.rom_file
-        if path and os.path.isfile(path):
-            return path
-    except Exception:
-        pass
-    return None
+from . import find_rom
 
 
 class TestWrites(unittest.TestCase):
@@ -65,7 +51,7 @@ class TestEmulation(unittest.TestCase):
             import unicorn  # noqa: F401
         except ImportError:
             raise unittest.SkipTest("unicorn not installed")
-        cls.rom_path = _find_rom()
+        cls.rom_path = find_rom()
         if not cls.rom_path:
             raise unittest.SkipTest("base ROM not found (set CVAOS_ROM)")
         base = bytearray(open(cls.rom_path, "rb").read())
