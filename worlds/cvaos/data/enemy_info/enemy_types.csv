@@ -1,110 +1,110 @@
 enemy_id,name,drop_1,drop_2
 0,Bat,,
-1,Zombie,Gym Clothes,Combat Knife
+1,Zombie,Cloth Tunic,Baselard
 2,Skeleton,,
 3,Merman,,
-4,Axe Armor,Copper Plate,
+4,Axe Armor,Leather Plate,
 5,Skull Archer,,
 6,Peeping Eye,,
-7,Killer Fish,,Mind Up
-8,Bone Pillar,,High Mind Up
+7,Killer Fish,,Tasty Meat
+8,Bone Pillar,,Mind Up
 9,Blue Crow,,
 10,Buer,,
 11,White Dragon,,
-12,Zombie Soldier,Spoiled Milk,Short Sword
-13,Skeleton Knight,Estoc,
+12,Zombie Soldier,Rotten Meat,Combat Knife
+13,Skeleton Knight,Rapier,
 14,Ghost,,
 15,Siren,,
-16,Tiny Devil,,High Mind Up
-17,Durga,War Fatigues,Tea
-18,Rock Armor,Warhammer,Iron Plate
+16,Tiny Devil,,Mind Up
+17,Durga,Gym Clothes,Coffee
+18,Rock Armor,Hammer,Copper Plate
 19,Giant Ghost,,
-20,Winged Skeleton,Trident,
-21,Minotaur,Death's Sickle,Tasty Meat
-22,Student Witch,High Mind Up,Cream Puff
-23,Arachne,High Potion,
-24,Fleaman,,Gym Clothes
-25,Evil Butcher,Combat Knife,Skull Key
-26,Quezlcoatl,,Black Belt
-27,Ectoplasm,Potato Pancake,
-28,Catoblepas,,Coffee
-29,Ghost Dancer,,Pudding
-30,Waiter Skeleton,,Ramen
+20,Winged Skeleton,Spear,
+21,Minotaur,Battle Axe,Meat Strip
+22,Student Witch,Mind Up,Cream Soda
+23,Arachne,Potion,
+24,Fleaman,,Cloth Tunic
+25,Evil Butcher,Baselard,Spoiled Milk
+26,Quezlcoatl,,Ancient Belt
+27,Ectoplasm,Uncurse Potion,
+28,Catoblepas,,Milk
+29,Ghost Dancer,,Tea
+30,Waiter Skeleton,,Beef Curry
 31,Killer Doll,,
-32,Zombie Officer,Short Sword,Cape
+32,Zombie Officer,Combat Knife,Army Jacket
 33,Creaking Skull,,
-34,Wooden Golem,,Persimmon
+34,Wooden Golem,,Grapes
 35,Tsuchinoko,,
-36,Persephone,Red Scarf,Melon
-37,Lilith,Heart Pendant,
+36,Persephone,Scarf,Strawberry
+37,Lilith,Pendant,
 38,Nemesis,,
 39,Kyoma Demon,,
-40,Chronomage,Strawberry,
-41,Valkyrie,Gabolg,Steel Plate
-42,Witch,Grapes,Gungner
-43,Curly,Flame Necklace,Satan's Ring
+40,Chronomage,Pudding,
+41,Valkyrie,Partizan,Iron Plate
+42,Witch,Melon,Gabolg
+43,Curly,Skull Necklace,Flame Necklace
 44,Altair,,
 45,Red Crow,,
-46,Cockatrice,,High Potion
-47,Dead Warrior,,Silk Robe
-48,Devil,Flame Necklace,Mana Prism
-49,Imp,High Mind Up,
-50,Werewolf,Skull Necklace,Coffee
-51,Gorgon,Tasty Meat,Coffee
-52,Disc Armor,Steel Plate,
-53,Golem,,Super Potion
-54,Manticore,,Gram
+46,Cockatrice,,Potion
+47,Dead Warrior,,Samurai Armor
+48,Devil,Skull Necklace,High Mind Up
+49,Imp,Mind Up,
+50,Werewolf,Black Belt,Milk
+51,Gorgon,Meat Strip,Milk
+52,Disc Armor,Iron Plate,
+53,Golem,,High Potion
+54,Manticore,,Gladius
 55,Gremlin,,
 56,Harpy,,
 57,Medusa Head,,
-58,Bomber Armor,Silver Plate,
+58,Bomber Armor,Steel Plate,
 59,Lightning Doll,,
-60,Great Armor,Steel Plate,Joyeuse
+60,Great Armor,Iron Plate,Great Sword
 61,Une,,
-62,Giant Worm,,Milk
-63,Needles,,Mind Up
-64,Man-Eater,,Durandal
+62,Giant Worm,,Cream Puff
+63,Needles,,Tasty Meat
+64,Man-Eater,,Rahab's Sword
 65,Fish Head,,
-66,Nightmare,Partizan,
-67,Triton,Lance,Beef Curry
+66,Nightmare,Lance,
+67,Triton,Trident,Potato Pancake
 68,Slime,,
-69,Big Golem,,Hrunting
-70,Dryad,Rahab's Sword,Rotten Meat
-71,Poison Worm,Uncurse Potion,
-72,Arc Demon,,Mana Prism
-73,Cagnazzo,Potato Pancake,Kunitsuna
-74,Ripper,Black Cloak,
-75,Werejaguar,Whip Knuckle,
+69,Big Golem,,Milican's Sword
+70,Dryad,Mystletain,Persimmon
+71,Poison Worm,Anti-Venom,
+72,Arc Demon,,High Mind Up
+73,Cagnazzo,Uncurse Potion,Onikiri
+74,Ripper,Crimson Cloak,
+75,Werejaguar,Mach Punch,
 76,Ukoback,,
-77,Alura Une,,Grapes
+77,Alura Une,,Melon
 78,Biphron,,
 79,Mandragora,,
-80,Flesh Golem,Spoiled Milk,Skull Key
+80,Flesh Golem,Rotten Meat,Spoiled Milk
 81,Sky Fish,,
-82,Dead Crusader,Cutall,Army Jacket
-83,Kicker Skeleton,Ancient Belt,Black Belt
-84,Weretiger,Poison Fist,
-85,Killer Mantle,,Cream Soda
+82,Dead Crusader,Estoc,Blocking Mail
+83,Kicker Skeleton,Red Scarf,Ancient Belt
+84,Weretiger,Whip Knuckle,
+85,Killer Mantle,,Ramen
 86,Mudman,,
 87,Gargoyle,,
-88,Red Minotaur,Death's Sickle,Mind Up
+88,Red Minotaur,Battle Axe,Tasty Meat
 89,Beam Skeleton,,
 90,Alastor,,
-91,Skull Millione,Yasutsuna,Handgun
-92,Giant Skeleton,,Laevatain
+91,Skull Millione,Kunitsuna,Poison Fist
+92,Giant Skeleton,,Durandal
 93,Gladiator,,
 94,Bael,,
-95,Succubus,Scarf,Strawberry
+95,Succubus,Heart Pendant,Pudding
 96,Mimic,,
-97,Stolas,,Super Potion
-98,Erinys,,Cestus
-99,Lubicant,,Hammer
-100,Basilisk,,Hrunting
+97,Stolas,,High Potion
+98,Erinys,,Ronginus' Spear
+99,Lubicant,,Muramasa
+100,Basilisk,,Milican's Sword
 101,Iron Golem,,
-102,Demon Lord,Anti-Venom,Armor of Fire
-103,Final Guard,Eversing,Bamboo Sword
-104,Flame Demon,,Burtgang
-105,Shadow Knight,,Meat Strip
+102,Demon Lord,Mana Prism,Demon's Mail
+103,Final Guard,Gold Plate,Final Sword
+104,Flame Demon,,Laevatain
+105,Shadow Knight,,Super Potion
 106,Headhunter,,
 107,Death,,
 108,Legion,,

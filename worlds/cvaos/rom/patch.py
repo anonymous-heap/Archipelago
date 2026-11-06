@@ -74,8 +74,8 @@ def _item_encodings() -> Dict[int, tuple[int, int, int]]:
 
     An item that a vanilla pickup holds uses that pickup's subtype and item_offset. Its type is
     always PICKUP, even for the five items that vanilla holds only in HARD_PICKUPs, which the game
-    spawns only in Hard Mode. One code stands for every copy of an item, and a copy that an enemy
-    check adds has to spawn in normal mode too.
+    spawns only in Hard Mode. One code stands for every copy of an item, and a copy placed anywhere
+    else, by a plando or an item link for example, has to spawn in normal mode too.
 
     PICKUP is also correct for the copies that those five HARD_PICKUPs add to the pool. They are
     in the pool only when Hard Mode is on or Hard Mode Pickups is ``always``. With Hard Mode on,

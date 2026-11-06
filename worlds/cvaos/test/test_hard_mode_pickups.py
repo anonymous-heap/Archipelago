@@ -15,7 +15,6 @@ from test.general import gen_steps, setup_multiworld
 
 from .. import CVAOSWorld
 from ..data import pickup_info_collection
-from ..items import ENEMY_ITEM
 from ..options import HardModePickups
 from ..rom.entity import ENTITY_SIZE, GBA_ROM_BASE, HARD_PICKUP, PICKUP
 from ..rom.patch import _TYPE_OFF, get_location_data
@@ -76,10 +75,10 @@ class SpawnTypeTest(unittest.TestCase):
     """A location holding a Hard Mode item is written as a PICKUP, so it spawns in normal mode too.
 
     Whenever the item's own copy is in the pool, Hard Mode is on or Hard Mode Pickups is
-    ``always``, so its location spawns either way. A copy that an enemy check adds has the same
-    code, and has to spawn in normal mode. The entity type comes from the item rather than the
-    location, so these tests place the item at an ordinary location, which is where a real fill
-    nearly always puts it."""
+    ``always``, so its location spawns either way. A copy placed elsewhere, by a plando for example,
+    has the same code and has to spawn in normal mode. The entity type comes from the item rather
+    than the location, so these tests place the item at an ordinary location, which is where a
+    real fill nearly always puts it."""
 
     def _written_type(self, hard_mode: bool, setting: str, item_name: str) -> int:
         world = build(hard_mode, setting).worlds[1]
@@ -93,8 +92,7 @@ class SpawnTypeTest(unittest.TestCase):
             with self.subTest(item=pickup.item_name):
                 self.assertEqual(self._written_type(False, "always", pickup.item_name), PICKUP)
 
-    def test_an_enemy_checks_death_s_sickle_spawns_in_normal_mode(self):
-        self.assertIn("Death's Sickle", ENEMY_ITEM.values())
+    def test_a_hard_mode_item_placed_in_a_normal_mode_seed_spawns_there(self):
         self.assertEqual(self._written_type(False, "with_hard_mode", "Death's Sickle"), PICKUP)
 
 

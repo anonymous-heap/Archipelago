@@ -77,9 +77,11 @@ class PoolTest(unittest.TestCase):
     def test_an_enemy_check_adds_another_copy_of_its_item(self):
         without_checks = pool()
         with_checks = pool(enemy_checks="all")
-        self.assertEqual(with_checks["High Mind Up"] - without_checks["High Mind Up"], 4)
-        self.assertEqual(with_checks["High Mind Up"], 8)
-        self.assertEqual(with_checks["Gym Clothes"], 2)
+        # Three pickups hold a Mind Up, and four enemy types drop one.
+        self.assertEqual(with_checks["Mind Up"] - without_checks["Mind Up"], 4)
+        self.assertEqual(with_checks["Mind Up"], 7)
+        # No pickup holds a Cloth Tunic, and two enemy types drop one.
+        self.assertEqual(with_checks["Cloth Tunic"], 2)
         self.assertEqual(with_checks["100 Gold"] - without_checks["100 Gold"], 43)
 
     def test_an_enemy_copy_never_holds_progression_but_other_copies_keep_theirs(self):
@@ -95,9 +97,12 @@ class PoolTest(unittest.TestCase):
             with self.subTest(item=name):
                 self.assertTrue(world.create_item(name).advancement)
 
-    def test_death_s_sickle_comes_from_enemies_even_without_hard_mode_pickups(self):
-        self.assertEqual(pool(enemy_checks="all")["Death's Sickle"], 2)
-        self.assertEqual(pool(enemy_checks="all", hard_mode_pickups="always")["Death's Sickle"], 3)
+    def test_an_enemy_drop_follows_the_rom_table(self):
+        # The table stores each drop as its item index plus 1, and the game subtracts the 1. These
+        # four drops are well known, so an off-by-one in enemy_types.csv shows up here.
+        expected = {"Dryad": "Mystletain", "Flame Demon": "Laevatain", "Poison Worm": "Anti-Venom",
+                    "Arachne": "Potion"}
+        self.assertEqual({enemy: ENEMY_ITEM[enemy] for enemy in expected}, expected)
 
 
 class SmoothingTest(unittest.TestCase):
