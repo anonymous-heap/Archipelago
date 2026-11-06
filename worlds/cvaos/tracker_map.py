@@ -31,7 +31,7 @@ from typing import NamedTuple
 
 from . import tracker_png
 from .data import map_info, pickup_info_collection
-from .enemy_checks import checkable_types, defeat_location_name, pin_placement
+from .enemy_checks import checkable_types, defeat_location_name, pin_rooms
 from .data._csv_resources import open_csv
 from .data.room_info import by_identifier as rooms_by_identifier
 
@@ -245,31 +245,52 @@ _OFFSETS = sorted(((dx / 8, dy / 8) for dx in range(-12, 13) for dy in range(-12
 
 
 @functools.cache
-def defeat_pins() -> tuple[tuple[str, str, tuple[float, float]], ...]:
-    """Return each defeat location's pin, as its name, its room and its map-cell position.
+def defeat_pins() -> tuple[tuple[str, tuple[tuple[str, tuple[float, float]], ...]], ...]:
+    """Return each defeat location's pins, as its name and a (room, map-cell position) per pin.
 
-    A pin goes at its enemy's pin placement (enemy_checks.pin_placement), unless that would bring
-    it within PIN_SPACING of another pin and hide part of it. The other pins are the pickups', the
-    defeat pins already placed, and the placements of those still to come. The pin then moves to
-    the nearest spot that is clear of them all and keeps the whole pin inside its room. In a room
-    too crowded for that, it goes where it comes closest to being clear.
+    A defeat location has a pin in each room where its enemy appears (enemy_checks.pin_rooms). The
+    pin starts at the enemy's placement in that room, or in the middle of the room's first map
+    cell when no placement there has a recorded position.
+
+    A pin moves when it would come within PIN_SPACING of another pin and hide part of it. The other
+    pins are the pickups', the defeat pins already placed, and the starting spots of those still
+    to come. The pin then moves to the nearest spot that is clear of them all and keeps the whole
+    pin inside its room. In a room too crowded for that, it goes where it comes closest to being
+    clear.
     """
+    starts = []
+    for enemy in checkable_types():
+        for room, placement in pin_rooms(enemy.name):
+            start = (cell_position(room, placement.x, placement.y) if placement is not None
+                     else _first_cell_middle(room))
+            starts.append((defeat_location_name(enemy.name), room, start))
     placed = [cell_position(pickup.room_identifier, pickup.x, pickup.y)
               for pickup in pickup_info_collection]
-    waiting = {}
-    for enemy in checkable_types():
-        placement = pin_placement(enemy.name)
-        waiting[enemy.name] = (placement.room, cell_position(placement.room, placement.x,
-                                                              placement.y))
-    pins = []
-    for enemy in checkable_types():
-        room, start = waiting.pop(enemy.name)
-        others = [cell for cell in (*placed, *(cell for _, cell in waiting.values()))
-                  if math.dist(start, cell) < 2]
+    pins: dict[str, list[tuple[str, tuple[float, float]]]] = {}
+    for index, (name, room, start) in enumerate(starts):
+        waiting = (cell for _, _, cell in starts[index + 1:])
+        others = [cell for cell in (*placed, *waiting) if math.dist(start, cell) < 2]
         cell = _free_spot(room, start, others)
         placed.append(cell)
-        pins.append((defeat_location_name(enemy.name), room, cell))
-    return tuple(pins)
+        pins.setdefault(name, []).append((room, cell))
+    return tuple((name, tuple(spots)) for name, spots in pins.items())
+
+
+@functools.cache
+def _cells_by_room() -> dict[str, list[tuple[int, int]]]:
+    """Return each room's map cells, top row first and left to right."""
+    cells: dict[str, list[tuple[int, int]]] = {}
+    for y in range(map_info.ROWS):
+        for x in range(map_info.COLUMNS):
+            room = map_info.room_at(x, y)
+            if room is not None:
+                cells.setdefault(room, []).append((x, y))
+    return cells
+
+
+def _first_cell_middle(room: str) -> tuple[float, float]:
+    x, y = _cells_by_room()[room][0]
+    return x + 0.5, y + 0.5
 
 
 def _free_spot(room: str, start: tuple[float, float],
@@ -357,22 +378,23 @@ def build() -> tuple[list[dict], list[dict]]:
         locations.append({"name": pickup.room_identifier,
                           "sections": [{"name": pickup.location_name}],
                           "map_locations": map_locations})
-    # Each defeat location is pinned where defeat_pins puts it. UT shows it only in a seed that has
-    # it. UT keys a map's pins by position, so a pin that would land on a taken spot moves right, a
-    # pixel at a time, until the spot is free.
+    # Each defeat location is pinned where defeat_pins puts it, once in each room where its enemy
+    # appears. UT shows it only in a seed that has it. UT keys a map's pins by position, so a pin
+    # that would land on a taken spot moves right, a pixel at a time, until the spot is free.
     taken = {(spot["map"], spot["x"], spot["y"])
              for node in locations for spot in node["map_locations"]}
-    for name, room, cell in defeat_pins():
+    for name, spots in defeat_pins():
         map_locations = []
-        for m in MAPS:
-            if room not in m.rooms:
-                continue
-            x, y = pin(m.origin, cell)
-            while (m.name, x, y) in taken:
-                x += 1
-            taken.add((m.name, x, y))
-            map_locations.append({"map": m.name, "x": x, "y": y})
-        locations.append({"name": room, "sections": [{"name": name}],
+        for room, cell in spots:
+            for m in MAPS:
+                if room not in m.rooms:
+                    continue
+                x, y = pin(m.origin, cell)
+                while (m.name, x, y) in taken:
+                    x += 1
+                taken.add((m.name, x, y))
+                map_locations.append({"map": m.name, "x": x, "y": y})
+        locations.append({"name": name, "sections": [{"name": name}],
                           "map_locations": map_locations})
     return maps, locations
 

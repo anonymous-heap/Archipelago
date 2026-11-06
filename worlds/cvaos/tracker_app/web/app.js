@@ -64,7 +64,7 @@ const els = {
   cells: new Map(),     // "x,y" -> rect
   edges: [],            // {x, y, top, door, cells, hidden}: drawn by renderEdges
   edgePaths: new Map(), // look -> the path that draws every wall or door with that look
-  pins: new Map(),      // location id -> circle
+  pins: new Map(),      // location id -> its circles, one for each of its spots
 };
 
 // The looks walls and doors can have, in drawing order, so doors sit on top of walls.
@@ -104,7 +104,7 @@ function explored() {
 
 // The areas Soma has been to, or null to treat them all as known. While unexplored cells are
 // hidden, he has been to an area once he has visited or remembers a cell in it, is in it, or has
-// checked a location in it. The game never marks the Chaotic Realm as explored, so once he has
+// checked a location that can only be checked in it. The game never marks the Chaotic Realm as explored, so once he has
 // left the Realm, a location checked there is the only sign that he was in it.
 function knownAreas() {
   const cells = explored();
@@ -115,9 +115,12 @@ function knownAreas() {
     if (rect) known.add(rect.dataset.area);
   }
   if (page.snapshot.position) known.add(page.snapshot.position[0][0]);
+  // A defeat location can be checked in any room where its enemy appears. So its check shows that
+  // Soma was in an area only when all of those rooms are in that one area.
   for (const [id, status] of Object.entries(page.snapshot.locations || {})) {
     const location = locationsById.get(Number(id));
-    if (status === "checked" && location) known.add(location.area);
+    if (status !== "checked" || !location) continue;
+    if (new Set(location.spots.map((spot) => spot.area)).size === 1) known.add(location.area);
   }
   return known;
 }
@@ -143,7 +146,7 @@ function keepFocusOnAKnownArea() {
 // gives the area, the room and that item.
 function describeLocation(location) {
   const match = /^(.*?) \[(\S+) (.*)\]$/.exec(location.name);
-  const area = areaName(location.area);
+  const area = [...new Set(location.spots.map((spot) => areaName(spot.area)))].join(", ");
   if (!match) return { title: location.name, subtitle: area };
   return {
     title: match[1],
@@ -178,10 +181,12 @@ function buildMap() {
   const pinLayer = $("layer-pins");
   for (const location of map.locations) {
     locationsById.set(location.id, location);
-    const pin = svg("circle", { cx: location.x, cy: location.y, r: 0.22, class: "pin" }, pinLayer);
-    pin.dataset.id = location.id;
-    pin.setAttribute("aria-label", location.name);
-    els.pins.set(location.id, pin);
+    els.pins.set(location.id, location.spots.map((spot) => {
+      const pin = svg("circle", { cx: spot.x, cy: spot.y, r: 0.22, class: "pin" }, pinLayer);
+      pin.dataset.id = location.id;
+      pin.setAttribute("aria-label", location.name);
+      return pin;
+    }));
   }
 
   for (const area of map.areas) areasById.set(area.id, area);
@@ -371,12 +376,19 @@ function drawnInFull(cellKey, visited) {
   return !visited || page.reveal || (rect && rect.dataset.area === REALM) || visited.has(cellKey);
 }
 
-// Whether a location shows on the map, in the sidebar and in the counts. It shows only if its cell
-// is shown and drawn in full. A greyed-out cell is one Soma hasn't visited, so its locations stay
-// hidden even when a Castle Map shows the cell.
-function checkShown(location, visible, visited) {
-  const cell = key(Math.floor(location.x), Math.floor(location.y));
+// Whether a spot's pin shows on the map. It shows only if its cell is shown and drawn in full. A
+// greyed-out cell is one Soma hasn't visited, so its pins stay hidden even when a Castle Map shows
+// the cell.
+function spotShown(spot, visible, visited) {
+  const cell = key(Math.floor(spot.x), Math.floor(spot.y));
   return (!visible || visible.has(cell)) && drawnInFull(cell, visited);
+}
+
+// The spots of a location that show, among those in an area ``inArea`` accepts. A location shows in
+// the sidebar and in the counts when any of its spots does. A defeat location has a spot in each
+// room where its enemy appears, and it counts once however many of them show.
+function shownSpots(location, visible, visited, inArea = () => true) {
+  return location.spots.filter((spot) => inArea(spot.area) && spotShown(spot, visible, visited));
 }
 
 function renderMap() {
@@ -425,14 +437,17 @@ function renderPins(visible = visibleCells()) {
   const statuses = page.snapshot.locations || {};
   const hinted = new Set(page.snapshot.hinted || []);
   const visited = visitedCells();
-  for (const [id, pin] of els.pins) {
+  for (const [id, pins] of els.pins) {
     const status = statuses[id];
     const location = locationsById.get(id);
-    const shown = status !== undefined && checkShown(location, visible, visited)
-                  && (status !== "checked" || page.showChecked);
-    pin.style.display = shown ? "" : "none";
-    const focus = inFocus(location.area) ? "" : " unfocused";
-    pin.setAttribute("class", `pin ${status || ""}${hinted.has(id) ? " hinted" : ""}${focus}`);
+    const hint = hinted.has(id) ? " hinted" : "";
+    location.spots.forEach((spot, index) => {
+      const shown = status !== undefined && spotShown(spot, visible, visited)
+                    && (status !== "checked" || page.showChecked);
+      pins[index].style.display = shown ? "" : "none";
+      const focus = inFocus(spot.area) ? "" : " unfocused";
+      pins[index].setAttribute("class", `pin ${status || ""}${hint}${focus}`);
+    });
   }
   renderSelectionRing();
 }
@@ -505,26 +520,38 @@ function renderRoute() {
     const marker = somaMarker(soma);
     points.unshift([marker.x, marker.y]);  // the line starts at Soma's dot, wherever it is drawn
   }
+  // A defeat location has a spot in each room where its enemy appears, and the route leads to one
+  // of them. It ends at the spot nearest its last point.
   const target = locationsById.get(route.target);
-  if (target) points.push([target.x, target.y]);
+  const last = points[points.length - 1];
+  const end = target && (last ? nearestSpot(target, last) : target.spots[0]);
+  if (end) points.push([end.x, end.y]);
   const coordinates = points.map(([x, y]) => `${x},${y}`).join(" ");
   svg("polyline", { points: coordinates, class: "route-casing" }, layer);
   svg("polyline", { points: coordinates, class: "route-line" }, layer);
-  if (target) svg("circle", { cx: target.x, cy: target.y, r: 0.45, class: "route-end" }, layer);
+  if (end) svg("circle", { cx: end.x, cy: end.y, r: 0.45, class: "route-end" }, layer);
+}
+
+function nearestSpot(location, [x, y]) {
+  const distance = (spot) => Math.hypot(spot.x - x, spot.y - y);
+  return location.spots.reduce((best, spot) => (distance(spot) < distance(best) ? spot : best));
 }
 
 function renderSelectionRing() {
   for (const ring of document.querySelectorAll(".selection-ring")) ring.remove();
   const location = locationsById.get(page.selected);
-  const pin = els.pins.get(page.selected);
-  if (!location || !pin || pin.style.display === "none") return;  // no ring around a hidden pin
-  svg("circle", { cx: location.x, cy: location.y, r: 0.4, class: "selection-ring" }, $("layer-pins"));
+  const pins = els.pins.get(page.selected);
+  if (!location || !pins) return;
+  location.spots.forEach((spot, index) => {
+    if (pins[index].style.display === "none") return;  // no ring around a hidden pin
+    svg("circle", { cx: spot.x, cy: spot.y, r: 0.4, class: "selection-ring" }, $("layer-pins"));
+  });
 }
 
 // --- The panels -----------------------------------------------------------------------------
 
 // Count an area's locations that are in logic, and those with tricks, among the ones that show
-// (checkShown). So while unexplored cells are hidden, the numbers don't give away what lies in
+// (shownSpots). So while unexplored cells are hidden, the numbers don't give away what lies in
 // rooms Soma hasn't visited.
 function counts(area, visible, visited) {
   const statuses = page.snapshot.locations || {};
@@ -533,8 +560,8 @@ function counts(area, visible, visited) {
   for (const [id, status] of Object.entries(statuses)) {
     const location = locationsById.get(Number(id));
     if (!location) continue;
-    const inArea = area === CASTLE ? location.area !== REALM : location.area === area;
-    if (!inArea || !checkShown(location, visible, visited)) continue;
+    const inArea = area === CASTLE ? (spotArea) => spotArea !== REALM : (spotArea) => spotArea === area;
+    if (!shownSpots(location, visible, visited, inArea).length) continue;
     if (status === "in_logic") inLogic += 1;
     if (status === "tricks") tricks += 1;
   }
@@ -639,14 +666,14 @@ function renderHeader() {
   const checked = statuses.filter((status) => status === "checked").length;
   $("stat-checked").textContent = `${checked}/${statuses.length}`;
   // The checked count is the slot's progress, so it counts every location. The in-logic and
-  // with-tricks counts include only the locations that show (checkShown), like the area counts.
+  // with-tricks counts include only the locations that show (shownSpots), like the area counts.
   const visible = visibleCells({ countRealm: true });
   const visited = visitedCells();
   let inLogic = 0;
   let tricks = 0;
   for (const [id, status] of Object.entries(snapshot.locations || {})) {
     const location = locationsById.get(Number(id));
-    if (!location || !checkShown(location, visible, visited)) continue;
+    if (!location || !shownSpots(location, visible, visited).length) continue;
     if (status === "in_logic") inLogic += 1;
     if (status === "tricks") tricks += 1;
   }
@@ -740,7 +767,7 @@ function renderLocationList() {
   const shown = page.map.locations.filter((location) => {
     const status = statuses[location.id];
     if (status !== "in_logic" && status !== "tricks") return false;
-    return inFocus(location.area) && checkShown(location, visible, visited);
+    return shownSpots(location, visible, visited, inFocus).length > 0;
   });
   shown.sort((a, b) => (statuses[a.id] === statuses[b.id] ? a.name.localeCompare(b.name) : statuses[a.id] === "in_logic" ? -1 : 1));
   if (!shown.length) {
@@ -763,11 +790,12 @@ function renderLocationList() {
     name.textContent = describeLocation(location).title;
     const room = document.createElement("span");
     room.className = "room-id";
-    room.textContent = location.room;
+    room.textContent = location.spots.length > 1 ? `${location.spots.length} rooms` : location.room;
     button.append(dot, name, room);
+    const [spot] = shownSpots(location, visible, visited, inFocus);
     button.addEventListener("click", () => {
       select(location.id);
-      centerOn(location.x, location.y);
+      centerOn(spot.x, spot.y);
     });
     item.appendChild(button);
     list.appendChild(item);

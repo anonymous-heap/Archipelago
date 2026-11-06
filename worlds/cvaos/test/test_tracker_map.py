@@ -19,7 +19,7 @@ from .. import CVAOSWorld, client_logic, tracker_map, tracker_png
 from ..client_logic import CVAOSClientLogic
 from ..data import map_info, pickup_info_collection
 from ..data.room_info import by_identifier as rooms_by_identifier
-from ..enemy_checks import checkable_types, pin_placement
+from ..enemy_checks import checkable_types, defeat_location_name, pin_rooms, placements_of
 from ..locations import location_name_to_id
 from ..tracker_map import BRIGHT, cell_position
 
@@ -80,11 +80,18 @@ class TrackerMapTest(unittest.TestCase):
         self.assertEqual(sorted(names), sorted(location_name_to_id))
 
     def test_every_location_is_on_its_overview_and_its_area(self):
+        # A defeat location is on these maps once for each room where its enemy appears.
+        rooms = {pickup.location_name: [pickup.room_identifier] for pickup in pickup_info_collection}
+        for enemy in checkable_types():
+            rooms[defeat_location_name(enemy.name)] = [room for room, _ in pin_rooms(enemy.name)]
         for node in self.locations:
-            area = node["name"][0]
-            expected = (["Chaotic Realm"] if area == tracker_map.REALM_AREA
-                        else ["Castle", tracker_map.AREA_NAMES[area]])
-            with self.subTest(location=node["sections"][0]["name"]):
+            name = node["sections"][0]["name"]
+            expected = []
+            for room in rooms[name]:
+                area = room[0]
+                expected += (["Chaotic Realm"] if area == tracker_map.REALM_AREA
+                             else ["Castle", tracker_map.AREA_NAMES[area]])
+            with self.subTest(location=name):
                 self.assertEqual([pin["map"] for pin in node["map_locations"]], expected)
 
     def test_every_pin_lands_on_a_drawn_room(self):
@@ -104,28 +111,43 @@ class TrackerMapTest(unittest.TestCase):
                         for node in self.locations for pin in node["map_locations"])
         self.assertEqual([spot for spot, count in spots.items() if count > 1], [])
 
+    def test_a_defeat_location_is_pinned_in_every_room_where_its_enemy_appears(self):
+        pinned = {name: [room for room, _ in spots] for name, spots in tracker_map.defeat_pins()}
+        for enemy in checkable_types():
+            rooms = {placement.room for placement in placements_of(enemy.name)}
+            with self.subTest(enemy=enemy.name):
+                self.assertCountEqual(pinned[defeat_location_name(enemy.name)], rooms)
+
     def test_no_defeat_pin_hides_another_pin(self):
         # A crowded room can't keep every pin PIN_SPACING apart, but no pin may sit mostly under
-        # another. Two pairs of placements would otherwise share a spot: Quezlcoatl's and
-        # Manticore's in room 106, and Lilith's and Succubus's in room 808.
+        # another. Some placements would otherwise share a spot, such as Quezlcoatl's and
+        # Manticore's in room 106.
         pins = [cell_position(p.room_identifier, p.x, p.y) for p in pickup_info_collection]
-        for name, _room, cell in tracker_map.defeat_pins():
-            with self.subTest(pin=name):
-                self.assertGreater(min(math.dist(cell, other) for other in pins), 0.3)
-            pins.append(cell)
+        for name, spots in tracker_map.defeat_pins():
+            for room, cell in spots:
+                with self.subTest(pin=name, room=room):
+                    self.assertGreater(min(math.dist(cell, other) for other in pins), 0.3)
+                pins.append(cell)
 
     def test_a_defeat_pin_stays_in_its_room(self):
-        for name, room, cell in tracker_map.defeat_pins():
-            with self.subTest(pin=name):
-                self.assertEqual(map_info.room_at(math.floor(cell[0]), math.floor(cell[1])), room)
+        for name, spots in tracker_map.defeat_pins():
+            for room, cell in spots:
+                with self.subTest(pin=name, room=room):
+                    self.assertEqual(map_info.room_at(math.floor(cell[0]), math.floor(cell[1])),
+                                     room)
 
-    def test_a_defeat_pin_is_never_at_an_unrecorded_position(self):
-        # Ghost, Winged Skeleton and Medusa Head each have placements recorded at (0, 0), which is
-        # a room's top-left corner rather than where the enemy appears.
+    def test_a_defeat_pin_starts_at_a_recorded_position_when_its_room_has_one(self):
+        # Ghost, Winged Skeleton and Medusa Head have placements recorded at (0, 0), which is a
+        # room's top-left corner rather than where the enemy appears.
         for enemy in checkable_types():
-            placement = pin_placement(enemy.name)
-            with self.subTest(enemy=enemy.name):
-                self.assertNotEqual((placement.x, placement.y), (0, 0))
+            for room, placement in pin_rooms(enemy.name):
+                recorded = [other for other in placements_of(enemy.name)
+                            if other.room == room and (other.x, other.y) != (0, 0)]
+                with self.subTest(enemy=enemy.name, room=room):
+                    if recorded:
+                        self.assertIn(placement, recorded)
+                    else:
+                        self.assertIsNone(placement)
 
     def test_a_pin_lands_where_its_pickup_is(self):
         # Entrance Parapet's pickup is 384 by 184 pixels into room 000, which starts at map cell

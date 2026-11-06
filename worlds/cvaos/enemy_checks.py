@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .data import (EnemyType, by_enemy_number_for_enemy_regions, enemy_placements,
-                   enemy_type_collection)
+from .data import (EnemyPlacement, EnemyType, by_enemy_number_for_enemy_regions,
+                   enemy_placements, enemy_type_collection)
 
 if TYPE_CHECKING:
     from .options import CVAOSOptions
@@ -31,7 +31,7 @@ __all__ = [
     "enemy_check_types",
     "enemy_id_for_location",
     "has_recorded_route",
-    "pin_placement",
+    "pin_rooms",
     "placements_of",
     "uses_enemy_checks",
 ]
@@ -115,17 +115,19 @@ def has_recorded_route(enemy_name: str) -> bool:
                for placement in placements_of(enemy_name))
 
 
-def pin_placement(enemy_name: str):
-    """Return the placement where the trackers pin ``enemy_name``'s defeat location.
+def pin_rooms(enemy_name: str) -> list[tuple[str, EnemyPlacement | None]]:
+    """Return each room where the trackers pin ``enemy_name``'s defeat location.
 
-    A check can be made at any of its placements, but a map pin needs one place. This is the first
-    placement with routing, so that the pin sits where logic expects the defeat, or else the first.
-
-    A few placements are recorded at (0, 0), the room's top-left corner, rather than where the
-    enemy appears. They are passed over when the enemy has a placement with a real position.
+    Defeating the enemy in any room where it appears makes the check, so the check gets a pin in
+    each of those rooms. Each room comes with the placement its pin goes at: the room's first
+    placement of the enemy with a recorded position. A few placements are recorded at (0, 0), the
+    room's top-left corner, rather than where the enemy appears. The placement is None when every
+    placement of the enemy in the room is recorded that way.
     """
-    placements = [placement for placement in placements_of(enemy_name)
-                  if (placement.x, placement.y) != (0, 0)] or placements_of(enemy_name)
-    routed = [placement for placement in placements
-              if placement.enemy_number in by_enemy_number_for_enemy_regions]
-    return min(routed or placements, key=lambda placement: placement.enemy_number)
+    rooms: dict[str, EnemyPlacement | None] = {}
+    by_number = sorted(placements_of(enemy_name), key=lambda placement: placement.enemy_number)
+    for placement in by_number:
+        positioned = (placement.x, placement.y) != (0, 0)
+        if rooms.get(placement.room) is None:
+            rooms[placement.room] = placement if positioned else None
+    return list(rooms.items())

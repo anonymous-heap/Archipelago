@@ -52,18 +52,28 @@ def _areas(cells: list[dict]) -> list[dict]:
     return areas
 
 
+def _spot(room: str, cell: tuple[float, float]) -> dict:
+    return {"room": room, "area": room[0], "x": round(cell[0], 3), "y": round(cell[1], 3)}
+
+
 def _locations() -> list[dict]:
+    """Return each location with the spots where its pins go.
+
+    A pickup has one spot. A defeat location has one in each room where its enemy appears, as
+    tracker_map.defeat_pins places them. A location's own room, area, x and y are its first spot's.
+    The page hides a location in a seed without it, as it hides any location the seed lacks.
+    """
     locations = []
     for pickup in sorted(pickup_info_collection, key=lambda p: p.ptr_address):
-        x, y = cell_position(pickup.room_identifier, pickup.x, pickup.y)
+        cell = cell_position(pickup.room_identifier, pickup.x, pickup.y)
         locations.append({"id": location_name_to_id[pickup.location_name],
-                          "name": pickup.location_name, "room": pickup.room_identifier,
-                          "area": pickup.room_identifier[0], "x": round(x, 3), "y": round(y, 3)})
-    # A defeat location is pinned where tracker_map.defeat_pins puts it. The page hides it in a seed
-    # without it, as it hides any location the seed lacks.
-    for name, room, (x, y) in defeat_pins():
-        locations.append({"id": location_name_to_id[name], "name": name, "room": room,
-                          "area": room[0], "x": round(x, 3), "y": round(y, 3)})
+                          "name": pickup.location_name,
+                          "spots": [_spot(pickup.room_identifier, cell)]})
+    for name, spots in defeat_pins():
+        locations.append({"id": location_name_to_id[name], "name": name,
+                          "spots": [_spot(room, cell) for room, cell in spots]})
+    for location in locations:
+        location.update(location["spots"][0])
     return locations
 
 
