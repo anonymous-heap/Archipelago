@@ -147,6 +147,16 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual({item["group"] for item in items.values()},
                              {"Souls", "Key items", "Weapons"})
 
+    async def test_the_item_list_holds_the_items_item_smoothing_places(self):
+        # Item smoothing holds the Ancient Books and the mobility souls out of the pool, so that it
+        # can place them itself. They are listed all the same, before Soma has any of them.
+        world = self.ctx.core.get_current_world()
+        held_back = {item.name for item in world.get_pre_fill_items() if item.advancement}
+        self.assertTrue(held_back)
+        items = {item["name"]: item["count"] for item in self.ctx.snapshot()["items"]}
+        self.assertEqual({name: items.get(name) for name in held_back},
+                         dict.fromkeys(held_back, 0))
+
     async def test_progression_from_outside_the_pool_is_listed_too(self):
         # A start inventory takes its items out of the pool, but Soma still has them.
         world = self.ctx.core.get_current_world()

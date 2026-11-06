@@ -475,7 +475,9 @@ class TrackerContext(CommonContext):
         else:
             goal = "no"
         # The pool's progression items, and any Soma has from elsewhere, such as a start inventory.
-        in_pool = {item.name for item in world.multiworld.itempool
+        # Item smoothing holds some progression out of the pool to place it itself, such as the
+        # Ancient Books and the mobility souls, so those come from get_pre_fill_items.
+        in_pool = {item.name for item in (*world.multiworld.itempool, *world.get_pre_fill_items())
                    if item.player == world.player and item.advancement}
         progression = sorted((in_pool | set(self.result.prog_items)) - {UT_TRICKS_ITEM})
         snapshot.update({
