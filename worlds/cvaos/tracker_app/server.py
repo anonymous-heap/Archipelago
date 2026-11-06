@@ -131,6 +131,7 @@ class TrackerServer:
         # address, and the page then reloads.
         self.map_json = json.dumps({**map_data(), "build": build_id()}).encode("utf-8")
         self._push_task: asyncio.Task | None = None
+        self._changed_during_push = False
         ctx.listeners.append(self.push)
 
     async def start(self, host: str, port: int) -> int:
@@ -256,15 +257,24 @@ class TrackerServer:
 
     def push(self) -> None:
         """Send the open pages a new snapshot soon, once for any number of changes before then."""
-        if self._push_task is None or self._push_task.done():
-            try:
-                self._push_task = asyncio.get_running_loop().create_task(self._push_later())
-            except RuntimeError:
-                pass  # no event loop yet, so no page to tell
+        if self._push_task is not None and not self._push_task.done():
+            self._changed_during_push = True
+            return
+        try:
+            self._push_task = asyncio.get_running_loop().create_task(self._push_later())
+        except RuntimeError:
+            pass  # no event loop yet, so no page to tell
 
     async def _push_later(self) -> None:
-        await asyncio.sleep(PUSH_DELAY)
-        if self.sockets:
+        # A change can arrive after a push has taken its snapshot, while the pages are still being
+        # sent it. The push then repeats, so the pages always end up with the latest state.
+        while True:
+            await asyncio.sleep(PUSH_DELAY)
+            self._changed_during_push = False
+            if not self.sockets:
+                return
             message = self.snapshot_message()
             await asyncio.gather(*(socket.send(message) for socket in list(self.sockets)),
                                  return_exceptions=True)
+            if not self._changed_during_push:
+                return

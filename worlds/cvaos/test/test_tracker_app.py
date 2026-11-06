@@ -329,6 +329,24 @@ class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
         return connect(f"ws://127.0.0.1:{self.port}/ws",
                        origin=origin or f"http://127.0.0.1:{self.port}")
 
+    async def test_a_change_during_a_push_is_pushed_too(self):
+        # Sending a snapshot can take a while. A change in that time comes after the snapshot was
+        # taken, so another push follows.
+        sent = []
+        server = self.server
+
+        class SlowPage:
+            async def send(self, message: str) -> None:
+                sent.append(message)
+                if len(sent) == 1:
+                    server.push()  # a change while this snapshot is on its way
+                await asyncio.sleep(0)
+
+        self.server.sockets.add(SlowPage())
+        self.server.push()
+        await asyncio.sleep(0.5)
+        self.assertEqual(len(sent), 2)
+
     async def test_it_serves_the_page_and_the_map(self):
         status, content_type, body = await self.fetch("/")
         self.assertEqual((status, content_type), (200, "text/html; charset=utf-8"))
