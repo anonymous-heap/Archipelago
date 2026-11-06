@@ -8,13 +8,11 @@ from __future__ import annotations
 
 import struct
 import unittest
-from types import SimpleNamespace
-from unittest import mock
 
 from .. import client_logic, exploration
-from ..client_logic import CVAOSClientLogic
 from ..data import map_info
 from ..exploration import Exploration
+from .test_tracker_map import ClientReportTest
 
 
 def ram_cells(visited: set[tuple[int, int]], remembered: set[tuple[int, int]]) -> bytes:
@@ -93,23 +91,12 @@ class FakeRam:
         return self.cells, self.event_flags, self.castle_maps
 
 
-class ExplorationReportTest(unittest.IsolatedAsyncioTestCase):
+class ExplorationReportTest(ClientReportTest):
     """The client keeps the explored map in data storage for the tracker."""
 
-    async def asyncSetUp(self) -> None:
-        self.client = CVAOSClientLogic()
-        self.client._reset_session_state()
-        self.sent: list[dict] = []
-
-        async def send_msgs(messages):
-            self.sent.extend(messages)
-
-        self.ctx = SimpleNamespace(team=0, slot=3, send_msgs=send_msgs)
+    def setUp(self) -> None:
+        super().setUp()
         self.ram = FakeRam()
-        self.now = 1000.0
-        patcher = mock.patch.object(client_logic.time, "monotonic", side_effect=lambda: self.now)
-        patcher.start()
-        self.addCleanup(patcher.stop)
 
     async def report(self) -> None:
         await self.client._report_exploration(self.ctx, self.ram)

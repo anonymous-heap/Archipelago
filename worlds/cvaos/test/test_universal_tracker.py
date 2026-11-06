@@ -10,6 +10,7 @@ with the original.
 """
 from __future__ import annotations
 
+import functools
 import inspect
 import unittest
 from collections import Counter
@@ -104,6 +105,20 @@ def logic_fingerprint(multiworld: MultiWorld) -> tuple:
     )
 
 
+def generated_fingerprint(options: dict) -> tuple:
+    """Return the logic fingerprint of a world generated with ``options``.
+
+    Each set of options is generated and fingerprinted once, because several tests compare against
+    the same configuration, most often the defaults.
+    """
+    return _fingerprint_of_options(tuple(sorted(options.items())))
+
+
+@functools.cache
+def _fingerprint_of_options(options: tuple) -> tuple:
+    return logic_fingerprint(generate(dict(options)))
+
+
 class InterfaceTest(unittest.TestCase):
     def test_interpret_slot_data_is_callable_on_the_class(self):
         # Universal Tracker calls interpret_slot_data on the class, before any world exists, and
@@ -149,7 +164,7 @@ class RoundTripTest(unittest.TestCase):
                                      getattr(original.worlds[1].options, name).value, name)
                 fingerprint = logic_fingerprint(original)
                 without_probe = {name: value for name, value in config.items() if name != probed}
-                self.assertNotEqual(logic_fingerprint(generate(without_probe)), fingerprint,
+                self.assertNotEqual(generated_fingerprint(without_probe), fingerprint,
                                     f"{probed} must change the logic in this configuration")
                 self.assertEqual(logic_fingerprint(rebuilt), fingerprint)
 
@@ -209,8 +224,8 @@ class UnlistedOptionsTest(unittest.TestCase):
                          for name, value in config.items()}
         for logic in ({}, logic_changed):
             with self.subTest(logic=logic):
-                self.assertEqual(logic_fingerprint(generate({**logic, **unlisted})),
-                                 logic_fingerprint(generate(logic)))
+                self.assertEqual(generated_fingerprint({**logic, **unlisted}),
+                                 generated_fingerprint(logic))
 
 
 class TricksTierTest(unittest.TestCase):

@@ -209,13 +209,14 @@ class TrackerMapTest(unittest.TestCase):
         self.assertEqual(moved, ["901"])
 
     def test_the_edge_table_closes_off_every_room(self):
+        bad = []
         for (a, b), kind in table_edges():
             rooms = (map_info.room_at(*a), map_info.room_at(*b))
-            with self.subTest(cells=(a, b), rooms=rooms):
-                if rooms[0] == rooms[1]:
-                    self.assertEqual(kind, map_info.OPEN, "inside a room, or where there is none")
-                else:
-                    self.assertNotEqual(kind, map_info.OPEN)
+            # An edge is open inside a room, or where there is no room on either side.
+            should_be_open = rooms[0] == rooms[1]
+            if (kind == map_info.OPEN) != should_be_open:
+                bad.append((a, b, rooms, kind))
+        self.assertEqual(bad, [])
 
     def test_every_door_between_two_rooms_is_an_entrance(self):
         from ..data.entrance_info import rows as entrances
@@ -279,23 +280,33 @@ class FakeRam:
         return self.position
 
 
-class PositionReportTest(unittest.IsolatedAsyncioTestCase):
-    """The client keeps Soma's position in data storage for UT's map tab and the tracker."""
+class ClientReportTest(unittest.IsolatedAsyncioTestCase):
+    """A base for tests of what the client keeps in data storage.
+
+    The client's messages go to ``self.sent``, and the client's clock reads ``self.now``.
+    """
 
     def setUp(self) -> None:
         self.client = CVAOSClientLogic()
         self.client._reset_session_state()
         self.sent: list[dict] = []
 
-        async def send_msgs(msgs):
-            self.sent.extend(msgs)
+        async def send_msgs(messages):
+            self.sent.extend(messages)
 
         self.ctx = SimpleNamespace(team=0, slot=3, send_msgs=send_msgs)
-        self.ram = FakeRam()
         self.now = 100.0
         clock = mock.patch.object(client_logic.time, "monotonic", lambda: self.now)
         clock.start()
         self.addCleanup(clock.stop)
+
+
+class PositionReportTest(ClientReportTest):
+    """The client keeps Soma's position in data storage for UT's map tab and the tracker."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.ram = FakeRam()
 
     def sent_values(self) -> list[tuple[str, list]]:
         return [(msg["key"], msg["operations"][0]["value"]) for msg in self.sent]
@@ -306,8 +317,6 @@ class PositionReportTest(unittest.IsolatedAsyncioTestCase):
             "cmd": "Set", "key": key, "default": None, "want_reply": False,
             "operations": [{"operation": "replace", "value": ["000", 384, 184]}]}
             for key in ("cvaos_position_0_3", "cvaos_map_cell_0_3")])
-        self.assertEqual(tracker_map.POSITION_KEY.format(team=0, player=3), "cvaos_position_0_3")
-        self.assertEqual(tracker_map.MAP_CELL_KEY.format(team=0, player=3), "cvaos_map_cell_0_3")
 
     async def test_ut_reads_the_map_cell_key(self):
         # UT reloads its map whenever its key changes, so it must not read the moving position.
@@ -317,7 +326,7 @@ class PositionReportTest(unittest.IsolatedAsyncioTestCase):
     async def test_a_move_within_the_cell_updates_only_the_position(self):
         await self.client._report_position(self.ctx, self.ram)
         self.sent.clear()
-        self.now += 5
+        self.now += client_logic.POSITION_INTERVAL
         self.ram.position = (0, 0, 500, 250)
         await self.client._report_position(self.ctx, self.ram)
         self.assertEqual(self.sent_values(), [("cvaos_position_0_3", ["000", 500, 250])])
@@ -329,7 +338,7 @@ class PositionReportTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_standing_still_sends_nothing(self):
         await self.client._report_position(self.ctx, self.ram)
-        self.now += 5
+        self.now += client_logic.POSITION_INTERVAL
         await self.client._report_position(self.ctx, self.ram)
         self.assertEqual(len(self.sent), 2)
 

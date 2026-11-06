@@ -6,9 +6,10 @@ routes the Aria of Sorrow tracker plans from the room Soma is in.
 """
 from __future__ import annotations
 
+import functools
 import unittest
 
-from BaseClasses import Entrance
+from BaseClasses import Entrance, MultiWorld
 
 from .. import CVAOSWorld
 from ..regions import UT_TRICKS_ITEM
@@ -22,14 +23,21 @@ def lines(messages) -> list[str]:
     return ["".join(part["text"] for part in message) for message in messages]
 
 
+@functools.cache
+def default_multiworld() -> MultiWorld:
+    """Return a world generated with the default options, shared by every test in this file."""
+    return generate({})
+
+
 class DescribeRouteTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.multiworld = generate({})
+        cls.multiworld = default_multiworld()
 
     def route(self, dest_name: str, items: list[str], multiworld=None):
+        """Ask the world for a route, as Universal Tracker's Find Route does."""
         multiworld = multiworld or self.multiworld
-        return describe_route(multiworld.worlds[1], dest_name, state_with(multiworld, items))
+        return multiworld.worlds[1].get_logical_path(dest_name, state_with(multiworld, items))
 
     def test_a_route_lists_rooms_by_area_and_names_what_they_need(self):
         route = lines(self.route(TERRACE, ["Malphas", "Hippogryph"]))
@@ -53,7 +61,7 @@ class DescribeRouteTest(unittest.TestCase):
         self.assertIsNone(self.route("no such place", ["Malphas"]))
 
     def test_a_route_that_needs_a_trick_says_so(self):
-        rebuilt = regenerate_from(generate({}).worlds[1].fill_slot_data())
+        rebuilt = regenerate_from(self.multiworld.worlds[1].fill_slot_data())
         items = ["Malphas"]
         only_with_tricks = reachable(rebuilt, items + [UT_TRICKS_ITEM]) - reachable(rebuilt, items)
         location = sorted(only_with_tricks)[0]
@@ -62,11 +70,7 @@ class DescribeRouteTest(unittest.TestCase):
         self.assertIn("a trick", "\n".join(route))
         self.assertEqual(route[-1], "-> " + location)
 
-    def test_universal_tracker_asks_the_world_for_its_route(self):
-        world = self.multiworld.worlds[1]
-        state = state_with(self.multiworld, ["Malphas"])
-        self.assertEqual(world.get_logical_path("lucky charm", state),
-                         describe_route(world, "lucky charm", state))
+    def test_the_route_command_has_help(self):
         # UT shows this docstring in its command help.
         self.assertTrue(CVAOSWorld.get_logical_path.__doc__)
 
@@ -76,7 +80,7 @@ class GateRouteTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.multiworld = generate({})
+        cls.multiworld = default_multiworld()
         cls.world = cls.multiworld.worlds[1]
         cls.state = cls.multiworld.get_all_state()
 
@@ -122,7 +126,7 @@ class PlanRouteTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.multiworld = generate({})
+        cls.multiworld = default_multiworld()
 
     def test_a_route_starts_at_the_door_soma_is_by(self):
         # With only Malphas, Soma can't cross room 108 from the door to 104 to the door to 109.
