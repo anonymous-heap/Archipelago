@@ -25,6 +25,7 @@ from Utils import async_start
 
 from .. import CVAOSWorld, exploration, tracker_map, tracker_route
 from ..data import item_info_collection
+from ..item_granting import canonical_code
 from ..regions import UT_TRICKS_ITEM
 from . import without_login
 from .ut import CurrentTrackerState
@@ -343,7 +344,11 @@ class TrackerContext(CommonContext):
         if not self.tracking:
             return
         self.core.set_missing_locations(self.missing_locations)
-        self.core.set_items_received(self.items_received)
+        # A seed from an older version of this world can send item codes with the retired field
+        # set, which the current data package doesn't list. They name the same items as the
+        # canonical codes do.
+        self.core.set_items_received([item._replace(item=canonical_code(item.item))
+                                      for item in self.items_received])
         self.core.set_hints(self.hinted_locations())
         self.result = self.core.updateTracker()
         self.plan_route()

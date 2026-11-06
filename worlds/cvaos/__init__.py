@@ -10,7 +10,7 @@ import settings
 
 from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA_ROM_MD5
 from .items import (FILLER_ITEM_NAMES, PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, CVAOSItem,
-                    item_name_to_id, create_item, create_itempool)
+                    item_name_groups, item_name_to_id, create_item, create_itempool)
 from .enemy_checks import (defeat_location_name, enemy_check_types, has_recorded_route,
                            uses_enemy_checks)
 from .locations import defeat_location_names, location_name_to_id, pickup_location_ids
@@ -151,6 +151,7 @@ class CVAOSWorld(World):
     settings: ClassVar[CVAOSSettings]
 
     item_name_to_id = item_name_to_id
+    item_name_groups = item_name_groups
     location_name_to_id = location_name_to_id
     location_name_groups = {"Enemy Defeats": set(defeat_location_names)}
 

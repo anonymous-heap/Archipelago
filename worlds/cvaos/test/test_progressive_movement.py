@@ -27,7 +27,7 @@ from ..rom.patch import _AP_PLACEHOLDER, _ITEM_OFF, _TYPE_OFF, get_location_data
 
 STEPS = ("generate_early", "create_regions", "create_items", "set_rules")
 MALPHAS = next(info for info in item_info_collection if info.name == "Malphas")
-OTHER_ITEM_CODE = item_table["Potion (A)"].code
+OTHER_ITEM_CODE = item_table["Potion"].code
 
 
 def build(progressive: bool, steps=STEPS, seed: int = 5, **options) -> MultiWorld:
@@ -315,7 +315,7 @@ class ReceivedCopyGrantTest(unittest.IsolatedAsyncioTestCase):
 
         ram = AoSRAM(FakeBackend({EWRAM: bytearray(0x40000), "ROM": bytearray(0x800000)}))
         ctx = SimpleNamespace(items_received=[NetworkItem(PROGRESSIVE_MOVEMENT_CODE, 0, 2),
-                                              NetworkItem(item_table["Mind Up (A)"].code, 0, 2)],
+                                              NetworkItem(item_table["Mind Up"].code, 0, 2)],
                               slot_data={}, items_handling=0b101)
         await _new_client()._receive_items(ctx, ram)
         self.assertEqual(await ram.get_received_count(), 2)

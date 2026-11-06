@@ -86,11 +86,22 @@ class PickupInfo(BaseModel):
         return f"{self.simple_name}{self.specifier or ''}"
 
     @property
+    def item_name(self) -> str:
+        """
+        The AP name of the item this pickup holds. Money (subtype 1) renders its gold value
+        (``500 Gold``) instead of the bare number. Every pickup holding the same item shares this
+        name, so it never says which pickup an item came from.
+        """
+        if self.subtype_num == 1:  # money: simple_name is the gold value
+            return f"{int(self.simple_name)} Gold"
+        return self.simple_name
+
+    @property
     def display_name(self) -> str:
         """
-        Human-readable AP item/location name. Money (subtype 1) renders its gold value
-        (``500 Gold``) instead of the bare number; a duplicate-suffix like ``_a`` becomes `` (A)``.
-        ``identifier_key`` stays the internal key; this is display-only (codes/ids are unaffected).\
+        The item name with this pickup's duplicate suffix, which tells apart the pickups that hold
+        the same item: ``_a`` becomes `` (A)``. Location and region names use it, as in ``Potion
+        (A)``. ``identifier_key`` stays the internal key.
         """
         spec = (self.specifier or "").lstrip("_")
         if not spec:
@@ -99,18 +110,15 @@ class PickupInfo(BaseModel):
             suffix = f" ({spec.upper()})"
         else:
             suffix = f" ({spec})"
-        if self.subtype_num == 1:  # money: simple_name is the gold value
-            return f"{int(self.simple_name)} Gold{suffix}"
-        return f"{self.simple_name}{suffix}"
+        return f"{self.item_name}{suffix}"
 
     @property
     def location_name(self) -> str:
         """
         Human-readable AP *location* name: the friendly room-area name followed by a bracketed
-        tag of the room id and the item's ``display_name`` -- e.g. ``White Dragon Hallway [00D
+        tag of the room id and the pickup's ``display_name`` -- e.g. ``White Dragon Hallway [00D
         Potion (A)]``. When no friendly name is mapped it falls back to the bare tag ``00D Potion
-        (A)``. This is the location (check) name only; ``display_name`` (the item name) and all
-        ids are unaffected.
+        (A)``. This is the location (check) name only; the item's name is ``item_name``.
         """
         tag = f"{self.room_identifier} {self.display_name}"
         return f"{self.friendly_name} [{tag}]" if self.friendly_name else tag

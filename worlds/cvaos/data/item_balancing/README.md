@@ -122,9 +122,9 @@ positions and [jittered](#per-item-jitter-long-tails-in-position-space).
 Gold's desirability (`~0.0`, the floor) would otherwise pin it to the very first spheres; the explicit
 early-to-mid band is what lifts the top of its range to mid-game.
 
-Money joins by **category, not name**: strip the ` (X)` disambiguation suffix; all 18 money pickups
-(`100/500/1000/2000 Gold`, see `display_name` in
-[`../pickup_info/__init__.py:101`](../pickup_info/__init__.py#L101)) feed the one stratified band.
+Money joins by **category, not name**: all 18 money pickups (`100/500/1000/2000 Gold`, see
+`item_name` in [`../pickup_info/__init__.py`](../pickup_info/__init__.py)) feed the one stratified
+band.
 
 ### Per-item jitter: long tails, in *position* space
 

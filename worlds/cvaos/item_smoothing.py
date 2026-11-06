@@ -107,27 +107,19 @@ MOVEMENT_SOULS = frozenset({
 ORIGIN_REGION = "Menu"
 _UNREACHED_DEPTH = 10 ** 9  # sort graph-disconnected regions last
 
-_SUFFIX = re.compile(r"\s\([^)]*\)$")  # " (A)" / " (foo)" disambiguation suffix on display names
 _GOLD = re.compile(r"^\d+ Gold$")
 
 
 # item identity
 
-def _base_name(display_name: str) -> str:
+def _category(name: str) -> str:
     """
-    Strip any disambiguation suffix to get the canonical item name.
+    Get the category of an item from its name.
     """
-    return _SUFFIX.sub("", display_name)
-
-
-def _category(base_name: str) -> str:
-    """
-    Get the category of an item based on its base name.
-    """
-    info = item_info.by_name.get(base_name)
+    info = item_info.by_name.get(name)
     if info is not None:
         return info.item_category
-    if _GOLD.match(base_name):
+    if _GOLD.match(name):
         return "money"
     return "unknown"
 
@@ -153,8 +145,11 @@ def _jittered(base: float, scale: float, params: SmoothingParams, rng) -> float:
     return base + scale * _student_t(params.nu, rng)
 
 
-def _assign_targets(items: List[Item], params: SmoothingParams, rng) -> Dict[Item, float]:
+def _assign_targets(items: List[Item], params: SmoothingParams, rng) -> List[float]:
     """A placement target (higher = later) per item, jittered in *position* space.
+
+    The targets come back in the order of ``items``. Copies of an item share its name, and items
+    compare equal by name and player, so everything here goes by an item's index in ``items``.
 
     Two steps, so the long tail keeps a middle ground:
 
@@ -174,13 +169,13 @@ def _assign_targets(items: List[Item], params: SmoothingParams, rng) -> Dict[Ite
        extreme) is set by ``nu``. A wildcard (prob ``eps``) ignores the target.
     Not clamped: the placement pass sorts by target, so an extreme draw just yields an extreme rank.
     """
-    base: Dict[Item, float] = {}
-    scale: Dict[Item, float] = {}
+    base: Dict[int, float] = {}
+    scale: Dict[int, float] = {}
 
     # Money is stratified by copy across the whole run below, NOT ranked: the money rows in
     # desirability.csv are intentionally ignored here -- gold quantity stratification, not rater
     # desirability, sets where gold lands.
-    golds = [it for it in items if _category(_base_name(it.name)) == "money"]
+    golds = [i for i, it in enumerate(items) if _category(it.name) == "money"]
     rng.shuffle(golds)
 
     # Pin some copies of each gold denomination at the very top of the order ("uppermost score"),
@@ -192,74 +187,74 @@ def _assign_targets(items: List[Item], params: SmoothingParams, rng) -> Dict[Ite
     top_base = max((info.desirability for info in desirability_data.by_name.values()), default=1.0)
     promoted_count: Dict[str, int] = {}
     promoted_rank = 0
-    banded: List[Item] = []
-    for item in golds:
-        name = _base_name(item.name)
+    banded: List[int] = []
+    for i in golds:
+        name = items[i].name
         if promoted_count.get(name, 0) < gold_uppermost_quota.get(name, 1):
             promoted_count[name] = promoted_count.get(name, 0) + 1
-            base[item] = top_base + 1.0 + promoted_rank  # strictly above all rated items
-            scale[item] = params.sigma_base
+            base[i] = top_base + 1.0 + promoted_rank  # strictly above all rated items
+            scale[i] = params.sigma_base
             promoted_rank += 1
         else:
-            scale[item] = params.sigma_base
-            banded.append(item)
+            scale[i] = params.sigma_base
+            banded.append(i)
     banded_set = set(banded)
 
     # Push selected copies of some mid-tier consumables into the *second half* of the run
     # (positions 0.5..1.0) instead of their normal desirability spot, so not all your healing/mana
     # shows up early. Per-type copy counts; rng picks which copies, the rest stay at their normal spot.
     second_half_quota = {"High Potion": 2, "Super Potion": 3, "Mana Prism": 4, "High Mind Up": 1}
-    second_half: List[Item] = []
+    second_half: List[int] = []
     taken: Dict[str, int] = {}
-    candidates = [it for it in items if _base_name(it.name) in second_half_quota]
+    candidates = [i for i, it in enumerate(items) if it.name in second_half_quota]
     rng.shuffle(candidates)
-    for item in candidates:
-        name = _base_name(item.name)
+    for i in candidates:
+        name = items[i].name
         if taken.get(name, 0) < second_half_quota[name]:
             taken[name] = taken.get(name, 0) + 1
-            scale[item] = params.sigma_base
-            second_half.append(item)
+            scale[i] = params.sigma_base
+            second_half.append(i)
     second_half_set = set(second_half)
 
-    for item in items:
-        if item in base or item in banded_set or item in second_half_set:
+    for i, item in enumerate(items):
+        if i in base or i in banded_set or i in second_half_set:
             continue
-        info = desirability_data.by_name.get(_base_name(item.name))
+        info = desirability_data.by_name.get(item.name)
         if info is not None:
-            base[item] = info.desirability
-            scale[item] = params.sigma_base + params.k * info.disagreement
+            base[i] = info.desirability
+            scale[i] = params.sigma_base + params.k * info.disagreement
         else:
-            base[item] = rng.random()  # unranked: uniform prior over the whole run
-            scale[item] = params.sigma_base
+            base[i] = rng.random()  # unranked: uniform prior over the whole run
+            scale[i] = params.sigma_base
 
     # Rank-transform the bases into evenly spaced positions, preserving order. The stratified gold and
     # the second-half consumables are excluded from the rank-transform and instead get their positions
     # set directly below -- so gold appears evenly across the whole run (and, being out of the rank,
     # doesn't crowd the early ranks and push the rest later) and the chosen consumables land in back.
-    order = sorted((it for it in items if it not in banded_set and it not in second_half_set),
-                   key=lambda it: base[it])
+    order = sorted((i for i in range(len(items)) if i not in banded_set and i not in second_half_set),
+                   key=lambda i: base[i])
     denom = max(1, len(order) - 1)
-    position = {item: i / denom for i, item in enumerate(order)}
+    position = {i: rank / denom for rank, i in enumerate(order)}
 
     gold_count = len(banded)
-    for index, item in enumerate(banded):
+    for index, i in enumerate(banded):
         lo = index / gold_count
         hi = (index + 1) / gold_count
-        position[item] = rng.uniform(lo, hi)
+        position[i] = rng.uniform(lo, hi)
 
     # Selected consumables: stratify evenly across the back half of the run [0.5, 1.0].
     sh_count = len(second_half)
-    for index, item in enumerate(second_half):
+    for index, i in enumerate(second_half):
         lo = 0.5 + (index / sh_count) * 0.5
         hi = 0.5 + ((index + 1) / sh_count) * 0.5
-        position[item] = rng.uniform(lo, hi)
+        position[i] = rng.uniform(lo, hi)
 
-    targets: Dict[Item, float] = {}
-    for item in items:
+    targets: List[float] = []
+    for i in range(len(items)):
         if rng.random() < params.eps:
-            targets[item] = rng.random()  # wildcard: ignore the target, place anywhere
+            targets.append(rng.random())  # wildcard: ignore the target, place anywhere
         else:
-            targets[item] = position[item] + scale[item] * _student_t(params.nu, rng)
+            targets.append(position[i] + scale[i] * _student_t(params.nu, rng))
     return targets
 
 
@@ -915,11 +910,14 @@ def smooth_placed_items(multiworld: MultiWorld, game: str) -> None:
         # Ceiling/floor breakers ride the normal distribution here (smoothable_locations_in_order lets
         # them in), so they spread by desirability like any other equipment. They're advancement and
         # the bulk reassign doesn't check reachability, so remember where fill put each one first.
-        breaker_homes = {loc.item: loc for loc in ordered
-                         if loc.item.name in logic_only_progression_names}
+        # A copy that an enemy check added is only useful, so logic never counts on it. The homes are
+        # pairs rather than a dict, because copies of an item compare equal.
+        breaker_homes = [(loc.item, loc) for loc in ordered
+                         if loc.item.advancement and loc.item.name in logic_only_progression_names]
         items = [loc.item for loc in ordered]
         targets = _assign_targets(items, params, world.random)
-        items.sort(key=lambda it: targets[it])  # ascending t == least desirable first
+        by_target = sorted(range(len(items)), key=lambda i: targets[i])
+        items = [items[i] for i in by_target]  # ascending t == least desirable first
         _reassign(ordered, items, multiworld.state)
         # If riding the distribution stranded a floor/ceiling gate, put the breakers back where fill
         # had them (guaranteed reachable); the non-advancement items keep their smoothed spots, since
@@ -928,9 +926,9 @@ def smooth_placed_items(multiworld: MultiWorld, game: str) -> None:
             _restore_breakers(breaker_homes)
 
 
-def _restore_breakers(breaker_homes: Dict[Item, Location]) -> None:
+def _restore_breakers(breaker_homes: List[Tuple[Item, Location]]) -> None:
     """Swap each breaker back to its pre-smoothing (fill) location, undoing only the breaker moves."""
-    for breaker, home in breaker_homes.items():
+    for breaker, home in breaker_homes:
         current = breaker.location
         if current is home:
             continue

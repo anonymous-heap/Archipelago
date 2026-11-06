@@ -110,7 +110,7 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
         return ram
 
     async def test_each_item_and_the_counter_advance(self) -> None:
-        await self.client._receive_items(self.ctx("Mind Up (A)", "Flying Armor", "500 Gold (A)"),
+        await self.client._receive_items(self.ctx("Mind Up", "Flying Armor", "500 Gold"),
                                          self.ram)
         self.assertEqual(await self.ram.owned_count("consumable", 5), 1)
         self.assertEqual(await self.ram.owned_count("blue_soul", 0), 1)
@@ -118,7 +118,7 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.ram.get_received_count(), 3)
 
     async def test_a_failure_after_the_grant_does_not_grant_an_item_again(self) -> None:
-        ram = await self.fail_then_heal("Mind Up (A)")
+        ram = await self.fail_then_heal("Mind Up")
         self.assertEqual(await ram.owned_count("consumable", 5), 1,
                          "the item must be granted exactly once")
         self.assertEqual(await ram.get_received_count(), 1)
@@ -130,7 +130,7 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await ram.get_received_count(), 1)
 
     async def test_a_failure_after_the_grant_does_not_add_gold_again(self) -> None:
-        ram = await self.fail_then_heal("500 Gold (A)")
+        ram = await self.fail_then_heal("500 Gold")
         self.assertEqual(self.gold(), 500, "the gold must be added exactly once")
         self.assertEqual(await ram.get_received_count(), 1)
 
@@ -144,7 +144,7 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_a_counter_changed_underneath_writes_nothing(self) -> None:
         ram = AoSRAM(CounterMoves(self.memory))
-        await self.client._receive_items(self.ctx("Mind Up (A)"), ram)
+        await self.client._receive_items(self.ctx("Mind Up"), ram)
         self.assertEqual(await ram.owned_count("consumable", 5), 0)
         self.assertEqual(await ram.get_received_count(), 7)
 
@@ -163,7 +163,7 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
     async def test_a_consumable_at_its_cap_still_advances_the_counter(self) -> None:
         self.ewram[MIND_UP_OFFSET] = 9
         with self.assertLogs("Client", level="WARNING"):
-            await self.client._receive_items(self.ctx("Mind Up (A)"), self.ram)
+            await self.client._receive_items(self.ctx("Mind Up"), self.ram)
         self.assertEqual(await self.ram.owned_count("consumable", 5), 9)
         self.assertEqual(await self.ram.get_received_count(), 1)
 
@@ -184,9 +184,9 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
                 return await super().guarded_write_many(writes)
 
         ram = AoSRAM(PlayerUsesOne(self.memory))
-        await self.client._receive_items(self.ctx("Mind Up (A)"), ram)
+        await self.client._receive_items(self.ctx("Mind Up"), ram)
         self.assertEqual(await self.ram.get_received_count(), 0, "a stale cap must fail the batch")
-        await self.client._receive_items(self.ctx("Mind Up (A)"), self.ram)
+        await self.client._receive_items(self.ctx("Mind Up"), self.ram)
         self.assertEqual(await self.ram.owned_count("consumable", 5), 9)
         self.assertEqual(await self.ram.get_received_count(), 1)
 
@@ -198,21 +198,21 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_an_unknown_code_is_skipped_and_the_next_item_still_arrives(self) -> None:
         with self.assertLogs("Client", level="WARNING"):
-            await self.client._receive_items(self.ctx("Mind Up (A)", codes=(1,)), self.ram)
+            await self.client._receive_items(self.ctx("Mind Up", codes=(1,)), self.ram)
         self.assertEqual(await self.ram.owned_count("consumable", 5), 1)
         self.assertEqual(await self.ram.get_received_count(), 2)
 
     async def test_a_reserved_category_is_skipped_and_the_next_item_still_arrives(self) -> None:
         reserved = item_granting.pack(item_granting.TransferCategory.EVENT, 0)
         with self.assertLogs("Client", level="WARNING"):
-            await self.client._receive_items(self.ctx("Mind Up (A)", codes=(reserved,)), self.ram)
+            await self.client._receive_items(self.ctx("Mind Up", codes=(reserved,)), self.ram)
         self.assertEqual(await self.ram.owned_count("consumable", 5), 1)
         self.assertEqual(await self.ram.get_received_count(), 2)
 
     def starting_then_received(self, slot_data: dict) -> SimpleNamespace:
         # The server sends the starting inventory first, at location -2.
-        items = [NetworkItem(item_table["500 Gold (A)"].code, STARTING_LOCATION, 2),
-                 NetworkItem(item_table["Mind Up (A)"].code, 5, 2)]
+        items = [NetworkItem(item_table["500 Gold"].code, STARTING_LOCATION, 2),
+                 NetworkItem(item_table["Mind Up"].code, 5, 2)]
         return SimpleNamespace(items_received=items, slot_data=slot_data, items_handling=0b101)
 
     async def test_an_older_seeds_save_counts_only_items_from_other_worlds(self) -> None:
@@ -232,7 +232,7 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.ram.get_received_count(), 2)
 
     async def test_one_tick_grants_at_most_max_items_per_tick(self) -> None:
-        ctx = self.ctx(*["500 Gold (A)"] * (MAX_ITEMS_PER_TICK + 5))
+        ctx = self.ctx(*["500 Gold"] * (MAX_ITEMS_PER_TICK + 5))
         await self.client._receive_items(ctx, self.ram)
         self.assertEqual(await self.ram.get_received_count(), MAX_ITEMS_PER_TICK)
         await self.client._receive_items(ctx, self.ram)

@@ -15,6 +15,7 @@ from test.general import gen_steps, setup_multiworld
 
 from .. import CVAOSWorld
 from ..data import pickup_info_collection
+from ..items import ENEMY_ITEM
 from ..options import HardModePickups
 from ..rom.entity import ENTITY_SIZE, GBA_ROM_BASE, HARD_PICKUP, PICKUP
 from ..rom.patch import _TYPE_OFF, get_location_data
@@ -22,7 +23,7 @@ from ..rom.patch import _TYPE_OFF, get_location_data
 STEPS = ("generate_early", "create_regions", "create_items")
 HARD_PICKUPS = [p for p in pickup_info_collection if p.is_hard_mode_only]
 HARD_LOCATIONS = {p.location_name for p in HARD_PICKUPS}
-HARD_ITEMS = Counter(p.display_name for p in HARD_PICKUPS)
+HARD_ITEMS = Counter(p.item_name for p in HARD_PICKUPS)
 
 # (hard_mode, hard_mode_pickups) -> whether the five pickups are shuffled.
 EXPECTED = {
@@ -81,25 +82,30 @@ class InclusionTest(unittest.TestCase):
 
 
 class SpawnTypeTest(unittest.TestCase):
-    """A location holding a Hard Mode item is written as a HARD_PICKUP, unless Hard Mode Pickups is
-    ``always``.
+    """A location holding a Hard Mode item is written as a PICKUP, so it spawns in normal mode too.
 
-    The entity type comes from the item rather than the location, so these tests place the item at
-    an ordinary location, which is where a real fill nearly always puts it."""
+    Whenever the item's own copy is in the pool, Hard Mode is on or Hard Mode Pickups is
+    ``always``, so its location spawns either way. A copy that an enemy check adds has the same
+    code, and has to spawn in normal mode. The entity type comes from the item rather than the
+    location, so these tests place the item at an ordinary location, which is where a real fill
+    nearly always puts it."""
 
-    def _written_type(self, hard_mode: bool, setting: str) -> int:
+    def _written_type(self, hard_mode: bool, setting: str, item_name: str) -> int:
         world = build(hard_mode, setting).worlds[1]
         location = next(loc for loc in world.get_locations() if loc.name not in HARD_LOCATIONS)
-        location.place_locked_item(world.create_item(HARD_PICKUPS[0].display_name))
+        location.place_locked_item(world.create_item(item_name))
         writes = get_location_data(world, [location])
         return writes[location.address - GBA_ROM_BASE + _TYPE_OFF][0]
 
-    def test_always_writes_an_ordinary_pickup(self):
-        self.assertEqual(self._written_type(False, "always"), PICKUP)
-        self.assertEqual(self._written_type(True, "always"), PICKUP)
+    def test_every_setting_writes_an_ordinary_pickup(self):
+        for hard_mode, setting in ((False, "always"), (True, "always"), (True, "with_hard_mode")):
+            with self.subTest(hard_mode=hard_mode, hard_mode_pickups=setting):
+                self.assertEqual(self._written_type(hard_mode, setting, HARD_PICKUPS[0].item_name),
+                                 PICKUP)
 
-    def test_with_hard_mode_keeps_the_hard_pickup_type(self):
-        self.assertEqual(self._written_type(True, "with_hard_mode"), HARD_PICKUP)
+    def test_an_enemy_checks_death_s_sickle_spawns_in_normal_mode(self):
+        self.assertIn("Death's Sickle", ENEMY_ITEM.values())
+        self.assertEqual(self._written_type(False, "with_hard_mode", "Death's Sickle"), PICKUP)
 
 
 class FilledSeedTest(unittest.TestCase):
@@ -110,15 +116,12 @@ class FilledSeedTest(unittest.TestCase):
         distribute_items_restrictive(multiworld)
         return multiworld
 
-    def test_always_leaves_no_hard_pickup_anywhere(self):
-        for hard_mode in (False, True):
+    def test_no_setting_writes_a_hard_pickup_anywhere(self):
+        for hard_mode, setting in ((False, "always"), (True, "always"), (True, "with_hard_mode")):
             for seed in (1, 2):
-                with self.subTest(hard_mode=hard_mode, seed=seed):
-                    self.assertNotIn(HARD_PICKUP, written_types(self._filled(hard_mode, "always", seed)))
-
-    def test_with_hard_mode_writes_one_hard_pickup_per_hard_item(self):
-        types = written_types(self._filled(True, "with_hard_mode", 1))
-        self.assertEqual(types.count(HARD_PICKUP), len(HARD_PICKUPS))
+                with self.subTest(hard_mode=hard_mode, hard_mode_pickups=setting, seed=seed):
+                    types = written_types(self._filled(hard_mode, setting, seed))
+                    self.assertNotIn(HARD_PICKUP, types)
 
     def test_never_leaves_the_vanilla_hard_pickups_untouched(self):
         _locations, writes = location_writes(self._filled(True, "never", 1))

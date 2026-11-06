@@ -28,7 +28,6 @@ from worlds.cvaos.item_smoothing import (
     EARLY_BAND,
     EARLY_GUARANTEE,
     _UNREACHED_DEPTH,
-    _base_name,
     _category,
     _designate_early_soul,
     _region_depth,
@@ -53,7 +52,7 @@ def _ordered_with_desirability(multiworld, player, by_map_distance=False):
     n = max(1, len(ordered) - 1)
     out = []
     for rank, loc in enumerate(ordered):
-        info = desirability_data.by_name.get(_base_name(loc.item.name))
+        info = desirability_data.by_name.get(loc.item.name)
         if info is not None and info.category != "money":
             out.append((rank / n, info))
     return ordered, out
@@ -134,7 +133,7 @@ class TestSmoothingStrict(CVAOSWorldTestBase):
         ordered, _ = _ordered_with_desirability(self.multiworld, self.player)
         n = max(1, len(ordered) - 1)
         gold_fracs = [rank / n for rank, loc in enumerate(ordered)
-                      if _category(_base_name(loc.item.name)) == "money"]
+                      if _category(loc.item.name) == "money"]
         self.assertGreaterEqual(len(gold_fracs), 5, "expected several gold pickups")
         self.assertLess(sum(gold_fracs) / len(gold_fracs), 0.6,
                         "gold should center early-to-mid, not late")

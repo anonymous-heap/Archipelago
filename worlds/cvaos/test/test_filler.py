@@ -14,7 +14,7 @@ from test.general import setup_multiworld
 from .. import CVAOSWorld
 from ..data import pickup_info_collection
 
-HARD_MODE_ONLY = {pickup.display_name for pickup in pickup_info_collection if pickup.is_hard_mode_only}
+HARD_MODE_ONLY = {pickup.item_name for pickup in pickup_info_collection if pickup.is_hard_mode_only}
 
 
 class FillerTest(unittest.TestCase):

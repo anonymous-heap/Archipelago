@@ -20,7 +20,7 @@ from ..data import enemy_placements, enemy_type_by_name, enemy_type_collection
 from ..enemy_checks import (BOSS_TYPES, FALLBACK_SOULS, SPAWNS_AFTER_BOSS_IN, defeat_location_id,
                             defeat_location_name, enemy_check_types, enemy_id_for_location,
                             has_recorded_route, placements_of)
-from ..items import ENEMY_FILLER, PROGRESSIVE_MOVEMENT, item_table
+from ..items import ENEMY_ITEM, PROGRESSIVE_MOVEMENT, create_enemy_item, item_table
 from ..locations import defeat_location_names, location_name_to_id, pickup_location_ids
 from ..options import EnemyChecks, Goal
 from ..rom.entity import GBA_ROM_BASE, PICKUP
@@ -106,7 +106,7 @@ class WhichTypesTest(unittest.TestCase):
 
 
 class GenerationTest(unittest.TestCase):
-    def test_seeds_generate_beatable_with_one_filler_per_defeat_location(self):
+    def test_seeds_generate_beatable_with_one_item_per_defeat_location(self):
         for setting in ("bosses", "all"):
             for seed in range(2):
                 multiworld = generate(seed, {"enemy_checks": setting})
@@ -118,24 +118,25 @@ class GenerationTest(unittest.TestCase):
                     self.assertEqual(len(defeats), len(types))
                     items = Counter(item.name for item in multiworld.get_items()
                                     if item.player == 1)
-                    fillers = Counter(ENEMY_FILLER[enemy.name][0] for enemy in types)
-                    self.assertEqual(items & fillers, fillers)
+                    added = Counter(ENEMY_ITEM[enemy.name] for enemy in types)
+                    self.assertEqual(items & added, added)
 
-    def test_enemy_fillers_never_hold_progression(self):
-        self.assertEqual([name for name, data in ENEMY_FILLER.values()
-                          if data.classification & ItemClassification.progression], [])
+    def test_enemy_items_never_hold_progression(self):
+        world = build("all", steps=("generate_early",)).worlds[1]
+        self.assertEqual([enemy for enemy in ENEMY_ITEM
+                          if create_enemy_item(world, enemy).classification
+                          & ItemClassification.progression], [])
 
     def test_a_drop_shows_as_the_same_pickup_that_holds_it_elsewhere(self):
         from ..data import pickup_info_collection
-        vanilla = {pickup.simple_name: (pickup.type_num, pickup.subtype_num, pickup.item_offset)
+        vanilla = {pickup.item_name: (pickup.type_num, pickup.subtype_num, pickup.item_offset)
                    for pickup in pickup_info_collection if pickup.type_num == PICKUP}
         compared = 0
-        for name, data in ENEMY_FILLER.values():
-            drop = name.rsplit(" (", 1)[0]
-            if drop in vanilla:
+        for name in set(ENEMY_ITEM.values()):
+            if name in vanilla:
                 compared += 1
-                with self.subTest(filler=name):
-                    self.assertEqual(get_item_encoding(data.code), vanilla[drop])
+                with self.subTest(item=name):
+                    self.assertEqual(get_item_encoding(item_table[name].code), vanilla[name])
         self.assertGreater(compared, 10)
 
     def test_off_adds_no_defeat_locations(self):
@@ -253,13 +254,13 @@ class DeliveryTest(unittest.TestCase):
         self.assertEqual(listed, expected)
         self.assertTrue(listed)
 
-    def test_the_rom_shows_each_own_enemy_filler_on_a_pickup_as_itself(self):
+    def test_the_rom_shows_each_own_enemy_item_on_a_pickup_as_itself(self):
         world = self.with_checks.worlds[1]
         pickups = [location for location in self.with_checks.get_locations(1)
                    if location.address in pickup_location_ids]
         writes = get_location_data(world, pickups)
-        fillers = {data.code for _name, data in ENEMY_FILLER.values()}
-        placed = [location for location in pickups if location.item.code in fillers]
+        added = {item_table[name].code for name in ENEMY_ITEM.values()}
+        placed = [location for location in pickups if location.item.code in added]
         self.assertTrue(placed)
         for location in placed:
             with self.subTest(location=location.name, item=location.item.name):
@@ -327,7 +328,7 @@ class ClientTest(unittest.IsolatedAsyncioTestCase):
         from NetUtils import NetworkItem
         pickup, other_pickup = sorted(pickup_location_ids)[:2]
         defeat = defeat_location_id(enemy_type_by_name["Bat"].id)
-        code = item_table["Potion (A)"].code
+        code = item_table["Potion"].code
         given_by_rom = NetworkItem(code, pickup, 1)
         at_a_defeat = NetworkItem(code, defeat, 1)
         from_another_world = NetworkItem(code, pickup, 2)
@@ -342,7 +343,7 @@ class ClientTest(unittest.IsolatedAsyncioTestCase):
     def test_the_rom_given_list_is_ignored_when_own_items_are_not_requested(self):
         from NetUtils import NetworkItem
         pickup = min(pickup_location_ids)
-        item = NetworkItem(item_table["Potion (A)"].code, pickup, 1)
+        item = NetworkItem(item_table["Potion"].code, pickup, 1)
         ctx = self.ctx((), items_handling=ITEMS_FROM_OTHER_WORLDS, items=[item],
                        slot_data={"rom_given_locations": [pickup],
                                   "starting_inventory_from_server": True})

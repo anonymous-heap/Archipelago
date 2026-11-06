@@ -12,8 +12,9 @@ Bit layout (MSB->LSB, 53 bits, because AP requires ``0 < id < 2**53`` for JS cli
     [48]    set_flag   (1)  also set an EWRAM flag bit?
     [47:40] unused     (8)  reserved for growth
     [39:28] id/value  (12)  item -> item_info.item_number; money -> gold value
-    [27:22] disambig   (6)  copy index: distinguishes multiple pickups of the same item so
-                            their codes stay unique; ignored when granting
+    [27:22] retired    (6)  always 0. Older versions gave each copy of an item its own name,
+                            and this field told those copies' codes apart. Seeds from those
+                            versions still carry it, so it is never reused (canonical_code)
     [21:4]  flag off  (18)  EWRAM byte offset (when set_flag)
     [3:1]   flag bit   (3)  bit index 0-7 (when set_flag)
     [0]     flag value (1)  value to set that bit to (when set_flag)
@@ -49,22 +50,19 @@ class TransferCategory(IntEnum):
 _CATEGORY_SHIFT, _CATEGORY_MASK = 49, 0xF
 _SET_FLAG_SHIFT = 48
 _ID_SHIFT, _ID_MASK = 28, 0xFFF            # 12 bits
-_DISAMBIG_SHIFT, _DISAMBIG_MASK = 22, 0x3F  # 6 bits
+_RETIRED_SHIFT, _RETIRED_MASK = 22, 0x3F  # 6 bits, always 0 in new codes
 _FLAG_OFFSET_SHIFT, _FLAG_OFFSET_MASK = 4, 0x3FFFF  # 18 bits (256 KB EWRAM)
 _FLAG_BIT_SHIFT, _FLAG_BIT_MASK = 1, 0x7    # 3 bits
 _FLAG_VALUE_MASK = 0x1
 
 ID_MAX = _ID_MASK            # 4095: largest packable item_number / gold value
-DISAMBIG_MAX = _DISAMBIG_MASK  # 63: most copies of one item that can share an (id) space
 
 
-def pack(category: TransferCategory, id_or_value: int, *, disambiguation: int = 0,
+def pack(category: TransferCategory, id_or_value: int, *,
          set_flag: bool = False, flag_offset: int = 0, flag_bit: int = 0, flag_value: int = 0) -> int:
     """Build a packed AP item code, raising if any field overflows its width."""
     if not 0 <= id_or_value <= _ID_MASK:
         raise ValueError(f"id/value {id_or_value} does not fit in 12 bits")
-    if not 0 <= disambiguation <= _DISAMBIG_MASK:
-        raise ValueError(f"disambiguation {disambiguation} does not fit in 6 bits")
     if not 0 <= flag_offset <= _FLAG_OFFSET_MASK:
         raise ValueError(f"flag_offset {flag_offset:#x} does not fit in 18 bits")
     if not 0 <= flag_bit <= _FLAG_BIT_MASK:
@@ -73,7 +71,6 @@ def pack(category: TransferCategory, id_or_value: int, *, disambiguation: int = 
         (int(category) << _CATEGORY_SHIFT)
         | (int(bool(set_flag)) << _SET_FLAG_SHIFT)
         | (id_or_value << _ID_SHIFT)
-        | (disambiguation << _DISAMBIG_SHIFT)
         | (flag_offset << _FLAG_OFFSET_SHIFT)
         | (flag_bit << _FLAG_BIT_SHIFT)
         | (flag_value & _FLAG_VALUE_MASK)
@@ -89,9 +86,18 @@ class ReceiveAction(NamedTuple):
     flag_value: int
 
 
+def canonical_code(code: int) -> int:
+    """Return ``code`` with its retired field cleared.
+
+    A seed from an older version can send a code that sets the retired field. Clearing it gives the
+    code that the item has now.
+    """
+    return code & ~(_RETIRED_MASK << _RETIRED_SHIFT)
+
+
 def resolve(code: int) -> "ReceiveAction | None":
     """Unpack a received AP code. Returns ``None`` for an undefined category (the caller should
-    log + skip). The disambiguation field is intentionally dropped: it never affects the grant.
+    log + skip). The retired field is ignored, so a code from an older seed grants the same item.
     """
     try:
         category = TransferCategory((code >> _CATEGORY_SHIFT) & _CATEGORY_MASK)

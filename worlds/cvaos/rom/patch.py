@@ -17,14 +17,13 @@ from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTok
 from .. import item_granting
 from ..data import item_info_collection, pickup_info_collection as pickup_infos
 from ..constants import AC_USA_ROM_MD5, USA_ROM_MD5
-from ..item_granting import TransferCategory
-from ..items import ENEMY_FILLER, FORBIDDEN_AREA_SWITCH, item_table
+from ..items import ENEMY_ITEM, FORBIDDEN_AREA_SWITCH, item_table
 from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
                inventory_menu, oops_all_whips, received_item_box, single_jump_divekick,
                skull_key_warp, soul_drop_rates, soul_guarantee_hook, soul_shuffle)
-from .entity import GBA_ROM_BASE, HARD_PICKUP, PICKUP, AoSPickupEntity
+from .entity import GBA_ROM_BASE, PICKUP, AoSPickupEntity
 from .._bytemaker_compat import offset_of
-from ..options import (ForbiddenAreaButton, HardModePickups, SoulShuffle, TARGET_ADVANCE_COLLECTION,
+from ..options import (ForbiddenAreaButton, SoulShuffle, TARGET_ADVANCE_COLLECTION,
                        TARGET_GBA)
 
 if TYPE_CHECKING:
@@ -61,50 +60,48 @@ _SOUL_SHUFFLE_MODES = {
 
 
 # Item encoding lookup: AP item *code* -> (type_num, subtype_num, item_offset). Keyed by the stable
-# packed code (not the display name) so renaming AP items can never desync ROM item placement.
-
-_item_encoding: Dict[int, tuple[int, int, int]] = {
-    item_table[p.display_name].code: (p.type_num, p.subtype_num, p.item_offset)
-    for p in pickup_infos
-}
+# packed code (not the name) so renaming AP items can never desync ROM item placement.
 
 
-def _enemy_filler_encodings() -> Dict[int, tuple[int, int, int]]:
-    """Return the encoding of each item that enemy checks add, by its code.
+def _item_encodings() -> Dict[int, tuple[int, int, int]]:
+    """Return the encoding of each item that the ROM can show on a pickup, by its code.
 
-    These items have codes that no vanilla pickup has. Gold takes the encoding of a vanilla PICKUP
-    holding the same amount. A drop follows its category's rule: every vanilla PICKUP of a category
-    stores the same type and subtype, and an item_offset that is the item's id plus a fixed amount.
-    This checks that the vanilla pickups agree on each rule.
+    An item that pickups hold takes their subtype and item_offset. Its type is always PICKUP, even
+    for the five items that vanilla holds only in HARD_PICKUPs, which the game spawns only in Hard
+    Mode. One code stands for every copy of an item, and a copy that an enemy check adds has to
+    spawn in normal mode too. Writing PICKUP changes nothing for a Hard Mode item's own copy:
+    whenever one is in the pool, either Hard Mode is on, which the client enforces, or Hard Mode
+    Pickups is ``always``.
+
+    An item that only an enemy check adds follows its category's rule: every vanilla PICKUP of a
+    category stores the same type and subtype, and an item_offset that is the item's id plus a
+    fixed amount. This checks that the vanilla pickups agree on each rule.
     """
     info_by_name = {info.name: info for info in item_info_collection}
     info_by_number = {info.item_number: info for info in item_info_collection}
-    gold: Dict[int, tuple[int, int, int]] = {}
+    encodings: Dict[int, tuple[int, int, int]] = {}
     rules: Dict[str, tuple[int, int, int]] = {}
     for p in pickup_infos:
-        if p.type_num != PICKUP:
-            continue
+        encoding = (PICKUP, p.subtype_num, p.item_offset)
+        if encodings.setdefault(item_table[p.item_name].code, encoding) != encoding:
+            raise ValueError(f"the pickups holding {p.item_name} disagree on their encoding")
         info = info_by_name.get(p.simple_name)
         if info is None:
-            gold[int(p.simple_name)] = (p.type_num, p.subtype_num, p.item_offset)
-            continue
-        rule = (p.type_num, p.subtype_num, p.item_offset - info.id)
+            continue  # gold
+        rule = (PICKUP, p.subtype_num, p.item_offset - info.id)
         if rules.setdefault(info.item_category, rule) != rule:
             raise ValueError(
                 f"{p.display_name}: {info.item_category} pickups disagree on their encoding")
-    encodings: Dict[int, tuple[int, int, int]] = {}
-    for _name, data in ENEMY_FILLER.values():
-        action = item_granting.resolve(data.code)
-        if action.category == TransferCategory.MONEY:
-            encodings[data.code] = gold[action.id_or_value]
-        else:
-            info = info_by_number[action.id_or_value]
+    for name in ENEMY_ITEM.values():
+        code = item_table[name].code
+        if code not in encodings:
+            info = info_by_number[item_granting.resolve(code).id_or_value]
             type_num, subtype_num, added = rules[info.item_category]
-            encodings[data.code] = (type_num, subtype_num, info.id + added)
+            encodings[code] = (type_num, subtype_num, info.id + added)
     return encodings
 
 
-_item_encoding.update(_enemy_filler_encodings())
+_item_encoding: Dict[int, tuple[int, int, int]] = _item_encodings()
 
 
 def get_item_encoding(item_code: int) -> tuple[int, int, int]:
@@ -162,13 +159,10 @@ def rom_gives_item(world, location) -> bool:
 def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Dict[int, bytes]:
     """Build a dict of {rom_file_offset: bytes_to_write} for every location.
 
-    Each location takes its entity type from the local item placed there, so a location holding
-    one of the five Hard Mode items is written as a HARD_PICKUP and spawns only in Hard Mode. When
-    Hard Mode Pickups is ``always``, HARD_PICKUP is written as PICKUP instead, so those locations
-    also spawn in normal mode.
+    Each location takes its entity type from the item placed there. Every item the ROM shows is
+    written as a PICKUP (see _item_encodings), so it spawns in normal mode and in Hard Mode alike.
     """
     writes: Dict[int, bytes] = {}
-    every_difficulty = world.options.hard_mode_pickups.value == HardModePickups.option_always
 
     for loc in active_locations:
         rom_offset = loc.address - GBA_ROM_BASE
@@ -188,8 +182,6 @@ def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Di
             # because it has no pickup of its own. When its location is checked, the client
             # grants the next soul in PROGRESSIVE_MOVEMENT_STAGES.
             type_num, subtype_num, item_offset = _AP_PLACEHOLDER
-        if every_difficulty and type_num == HARD_PICKUP:
-            type_num = PICKUP
 
         writes[rom_offset + _TYPE_OFF] = bytes([type_num, subtype_num])
         writes[rom_offset + _ITEM_OFF] = item_offset.to_bytes(2, "little")

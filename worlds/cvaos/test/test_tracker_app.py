@@ -288,6 +288,16 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(snapshot["route_target"], terrace)
         self.assertIsNotNone(snapshot["route"])
 
+    async def test_an_item_code_from_an_older_seed_tracks_as_its_item(self):
+        # Older versions gave each copy of an item its own code, using a field that is now
+        # retired. The data package no longer lists those codes.
+        from ..item_granting import _RETIRED_SHIFT
+        code = CVAOSWorld.item_name_to_id["Malphas"] | (1 << _RETIRED_SHIFT)
+        self.ctx.items_received += [NetworkItem(code, -1, 1, 0)]
+        self.ctx.on_package("ReceivedItems", {})
+        items = {item["name"]: item["count"] for item in self.ctx.snapshot()["items"]}
+        self.assertEqual(items["Malphas"], 1)
+
     async def test_a_route_is_dropped_for_another_slot(self):
         self.receive("Malphas", "Hippogryph")
         self.ctx.room_address = "localhost:38281"

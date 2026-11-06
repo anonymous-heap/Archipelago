@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from collections import Counter
 from typing import Dict, List, NamedTuple, TYPE_CHECKING
 
 from BaseClasses import Item, ItemClassification
 
 from .data import item_info_collection, pickup_info_collection as pickup_infos
 from .enemy_checks import checkable_types, enemy_check_types
-from .item_granting import DISAMBIG_MAX, ID_MAX, TransferCategory, pack
+from .item_granting import ID_MAX, TransferCategory, pack
 from .options import ForbiddenAreaButton, hard_mode_pickups_included
 
 if TYPE_CHECKING:
@@ -76,22 +75,23 @@ def _transfer_for(pickup) -> tuple[TransferCategory, int]:
 
 
 def _build_item_table() -> Dict[str, ItemData]:
+    """Return the items that pickups hold, by name.
+
+    Every pickup holding the same item gives it the same name and code, as other worlds do, so its
+    copies differ only by their locations. A location name still tells the vanilla pickups apart,
+    as in "White Dragon Hallway [00D Potion (A)]".
+    """
     # TODO(maps): Castle Maps currently encode as plain item transfers (no set_flag). Once the
     # map-reveal EWRAM flag offsets are known, pack them with set_flag=1 so receiving a map
     # reveals it -- item_granting.pack supports it and resolve/grant already apply it.
-    copies: Dict[tuple, int] = {}
     table: Dict[str, ItemData] = {}
     for pickup in pickup_infos:
         category, id_or_value = _transfer_for(pickup)
         if id_or_value > ID_MAX:
             raise ValueError(f"{pickup.identifier_key}: id/value {id_or_value} exceeds {ID_MAX} (12 bits)")
-        key = (category, id_or_value)
-        disambiguation = copies.get(key, 0)
-        copies[key] = disambiguation + 1
-        if disambiguation > DISAMBIG_MAX:
-            raise ValueError(f"more than {DISAMBIG_MAX + 1} copies of {key}; 6-bit disambiguation overflow")
-        code = pack(category, id_or_value, disambiguation=disambiguation)
-        table[pickup.display_name] = ItemData(_classification_for_pickup(pickup.simple_name), code)
+        data = ItemData(_classification_for_pickup(pickup.simple_name), pack(category, id_or_value))
+        if table.setdefault(pickup.item_name, data) != data:
+            raise ValueError(f"the pickups named {pickup.item_name!r} hold different items")
     return table
 
 
@@ -119,73 +119,68 @@ PROGRESSIVE_MOVEMENT = "Progressive Movement"
 PROGRESSIVE_MOVEMENT_STAGES: tuple[str, ...] = ("Flying Armor", "Malphas", "Giant Bat")
 item_table[PROGRESSIVE_MOVEMENT] = ItemData(
     ItemClassification.progression, pack(TransferCategory.PROGRESSIVE, 0))
-_SYNTHETIC_ITEM_NAMES: frozenset[str] = frozenset({FORBIDDEN_AREA_SWITCH, PROGRESSIVE_MOVEMENT})
 
-# --- Enemy check filler (enemy_checks.py) ---
+# --- Enemy check items (enemy_checks.py) ---
 # Each defeat location adds one item to the pool: the enemy's own drop, from slot 1 or else slot 2,
 # or ENEMY_GOLD gold for an enemy that drops nothing. A type always adds the same item, because
-# Universal Tracker rebuilds the pool from the slot data and has to arrive at the same pool. A drop
-# that is normally progression counts only as useful here, so enemy checks never add progression.
+# Universal Tracker rebuilds the pool from the slot data and has to arrive at the same pool. The
+# item has its usual name and code, so an enemy's Potion is the same item as a pickup's Potion. A
+# drop that is normally progression counts only as useful here (create_enemy_item), so enemy checks
+# never add progression.
 # ENEMY_GOLD is an amount that gold pickups hold, so the ROM can show the gold on a pickup too.
 ENEMY_GOLD = 100
 
 
-def _build_enemy_fillers() -> Dict[str, tuple[str, ItemData]]:
-    # Number each filler's copies after the pickups' own, so that "100 Gold (Bat)" and the
-    # vanilla "100 Gold" pickups get different codes.
-    copies: Dict[tuple, int] = dict(Counter(_transfer_for(pickup) for pickup in pickup_infos))
-    fillers: Dict[str, tuple[str, ItemData]] = {}
-    for enemy in checkable_types():
-        drop = enemy.drops[0] or enemy.drops[1]
-        if drop:
-            key = (TransferCategory.OTHER_ITEM, _item_info_by_name[drop].item_number)
-            classification = _classification_for_pickup(drop)
-            if classification & ItemClassification.progression:
-                classification = ItemClassification.useful
-            name = f"{drop} ({enemy.name})"
-        else:
-            key = (TransferCategory.MONEY, ENEMY_GOLD)
-            classification = ItemClassification.filler
-            name = f"{ENEMY_GOLD} Gold ({enemy.name})"
-        disambiguation = copies.get(key, 0)
-        copies[key] = disambiguation + 1
-        fillers[enemy.name] = (name, ItemData(classification, pack(*key, disambiguation=disambiguation)))
-    return fillers
+def _enemy_item_name(drops: tuple[str, str]) -> str:
+    return drops[0] or drops[1] or f"{ENEMY_GOLD} Gold"
 
 
-# enemy name -> (the name of the item its defeat location adds, that item's data)
-ENEMY_FILLER: Dict[str, tuple[str, ItemData]] = _build_enemy_fillers()
-for _filler_name, _filler_data in ENEMY_FILLER.values():
-    if _filler_name in item_table:
-        raise ValueError(f"enemy filler {_filler_name!r} has the name of another item")
-    item_table[_filler_name] = _filler_data
-_ENEMY_FILLER_NAMES: frozenset[str] = frozenset(name for name, _ in ENEMY_FILLER.values())
+# enemy name -> the name of the item its defeat location adds
+ENEMY_ITEM: Dict[str, str] = {enemy.name: _enemy_item_name(enemy.drops) for enemy in checkable_types()}
+if f"{ENEMY_GOLD} Gold" not in item_table:
+    raise ValueError(f"no gold pickup holds {ENEMY_GOLD} gold, so the ROM can't show it")
+for _name in ENEMY_ITEM.values():
+    if _name not in item_table:
+        # A drop that no pickup holds is transferred as OTHER_ITEM, the category for an item with no
+        # ground pickup.
+        _info = _item_info_by_name[_name]
+        item_table[_name] = ItemData(_classification_for_pickup(_name),
+                                     pack(TransferCategory.OTHER_ITEM, _info.item_number))
 
 # Convenience map for the World class. Kept complete (every pickup, Hard-Mode ones included) so
 # item ids stay stable for the data package; per-seed inclusion is decided in create_itempool.
 item_name_to_id: Dict[str, int] = {name: data.code for name, data in item_table.items()}
 
-# Items that exist only in the game's Hard Mode (the HARD_PICKUP entities). Excluded from the
-# pool unless options.hard_mode_pickups_included returns True, the same test that gates their
-# locations in regions.create_regions.
-_HARD_PICKUP_ITEM_NAMES: frozenset[str] = frozenset(
-    p.display_name for p in pickup_infos if p.is_hard_mode_only)
+# Item groups, so that a YAML or a hint can name a kind of item, such as "Gold" or "Red Souls".
+_GROUP_BY_CATEGORY = {"weapon": "Weapons", "armor": "Armor", "accessory": "Accessories",
+                      "consumable": "Consumables", "red_soul": "Red Souls", "blue_soul": "Blue Souls",
+                      "yellow_soul": "Yellow Souls", "ability_soul": "Ability Souls"}
+_SOUL_GROUPS = ("Red Souls", "Blue Souls", "Yellow Souls", "Ability Souls")
+item_name_groups: Dict[str, set[str]] = {}
+for _name in item_table:
+    _info = _item_info_by_name.get(_name)
+    if _info is not None:
+        _group = _GROUP_BY_CATEGORY[_info.item_category]
+        item_name_groups.setdefault(_group, set()).add(_name)
+        if _group in _SOUL_GROUPS:
+            item_name_groups.setdefault("Souls", set()).add(_name)
+    elif _name.endswith(" Gold"):
+        item_name_groups.setdefault("Gold", set()).add(_name)
 
 
-# The item the Study Sealswitch displaces when it is shuffled in: the smallest gold pickup, with
-# ties going to the first in table order. The displaced item leaves the game. Gold pickups differ
-# only in amount, so losing the smallest one costs the player the least.
+# The item the Study Sealswitch displaces when it is shuffled in: the smallest gold pickup. The
+# displaced item leaves the game. Gold pickups differ only in amount, so losing the smallest one
+# costs the player the least.
 _SEALSWITCH_DISPLACES: str = min(
     (p for p in pickup_infos if p.subtype_num == _MONEY_SUBTYPE and not p.is_hard_mode_only),
-    key=lambda p: int(p.simple_name)).display_name
+    key=lambda p: int(p.simple_name)).item_name
 
-# Plain filler that every seed can hold: no progression, nothing that exists only in Hard Mode,
-# and none of the synthetic items. CVAOSWorld.get_filler_item_name picks from these.
+# Plain filler that every seed can hold: the filler items of the pickups that exist outside Hard
+# Mode. An item appears once for each such pickup, so CVAOSWorld.get_filler_item_name picks an item
+# as often as the castle holds it.
 FILLER_ITEM_NAMES: tuple[str, ...] = tuple(sorted(
-    name for name, data in item_table.items()
-    if data.classification == ItemClassification.filler
-    and name not in _HARD_PICKUP_ITEM_NAMES and name not in _SYNTHETIC_ITEM_NAMES
-    and name not in _ENEMY_FILLER_NAMES))
+    p.item_name for p in pickup_infos
+    if not p.is_hard_mode_only and item_table[p.item_name].classification == ItemClassification.filler))
 
 
 def create_item(world: "CVAOSWorld", name: str) -> CVAOSItem:
@@ -193,13 +188,25 @@ def create_item(world: "CVAOSWorld", name: str) -> CVAOSItem:
     return CVAOSItem(name, data.classification, data.code, world.player)
 
 
+def create_enemy_item(world: "CVAOSWorld", enemy_name: str) -> CVAOSItem:
+    """Create the item that ``enemy_name``'s defeat location adds to the pool.
+
+    A drop that is normally progression is created as useful, so enemy checks never add
+    progression. Another copy of the same item, such as one a pickup holds, keeps its own
+    classification.
+    """
+    item = create_item(world, ENEMY_ITEM[enemy_name])
+    if item.classification & ItemClassification.progression:
+        item.classification = ItemClassification.useful
+    return item
+
+
 def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
     # One item per pickup. Hard-Mode-only pickups are included only when hard_mode_pickups_included
     # returns True, the test regions.create_regions also uses, so item and location counts match.
     include_hard = hard_mode_pickups_included(world.options)
-    pool = [create_item(world, name) for name in item_table
-            if name not in _SYNTHETIC_ITEM_NAMES and name not in _ENEMY_FILLER_NAMES
-            and (include_hard or name not in _HARD_PICKUP_ITEM_NAMES)]
+    pool = [create_item(world, pickup.item_name) for pickup in pickup_infos
+            if include_hard or not pickup.is_hard_mode_only]
     if world.options.forbidden_area_button.value == ForbiddenAreaButton.option_pickup:
         # Shuffle in the Study Sealswitch, displacing one gold pickup so the pool size still
         # equals the location count. The A01 button is removed rather than turned into a check of
@@ -207,10 +214,9 @@ def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
         displaced = next(i for i, existing in enumerate(pool)
                          if existing.name == _SEALSWITCH_DISPLACES)
         pool[displaced] = create_item(world, FORBIDDEN_AREA_SWITCH)
-    # One filler per defeat location, so the pool still matches the location count.
-    pool += [create_item(world, ENEMY_FILLER[enemy.name][0])
-             for enemy in enemy_check_types(world.options)]
     if world.options.progressive_movement.value:
         pool = [create_item(world, PROGRESSIVE_MOVEMENT) if item.name in PROGRESSIVE_MOVEMENT_STAGES
                 else item for item in pool]
+    # One item per defeat location, so the pool still matches the location count.
+    pool += [create_enemy_item(world, enemy.name) for enemy in enemy_check_types(world.options)]
     return pool
