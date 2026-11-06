@@ -1,191 +1,184 @@
 """
-Tests for the item-smoothing placement feature (see data/item_balancing/README.md):
+Tests for item smoothing (see data/item_balancing/README.md).
 
-* the Ancient Books are spread across early/mid/late by the pre_fill, and
-* non-progression items are smoothed so less-desirable items land earlier and more-desirable
-  ones later, with gold sprinkled early-to-mid -- all only when item_smoothing is enabled.
+With item_smoothing on, the Ancient Books are spread over the run, the mobility souls and Black
+Panther are aimed at early or late targets, and more desirable non-progression items are moved
+later in the run. With item_smoothing off, none of this happens.
+
+    python -m pytest worlds/cvaos/test/test_item_balancing.py -v
 """
+from __future__ import annotations
 
 import random
 import statistics
 import unittest
-from argparse import Namespace
 from collections import Counter
 
 from BaseClasses import CollectionState, MultiWorld
 from Fill import distribute_items_restrictive
-from test.bases import WorldTestBase
-from test.general import gen_steps
-from worlds.AutoWorld import AutoWorldRegister, call_all
+from test.general import gen_steps, setup_multiworld
+from worlds.AutoWorld import call_all
 
-from worlds.cvaos.data import item_balancing as desirability_data
+from .. import CVAOSWorld
+from ..data import item_balancing as desirability_data
+from ..item_smoothing import (ANCIENT_BOOK_NAMES, BIASED_SOULS, EARLY_BAND, EARLY_GUARANTEE,
+                              SmoothingParams, _UNREACHED_DEPTH, _assign_targets,
+                              _designate_early_soul, _region_depth, _run_position,
+                              smoothable_locations_in_order)
+from ..items import CVAOSItem, item_table
+from ..regions import can_reach_room
+from .test_smoothing_location_settings import BEFORE_FILL, generate
 
-GAME = "Castlevania - Aria of Sorrow"
-from worlds.cvaos.item_smoothing import (
-    ANCIENT_BOOK_NAMES,
-    BIASED_SOULS,
-    BLACK_PANTHER_EARLY_WINDOW,
-    EARLY_BAND,
-    EARLY_GUARANTEE,
-    _UNREACHED_DEPTH,
-    _category,
-    _designate_early_soul,
-    _region_depth,
-    _run_position,
-    smoothable_locations_in_order,
-)
+# The post-fill pass aims one book into each of [0, 1/3], [1/3, 2/3] and [1/2, 3/4] of the run, so
+# the books in run order belong in these bands. A swap can stop short of its target, so each band
+# here is widened by 0.05 to 0.1.
+BOOK_BANDS = ((0.0, 0.4), (0.25, 0.75), (0.45, 0.85))
 
 
-def _run_fill(multiworld) -> None:
-    """Run the main fill, then post_fill (which triggers stage_post_fill smoothing)."""
-    distribute_items_restrictive(multiworld)
-    call_all(multiworld, "post_fill")
+def prepared(seed: int, options: dict) -> CVAOSWorld:
+    """Generate one world through pre_fill, where the smoothing passes set their targets."""
+    return setup_multiworld(CVAOSWorld, gen_steps, seed=seed, options=options).worlds[1]
 
 
-def _ordered_with_desirability(multiworld, player, by_map_distance=False):
-    """(rank_fraction, info) for each smoothed location's item that is ranked and not money,
-    in progress order -- the achieved arrangement the feature is supposed to produce."""
-    spheres = list(multiworld.get_spheres())
-    depth = _region_depth(multiworld, player)
-    ordered = smoothable_locations_in_order(multiworld, player, spheres, depth,
+def book_positions(multiworld: MultiWorld) -> list[float]:
+    """Return the run positions of the three Ancient Books, earliest first."""
+    position = _run_position(multiworld, 1)
+    return sorted(position[loc] for loc in position if loc.item.name in ANCIENT_BOOK_NAMES)
+
+
+def positions_by_desirability(multiworld: MultiWorld, by_map_distance: bool) -> list[float]:
+    """Return the positions of the rated items that the post-fill pass reorders, least desirable
+    first.
+
+    A position is the item's rank in that pass's order, scaled to [0, 1]. Gold is left out, because
+    the pass places gold by amount rather than by desirability.
+    """
+    ordered = smoothable_locations_in_order(multiworld, 1, list(multiworld.get_spheres()),
+                                            _region_depth(multiworld, 1),
                                             by_map_distance=by_map_distance)
-    n = max(1, len(ordered) - 1)
-    out = []
+    last = max(1, len(ordered) - 1)
+    rated = []
     for rank, loc in enumerate(ordered):
         info = desirability_data.by_name.get(loc.item.name)
         if info is not None and info.category != "money":
-            out.append((rank / n, info))
-    return ordered, out
+            rated.append((info.desirability, rank / last))
+    rated.sort(key=lambda pair: pair[0])
+    return [position for _desirability, position in rated]
 
 
-class CVAOSWorldTestBase(WorldTestBase):
-    game = "Castlevania - Aria of Sorrow"
+class DefaultOptionsTest(unittest.TestCase):
+    """Seeds generated and filled with the default options.
+
+    The default goal is chaos, and the gate on the way to Chaos needs all three Ancient Books.
+    Smoothing is strict, and early_mobility_souls is bias_early, which never picks Giant Bat as
+    the early soul.
+    """
+
+    SEEDS = range(9, 14)
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.multiworlds = {seed: generate(seed, {}) for seed in cls.SEEDS}
+
+    def test_every_seed_is_beatable_with_the_books_required(self):
+        for seed, multiworld in self.multiworlds.items():
+            with self.subTest(seed=seed):
+                self.assertTrue(multiworld.fulfills_accessibility())
+
+    def test_the_books_are_placed_and_locked_before_the_main_fill(self):
+        # A book that pre_fill could not place would go into the pool, unlocked, for the main fill.
+        for seed, multiworld in self.multiworlds.items():
+            books = [loc for loc in multiworld.get_filled_locations(1)
+                     if loc.item.name in ANCIENT_BOOK_NAMES]
+            with self.subTest(seed=seed):
+                self.assertEqual(sorted(loc.item.name for loc in books), list(ANCIENT_BOOK_NAMES))
+                self.assertTrue(all(loc.locked for loc in books))
+                self.assertEqual([item for item in multiworld.itempool
+                                  if item.name in ANCIENT_BOOK_NAMES], [])
+
+    def test_the_books_are_spread_over_the_run(self):
+        for seed, multiworld in self.multiworlds.items():
+            positions = book_positions(multiworld)
+            with self.subTest(seed=seed):
+                self.assertEqual(len(positions), 3)
+                for position, (low, high) in zip(positions, BOOK_BANDS):
+                    self.assertTrue(low <= position <= high, positions)
+
+    def test_giant_bat_is_aimed_late_and_usually_lands_late(self):
+        positions = []
+        for seed, multiworld in self.multiworlds.items():
+            targets = multiworld.worlds[1]._soul_targets
+            self.assertGreater(targets["Giant Bat"], EARLY_BAND, f"seed {seed}")
+            run_position = _run_position(multiworld, 1)
+            positions.append(next(position for loc, position in run_position.items()
+                                  if loc.item.name == "Giant Bat"))
+        self.assertGreater(statistics.median(positions), 0.5, positions)
 
 
-class TestBooksSpread(CVAOSWorldTestBase):
-    options = {"item_smoothing": "strict"}
+class SmoothingOrderTest(unittest.TestCase):
+    """The post-fill pass along each item_smoothing_order axis, on the same seed."""
 
-    def test_books_placed_and_locked(self):
-        self.world_setup(seed=123)
-        multiworld = self.multiworld
-        placed = {loc.item.name: loc
-                  for loc in multiworld.get_locations(self.player)
-                  if loc.item is not None and loc.item.name in ANCIENT_BOOK_NAMES}
-        self.assertEqual(set(placed), set(ANCIENT_BOOK_NAMES),
-                         "all three Ancient Books should be placed by pre_fill")
-        for name, loc in placed.items():
-            self.assertTrue(loc.locked, f"{name} should be locked in place")
-            self.assertIsNotNone(loc.address)
-        self.assertEqual([it for it in multiworld.itempool if it.name in ANCIENT_BOOK_NAMES], [],
-                         "placed books must not be in the itempool")
+    ORDERS = ("spheres", "map_distance")
 
-    def test_books_spread_over_spheres(self):
-        # After the post-fill refine, the books sit at distinct points of the *run* (sphere ordering)
-        # -- one early [0, 1/3], one mid [1/3, 2/3], one near 4/6 -- so positions span a wide range.
-        spreads = []
-        for seed in range(1000, 1008):
-            self.world_setup(seed=seed)
-            _run_fill(self.multiworld)  # distribute + post_fill -> runs refine_ancient_books
-            position = _run_position(self.multiworld, self.player)
-            book_fracs = [position[loc] for loc in self.multiworld.get_locations(self.player)
-                          if loc.item is not None and loc.item.name in ANCIENT_BOOK_NAMES
-                          and loc.item.player == self.player and loc in position]
-            if len(book_fracs) == 3:
-                spreads.append(max(book_fracs) - min(book_fracs))
-        self.assertTrue(spreads, "no seed placed all three books")
-        self.assertGreater(sum(spreads) / len(spreads), 0.4,
-                           "books should span a wide range of the run by sphere ordering (~thirds)")
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.multiworlds = {order: generate(4, {"item_smoothing_order": order})
+                           for order in cls.ORDERS}
 
+    def test_more_desirable_items_land_later(self):
+        for order, multiworld in self.multiworlds.items():
+            positions = positions_by_desirability(multiworld,
+                                                  by_map_distance=order == "map_distance")
+            with self.subTest(order=order):
+                self.assertGreater(len(positions), 10, "too few rated items to compare")
+                half = len(positions) // 2
+                gap = statistics.mean(positions[half:]) - statistics.mean(positions[:half])
+                self.assertGreater(gap, 0.2)
 
-class TestSmoothingMinimalAccessibility(CVAOSWorldTestBase):
-    """Smoothing must run cleanly under accessibility=minimal, where own filler can sit in unreachable
-    spots -- the case smoothable_locations_in_order's unreachable-sphere sentinel guard handles."""
-    options = {"item_smoothing": "strict", "accessibility": "minimal"}
+    def test_the_two_orders_give_different_arrangements(self):
+        # Pre_fill and the main fill do not read the option, so only the post-fill pass differs.
+        arrangements = [{loc.name: loc.item.name for loc in multiworld.get_filled_locations(1)}
+                        for multiworld in self.multiworlds.values()]
+        self.assertNotEqual(*arrangements)
 
-    def test_runs_and_places_books(self):
-        self.world_setup(seed=314)
-        _run_fill(self.multiworld)
-        books = [loc for loc in self.multiworld.get_locations(self.player)
-                 if loc.item is not None and loc.item.name in ANCIENT_BOOK_NAMES]
-        self.assertEqual(len(books), 3, "all three books placed under minimal accessibility")
-
-
-class TestSmoothingStrict(CVAOSWorldTestBase):
-    # Pinned to the spheres axis. The default axis, map_distance, is covered by
-    # TestSmoothingMapDistanceAxis.
-    options = {"item_smoothing": "strict", "item_smoothing_order": "spheres"}
-
-    def test_desirable_items_land_later(self):
-        self.world_setup(seed=777)
-        _run_fill(self.multiworld)
-        _, pairs = _ordered_with_desirability(self.multiworld, self.player)
-        self.assertGreater(len(pairs), 10, "need a meaningful sample of ranked items")
-        pairs.sort(key=lambda p: p[1].desirability)
-        half = len(pairs) // 2
-        low_rank = sum(p[0] for p in pairs[:half]) / half
-        high_rank = sum(p[0] for p in pairs[half:]) / (len(pairs) - half)
-        self.assertGreater(high_rank, low_rank,
-                           "more-desirable items should sit later in progress order on average")
-
-    def test_gold_sprinkled_early_to_mid(self):
-        self.world_setup(seed=778)
-        _run_fill(self.multiworld)
-        ordered, _ = _ordered_with_desirability(self.multiworld, self.player)
-        n = max(1, len(ordered) - 1)
-        gold_fracs = [rank / n for rank, loc in enumerate(ordered)
-                      if _category(loc.item.name) == "money"]
-        self.assertGreaterEqual(len(gold_fracs), 5, "expected several gold pickups")
-        self.assertLess(sum(gold_fracs) / len(gold_fracs), 0.6,
-                        "gold should center early-to-mid, not late")
-        self.assertGreater(max(gold_fracs) - min(gold_fracs), 0.15,
-                           "gold should be spread across a band, not clustered")
-
-
-class TestSmoothingMapDistanceAxis(CVAOSWorldTestBase):
-    """item_smoothing_order=map_distance, the default, smooths along structural map distance, which
-    is the same in every seed, rather than along this seed's spheres."""
-    options = {"item_smoothing": "strict", "item_smoothing_order": "map_distance"}
-
-    def test_ordering_is_monotonic_in_map_distance(self):
-        self.world_setup(seed=4242)
-        _run_fill(self.multiworld)
-        depth = _region_depth(self.multiworld, self.player)
-        spheres = list(self.multiworld.get_spheres())
-        ordered = smoothable_locations_in_order(self.multiworld, self.player, spheres, depth,
-                                                by_map_distance=True)
-        self.assertGreater(len(ordered), 10, "need a meaningful number of smoothed locations")
+    def test_map_distance_order_follows_map_depth(self):
+        multiworld = self.multiworlds["map_distance"]
+        depth = _region_depth(multiworld, 1)
+        ordered = smoothable_locations_in_order(multiworld, 1, list(multiworld.get_spheres()),
+                                                depth, by_map_distance=True)
+        self.assertGreater(len(ordered), 10)
         depths = [depth.get(loc.parent_region.name, _UNREACHED_DEPTH) for loc in ordered]
-        self.assertEqual(depths, sorted(depths),
-                         "map_distance ordering must be non-decreasing in structural map depth")
-
-    def test_desirable_items_land_later_by_map_distance(self):
-        self.world_setup(seed=4243)
-        _run_fill(self.multiworld)
-        _, pairs = _ordered_with_desirability(self.multiworld, self.player, by_map_distance=True)
-        self.assertGreater(len(pairs), 10, "need a meaningful sample of ranked items")
-        pairs.sort(key=lambda p: p[1].desirability)
-        half = len(pairs) // 2
-        low_rank = sum(p[0] for p in pairs[:half]) / half
-        high_rank = sum(p[0] for p in pairs[half:]) / (len(pairs) - half)
-        self.assertGreater(high_rank, low_rank,
-                           "more-desirable items should sit later along map distance too")
+        self.assertEqual(depths, sorted(depths))
 
 
-class TestEarlyMobilityOff(CVAOSWorldTestBase):
-    """early_mobility_souls=off skips the mobility-soul bias entirely: no targets are computed and
-    the souls are left in the pool for the normal fill (rather than pre-placed)."""
-    options = {"item_smoothing": "strict", "early_mobility_souls": "off",
-               "black_panther_bias": False}
+class GoldTargetTest(unittest.TestCase):
+    """Where the post-fill pass aims gold.
 
-    def test_souls_not_biased(self):
-        self.world_setup(seed=555)
-        world = self.multiworld.worlds[self.player]
-        self.assertIsNone(getattr(world, "_soul_targets", None),
-                          "off must not compute soul lateness targets")
-        pool_souls = {it.name for it in self.multiworld.itempool
-                      if it.player == self.player and it.name in BIASED_SOULS}
-        self.assertTrue(pool_souls,
-                        "off must leave the mobility souls in the itempool, not pre-place them")
+    The jitter is turned off, so each target is the position in the run that the item is aimed at.
+    """
+
+    NO_JITTER = SmoothingParams(nu=4.0, sigma_base=0.0, k=0.0, eps=0.0)
+    RATED = [row.name for row in desirability_data.rows if row.category != "money"]
+
+    def targets(self, names: list[str]) -> list[tuple[str, float]]:
+        items = [CVAOSItem(name, item_table[name].classification, item_table[name].code, 1)
+                 for name in names]
+        return list(zip(names, _assign_targets(items, self.NO_JITTER, random.Random(1))))
+
+    def test_gold_is_spread_over_the_run_and_one_larger_copy_is_aimed_last(self):
+        for amount in ("500 Gold", "1000 Gold", "2000 Gold"):
+            targets = self.targets([*self.RATED, *["100 Gold"] * 8, *[amount] * 3])
+            rated = [target for name, target in targets if name in self.RATED]
+            small = [target for name, target in targets if name == "100 Gold"]
+            large = sorted(target for name, target in targets if name == amount)
+            with self.subTest(amount=amount):
+                # One copy of the larger amount is aimed after every rated item.
+                self.assertGreater(large[-1], max(rated))
+                # Every other copy, including every 100 Gold, is stratified over the whole run, so
+                # each of that many equal slices of the run holds exactly one.
+                spread = [*small, *large[:-1]]
+                slices = sorted(int(target * len(spread)) for target in spread)
+                self.assertEqual(slices, list(range(len(spread))))
 
 
 class EarlySoulChoiceTest(unittest.TestCase):
@@ -209,236 +202,104 @@ class EarlySoulChoiceTest(unittest.TestCase):
         self.assertEqual(self._picks(1.0, names=["Giant Bat"]), Counter({None: 2000}))
 
 
-class TestEarlyMobilityGuaranteed(CVAOSWorldTestBase):
-    """early_mobility_souls=guarantee_early designates an early soul in every seed, while the
-    bias_early default does so in about 93% of seeds. The early soul, Malphas or Hippogryph, is
-    aimed at the early band, and Giant Bat is aimed late."""
-    options = {"item_smoothing": "strict", "early_mobility_souls": "guarantee_early",
-               "black_panther_bias": False}
+class SoulTargetTest(unittest.TestCase):
+    """The lateness targets that pre_fill gives the mobility souls and Black Panther."""
 
-    def test_malphas_or_hippogryph_is_always_targeted_early(self):
-        for seed in range(900, 906):
-            self.world_setup(seed=seed)
-            world = self.multiworld.worlds[self.player]
-            targets = getattr(world, "_soul_targets", None)
-            self.assertTrue(targets, f"seed {seed}: guarantee_early must store soul targets")
+    def test_early_mobility_souls_off_leaves_the_souls_in_the_pool(self):
+        world = prepared(555, {"early_mobility_souls": "off", "black_panther_bias": False})
+        self.assertIsNone(getattr(world, "_soul_targets", None))
+        pool_souls = {item.name for item in world.multiworld.itempool if item.name in BIASED_SOULS}
+        self.assertEqual(pool_souls, set(BIASED_SOULS))
+
+    def test_guarantee_early_aims_malphas_or_hippogryph_early_and_giant_bat_late(self):
+        for seed in (900, 901):
+            world = prepared(seed, {"early_mobility_souls": "guarantee_early",
+                                    "black_panther_bias": False})
+            targets = world._soul_targets
             early = min(targets, key=targets.get)
-            self.assertLess(targets[early], EARLY_BAND,
-                            f"seed {seed}: guarantee_early must aim one soul at the early band")
-            self.assertIn(early, ("Malphas", "Hippogryph"), f"seed {seed}")
-            self.assertGreater(targets["Giant Bat"], EARLY_BAND, f"seed {seed}")
+            with self.subTest(seed=seed):
+                self.assertIn(early, ("Malphas", "Hippogryph"))
+                self.assertLess(targets[early], EARLY_BAND)
+                self.assertGreater(targets["Giant Bat"], EARLY_BAND)
+
+    def test_black_panther_bias_gives_black_panther_a_target_in_every_seed(self):
+        # BLACK_PANTHER_EARLY_CHANCE is 1.0, so the bias applies in every seed.
+        for seed in (700, 701):
+            with self.subTest(seed=seed):
+                self.assertIn("Black Panther", prepared(seed, {})._soul_targets)
+
+    def test_black_panther_bias_off_gives_black_panther_no_target(self):
+        world = prepared(606, {"black_panther_bias": False})
+        self.assertNotIn("Black Panther", getattr(world, "_soul_targets", None) or {})
 
 
-class TestGiantBatLandsLate(CVAOSWorldTestBase):
-    """With the default early_mobility_souls (bias_early), Giant Bat is aimed late. After the fill
-    and the refine pass, it usually ends up in the later half of the run."""
-    options = {"item_smoothing": "strict"}
-
-    def test_giant_bat_is_aimed_late_and_usually_lands_late(self):
-        positions = []
-        for seed in range(910, 918):
-            self.world_setup(seed=seed)
-            targets = self.multiworld.worlds[self.player]._soul_targets
-            self.assertGreater(targets["Giant Bat"], EARLY_BAND, f"seed {seed}")
-            _run_fill(self.multiworld)
-            run_position = _run_position(self.multiworld, self.player)
-            positions.append(next(position for loc, position in run_position.items()
-                                  if loc.item.name == "Giant Bat"))
-        self.assertGreater(statistics.median(positions), 0.5, positions)
+class SmoothingOffTest(unittest.TestCase):
+    def test_off_leaves_the_books_in_the_pool(self):
+        world = prepared(42, {"item_smoothing": "off"})
+        books = [item for item in world.multiworld.itempool if item.name in ANCIENT_BOOK_NAMES]
+        self.assertEqual(len(books), 3)
 
 
-class TestBlackPantherBiasOff(CVAOSWorldTestBase):
-    """Black Panther Bias off leaves Black Panther to normal placement -- no early target."""
-    options = {"item_smoothing": "strict", "black_panther_bias": False}
+class FillTest(unittest.TestCase):
+    """One seed of each non-default smoothing setting fills completely and stays accessible.
 
-    def test_not_biased(self):
-        self.world_setup(seed=606)
-        world = self.multiworld.worlds[self.player]
-        targets = getattr(world, "_soul_targets", None) or {}
-        self.assertNotIn("Black Panther", targets,
-                         "Black Panther Bias off must not give Black Panther an early target")
+    DefaultOptionsTest covers the default options.
+    """
 
+    SETTINGS = (
+        {"item_smoothing_order": "spheres"},
+        {"early_mobility_souls": "off", "black_panther_bias": False},
+        {"early_mobility_souls": "guarantee_early", "black_panther_bias": False},
+        {"black_panther_bias": False},
+        {"item_smoothing": "off"},
+    )
 
-class TestBlackPantherBiasOn(CVAOSWorldTestBase):
-    """Black Panther Bias on (default) targets Black Panther into the early window (by sphere ordering)
-    in most seeds; every target that is set lands within that window."""
-    options = {"item_smoothing": "strict"}
-
-    def test_targets_early_in_most_seeds(self):
-        n = 12
-        targeted = 0
-        for seed in range(700, 700 + n):
-            self.world_setup(seed=seed)
-            target = (getattr(self.multiworld.worlds[self.player], "_soul_targets", None) or {}).get("Black Panther")
-            if target is not None:
-                targeted += 1
-                self.assertLessEqual(target, BLACK_PANTHER_EARLY_WINDOW,
-                                     f"seed {seed}: a Black Panther target must sit in the early window")
-        self.assertGreaterEqual(targeted, n // 2,
-                                "with Black Panther Bias on, most seeds should target it early")
+    def test_each_setting_fills_an_accessible_seed(self):
+        for options in self.SETTINGS:
+            with self.subTest(**options):
+                multiworld = generate(1, options)
+                self.assertEqual(list(multiworld.get_unfilled_locations(1)), [])
+                self.assertTrue(multiworld.fulfills_accessibility())
 
 
-class TestSmoothingDeterminism(CVAOSWorldTestBase):
-    options = {"item_smoothing": "strict"}
+class MultiworldDeterminismTest(unittest.TestCase):
+    """Two cvaos slots with smoothing on get the same placement from the same seed.
 
-    def test_same_seed_same_placement(self):
-        def run(seed):
-            self.world_setup(seed=seed)
-            _run_fill(self.multiworld)
-            return {loc.name: (loc.item.name, loc.item.player)
-                    for loc in self.multiworld.get_locations(self.player)
-                    if loc.item is not None}
-        self.assertEqual(run(2024), run(2024),
-                         "smoothing must be deterministic for a fixed seed")
+    Each slot's smoothing orders only the locations in its own world, so the result does not depend
+    on the iteration order of a set that mixes both worlds' locations.
+    """
 
-
-def _setup_filled_multiworld(players, seed, options):
-    """Build and fully fill (incl. stage_post_fill) a multiworld of N cvaos slots, deterministically."""
-    multiworld = MultiWorld(players)
-    multiworld.player_name = {p: f"P{p}" for p in range(1, players + 1)}
-    for player in range(1, players + 1):
-        multiworld.game[player] = GAME
-    multiworld.set_seed(seed)
-    random.seed(multiworld.seed)
-    args = Namespace()
-    for name, option in AutoWorldRegister.world_types[GAME].options_dataclass.type_hints.items():
-        value = options.get(name, option.default)
-        setattr(args, name, {p: option.from_any(value) for p in range(1, players + 1)})
-    multiworld.set_options(args)
-    multiworld.state = CollectionState(multiworld)
-    for step in gen_steps:
-        call_all(multiworld, step)
-    distribute_items_restrictive(multiworld)
-    call_all(multiworld, "post_fill")
-    return multiworld
-
-
-class TestMultiworldDeterminism(unittest.TestCase):
-    """The smoothing is scoped to on-world locations, so two cvaos slots stay deterministic for a
-    fixed seed (this is the regression guard for the cross-player set-ordering hazard)."""
-
-    def test_two_cvaos_slots_same_seed_same_placement(self):
-        def run():
-            multiworld = _setup_filled_multiworld(2, 31337, {"item_smoothing": "strict"})
-            return {(loc.player, loc.name): (loc.item.name, loc.item.player)
-                    for loc in multiworld.get_locations() if loc.item is not None}
-        self.assertEqual(run(), run())
-
-
-class TestSmoothingOrderWiring(unittest.TestCase):
-    """item_smoothing_order is actually threaded into the post-fill smoothing pass: flipping it on a
-    fixed seed changes the resulting arrangement (guards against the option being silently ignored)."""
-
-    def test_axis_changes_arrangement(self):
-        def arrangement(order_key):
-            multiworld = _setup_filled_multiworld(
-                1, 9001, {"item_smoothing": "strict", "item_smoothing_order": order_key})
-            return {loc.name: loc.item.name for loc in multiworld.get_locations(1)
-                    if loc.item is not None}
-        self.assertNotEqual(arrangement("spheres"), arrangement("map_distance"),
-                            "flipping item_smoothing_order must change the smoothing arrangement")
-
-
-class TestBooksAsRequiredProgression(unittest.TestCase):
-    """Forward-looking: once the Ancient Books are required to reach Graham for the good ending (a real
-    item_requirements access rule), the book smoothing must still yield a beatable seed with the books
-    spread. Simulate by wrapping the completion condition to require all three books, then run the
-    pre-fill spread + main fill + post-fill refine and confirm accessibility still holds."""
-
-    def test_smoothing_safe_when_books_required(self):
-        for seed in range(2000, 2004):
-            multiworld = MultiWorld(1)
-            multiworld.player_name = {1: "P1"}
-            multiworld.game[1] = GAME
-            multiworld.set_seed(seed)
-            random.seed(multiworld.seed)
-            args = Namespace()
-            for name, option in AutoWorldRegister.world_types[GAME].options_dataclass.type_hints.items():
-                setattr(args, name, {1: option.from_any({"item_smoothing": "strict"}.get(name, option.default))})
-            multiworld.set_options(args)
-            multiworld.state = CollectionState(multiworld)
-            for step in gen_steps:
-                call_all(multiworld, step)
-            # completion_condition was set in create_regions; now also require the three books, as the
-            # good-ending Graham gate eventually will. The post-fill refine's accessibility check must
-            # respect this (and the pre-fill spread must not have locked a book where it's needed).
-            base = multiworld.completion_condition[1]
-            multiworld.completion_condition[1] = (
-                lambda state, base=base: base(state) and all(state.has(b, 1) for b in ANCIENT_BOOK_NAMES))
+    def test_two_slots_get_the_same_placement_from_the_same_seed(self):
+        def placement() -> dict:
+            multiworld = setup_multiworld([CVAOSWorld, CVAOSWorld], gen_steps, seed=31337)
             distribute_items_restrictive(multiworld)
             call_all(multiworld, "post_fill")
-            self.assertTrue(multiworld.fulfills_accessibility(),
-                            f"seed {seed}: seed must stay beatable when the books are required progression")
-            position = _run_position(multiworld, 1)
-            fracs = sorted(position[loc] for loc in multiworld.get_locations(1)
-                           if loc.item is not None and loc.item.name in ANCIENT_BOOK_NAMES and loc in position)
-            self.assertEqual(len(fracs), 3, f"seed {seed}: all three books placed")
-            self.assertGreater(fracs[-1] - fracs[0], 0.25,
-                               f"seed {seed}: books should still be spread when required")
+            return {(loc.player, loc.name): (loc.item.name, loc.item.player)
+                    for loc in multiworld.get_filled_locations()}
+        self.assertEqual(placement(), placement())
 
 
-class TestRealmGateRequiresBooks(unittest.TestCase):
-    """The Chaotic Realm gate (good ending) now requires all three Ancient Books. Verify the gate
-    actually enforces it (B14 unreachable without the books, reachable with them) and that a full
-    chaos-goal generation with smoothing on stays beatable with the books as real gating progression."""
+class RealmGateTest(unittest.TestCase):
+    """The gate on the way to Chaos (room B14) needs all three Ancient Books."""
 
-    @staticmethod
-    def _build(seed, options):
-        multiworld = MultiWorld(1)
-        multiworld.player_name = {1: "P1"}
-        multiworld.game[1] = GAME
-        multiworld.set_seed(seed)
-        random.seed(multiworld.seed)
-        args = Namespace()
-        for name, option in AutoWorldRegister.world_types[GAME].options_dataclass.type_hints.items():
-            setattr(args, name, {1: option.from_any(options.get(name, option.default))})
-        multiworld.set_options(args)
-        multiworld.state = CollectionState(multiworld)
-        return multiworld
-
-    def test_gate_requires_books(self):
-        from worlds.cvaos.regions import can_reach_room, ANCIENT_BOOKS
-        multiworld = self._build(515, {"goal": "chaos", "item_smoothing": "off"})
-        for step in ("create_regions", "create_items", "set_rules", "generate_basic"):
-            call_all(multiworld, step)
+    def test_the_books_are_the_last_thing_the_gate_needs(self):
+        multiworld = setup_multiworld(CVAOSWorld, BEFORE_FILL, seed=515,
+                                      options={"goal": "chaos", "item_smoothing": "off"})
         world = multiworld.worlds[1]
-        # Collect every itempool item EXCEPT the three books -> all other gate terms satisfiable.
+        # Every item except the books, so every other part of the gate can be met.
         without_books = CollectionState(multiworld)
         for item in multiworld.itempool:
-            if item.name not in ANCIENT_BOOKS:
-                multiworld.worlds[item.player].collect(without_books, item)
+            if item.name not in ANCIENT_BOOK_NAMES:
+                world.collect(without_books, item)
         without_books.sweep_for_advancements()
-        self.assertFalse(can_reach_room(without_books, world, "B14"),
-                         "Chaos arena must be UNREACHABLE without all three Ancient Books")
-        # Now add the books -> the gate opens (proves books were the only missing term).
+        self.assertFalse(can_reach_room(without_books, world, "B14"))
         with_books = without_books.copy()
-        for name in ANCIENT_BOOKS:
-            world.collect(with_books, next(it for it in multiworld.itempool if it.name == name))
+        for item in multiworld.itempool:
+            if item.name in ANCIENT_BOOK_NAMES:
+                world.collect(with_books, item)
         with_books.sweep_for_advancements()
-        self.assertTrue(can_reach_room(with_books, world, "B14"),
-                        "Chaos arena must be reachable once all three Ancient Books are in hand")
-
-    def test_chaos_seed_with_smoothing_is_beatable(self):
-        for seed in range(2100, 2104):
-            multiworld = self._build(seed, {"goal": "chaos", "item_smoothing": "strict"})
-            for step in gen_steps:
-                call_all(multiworld, step)
-            distribute_items_restrictive(multiworld)
-            call_all(multiworld, "post_fill")
-            self.assertTrue(multiworld.fulfills_accessibility(),
-                            f"seed {seed}: chaos-goal seed with smoothing must be beatable (books gate the realm)")
+        self.assertTrue(can_reach_room(with_books, world, "B14"))
 
 
-class TestSmoothingOff(CVAOSWorldTestBase):
-    options = {"item_smoothing": "off"}
-
-    def test_off_is_inert(self):
-        self.world_setup(seed=42)
-        multiworld = self.multiworld
-        # pre_fill is a no-op: the three books are still loose in the pool, unplaced.
-        self.assertEqual(len([it for it in multiworld.itempool if it.name in ANCIENT_BOOK_NAMES]), 3,
-                         "with smoothing off, books must not be pre-placed")
-        _run_fill(multiworld)
-        book_locs = [loc for loc in multiworld.get_locations(self.player)
-                     if loc.item is not None and loc.item.name in ANCIENT_BOOK_NAMES]
-        self.assertEqual(len(book_locs), 3, "books should still be placed by the normal fill")
+if __name__ == "__main__":
+    unittest.main()

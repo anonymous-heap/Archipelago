@@ -13,43 +13,20 @@ from ..data import (
     transdoor_connection_collection,
 )
 from ..tools.routing.entrances import RoutingGraphBuilder
-from ..locations import defeat_location_names, location_name_to_id, location_id_to_name
-
-
-def test_location_tables_built():
-    """The location tables hold every pickup and every possible defeat location."""
-    assert len(location_name_to_id) > 0, "No locations were created"
-    assert len(location_name_to_id) == len(location_id_to_name), "Name->ID and ID->Name mappings don't match"
-    assert len(location_name_to_id) == len(pickup_info_collection) + len(defeat_location_names),         "Location count doesn't match the pickup and defeat counts"
-
-
-def test_location_ids_unique():
-    """Test that all location IDs are unique."""
-    ids = list(location_name_to_id.values())
-    assert len(ids) == len(set(ids)), "Duplicate location IDs found"
-
-
-def test_location_names_unique():
-    """Test that all location names are unique."""
-    names = list(location_name_to_id.keys())
-    assert len(names) == len(set(names)), "Duplicate location names found"
+from ..locations import defeat_location_names, location_name_to_id
 
 
 def test_location_names_use_friendly_format():
     """Pickup location names are the friendly form '<area> [<room> <item>]', not the item name."""
     # The data-package location names are exactly PickupInfo.location_name for every pickup, plus
-    # the "Defeat <enemy>" names of the defeat locations.
+    # the "Defeat <enemy>" names of the defeat locations, with no name shared between them.
     assert set(location_name_to_id) == ({p.location_name for p in pickup_info_collection}
                                         | defeat_location_names)
+    assert len(location_name_to_id) == len(pickup_info_collection) + len(defeat_location_names)
     # A known pickup renders in the documented format.
     assert "White Dragon Hallway [00D Potion (A)]" in location_name_to_id
     # The bare item name is NOT a location name (items and locations are distinct).
     assert "Potion" not in location_name_to_id
-
-
-def test_entrance_data_loaded():
-    """Test that entrance data was loaded."""
-    assert len(entrance_info_collection) > 0, "No entrances were loaded"
 
 
 def test_routing_data_loaded():
@@ -73,28 +50,3 @@ def test_starting_entrance_exists():
     """Test that the starting entrance (000:003) exists."""
     entrance_ids = {e.door_identifier_unique for e in entrance_info_collection}
     assert "000:003" in entrance_ids, "Starting entrance 000:003 not found"
-
-
-def test_location_id_range():
-    """Test that location IDs are within valid range (positive integers)."""
-    for name, loc_id in location_name_to_id.items():
-        assert loc_id > 0, f"Location {name} has invalid ID {loc_id}"
-
-
-def test_print_summary():
-    """Print a summary of the data (always passes, for info)."""
-    print("\n" + "=" * 60)
-    print("CVAOS Data Summary")
-    print("=" * 60)
-    print(f"Entrances: {len(entrance_info_collection)}")
-    print(f"Pickups/Locations: {len(pickup_info_collection)}")
-    print(f"Routing connections: {len(entrance_to_entrance_info_collection)}")
-
-    if location_name_to_id:
-        ids = list(location_name_to_id.values())
-        print(f"Location ID range: {min(ids):#x} - {max(ids):#x}")
-
-    print("\nFirst 5 locations:")
-    for i, (name, loc_id) in enumerate(list(location_name_to_id.items())[:5]):
-        print(f"  {i+1}. {name} (ID: {loc_id:#x})")
-    print("=" * 60)

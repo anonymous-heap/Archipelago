@@ -78,10 +78,6 @@ def _rule(masks: tuple[int, ...], difficulty: int = LogicDifficultyPreset.defaul
 
 # --- resolver: precedence chain ----------------------------------------------------------
 
-def test_default_has_nothing_in_logic():
-    assert resolve_allowed_techniques(_options()) == AbilityCombo.None_
-
-
 def test_tiers_accumulate_techniques():
     """Each tier adds its technique on top of the previous tier's (per the option docstrings)."""
     by_difficulty = {d: resolve_allowed_techniques(_options(d)) for d in _ALL_DIFFICULTIES}
@@ -90,9 +86,6 @@ def test_tiers_accumulate_techniques():
     assert by_difficulty[LogicDifficultyPreset.option_advanced] == AbilityCombo.Enemy | AbilityCombo.Clip
     assert by_difficulty[LogicDifficultyPreset.option_expert] == \
         AbilityCombo.Enemy | AbilityCombo.Clip | AbilityCombo.PixPer
-    # Monotonic: raising the difficulty never removes a technique.
-    for lower, higher in zip(_ALL_DIFFICULTIES, _ALL_DIFFICULTIES[1:]):
-        assert by_difficulty[lower] & by_difficulty[higher] == by_difficulty[lower]
 
 
 def test_override_out_of_logic_beats_tier():

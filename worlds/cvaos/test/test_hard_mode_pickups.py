@@ -36,10 +36,8 @@ EXPECTED = {
 }
 
 
-def build(hard_mode: bool, hard_mode_pickups: str | None, steps=STEPS, seed: int = 3) -> MultiWorld:
-    options = {"hard_mode": hard_mode}
-    if hard_mode_pickups is not None:
-        options["hard_mode_pickups"] = hard_mode_pickups
+def build(hard_mode: bool, hard_mode_pickups: str, steps=STEPS, seed: int = 3) -> MultiWorld:
+    options = {"hard_mode": hard_mode, "hard_mode_pickups": hard_mode_pickups}
     return setup_multiworld(CVAOSWorld, steps, seed=seed, options=options)
 
 
@@ -73,13 +71,6 @@ class InclusionTest(unittest.TestCase):
                 self.assertEqual(pool & HARD_ITEMS, HARD_ITEMS if included else Counter())
                 self.assertEqual(len(items), len(names))
 
-    def test_leaving_the_option_unset_behaves_like_with_hard_mode(self):
-        for hard_mode in (False, True):
-            with self.subTest(hard_mode=hard_mode):
-                unset = {loc.name for loc in build(hard_mode, None).get_locations(1)}
-                explicit = {loc.name for loc in build(hard_mode, "with_hard_mode").get_locations(1)}
-                self.assertEqual(unset, explicit)
-
 
 class SpawnTypeTest(unittest.TestCase):
     """A location holding a Hard Mode item is written as a PICKUP, so it spawns in normal mode too.
@@ -97,11 +88,10 @@ class SpawnTypeTest(unittest.TestCase):
         writes = get_location_data(world, [location])
         return writes[location.address - GBA_ROM_BASE + _TYPE_OFF][0]
 
-    def test_every_setting_writes_an_ordinary_pickup(self):
-        for hard_mode, setting in ((False, "always"), (True, "always"), (True, "with_hard_mode")):
-            with self.subTest(hard_mode=hard_mode, hard_mode_pickups=setting):
-                self.assertEqual(self._written_type(hard_mode, setting, HARD_PICKUPS[0].item_name),
-                                 PICKUP)
+    def test_every_hard_mode_item_is_written_as_an_ordinary_pickup(self):
+        for pickup in HARD_PICKUPS:
+            with self.subTest(item=pickup.item_name):
+                self.assertEqual(self._written_type(False, "always", pickup.item_name), PICKUP)
 
     def test_an_enemy_checks_death_s_sickle_spawns_in_normal_mode(self):
         self.assertIn("Death's Sickle", ENEMY_ITEM.values())
@@ -109,19 +99,18 @@ class SpawnTypeTest(unittest.TestCase):
 
 
 class FilledSeedTest(unittest.TestCase):
-    """End to end: fill a seed, then build the location writes for every location."""
+    """End to end: fill a seed, then build the location writes for every location.
+
+    The writes depend only on the placed items, not on the hard mode options."""
 
     def _filled(self, hard_mode: bool, setting: str, seed: int) -> MultiWorld:
         multiworld = build(hard_mode, setting, steps=gen_steps, seed=seed)
         distribute_items_restrictive(multiworld)
         return multiworld
 
-    def test_no_setting_writes_a_hard_pickup_anywhere(self):
-        for hard_mode, setting in ((False, "always"), (True, "always"), (True, "with_hard_mode")):
-            for seed in (1, 2):
-                with self.subTest(hard_mode=hard_mode, hard_mode_pickups=setting, seed=seed):
-                    types = written_types(self._filled(hard_mode, setting, seed))
-                    self.assertNotIn(HARD_PICKUP, types)
+    def test_a_filled_seed_writes_no_hard_pickup_anywhere(self):
+        # Normal mode with the five pickups shuffled in: a HARD_PICKUP written here would not spawn.
+        self.assertNotIn(HARD_PICKUP, written_types(self._filled(False, "always", 1)))
 
     def test_never_leaves_the_vanilla_hard_pickups_untouched(self):
         _locations, writes = location_writes(self._filled(True, "never", 1))

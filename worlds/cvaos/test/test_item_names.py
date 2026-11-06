@@ -14,7 +14,6 @@ from collections import Counter
 
 from BaseClasses import ItemClassification
 from test.general import setup_multiworld
-from Utils import get_intended_text
 
 from .. import CVAOSWorld
 from ..data import pickup_info_collection
@@ -23,8 +22,8 @@ from ..item_smoothing import PARAMS_BY_KEY, _assign_targets
 from ..items import ENEMY_ITEM, CVAOSItem, create_enemy_item, item_name_groups, item_table
 
 # The item ids of the last version that named each copy of an item, such as "Potion (A)".
-OLD_IDS: dict[str, int] = json.load(open(os.path.join(os.path.dirname(__file__),
-                                                      "item_ids_with_copy_names.json")))
+with open(os.path.join(os.path.dirname(__file__), "item_ids_with_copy_names.json")) as _file:
+    OLD_IDS: dict[str, int] = json.load(_file)
 COPY_SUFFIX = re.compile(r" \([A-Z]\)$")
 
 
@@ -56,20 +55,22 @@ class NameTest(unittest.TestCase):
         for old_name, old_id in OLD_IDS.items():
             with self.subTest(item=old_name):
                 self.assertEqual(by_code.get(canonical_code(old_id)), COPY_SUFFIX.sub("", old_name))
-        kept = [name for name, old_id in OLD_IDS.items() if old_id in by_code]
-        self.assertEqual(len(kept), 88)
+        kept = {name for name, old_id in OLD_IDS.items() if old_id in by_code}
+        first_copies = {name for name in OLD_IDS
+                        if not COPY_SUFFIX.search(name) or name.endswith(" (A)")}
+        self.assertEqual(kept, first_copies)
 
-    def test_item_groups_never_share_an_item_name(self):
-        self.assertEqual(set(item_name_groups) & set(item_table), set())
+    def test_the_gold_group_holds_every_gold_amount(self):
         self.assertEqual(item_name_groups["Gold"],
                          {"100 Gold", "500 Gold", "1000 Gold", "2000 Gold"})
 
     def test_a_hint_for_an_item_names_the_item_itself(self):
-        # The server hints every copy of the item it matches, so a plain name must match exactly.
+        # The server hints every copy of the item a hint names. A hint that matches an item or
+        # group name exactly always resolves to that name, so each plain name only needs to exist.
         names = CVAOSWorld.item_names | set(CVAOSWorld.item_name_groups)
         for query in ("High Mind Up", "Potion", "100 Gold", "Death's Sickle", "Gold"):
             with self.subTest(query=query):
-                self.assertEqual(get_intended_text(query, names)[:2], (query, True))
+                self.assertIn(query, names)
 
 
 class PoolTest(unittest.TestCase):

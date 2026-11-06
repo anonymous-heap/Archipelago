@@ -1,7 +1,13 @@
 """Generation + logic tests for the Forbidden Area Button option (off / pickup)."""
+import unittest
+from collections import Counter
+
 from BaseClasses import CollectionState, ItemClassification
 from test.bases import WorldTestBase
+from test.general import gen_steps, setup_multiworld
 
+from .. import CVAOSWorld
+from ..items import create_itempool
 from . import find_rom
 
 FORBIDDEN_AREA_SWITCH = "Study Sealswitch"
@@ -9,15 +15,10 @@ _FWD = "A01:20D -> A01:A02"   # the within-A01 forward (20D->A02) connection nam
 _REV = "A01:A02 -> A01:20D"   # the within-A01 reverse (A02->20D), up from the Forbidden Area
 
 
-class _Base(WorldTestBase):
+class TestForbiddenAreaOff(WorldTestBase):
+    # A WorldTestBase, so its built-in tests also fill a seed with the button off.
     game = "Castlevania - Aria of Sorrow"
-
-
-class TestForbiddenAreaOff(_Base):
     options = {"forbidden_area_button": "off"}
-
-    def test_no_key_in_pool(self):
-        self.assertNotIn(FORBIDDEN_AREA_SWITCH, [i.name for i in self.multiworld.itempool])
 
     def test_forward_blocked(self):
         ent = next(e for e in self.multiworld.get_entrances()
@@ -34,25 +35,25 @@ class TestForbiddenAreaOff(_Base):
         self.assertTrue(ent.access_rule(st))
 
 
-class TestForbiddenAreaPickup(_Base):
-    options = {"forbidden_area_button": "pickup"}
+class ForbiddenAreaPickupTest(unittest.TestCase):
+    """pickup is the default setting, so the core tests already fill a seed with it."""
 
-    def test_exactly_one_key(self):
-        names = [i.name for i in self.multiworld.itempool]
-        self.assertEqual(names.count(FORBIDDEN_AREA_SWITCH), 1)
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.multiworld = setup_multiworld(CVAOSWorld, gen_steps, seed=1,
+                                          options={"forbidden_area_button": "pickup"})
+        cls.world = cls.multiworld.worlds[1]
+
+    def entrance(self, prefix: str):
+        return next(e for e in self.multiworld.get_entrances()
+                    if e.player == 1 and e.name.startswith(prefix))
 
     def test_key_is_progression(self):
         key = next(i for i in self.multiworld.itempool if i.name == FORBIDDEN_AREA_SWITCH)
         self.assertEqual(key.classification, ItemClassification.progression)
 
-    def test_pool_not_overfilled(self):
-        # The Key displaces a filler (it doesn't grow the pool), so the pool still fits the locations.
-        self.assertLessEqual(len(self.multiworld.itempool),
-                             len(self.multiworld.get_locations(self.player)))
-
     def test_forward_gated_on_key(self):
-        ent = next(e for e in self.multiworld.get_entrances()
-                   if e.player == self.player and e.name.startswith(_FWD))
+        ent = self.entrance(_FWD)
         st = CollectionState(self.multiworld)
         self.assertFalse(ent.access_rule(st), "forward should be blocked without the Key")
         st.collect(self.world.create_item(FORBIDDEN_AREA_SWITCH), prevent_sweep=True)
@@ -60,8 +61,7 @@ class TestForbiddenAreaPickup(_Base):
 
     def test_reverse_needs_the_key_and_a_way_up(self):
         # Without the button, the barrier blocks the way up from the Forbidden Area as well.
-        ent = next(e for e in self.multiworld.get_entrances()
-                   if e.player == self.player and e.name.startswith(_REV))
+        ent = self.entrance(_REV)
         st = CollectionState(self.multiworld)
         st.collect(self.world.create_item("Hippogryph"), prevent_sweep=True)
         self.assertFalse(ent.access_rule(st), "a way up is not enough without the Key")
@@ -72,44 +72,21 @@ class TestForbiddenAreaPickup(_Base):
         self.assertFalse(ent.access_rule(key_only), "the Key is not enough without a way up")
 
 
-# --- Direct create_itempool checks: the Key displaces exactly one filler (net-zero pool size) ---
-import types
-from BaseClasses import ItemClassification as _IC
-from ..items import create_itempool as _create_itempool
-from ..options import EnemyChecks, ForbiddenAreaButton as _FAB, Goal
+def _pool(setting: str) -> Counter:
+    world = setup_multiworld(CVAOSWorld, ("generate_early",), seed=1,
+                             options={"forbidden_area_button": setting}).worlds[1]
+    return Counter(item.name for item in create_itempool(world))
 
 
-def _mock_world(fab_value):
-    return types.SimpleNamespace(
-        player=1,
-        options=types.SimpleNamespace(
-            hard_mode=0,
-            hard_mode_pickups=types.SimpleNamespace(value=0),
-            progressive_movement=types.SimpleNamespace(value=0),
-            forbidden_area_button=types.SimpleNamespace(value=fab_value),
-            enemy_checks=EnemyChecks(EnemyChecks.option_off),
-            goal=Goal(Goal.default),
-        ),
-    )
-
-
-def test_key_displaces_one_filler():
-    off = _create_itempool(_mock_world(_FAB.option_off))
-    pick = _create_itempool(_mock_world(_FAB.option_pickup))
-    assert len(off) == len(pick), "Key should displace a filler, not grow the pool"
-    assert FORBIDDEN_AREA_SWITCH not in [i.name for i in off]
-    assert [i.name for i in pick].count(FORBIDDEN_AREA_SWITCH) == 1
-    n_filler = lambda pool: sum(i.classification == _IC.filler for i in pool)
-    assert n_filler(pick) == n_filler(off) - 1, "exactly one filler should be displaced"
-
-
-def test_the_key_displaces_gold_rather_than_a_unique_item():
-    # The first filler in table order is the game's only Lucky Charm, so the Key displaces the
-    # smallest gold pickup instead.
-    off = [i.name for i in _create_itempool(_mock_world(_FAB.option_off))]
-    names = [i.name for i in _create_itempool(_mock_world(_FAB.option_pickup))]
-    assert "Lucky Charm" in names
-    assert names.count("100 Gold") == off.count("100 Gold") - 1
+def test_the_key_takes_the_place_of_one_100_gold():
+    # The Key displaces the smallest gold pickup rather than a unique filler item such as the
+    # game's only Lucky Charm. One item replaces another, so the pool size still equals the
+    # location count.
+    off = _pool("off")
+    pickup = _pool("pickup")
+    assert off[FORBIDDEN_AREA_SWITCH] == 0
+    assert pickup - off == Counter({FORBIDDEN_AREA_SWITCH: 1})
+    assert off - pickup == Counter({"100 Gold": 1})
 
 
 # --- ROM: pickup mode replaces the A01 press-button with an inert object (in place) ---
