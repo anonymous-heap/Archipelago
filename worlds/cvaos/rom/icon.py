@@ -25,13 +25,16 @@ These details are verified against the USA ROM.
 """
 from __future__ import annotations
 
-import struct
-from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+import os
+from dataclasses import dataclass
+from typing import Dict, Tuple
+
+from .tools.png_to_icon import decode_png_rgba, fit_16x16, tile_4bpp, to_indices
 
 GBA_ROM_BASE = 0x08000000
 ICON_HALF = 0x40                 # each 16x16 icon = two 0x40-byte halves
 _PAGE_TILES_PER_ROW = 16         # 1-dimensional sprite-gfx page width, in 8x8 tiles
+_ICON_DIR = os.path.join(os.path.dirname(__file__), "icons")
 
 
 # --- Icon source descriptors (declared per pickup in the content registry) ---
@@ -45,19 +48,26 @@ class RomSprite:
     a bank-6 index. A source index missing from ``remap`` becomes 0, which is transparent.
 
     With ``crop`` set, the region's opaque content is cropped and centred in 16x16, so the region
-    can be any size whose opaque content fits. Without it, the region must be exactly 16x16."""
+    can be any size whose opaque content fits. Without it, the region must be exactly 16x16, and
+    any other size raises ValueError."""
     gfx_addr: int
     part: Tuple[int, int, int, int]
     remap: Dict[int, int]
     crop: bool = True
 
+    def __post_init__(self):
+        _, _, w, h = self.part
+        if not self.crop and (w, h) != (16, 16):
+            raise ValueError(f"RomSprite at {self.gfx_addr:#x}: an uncropped region must be "
+                             f"16x16, but part {self.part} is {w}x{h}")
+
 
 @dataclass(frozen=True)
 class ImageFile:
-    """An original 8-bit RGBA PNG under rom/icons/, quantised to bank 6 at build time.
+    """An original PNG under rom/icons/, quantised to bank 6 at build time.
 
-    An image that is not 16x16 is cropped to its opaque content and centred, so that content must
-    fit in 16x16."""
+    The PNG must be 8-bit RGBA and not interlaced. An image that is not 16x16 is cropped to its
+    opaque content and centred, so that content must fit in 16x16."""
     filename: str
 
 
@@ -104,44 +114,34 @@ def rom_sprite_indices(base_rom: bytes, sprite: RomSprite) -> list:
     x, y, w, h = sprite.part
     grid = [[sprite.remap.get(_sprite_page_pixel(gfx, x + cx, y + cy), 0) for cx in range(w)]
             for cy in range(h)]
-    return _fit_16x16(grid) if sprite.crop else grid
+    return fit_16x16(grid) if sprite.crop else grid
 
 
-# --- 16x16 fit + pack ---
+def image_file_indices(source: ImageFile) -> list:
+    """Read the PNG at rom/icons/<filename>, and return it as a 16x16 grid of bank-6 indices.
 
-def _fit_16x16(grid: list) -> list:
-    """Crop the opaque (nonzero) bounding box and centre it in a 16x16 index grid."""
-    opaque = [(x, y) for y in range(len(grid)) for x in range(len(grid[0])) if grid[y][x] != 0]
-    if not opaque:
-        raise ValueError("icon source is fully transparent")
-    x0 = min(x for x, _ in opaque); x1 = max(x for x, _ in opaque)
-    y0 = min(y for _, y in opaque); y1 = max(y for _, y in opaque)
-    cw, ch = x1 - x0 + 1, y1 - y0 + 1
-    if cw > 16 or ch > 16:
-        raise ValueError(f"opaque content is {cw}x{ch}; must be <= 16x16")
-    ox, oy = (16 - cw) // 2, (16 - ch) // 2
-    out = [[0] * 16 for _ in range(16)]
-    for yy in range(ch):
-        for xx in range(cw):
-            out[oy + yy][ox + xx] = grid[y0 + yy][x0 + xx]
-    return out
+    Each opaque pixel becomes the index of its nearest bank-6 colour, and each pixel with alpha 0
+    becomes index 0. An image that is not 16x16 is cropped to its opaque content and centred.
+    Raises ValueError, with the file name in the message, for a PNG that is not 8-bit RGBA, for an
+    interlaced PNG, and for an image whose opaque content does not fit in 16x16."""
+    from .custom_pickups import BANK6_PALETTE  # local import to avoid a cycle at module load
+
+    with open(os.path.join(_ICON_DIR, source.filename), "rb") as f:
+        png = f.read()
+    try:
+        w, h, px = decode_png_rgba(png)
+        grid = to_indices(px, w, h, BANK6_PALETTE)
+        return grid if (w, h) == (16, 16) else fit_16x16(grid)
+    except ValueError as err:
+        raise ValueError(f"icon {source.filename}: {err}") from err
 
 
-def _tile_4bpp(grid: list, tx: int, ty: int) -> bytes:
-    """One 8x8 4bpp tile at tile-column tx, tile-row ty (low nibble = left pixel)."""
-    out = bytearray()
-    for row in range(8):
-        for col in range(0, 8, 2):
-            lo = grid[ty * 8 + row][tx * 8 + col]
-            hi = grid[ty * 8 + row][tx * 8 + col + 1]
-            out.append((hi << 4) | lo)
-    return bytes(out)
-
+# --- Packing ---
 
 def pack_icon(grid16: list) -> bytes:
     """Pack a 16x16 bank-6-index grid into the 0x80-byte icon blob (top half tiles 0/1, bottom 2/3)."""
-    top = _tile_4bpp(grid16, 0, 0) + _tile_4bpp(grid16, 1, 0)
-    bottom = _tile_4bpp(grid16, 0, 1) + _tile_4bpp(grid16, 1, 1)
+    top = tile_4bpp(grid16, 0, 0) + tile_4bpp(grid16, 1, 0)
+    bottom = tile_4bpp(grid16, 0, 1) + tile_4bpp(grid16, 1, 1)
     blob = top + bottom
     assert len(blob) == 2 * ICON_HALF
     return blob
@@ -152,31 +152,5 @@ def build_icon_tiles(base_rom: bytes, source) -> bytes:
     if isinstance(source, RomSprite):
         return pack_icon(rom_sprite_indices(base_rom, source))
     if isinstance(source, ImageFile):
-        return _image_file_tiles(source)
+        return pack_icon(image_file_indices(source))
     raise TypeError(f"unknown icon source {source!r}")
-
-
-def _image_file_tiles(source: ImageFile) -> bytes:
-    """Quantise the PNG at rom/icons/<filename> to bank 6, and pack it into the icon blob."""
-    import os
-    from .custom_pickups import BANK6_PALETTE  # local import to avoid a cycle at module load
-    from .tools.png_to_icon import decode_png_rgba, fit_16x16, bgr555_to_rgb
-
-    path = os.path.join(os.path.dirname(__file__), "icons", source.filename)
-    w, h, px = decode_png_rgba(path)
-    if (w, h) != (16, 16):
-        w, h, px = fit_16x16(w, h, px)
-    pal_rgb = [bgr555_to_rgb(c) for c in BANK6_PALETTE]
-
-    def nearest(r, g, b):
-        best, bi = 1 << 30, 1
-        for i in range(1, 16):                      # never map an opaque pixel to index 0 (transparent)
-            pr, pg, pb = pal_rgb[i]
-            d = (pr - r) ** 2 + (pg - g) ** 2 + (pb - b) ** 2
-            if d < best:
-                best, bi = d, i
-        return bi
-
-    grid = [[0 if px[y * 16 + x][3] == 0 else nearest(*px[y * 16 + x][:3]) for x in range(16)]
-            for y in range(16)]
-    return pack_icon(grid)
