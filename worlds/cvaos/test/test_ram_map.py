@@ -187,6 +187,25 @@ class AccessorBehaviourTest(unittest.TestCase):
         self.assertEqual(self.run_(self.ram.get_run_state()), (4, 1))
         self.assertTrue(self.run_(self.ram.is_in_gameplay()))
 
+    def test_deathlink_state_is_one_batched_read(self):
+        self.mem[0x1324C] = 1
+        batches = []
+        original = self.ram.backend.read_many
+
+        async def record(requests):
+            batches.append(list(requests))
+            return await original(requests)
+
+        self.ram.backend.read_many = record
+        self.assertEqual(self.run_(self.ram.get_deathlink_state()), (4, 1, -5, True))
+        self.assertEqual(len(batches), 1, "the four values must come from one frame")
+
+    def test_clearing_the_kill_request_zeroes_the_flag(self):
+        self.run_(self.ram.request_kill())
+        self.run_(self.ram.clear_kill_request())
+        self.assertEqual(self.mem[0x1324C], 0)
+        self.assertFalse(self.run_(self.ram.get_kill_request()))
+
     def test_current_hp_is_signed_and_vitals_decode(self):
         self.assertEqual(self.run_(self.ram.get_current_hp()), -5)
         v = self.run_(self.ram.get_vitals())

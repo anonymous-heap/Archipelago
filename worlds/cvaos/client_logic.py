@@ -106,7 +106,7 @@ class CVAOSClientLogic:
             self.death_causes = [data.get("cause") or f"{source} killed you without a word!"]
 
     async def _tick(self, ctx: "CommonContext", ram: AoSRAM) -> None:
-        # Per-tick orchestrator: read the run state once, relay DeathLink every tick, and run the
+        # Per-tick orchestrator: read the run state, relay DeathLink every tick, and run the
         # in-gameplay-only concerns (checks, tracker data, items, goal) when it is safe to read &
         # write game memory.
         game_state, menu_state = await ram.get_run_state()
@@ -115,8 +115,9 @@ class CVAOSClientLogic:
         # DeathLink must run even when NOT in gameplay: a death is, by definition, the game
         # leaving normal gameplay (the death fade, then the game-over screen). Gating it behind
         # is_in_gameplay() was the bug -- it could only catch the ~1-frame window where HP hit 0
-        # while still in normal play, which a 0.125s poll almost always skipped.
-        await self._relay_deathlink(ctx, ram, game_state, menu_state, in_gameplay)
+        # while still in normal play, which a 0.125s poll almost always skipped. The relay reads
+        # the run state again itself, in the same request as HP and the kill-request flag.
+        await self._relay_deathlink(ctx, ram)
         # RAM state to keep forced while a game is loaded (any in-game sub-state, so it is set
         # before room transitions load entities). The game writes these only at
         # new-game/mode-select/completion, so a per-tick poke holds without fighting it.
@@ -279,8 +280,7 @@ class CVAOSClientLogic:
             return ctx.items_received
         return [item for item in ctx.items_received if item.location != STARTING_LOCATION]
 
-    async def _relay_deathlink(self, ctx: "CommonContext", ram: AoSRAM,
-                               game_state: int, menu_state: int, in_gameplay: bool) -> None:
+    async def _relay_deathlink(self, ctx: "CommonContext", ram: AoSRAM) -> None:
         # DeathLink: enable from slot_data, broadcast Soma's death the moment the engine enters its
         # death sub-state or the game-over screen, apply an incoming death by asking the ROM hook to
         # run the real death routine (request_kill) during gameplay, and re-arm once Soma is alive.
@@ -300,6 +300,15 @@ class CVAOSClientLogic:
         if wanted != ("DeathLink" in ctx.tags):
             await ctx.update_death_link(wanted)
 
+        # Read the run state, HP and the kill-request flag in one request, so every decision below
+        # sees the same frame. Separate reads can land on different frames, and the ROM hook can
+        # run a requested kill between them. Normal play read before that kill, together with a
+        # clear flag read after it, would re-arm the latch. The next tick would then broadcast the
+        # kill as Soma's own death.
+        game_state, menu_state, current_hp, kill_request = await ram.get_deathlink_state()
+        in_gameplay = (game_state == addr.GameState.INGAME
+                       and menu_state == addr.MENU_STATE_NORMAL)
+
         # Dead/dying: the in-game death fade (MENU_STATE==DEATH while still INGAME) or the game-over
         # screen. The sub-state is gated on INGAME so we never misread the byte outside gameplay.
         dead = ((game_state == addr.GameState.INGAME and menu_state == addr.MENU_STATE_DEATH)
@@ -311,7 +320,7 @@ class CVAOSClientLogic:
         # broadcast as a new death of Soma's. If the latch starts set, a death queued before this
         # read is dropped, just as the bounce handler drops one that arrives while Soma is dead.
         if self.currently_dead is None:
-            self.currently_dead = dead or await ram.get_kill_request()
+            self.currently_dead = dead or kill_request
             if self.currently_dead:
                 self.death_causes.clear()
 
@@ -319,9 +328,15 @@ class CVAOSClientLogic:
         # latch so the next death in either direction is detected. The pending-kill guard covers the
         # frames between requesting an incoming death and the ROM hook running it (state still NORMAL,
         # flag still set), so we don't re-arm and then immediately re-broadcast that same death.
-        if (self.currently_dead and in_gameplay and await ram.get_current_hp() > 0
-                and not await ram.get_kill_request()):
+        if self.currently_dead and in_gameplay and current_hp > 0 and not kill_request:
             self.currently_dead = False
+
+        # The ROM hook skips a requested kill while Soma is already dying, and leaves the flag set.
+        # The flag is outside the save data, so loading a save does not clear it. The hook would
+        # then kill Soma again as soon as he is back in play. A received death kills him only once,
+        # and he is already dead, so clear the flag.
+        if dead and kill_request:
+            await ram.clear_kill_request()
 
         if "DeathLink" in ctx.tags and dead and not self.currently_dead:
             # Died on our own. Mark dead BEFORE awaiting so a same-tick re-entry can't double-send.

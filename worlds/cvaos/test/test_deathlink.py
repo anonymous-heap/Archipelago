@@ -7,7 +7,8 @@ the death sub-state on the same frame -- a state that persists for many frames, 
 (INGAME, NORMAL, hp==0) window the old check relied on and almost always missed.
 
 These tests drive _relay_deathlink through the relevant transitions with a fake context and a fake
-RAM accessor, so they need no emulator. Run from the Archipelago root:
+RAM accessor, so they need no emulator. DeathLinkTickTest runs whole ticks instead, so the ROM hook
+can run between two of a tick's reads. Run from the Archipelago root:
     python -m pytest worlds/cvaos/test/test_deathlink.py -v
 """
 from __future__ import annotations
@@ -52,23 +53,59 @@ class FakeCtx:
 
 
 class FakeRam:
-    """Fake AoSRAM: HP is whatever we set. request_kill sets the kill-request flag (the real ROM hook
-    would consume it and run the death routine the next frame); it does NOT touch HP."""
+    """Fake AoSRAM: the run state, HP and the kill-request flag are whatever we set. request_kill
+    sets the flag and does NOT touch HP; run_hook does what the real ROM hook does with the flag."""
 
     def __init__(self, hp: int = 100) -> None:
+        self.game_state, self.menu_state = INGAME, NORMAL
         self.hp = hp
+        self.max_hp = 320
         self.kill_calls = 0
         self.kill_request = False
+        # When set, the ROM hook runs after this many more read requests (see _read).
+        self.reads_before_hook: int | None = None
+
+    def _read(self, value):
+        # Each read request lands on its own frame. A scheduled hook runs after the request that
+        # ends its count, so the next request sees what it did.
+        if self.reads_before_hook is not None:
+            self.reads_before_hook -= 1
+            if self.reads_before_hook == 0:
+                self.reads_before_hook = None
+                self.run_hook()
+        return value
+
+    def run_hook(self) -> None:
+        # One frame of the ROM hook. It runs a requested kill unless Soma is already dying, and
+        # the death routine it starts enters the death fade without zeroing HP.
+        if self.kill_request and self.menu_state == NORMAL:
+            self.kill_request = False
+            self.menu_state = DEATH
+
+    async def get_run_state(self) -> tuple[int, int]:
+        return self._read((self.game_state, self.menu_state))
+
+    async def get_deathlink_state(self) -> tuple[int, int, int, bool]:
+        return self._read((self.game_state, self.menu_state, self.hp, self.kill_request))
 
     async def get_current_hp(self) -> int:
-        return self.hp
+        return self._read(self.hp)
+
+    async def get_kill_request(self) -> bool:
+        return self._read(self.kill_request)
+
+    async def get_max_hp(self) -> int:
+        return self._read(self.max_hp)
+
+    async def ensure_game_cleared(self) -> bool:
+        return False
 
     async def request_kill(self) -> None:
         self.kill_calls += 1
         self.kill_request = True
 
-    async def get_kill_request(self) -> bool:
-        return self.kill_request
+    async def clear_kill_request(self) -> None:
+        self.kill_request = False
 
 
 def _new_client() -> CVAOSClient:
@@ -88,10 +125,10 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
         self.ram = FakeRam(hp=100)
 
     async def relay(self, game_state: int, menu_state: int, hp: int | None = None) -> None:
+        self.ram.game_state, self.ram.menu_state = game_state, menu_state
         if hp is not None:
             self.ram.hp = hp
-        in_gameplay = game_state == INGAME and menu_state == NORMAL
-        await self.client._relay_deathlink(self.ctx, self.ram, game_state, menu_state, in_gameplay)
+        await self.client._relay_deathlink(self.ctx, self.ram)
 
     async def test_enables_death_link_from_slot_data(self) -> None:
         self.assertNotIn("DeathLink", self.ctx.tags)
@@ -310,6 +347,56 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
         await self.relay(INGAME, DEATH, hp=0)       # the game now enters its death fade
         self.assertEqual(len(self.ctx.sent_deaths), sent_before,
                          "a received death must not be rebroadcast as our own")
+
+
+class DeathLinkTickTest(unittest.IsolatedAsyncioTestCase):
+    """Whole client ticks, so the ROM hook can run on a frame between two of a tick's reads."""
+
+    def setUp(self) -> None:
+        self.client = _new_client()
+        self.ctx = FakeCtx(death_link=True)
+        self.ram = FakeRam(hp=100)
+        # Other tests cover the save-block concerns, so here they are stubs that touch no RAM.
+        for concern in ("_send_location_checks", "_report_position", "_report_exploration",
+                        "_receive_items", "_grant_progressive_movement", "_report_goal"):
+            setattr(self.client, concern, mock.AsyncMock())
+
+    async def tick(self) -> None:
+        await self.client._tick(self.ctx, self.ram)
+
+    async def test_a_kill_run_between_two_reads_is_not_broadcast(self) -> None:
+        # The new-soul effect holds the ROM hook back while MENU_STATE stays NORMAL, so a requested
+        # kill can run partway through a tick. Whichever read it follows, the relay must not count
+        # that kill as Soma's own death.
+        for reads_before_hook in (1, 2):
+            with self.subTest(reads_before_hook=reads_before_hook):
+                self.setUp()
+                await self.tick()
+                self.client.death_causes.append("Someone else died")
+                await self.tick()                    # the kill is requested
+                self.ram.reads_before_hook = reads_before_hook
+                await self.tick()                    # the hook runs the kill during this tick
+                await self.tick()                    # Soma is in the death fade
+                self.assertEqual(self.ctx.sent_deaths, [],
+                                 "a received death must not be rebroadcast as our own")
+
+    async def test_a_kill_request_left_set_by_a_death_is_cleared(self) -> None:
+        await self.tick()
+        self.client.death_causes.append("Someone else died")
+        await self.tick()                            # the kill is requested
+        # Soma takes a lethal hit on the frame the request lands. He is already dying when the hook
+        # reads the flag, so the hook skips the kill and leaves the flag set.
+        self.ram.menu_state, self.ram.hp = DEATH, 0
+        self.ram.run_hook()
+        await self.tick()                            # the client sees the death fade
+        self.ram.game_state = GAME_OVER
+        await self.tick()
+        self.assertFalse(self.ram.kill_request, "Soma has died, so the request must be withdrawn")
+        # He loads a save, which leaves the flag as it was.
+        self.ram.game_state, self.ram.menu_state, self.ram.hp = INGAME, NORMAL, 100
+        self.ram.run_hook()
+        self.assertEqual(self.ram.menu_state, NORMAL,
+                         "a kill skipped during a death must not run after Soma loads a save")
 
 
 class SetAuthTest(unittest.IsolatedAsyncioTestCase):

@@ -36,11 +36,8 @@ class FakeRam:
         self.max_hp_reads += 1
         return self.max_hp
 
-    async def get_current_hp(self) -> int:
-        return self.max_hp
-
-    async def get_kill_request(self) -> bool:
-        return False
+    async def get_deathlink_state(self) -> tuple[int, int, int, bool]:
+        return self.game_state, self.menu_state, self.max_hp, False
 
     async def ensure_game_cleared(self) -> bool:
         return False

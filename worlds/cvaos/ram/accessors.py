@@ -103,11 +103,23 @@ class AoSRAM:
         ``(GAME_STATE, MENU_STATE)`` in a single round-trip. GAME_STATE is a
         ``GameState`` value (INGAME / GAME_OVER / ...); MENU_STATE is the in-room
         sub-state (NORMAL / ROOM_TRANSITION / PAUSE / SHOP, plus the death-fade
-        value ``MENU_STATE_DEATH``). The DeathLink relay needs both even when not
-        in gameplay, so it reads them here and derives ``is_in_gameplay`` itself.
+        value ``MENU_STATE_DEATH``). The client tick reads both even when not in
+        gameplay, and derives ``is_in_gameplay`` itself.
         """
         state, menu = await self.read_group(addr.GAME_STATE, addr.MENU_STATE)
         return state, menu
+
+    async def get_deathlink_state(self) -> tuple[int, int, int, bool]:
+        """
+        Return GAME_STATE, MENU_STATE, current HP and the kill-request flag, in one read.
+
+        The DeathLink relay decides from these four values together, so they must come from the
+        same frame. Separate reads can land on different frames, and the ROM hook can run a
+        requested kill between them. HP is signed, as in ``get_current_hp``.
+        """
+        state, menu, hp, kill_request = await self.read_group(
+            addr.GAME_STATE, addr.MENU_STATE, addr.CURRENT_HP, addr.KILL_REQUEST)
+        return state, menu, hp, bool(kill_request)
 
     async def is_in_gameplay(self) -> bool:
         """
@@ -229,6 +241,10 @@ class AoSRAM:
     async def get_kill_request(self) -> bool:
         """True while a DeathLink kill-request is still pending (the ROM hook hasn't consumed it yet)."""
         return bool(await self._fetch(addr.KILL_REQUEST))
+
+    async def clear_kill_request(self) -> None:
+        """Clear the kill-request flag, so the ROM hook does not run the pending kill."""
+        await self._store(addr.KILL_REQUEST, 0)
 
     async def kill_player(self) -> None:
         """
