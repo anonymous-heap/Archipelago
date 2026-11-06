@@ -19,6 +19,10 @@ The sheet sometimes holds a sixth combo in the unnamed column after "Misc. combo
 as "Misc. combo 6", which the loader reads like the others. The columns after that hold notes and
 are not copied.
 
+The columns are copied by position, so the tool first checks that the sheet's names for them
+match the CSV's header. The sixth combo's blank name matches "Misc. combo 6". When a name differs,
+the tool lists each difference and stops without changing the CSV.
+
 Run it from the repository root:
 
     python -m worlds.cvaos.tools.import_pickup_requirements           # rewrite the CSV
@@ -30,6 +34,7 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import itertools
 import os
 import re
 import urllib.request
@@ -50,8 +55,12 @@ def download(gid: int = PICKUP_TAB_GID) -> str:
         return response.read().decode("utf-8")
 
 
-def sheet_rows(text: str) -> list[list[str]]:
-    """Return the tab's pickup rows, with the CSV's columns plus the sixth combo, in order."""
+def read_sheet(text: str) -> tuple[list[str], list[list[str]]]:
+    """Return the sheet's names for the copied columns, then the tab's pickup rows.
+
+    The copied columns are the CSV's columns plus the sixth combo, in order, and each row holds
+    only those columns.
+    """
     rows = list(csv.reader(io.StringIO(text)))
     header_index = next(i for i, row in enumerate(rows) if "pickup_number" in row)
     header = rows[header_index]
@@ -61,9 +70,31 @@ def sheet_rows(text: str) -> list[list[str]]:
     last_combo = header.index("Misc. combo 5")
     columns = ([first, first + 1, first + 2, destination - 1, destination]
                + list(range(abilities, last_combo + 2)))
-    return [[row[i] if i < len(row) else "" for i in columns]
-            for row in rows[header_index + 1:]
-            if len(row) > first and row[first].strip().isdigit()]
+    names = [header[i] if i < len(header) else "" for i in columns]
+    return names, [[row[i] if i < len(row) else "" for i in columns]
+                   for row in rows[header_index + 1:]
+                   if len(row) > first and row[first].strip().isdigit()]
+
+
+def header_mismatches(names: list[str], header: list[str]) -> list[str]:
+    """Return a description of each copied column whose sheet name differs from the CSV's header.
+
+    ``names`` ends with the sheet's sixth combo column, whose name can be blank or
+    "Misc. combo 6". The CSV's ``header`` can leave that column out, because main adds it when the
+    sheet uses it. Returns an empty list when the names match.
+    """
+    expected = [name for name in header if name != EXTRA_COMBO]
+    differences = [f"the sheet has {_shown(name)} where the CSV has {_shown(wanted)}"
+                   for name, wanted in itertools.zip_longest(names[:-1], expected)
+                   if name != wanted]
+    if names[-1] not in ("", EXTRA_COMBO):
+        differences.append(f"the sheet has {names[-1]!r} where the CSV has {EXTRA_COMBO!r}")
+    return differences
+
+
+def _shown(name: str | None) -> str:
+    """Return ``name`` quoted, or "no column" when one side has no column there."""
+    return "no column" if name is None else repr(name)
 
 
 def problems(row: dict) -> list[str]:
@@ -123,11 +154,11 @@ def merge(sheet: list[list[str]], current: list[list[str]], header: list[str]):
     return merged, updated, held
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--check", action="store_true", help="report without writing the CSV")
     parser.add_argument("--sheet-csv", help="read the tab from this file instead of downloading it")
-    options = parser.parse_args()
+    options = parser.parse_args(argv)
 
     if options.sheet_csv:
         with open(options.sheet_csv, encoding="utf-8", newline="") as f:
@@ -137,7 +168,11 @@ def main() -> None:
     with open(CSV_PATH, encoding="utf-8", newline="") as f:
         current = list(csv.reader(f))
     header = current[0]
-    sheet = sheet_rows(text)
+    names, sheet = read_sheet(text)
+    differences = header_mismatches(names, header)
+    if differences:
+        raise SystemExit("The sheet's column names differ from the CSV's header, so the CSV is "
+                         "unchanged:\n" + "\n".join(f"    {line}" for line in differences))
     if EXTRA_COMBO not in header and any(row[-1].strip() for row in sheet):
         header = header + [EXTRA_COMBO]
     merged, updated, held = merge(sheet, [row for row in current[1:] if any(row)], header)
