@@ -1,12 +1,13 @@
 """Single import point for the pydantic v1 API.
 
-The cvaos data models are written against the pydantic v1 API so the world can run on
-frozen Archipelago installs, where pydantic cannot be pip-installed and pydantic v2
-cannot be vendored (pydantic_core is a compiled extension that zipimport cannot load
-from an .apworld). Resolution order:
+The cvaos data models use the pydantic v1 API so the world can run on frozen Archipelago
+installs. pydantic cannot be pip-installed there, and pydantic v2 cannot be vendored, because
+zipimport cannot load its compiled pydantic_core extension from an .apworld.
 
-1. ``pydantic.v1`` — the v1 compatibility namespace of an installed pydantic v2
-   (also present in pydantic >= 1.10.17).
+The names come from the first of these that is available:
+
+1. ``pydantic.v1``, the v1 compatibility namespace of an installed pydantic v2 (pydantic
+   1.10.17 and later have it too).
 2. An installed pydantic v1.
 3. The pure-Python pydantic 1.10.x vendored in ``worlds/cvaos/vendor``.
 """

@@ -1,15 +1,17 @@
 """
 Enemy checks: one location per kind of enemy, checked the first time that kind is defeated.
 
-The game's Enemy List keeps a saved bit per enemy type that its death routine sets on the first
-defeat (EWRAM 0x020133A0, bit ``id & 7`` of byte ``id >> 3``). The client reads those bits, so a
-defeat needs no ROM change, and one made offline is sent on the next connection. The ROM never
-hands out the item at an enemy check. The client gets it from the server instead, which is why
-seeds with enemy checks ask the server for the player's own items (see :func:`uses_enemy_checks`).
+The game's Enemy List keeps a saved bit for each enemy type, and the death routine sets a type's
+bit on its first defeat (EWRAM 0x020133A0, bit ``id & 7`` of byte ``id >> 3``). The client
+reads those bits, so detecting a defeat needs no ROM change, and a defeat made offline is sent on
+the next connection. The ROM never hands out the item at an enemy check. The client gets it from
+the server instead, so with enemy checks on, the client also asks the server for the player's own
+items (see :func:`uses_enemy_checks`).
 
 Logic treats a type's check as reachable when any of its placements is. A placement with routing
-in the enemy routing CSV uses that routing. One without any is not annotated yet, so logic expects
-:data:`FALLBACK_SOULS` once its room is reachable. Boss Rush arenas never count as placements.
+in the enemy routing CSV uses that routing. One without routing has not been annotated yet, so
+logic expects :data:`FALLBACK_SOULS` once its room is reachable. Boss Rush arenas never count as
+placements.
 """
 
 from __future__ import annotations
@@ -48,8 +50,8 @@ NEVER_CHECKED = frozenset({"Chaos"})
 BOSS_TYPES: tuple[str, ...] = ("Creaking Skull", "Manticore", "Great Armor", "Big Golem",
                                "Headhunter", "Death", "Legion", "Balore", "Belmont", "Graham")
 
-# What logic expects before the check of an enemy whose placements have no routing yet: every item
-# that opens a new kind of movement.
+# What logic expects before the check of an enemy whose placements have no routing yet: these
+# eight mobility souls.
 FALLBACK_SOULS: tuple[str, ...] = ("Flying Armor", "Skeleton Blaze", "Malphas", "Hippogryph",
                                    "Undine", "Skula", "Black Panther", "Giant Bat")
 
@@ -58,9 +60,10 @@ BOSS_RUSH_AREA = "C"
 
 # Rooms whose placements spawn only once a boss elsewhere has been beaten, mapped to that boss's
 # room. Three of room 710's four placements appear only after Legion (room 725). The data doesn't
-# say which three, so all four wait for Legion. Biphron and Ripper also appear elsewhere, so this
-# costs nothing. Placements that wait for the boss of their own room need no entry, because
-# reaching the room is reaching the boss.
+# say which three, so logic requires beating Legion for all four. Alura Une, Biphron and Ripper
+# all appear in other rooms too, so each of their checks still has placements that don't need
+# Legion. A placement that spawns after the boss of its own room needs no entry, because logic
+# treats reaching a boss's room as beating that boss.
 SPAWNS_AFTER_BOSS_IN: dict[str, str] = {"710": "725"}
 
 

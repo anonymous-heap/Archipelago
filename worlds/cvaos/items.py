@@ -1,3 +1,7 @@
+"""
+The item table, item groups and item pool for Castlevania: Aria of Sorrow.
+"""
+
 from __future__ import annotations
 
 from typing import Dict, List, NamedTuple, TYPE_CHECKING
@@ -24,14 +28,15 @@ class ItemData(NamedTuple):
     code: int  # packed AP code (see item_granting.pack / its bit layout)
 
 
-# Grab ItemInfos by name for classification flags.
+# Each ItemInfo row, by item name.
 _item_info_by_name: Dict[str, object] = {info.name: info for info in item_info_collection}
 
-# Canonical progression: Items that you'd expect to give actual progression.
+# Canonical progression: the items that item_info marks as progression, which a run is expected
+# to need.
 canonical_progression_names: frozenset[str] = frozenset(
     info.name for info in item_info_collection if info.progression)
-# Items that technically _can_ give progression (e.g. breaking a ceiling), but aren't
-# realistically going to be in most runs.
+# Items whose only progression use is breaking a ceiling or floor. Logic counts them, but most runs
+# never need them for it.
 logic_only_progression_names: frozenset[str] = frozenset(
     info.name for info in item_info_collection
     if (info.breaks_ceilings or info.breaks_floors) and not info.progression)
@@ -56,13 +61,11 @@ _MONEY_SUBTYPE = 1
 
 def _transfer_for(pickup) -> tuple[TransferCategory, int]:
     """
-    (category, id/value) for a pickup's AP code:
-    - For money, (MONEY, gold value)
-    - for every other pickup, (PICKUP, item_info.item_number). 
-    
-    Raises a ValueError if a non-money pickup has no item_info row
-    (possibly due to a name mismatch between pickup_info and item_info)
-    so the gap fails loudly at load.
+    Return the transfer category and the id or value that a pickup's AP code packs.
+
+    Money gives (MONEY, gold amount), and every other pickup gives (PICKUP, its item_info
+    item_number). A non-money pickup with no item_info row raises ValueError, so the world fails to
+    load. That usually means the pickup's name in pickup_info differs from the one in item_info.
     """
     if pickup.subtype_num == _MONEY_SUBTYPE:
         return TransferCategory.MONEY, int(pickup.simple_name)
@@ -77,13 +80,14 @@ def _transfer_for(pickup) -> tuple[TransferCategory, int]:
 def _build_item_table() -> Dict[str, ItemData]:
     """Return the items that pickups hold, by name.
 
-    Every pickup holding the same item gives it the same name and code, as other worlds do, so its
-    copies differ only by their locations. A location name still tells the vanilla pickups apart,
-    as in "White Dragon Hallway [00D Potion (A)]".
+    Every copy of an item has the same name and code, as in other worlds, so copies differ only in
+    their locations. Location names tell the pickups apart, as in
+    "White Dragon Hallway [00D Potion (A)]". Pickups that share an item name but hold different
+    items raise ValueError.
     """
     # TODO(maps): Castle Maps currently encode as plain item transfers (no set_flag). Once the
     # map-reveal EWRAM flag offsets are known, pack them with set_flag=1 so receiving a map
-    # reveals it -- item_granting.pack supports it and resolve/grant already apply it.
+    # reveals it. item_granting.pack supports that, and resolve/grant already apply it.
     table: Dict[str, ItemData] = {}
     for pickup in pickup_infos:
         category, id_or_value = _transfer_for(pickup)
@@ -98,13 +102,11 @@ def _build_item_table() -> Dict[str, ItemData]:
 item_table: Dict[str, ItemData] = _build_item_table()
 
 # --- Synthetic, non-pickup items (shuffled into the pool only under specific options) ---
-# Study Sealswitch: the item whose pickup unlocks the barrier separating the Study from the 
-# forbidden area. 
-# In a remote world, receiving it sets MISC flag #48 (the Forbidden Area barrier flag).
-# In a local world, it appears as the Study Sealswitch
-# custom pickup (rom/custom_pickups.py), which sets the same flag on collection.
-# Thus, both share the player-facing name "Study Sealswitch" (what the client announces on
-# collection).
+# The Study Sealswitch opens the barrier between the Study and the Forbidden Area by setting MISC
+# flag #48, the flag the barrier's button sets. Receiving the item from the server sets the flag.
+# When the item is at one of this world's pickups, that pickup is the Study Sealswitch custom
+# pickup (rom/custom_pickups.py), which sets the same flag when collected. Either way, the player
+# sees it named "Study Sealswitch".
 FORBIDDEN_AREA_SWITCH = "Study Sealswitch"
 item_table[FORBIDDEN_AREA_SWITCH] = ItemData(
     ItemClassification.progression,
@@ -147,11 +149,13 @@ for _name in ENEMY_ITEM.values():
         item_table[_name] = ItemData(_classification_for_pickup(_name),
                                      pack(TransferCategory.OTHER_ITEM, _info.item_number))
 
-# Convenience map for the World class. Kept complete (every pickup, Hard-Mode ones included) so
-# item ids stay stable for the data package; per-seed inclusion is decided in create_itempool.
+# The World's item_name_to_id. It holds every item in item_table whatever the options, including
+# the synthetic items, the drops that only enemy checks add and Hard Mode pickups' items, so item
+# ids stay the same in the data package. create_itempool picks the items that a seed uses.
 item_name_to_id: Dict[str, int] = {name: data.code for name, data in item_table.items()}
 
-# Item groups, so that a YAML or a hint can name a kind of item, such as "Gold" or "Red Souls".
+# Item groups, so that a YAML or a hint can name a kind of item, such as "Gold" or "Blue Souls".
+# No red soul is an item, so the "Red Souls" group is never created.
 _GROUP_BY_CATEGORY = {"weapon": "Weapons", "armor": "Armor", "accessory": "Accessories",
                       "consumable": "Consumables", "red_soul": "Red Souls", "blue_soul": "Blue Souls",
                       "yellow_soul": "Yellow Souls", "ability_soul": "Ability Souls"}

@@ -1,3 +1,11 @@
+"""
+Location tables for Castlevania: Aria of Sorrow.
+
+The tables name a location for every ground pickup, and for the first defeat of each kind of
+enemy that enemy checks can cover. They hold all of these whatever the options, so location ids
+stay the same in the data package.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -22,19 +30,21 @@ __all__ = [
 
 class CVAOSLocation(Location):
     """
-    A location in Castlevania: Aria of Sorrow: a pickup, or with enemy checks on, the first
-    defeat of a kind of enemy (enemy_checks.py).
+    A location in Castlevania: Aria of Sorrow.
+
+    It is either a ground pickup or, with enemy checks on, the first defeat of a kind of enemy
+    (see enemy_checks.py).
     """
     game: str = "Castlevania - Aria of Sorrow"
 
 
 def _build_location_tables() -> tuple[dict[str, int], dict[int, str]]:
     """
-    Build location name <-> ID mappings from pickup_info_collection.
+    Build the pickup locations' name-to-id and id-to-name tables from pickup_info_collection.
 
-    Location names use PickupInfo.location_name -- the friendly room-area name plus a bracketed
-    "<room> <item>" tag, e.g. "White Dragon Hallway [00D Potion (A)]".
-    Location IDs are based on ptr_address to ensure uniqueness.
+    A location's name is its PickupInfo.location_name: the room area's friendly name plus a
+    bracketed "<room> <item>" tag, such as "White Dragon Hallway [00D Potion (A)]". Its id is the
+    pickup's ptr_address. A duplicate name or id raises ValueError.
     """
     name_to_id: dict[str, int] = {}
     id_to_name: dict[int, str] = {}
@@ -75,10 +85,11 @@ for _enemy in checkable_types():
 
 def _build_flag_offset_map() -> dict[int, int]:
     """
-    Map each pickup's ``flag_offset`` (its bit index in the collected-pickup
-    bitfield) to its AP location id (``ptr_address``). The client reads that
-    bitfield and turns each set bit back into a location check. A given
-    flag offset is unique over all pickups.
+    Map each pickup's save-flag bit to its location id.
+
+    The key is the pickup's ``flag_offset``, its bit index in the collected-pickup bitfield, and
+    the value is its ``ptr_address``. The client reads that bitfield and turns each set bit back
+    into a location check. No two pickups share a flag offset, and a duplicate raises ValueError.
     """
     flag_to_id: dict[int, int] = {}
     for pickup in pickup_info_collection:

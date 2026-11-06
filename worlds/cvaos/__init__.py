@@ -31,8 +31,9 @@ def launch_tracker(*args: str) -> None:
 
 
 def launch_collection_installer(*args: str) -> None:
-    # Runs in the Launcher process (Messenger-style tool component): prompts for the
-    # patched .gba, resolves game.exe from settings, swaps the ROM into windata/.
+    # Runs in the Launcher process, as a tool component. It finds game.exe through the settings
+    # and asks for an .apcvaos patch or a patched .gba, unless one was passed in. It then installs
+    # the ROM into the collection's windata/.
     from .advance_collection.install import run_from_launcher
     run_from_launcher(*args)
 
@@ -159,7 +160,8 @@ class CVAOSWorld(World):
     origin_region_name = "Menu"
 
     # Both set in create_regions: enemy_number -> region name, and room id -> its door
-    # region names. Used by the goal's reachability checks (regions.can_reach_*).
+    # region names. The regions.can_reach_* helpers read them for the goal, the Chaotic Realm gate,
+    # the transformation-soul (Tform) requirement, and enemy checks that need a boss beaten first.
     enemy_region_name_by_number: dict[int, str]
     entrance_region_names_by_room: dict[str, list[str]]
 
@@ -221,10 +223,11 @@ class CVAOSWorld(World):
     # multiworld pool (item_smoothing.take_smoothing_items).
     _smoothing_items: Sequence[Item] = ()
 
-    # At most this many defeat checks without a recorded route may be priority locations. The fill
-    # locks progression into priority locations first, and on such a check it lands behind all
-    # eight fallback souls, which then run out of places to go. Seeds stop generating reliably with
-    # 25 or more (local_docs/ENEMY_CHECKS_DESIGN.md).
+    # At most this many defeat checks without a recorded route may be priority locations. Such a
+    # check requires all eight fallback souls, and the fill places progression on priority
+    # locations first. The souls must then go where none of the progression on those checks is
+    # needed, and with many such checks they run out of places. Seeds stop generating reliably with
+    # 25 or more, as measured in local_docs/ENEMY_CHECKS_DESIGN.md.
     MAX_FALLBACK_PRIORITY = 10
 
     def generate_early(self) -> None:
@@ -279,9 +282,10 @@ class CVAOSWorld(World):
                 lambda state: can_reach_room(state, self, "904")
         else:
             # True ending: reach the Chaos arena (room B14). The Chaotic Realm is reachable
-            # only through the gated 507 -> 506 door, which already requires the Flame Demon,
-            # Succubus, and Giant Bat souls plus beating Graham, so reaching B14 encodes the
-            # whole true-ending requirement (see regions._chaotic_realm_gate).
+            # only through the gated 507 -> 506 door. That door already requires the three Ancient
+            # Books, the Giant Bat soul and beating Graham, and it requires reaching a Flame Demon
+            # and a Succubus for their souls. So reaching B14 covers the whole true-ending
+            # requirement (see regions._chaotic_realm_gate).
             self.multiworld.completion_condition[player] = \
                 lambda state: can_reach_room(state, self, "B14")
 
@@ -324,11 +328,12 @@ class CVAOSWorld(World):
         return changed
 
     def pre_fill(self) -> None:
-        # Logic-aware placement before the main fill, gated on item_smoothing ("off" keeps vanilla):
-        #  - bias the gating mobility souls (Malphas or Hippogryph early; Giant Bat late),
-        #  - spread the Ancient Books across early/mid/late (rough pass; refined post-fill, and
-        #    logic-safe even once the books are required to reach Graham for the good ending), and
-        #  - put anything those passes could not place into the pool for the main fill.
+        # With item smoothing on, some progression is placed before the main fill, and only where
+        # logic can reach it. bias_progression_souls places the gating mobility souls and Black
+        # Panther near targets in the run, following Early Mobility Souls and Black Panther Bias.
+        # spread_ancient_books places the Ancient Books in early, middle and late bands of map
+        # depth, each where it is reachable without any book. stage_post_fill refines both.
+        # Anything these passes could not place goes into the pool for the main fill.
         if self.options.item_smoothing.current_key != "off":
             from .item_smoothing import (add_unplaced_to_pool, bias_progression_souls,
                                          spread_ancient_books)
@@ -343,10 +348,12 @@ class CVAOSWorld(World):
 
     @classmethod
     def stage_post_fill(cls, multiworld: MultiWorld) -> None:
-        # First refine the gating mobility souls and the Ancient Books to their target run-positions
-        # (verified-safe swaps), then re-order placed non-progression items -- plus the ceiling/floor
-        # breakers -- so weaker items come earlier and stronger later (smooth_placed_items keeps the
-        # breakers logic-safe). Runs once for all cvaos slots; no-op for any slot with smoothing off.
+        # Runs once for all cvaos slots, and skips any slot with item smoothing off. It first moves
+        # the souls that pre_fill biased and the Ancient Books closer to their target positions in
+        # the run, keeping only the swaps that leave the multiworld's accessibility intact. It then
+        # reorders the placed non-progression items and the ceiling and floor breakers, so weaker
+        # items come earlier and stronger ones later. If that order breaks accessibility,
+        # smooth_placed_items puts the breakers back where the main fill placed them.
         from .item_smoothing import (refine_ancient_books, refine_soul_positions,
                                      smooth_placed_items)
         for world in multiworld.get_game_worlds(cls.game):

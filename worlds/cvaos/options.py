@@ -1,14 +1,13 @@
 """
 Options for the AP Castlevania: Aria of Sorrow randomizer.
 
-Routing requirement masks (data/routing_info) may require execution
-techniques (pixel-perfect platforming, platform clips, ...) on top of dev-intended
-(canonical) logic.
-``LogicDifficultyPreset`` picks which techniques logic may expect by default,
-and each technique has an inherit/in_logic/out_of_logic option. ``resolve_allowed_techniques``
-resolves them with this priority:
-    1. per-technique override
-    2. difficulty tier presets (the TECHNIQUES registry)
+Some routing requirements (data/routing_info) go beyond the developer-intended (canonical) routes
+and need an execution technique, such as pixel-perfect platforming or a platform clip.
+``LogicDifficultyPreset`` picks which techniques logic may expect by default, and each technique
+also has its own option with the values inherit, in_logic and out_of_logic.
+``resolve_allowed_techniques`` combines them. A technique's own option decides unless it is
+inherit. An inherited technique is in logic when the preset is at or above its tier in the
+TECHNIQUES registry.
 """
 
 from dataclasses import dataclass
@@ -57,8 +56,8 @@ class TargetPlatform(Choice):
         return super().get_option_name(value)
 
 
-# Slot-data / rom_config values for TargetPlatform (kept in sync with the option above so the
-# clients and the patch-apply base-ROM selector can compare without importing the Choice).
+# TargetPlatform's values, as the slot data and rom_config.json hold them. The clients and the
+# base-ROM selection at patch time compare against these names instead of the Choice's attributes.
 TARGET_GBA = TargetPlatform.option_gba
 TARGET_ADVANCE_COLLECTION = TargetPlatform.option_advance_collection
 
@@ -78,7 +77,7 @@ class Goal(Choice):
 
 class HardMode(Toggle):
     """
-    Turns on Hard Mode (the client forces the relevant nibble).
+    Turns on Hard Mode, which the client sets in the game's memory.
 
     Also shuffles the game's five Hard Mode pickups while Hard Mode Pickups is left at
        with_hard_mode, its default. That option can instead shuffle them without Hard Mode, or
@@ -139,8 +138,8 @@ class KeepSoulDropRates(DefaultOnToggle):
 
     - on (keep soul drop rates): each soul stays exactly as rare as it is in vanilla and only
       its source changes, so the shuffle doesn't alter how much grinding the game asks for.
-    - off (keep enemy drop rates): rarity becomes a property of the encounter -- a soul is as
-      common as whatever now drops it. Rare enemies become worth hunting for their own sake.
+    - off (keep enemy drop rates): each enemy keeps its vanilla soul drop rate, so a soul is as
+      rare as the enemy that now drops it. Rare enemies become worth hunting for their own sake.
 
     Either way, the one-time bosses Headhunter, Death, Legion and Balore still award exactly one
        soul when they die: whichever soul the shuffle gave them. In vanilla, those four souls come
@@ -262,15 +261,14 @@ class EnemyChecks(Choice):
 
 class ForbiddenAreaButton(Choice):
     """
-    How the Forbidden Area (gate at the bottom of the Study) is unlocked.
+    How the barrier at the bottom of the Study, on the way to the Forbidden Area, is opened.
 
     Normally the Forbidden Area can't be entered _first_ through the Study, because a metal
-        barrier blocks the way until a button on the far side is pressed.
-
-    With pickup, the default, the button is replaced by a shuffled item.
+       barrier blocks the way until a button on the far side is pressed.
 
     - off: the button is present in A01 and opens the barrier when pressed.
-    - pickup: the button is removed and the unlock becomes a shuffled "Study Sealswitch" pickup.
+    - pickup: the button is removed, and the barrier opens once you have the shuffled "Study
+      Sealswitch" item.
     """
     display_name = "Forbidden Area Button"
     option_off = 0
@@ -281,7 +279,7 @@ class ForbiddenAreaButton(Choice):
 class SingleJumpDivekick(DefaultOnToggle):
     """
     Allows the divekick out of a first jump, before Malphas (Double Jump) is owned.
-       Still disallowed in water without Skula.
+       It is still disallowed in water without Skula.
        (From Xanthus's public AoS patch collection.)
     """
     display_name = "Single-Jump Divekick"
@@ -304,7 +302,7 @@ class OopsAllWhips(Toggle):
        (From Xanthus's public AoS patch collection.)
 
     The whip swing does not break floors or ceilings, so while this is on, logic expects Black
-        Panther for those rather than a weapon.
+       Panther for those rather than a weapon.
 
     Weapon stats are untouched, but effective reach follows the whip swing.
     """
@@ -324,7 +322,7 @@ class ItemSmoothing(Choice):
        Panther follow Early Mobility Souls and Black Panther Bias. Weapons whose only progression
        use is breaking floors or ceilings are ordered like other equipment.
 
-    - off: vanilla placement -- any item can appear anywhere.
+    - off: Archipelago's normal placement, where any item can appear anywhere.
     - loose: gentle escalation with wide, long-tailed luck (more surprises, lucky early finds).
     - strict: stronger escalation with tighter placement (fewer surprises).
     """
@@ -339,30 +337,22 @@ class ItemSmoothingOrder(Choice):
     """
     No effect when Item Smoothing is off.
 
-    Explanation:
+    Decides what "later" means when Item Smoothing puts good stuff later. For example, should
+       Claimh Solais (a very strong weapon) show up late in this seed's progression (spheres), or
+       far from the start of the map (map_distance)?
 
-    When Item Smoothing is on:
-        option_spheres = good stuff generally appears later in the run
-        option_map_distance = good stuff generally appears in later original-game spots
+    - spheres: how deep into this seed's progression a location sits (its logical sphere),
+      measured after randomization. This differs from seed to seed.
+    - map_distance: how far a location is from the start on the unrandomized map (the region
+      graph), ignoring access rules. This is the same in every seed, so a room is always "as
+      early" wherever progression landed.
 
-    For example: does Claimh Solais (a very strong weapon) show up later in the run (spheres),
-        or in a spot that would be accessed late in the original game (map_distance)?
-
-
-    We default to "option_map_distance" to make sure you can find good stuff if forced into a 
-        hard area.
+    The default is map_distance, so that if logic sends you into a hard area, you can find good
+       stuff there.
 
     The Ancient Books, the mobility souls and Black Panther are placed by their own rules rather
-        than this order. Weapons whose only progression use is breaking floors or ceilings do
-        follow it.
-
-    Options:
-
-    - spheres: logical reachability order, measured after randomization -- how deep into *this
-      seed's* progression a location actually sits. Seed-specific.
-    - map_distance: structural distance from the start in the unrandomized map (the region graph),
-      ignoring access rules and randomization. Seed-independent: a room is always "as early"
-      regardless of where progression landed.
+       than this order. Weapons whose only progression use is breaking floors or ceilings do
+       follow it.
     """
     display_name = "Item Smoothing Order"
     option_spheres = 0
@@ -388,9 +378,10 @@ class EarlyMobilitySouls(Choice):
     """
     No effect when Item Smoothing is off.
 
-    When Item Smoothing is on, how the three vertical mobility souls (Malphas/DJump, Hippogryph, and
-       Giant Bat) are placed. They gate movement, so this is a separate axis from item desirability.
-    
+    How the three vertical mobility souls are placed: Malphas (double jump), Hippogryph and Giant
+       Bat. They gate where you can go, so this option sets their placement separately from how
+       desirable they are.
+
     - off: no special handling. The souls are placed like any other progression item.
     - bias_early: in about 93% of seeds, pull Malphas or, less often, Hippogryph into the first
       third of the run. In the other seeds, all three stay late.
@@ -416,11 +407,9 @@ class BlackPantherBias(DefaultOnToggle):
     """
     No effect when Item Smoothing is off.
 
-    When Item Smoothing is on:
-       On: aim Black Panther (dash) at roughly the first half of the run (by sphere ordering).
-          Logic sometimes leaves no early spot for it, so it lands there in most seeds rather
-          than all of them.
-       Off: Black Panther places like any other progression item.
+    - on: aim Black Panther (dash) at roughly the first half of the run, by sphere order. Logic
+      sometimes leaves no early spot for it, so it lands there in most seeds rather than all.
+    - off: Black Panther is placed like any other progression item.
     """
     display_name = "Black Panther Bias"
 
@@ -435,9 +424,8 @@ class LogicDifficultyPreset(Choice):
     - advanced: may also expect platform clips.
     - expert: may also expect pixel-perfect platforming.
 
-    Quick-save resets and inbounds zips are never expected; see Quick-Save Reset Logic and
-    Inbounds Zip Logic.
-    Each technique can be forced in or out of logic with its own option.
+    No preset expects quick-save resets or inbounds zips. Each technique can be forced in or out
+    of logic with its own option, such as Quick-Save Reset Logic or Inbounds Zip Logic.
     """
     display_name = "Logic Difficulty Preset"
     option_canonical = 0
@@ -449,8 +437,10 @@ class LogicDifficultyPreset(Choice):
 
 class TechniqueLogic(Choice):
     """
-    Tri-state per-technique override: ``inherit`` follows the Logic Difficulty Preset;
-    ``in_logic``/``out_of_logic`` force the technique.
+    Base class for the per-technique logic options.
+
+    ``inherit`` follows the Logic Difficulty Preset, while ``in_logic`` and ``out_of_logic`` force
+    the technique in or out of logic.
     """
     option_inherit = 0
     option_in_logic = 1
@@ -502,8 +492,8 @@ class Tier(IntEnum):
     """
     Lowest ``LogicDifficultyPreset`` at which a technique is in logic by default.
 
-    ``MANUAL`` sits above every real difficulty, so a ``MANUAL`` technique is never
-    tier-enabled -- only its per-technique override can put it in logic.
+    ``MANUAL`` sits above every real difficulty, so no preset puts a ``MANUAL`` technique in
+    logic. Only its own option can.
     """
     CANONICAL = LogicDifficultyPreset.option_canonical
     STANDARD = LogicDifficultyPreset.option_standard
@@ -519,9 +509,9 @@ class Technique:
     tier: Tier
 
 
-# The source of truth for gateable techniques. Tier assignments here must match the
-# option docstrings above (the player-facing contract). One-technique-per-tier is incidental:
-# tiers may share techniques.
+# The source of truth for the techniques that logic can gate. Each technique's tier here must
+# match what its option's docstring above tells players. A tier can hold several techniques, as
+# MANUAL does.
 TECHNIQUES: tuple[Technique, ...] = (
     Technique(AbilityCombo.Enemy,  "kickable_enemy_logic",   Tier.STANDARD),
     Technique(AbilityCombo.Clip,   "platform_clip_logic",    Tier.ADVANCED),
@@ -630,7 +620,11 @@ def hard_mode_pickups_included(options: CVAOSOptions) -> bool:
 
 
 def resolve_allowed_techniques(options: CVAOSOptions) -> AbilityCombo:
-    """Techniques in logic, as an AbilityCombo mask: per-technique override > tier > default."""
+    """Return the techniques in logic as an AbilityCombo mask.
+
+    A technique's own option decides unless it is ``inherit``. An inherited technique is in logic
+    when the Logic Difficulty Preset is at or above the technique's tier.
+    """
     difficulty = options.logic_difficulty_preset.value
     allowed = AbilityCombo.None_
     for technique in TECHNIQUES:

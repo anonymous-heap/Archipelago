@@ -6,9 +6,9 @@ This world's regions are door nodes, so UT's own route reads as "Door: 000:003 -
 line per door. A route here lists the rooms on the way instead, one line per area, and names what
 each room needs, such as a soul, a weapon to break a ceiling, or a trick.
 
-UT's routes start where the game does, wherever Soma is. :func:`plan_route` can start in Soma's
-room instead. :func:`route_points` returns the doors a route goes through as points on the map, so
-the tracker can draw the route.
+UT's routes always begin at the start of the game, no matter where Soma is. :func:`plan_route` can
+start in Soma's current room instead. :func:`route_points` returns the doors a route goes through
+as points on the map, so the tracker can draw the route.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     from . import CVAOSWorld
 
-DOOR_NODE_PREFIX = "Entrance: "  # door nodes are named "Entrance: {room}:{door}"
+DOOR_NODE_PREFIX = "Entrance: "  # door nodes are named "Entrance: {room}:{neighbor}"
 
 
 class Route(NamedTuple):
