@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from BaseClasses import Location
 
-from .data import PickupInfo, pickup_info_collection
+from .data import pickup_info_collection
 from .enemy_checks import checkable_types, defeat_location_id, defeat_location_name
 
 if TYPE_CHECKING:

@@ -219,10 +219,10 @@ def validate_registry(pickups: List[CustomPickup]) -> None:
 
 
 # Re-export the content registry's names, so ``custom_pickups.CUSTOM_PICKUPS``,
-# ``.STUDY_SEALSWITCH``, ``.FORBIDDEN_AREA_BUTTON`` and ``.CUSTOM_PICKUP_TEST_PLACEMENTS`` resolve
-# here as well, as tests and patch.py expect. The module-level __getattr__ (PEP 562) imports them on
+# ``.STUDY_SEALSWITCH`` and ``.CUSTOM_PICKUP_TEST_PLACEMENTS`` resolve here as well, as tests and
+# patch.py expect. The module-level __getattr__ (PEP 562) imports them on
 # first access, which avoids the same import cycle as _registry.
-_CONTENT_NAMES = ("CUSTOM_PICKUPS", "STUDY_SEALSWITCH", "FORBIDDEN_AREA_BUTTON", "CUSTOM_PICKUP_TEST_PLACEMENTS")
+_CONTENT_NAMES = ("CUSTOM_PICKUPS", "STUDY_SEALSWITCH", "CUSTOM_PICKUP_TEST_PLACEMENTS")
 
 
 def __getattr__(name: str):

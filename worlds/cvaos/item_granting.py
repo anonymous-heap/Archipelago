@@ -20,9 +20,8 @@ Bit layout (MSB->LSB, 53 bits, because AP requires ``0 < id < 2**53`` for JS cli
     [0]     flag value (1)  value to set that bit to (when set_flag)
 
 ``other_item`` is granted the same way as ``pickup``. ``event`` and ``to_be_implemented`` are
-reserved, so ``grant`` logs and skips them. Castle Maps are plain item transfers for now, and
-could set their reveal flags through ``set_flag`` once those offsets are known (see the TODO in
-items.py).
+reserved, so ``grant`` logs and skips them. A Castle Map is a plain item transfer, because the
+game reveals a map's areas while Soma holds it.
 """
 from __future__ import annotations
 

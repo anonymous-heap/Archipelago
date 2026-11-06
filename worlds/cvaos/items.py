@@ -31,10 +31,6 @@ class ItemData(NamedTuple):
 # Each ItemInfo row, by item name.
 _item_info_by_name: Dict[str, object] = {info.name: info for info in item_info_collection}
 
-# Canonical progression: the items that item_info marks as progression, which a run is expected
-# to need.
-canonical_progression_names: frozenset[str] = frozenset(
-    info.name for info in item_info_collection if info.progression)
 # Items whose only progression use is breaking a ceiling or floor. Logic counts them, but most runs
 # never need them for it.
 logic_only_progression_names: frozenset[str] = frozenset(
@@ -85,9 +81,6 @@ def _build_item_table() -> Dict[str, ItemData]:
     "White Dragon Hallway [00D Potion (A)]". Pickups that share an item name but hold different
     items raise ValueError.
     """
-    # TODO(maps): Castle Maps currently encode as plain item transfers (no set_flag). Once the
-    # map-reveal EWRAM flag offsets are known, pack them with set_flag=1 so receiving a map
-    # reveals it. item_granting.pack supports that, and resolve/grant already apply it.
     table: Dict[str, ItemData] = {}
     for pickup in pickup_infos:
         category, id_or_value = _transfer_for(pickup)

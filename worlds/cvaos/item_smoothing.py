@@ -681,27 +681,22 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
 SOUL_REFINE_TRIES = 8  # post-fill swap candidates to try per soul before leaving it where it is
 
 
-def _run_position(multiworld: MultiWorld, player: int, *,
-                  by_map_distance: bool = False) -> Dict[Location, float]:
+def _run_position(multiworld: MultiWorld, player: int) -> Dict[Location, float]:
     """
     Return how far through this player's run each filled pickup location comes, from 0 to 1.
 
-    By default the order is by multiworld sphere, then map depth, then name. That is the real
-    position in this seed, and it needs the spheres, so it is available only after the main fill.
-    With ``by_map_distance=True`` the order is by map depth and name only, which does not depend on
-    the seed. The refine passes use the default order whatever ``item_smoothing_order`` is set to.
+    The order is by multiworld sphere, then map depth, then name. That is the real position in
+    this seed, and it needs the spheres, so it is available only after the main fill. The refine
+    passes use this order whatever ``item_smoothing_order`` is set to.
     """
     depth = _region_depth(multiworld, player)
     locs = [loc for loc in multiworld.get_locations(player)
             if loc.address in pickup_location_ids and loc.item is not None
             and loc.parent_region is not None]
-    if by_map_distance:
-        locs.sort(key=lambda loc: (depth.get(loc.parent_region.name, 10**9), loc.name))
-    else:
-        spheres = list(multiworld.get_spheres())
-        sphere_of = {loc: i for i, sphere in enumerate(spheres) for loc in sphere}
-        locs.sort(key=lambda loc: (sphere_of.get(loc, 10**9),
-                                   depth.get(loc.parent_region.name, 10**9), loc.name))
+    spheres = list(multiworld.get_spheres())
+    sphere_of = {loc: i for i, sphere in enumerate(spheres) for loc in sphere}
+    locs.sort(key=lambda loc: (sphere_of.get(loc, _UNREACHED_DEPTH),
+                               depth.get(loc.parent_region.name, _UNREACHED_DEPTH), loc.name))
     denom = max(1, len(locs) - 1)
     return {loc: i / denom for i, loc in enumerate(locs)}
 

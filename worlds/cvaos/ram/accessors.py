@@ -16,7 +16,7 @@ from . import addresses as addr
 from .._bytemaker_compat import Entry
 from .addresses import EWRAM
 from .backend import GuardedWrite, RamBackend
-from .structures import EquippedGear, PlayerVitals, SoulPair
+from .structures import SoulPair
 
 
 class AoSRAM:
@@ -105,8 +105,8 @@ class AoSRAM:
 
         GAME_STATE is a ``GameState`` value (INGAME, GAME_OVER, ...). MENU_STATE is the in-room
         sub-state, one of the ``MENU_STATE_*`` values such as NORMAL, PAUSE or the death fade.
-        The client tick reads both even when not in gameplay, and makes the ``is_in_gameplay``
-        test itself.
+        The client tick reads both even when not in gameplay, and decides from them itself whether
+        Soma is in normal gameplay.
         """
         state, menu = await self.read_group(addr.GAME_STATE, addr.MENU_STATE)
         return state, menu
@@ -117,21 +117,14 @@ class AoSRAM:
 
         The DeathLink relay decides from these four values together, so they must come from the
         same frame. Separate reads can land on different frames, and the ROM hook can run a
-        requested kill between them. HP is signed, as in ``get_current_hp``.
+        requested kill between them.
+
+        HP is signed. The engine stores and tests it signed, and an overkill hit can leave it
+        briefly negative before it is clamped to 0, so a ``> 0`` test must read it signed.
         """
         state, menu, hp, kill_request = await self.read_group(
             addr.GAME_STATE, addr.MENU_STATE, addr.CURRENT_HP, addr.KILL_REQUEST)
         return state, menu, hp, bool(kill_request)
-
-    async def is_in_gameplay(self) -> bool:
-        """
-        True in normal in-room gameplay: not paused, transitioning, in a menu, or at game over.
-
-        This alone does not make it safe to read checks or grant items. The save-data block reads
-        as zeros while a file is still loading, so the client tick also requires a nonzero max HP.
-        """
-        game_state, menu_state = await self.get_run_state()
-        return game_state == addr.GameState.INGAME and menu_state == addr.MENU_STATE_NORMAL
 
     # --- hard mode and cleared data -----------------------------------------
     async def ensure_hard_mode(self) -> bool:
@@ -212,29 +205,6 @@ class AoSRAM:
         return ids
 
     # --- player state -------------------------------------------------------
-    async def get_vitals(self) -> PlayerVitals:
-        """
-        The full HP/MP block, typed (``.current_hp`` etc. are plain ints).
-        """
-        return await self._fetch(addr.VITALS)
-
-    async def get_equipped_gear(self) -> EquippedGear:
-        """
-        Currently-equipped weapon/souls/armor/accessory indices, typed.
-        """
-        return await self._fetch(addr.GEAR)
-
-    async def get_current_hp(self) -> int:
-        """
-        Current HP as a SIGNED s16.
-
-        The engine stores and tests HP signed, and an overkill hit can leave it briefly negative
-        before it is clamped to 0. A ``> 0`` test, such as the one that confirms a real respawn,
-        must therefore read it signed. The signedness comes from the ``current_hp`` field's
-        declaration. See `get_vitals` for the whole typed block.
-        """
-        return await self._fetch(addr.CURRENT_HP)
-
     async def get_player_room_position(self) -> tuple[int, int, int, int]:
         """Return Soma's area, room, and his x and y in pixels within the room, in one read."""
         area, room, camera_x, camera_y, screen_x, screen_y = await self.read_group(
@@ -246,8 +216,7 @@ class AoSRAM:
         """
         Max HP, which is never 0 once a save file has loaded.
 
-        The client tick reads it to tell a loaded file from one that is still loading. See
-        `get_vitals` for the whole typed block.
+        The client tick reads it to tell a loaded file from one that is still loading.
         """
         return await self._fetch(addr.MAX_HP)
 
@@ -258,29 +227,14 @@ class AoSRAM:
 
         This sets the kill-request flag. The hook (rom/deathlink_hook.py) checks the flag on every
         frame that updates Soma. If he is not already dying, the hook clears the flag and calls the
-        death handler. Otherwise it leaves the flag set. HP regeneration cannot undo this kill,
-        unlike the HP change ``kill_player`` makes. This method requires a ROM patched with the
-        hook, which only DeathLink seeds have.
+        death handler. Otherwise it leaves the flag set. HP regeneration cannot undo this kill.
+        This method requires a ROM patched with the hook, which only DeathLink seeds have.
         """
         await self._store(addr.KILL_REQUEST, 1)
-
-    async def get_kill_request(self) -> bool:
-        """True while the kill-request flag is set, so the ROM hook has not run the kill yet."""
-        return bool(await self._fetch(addr.KILL_REQUEST))
 
     async def clear_kill_request(self) -> None:
         """Clear the kill-request flag, so the ROM hook does not run the pending kill."""
         await self._store(addr.KILL_REQUEST, 0)
-
-    async def kill_player(self) -> None:
-        """
-        Set current HP to 0, which kills Soma only when he next takes damage.
-
-        The game has no per-frame HP check, and HP regeneration can undo the change before the
-        next hit. Only tests call this method. The clients apply a DeathLink with
-        ``request_kill``, which runs the death routine through the ROM hook.
-        """
-        await self._store(addr.CURRENT_HP, 0)
 
     # --- goal flags ---------------------------------------------------------
     async def get_boss_flags(self) -> int:

@@ -301,8 +301,6 @@ class TrackerContext(CommonContext):
 
     def reset_server_state(self) -> None:
         super().reset_server_state()
-        if not hasattr(self, "core"):
-            return  # in case this runs before __init__ has created the tracker's own state
         self.core.disconnect()
         self.result = None
         self.route = None  # planned again once the seed is rebuilt, to the same target

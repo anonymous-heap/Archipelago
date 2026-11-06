@@ -60,9 +60,6 @@ STUDY_SEALSWITCH = CustomPickup(
 # --- The registry (append new pickups here) ---------------------------------------------------------
 CUSTOM_PICKUPS: List[CustomPickup] = [STUDY_SEALSWITCH]
 
-# Another name for STUDY_SEALSWITCH, still used by test_custom_pickups.py.
-FORBIDDEN_AREA_BUTTON = STUDY_SEALSWITCH
-
 # --- Test placements (dev): map a location's NAME (PickupInfo.location_name, the friendly form) ->
 # a CustomPickup to force it to spawn that custom pickup instead of its rolled item. Empty by
 # default, so no location is overridden. To try the Sealswitch in-game, for example:

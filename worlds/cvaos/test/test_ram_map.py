@@ -185,7 +185,6 @@ class AccessorBehaviourTest(unittest.TestCase):
         self.assertEqual(self.run_(self.ram.get_run_state()), (4, 1))
         self.assertEqual(self.ram.backend.read_batches, [[(0x10, 1, EWRAM), (0x64, 1, EWRAM)]],
                          "both values must come from one frame")
-        self.assertTrue(self.run_(self.ram.is_in_gameplay()))
 
     def test_deathlink_state_is_one_batched_read(self):
         self.mem[0x1324C] = 1
@@ -197,12 +196,9 @@ class AccessorBehaviourTest(unittest.TestCase):
         self.run_(self.ram.request_kill())
         self.run_(self.ram.clear_kill_request())
         self.assertEqual(self.mem[0x1324C], 0)
-        self.assertFalse(self.run_(self.ram.get_kill_request()))
 
-    def test_current_hp_is_signed_and_vitals_decode(self):
-        self.assertEqual(self.run_(self.ram.get_current_hp()), -5)
-        v = self.run_(self.ram.get_vitals())
-        self.assertEqual((v.current_hp, v.max_hp), (-5, 500))
+    def test_max_hp_reads_its_field_in_the_vitals_block(self):
+        self.assertEqual(self.run_(self.ram.get_max_hp()), 500)
 
     def test_nibble_give_bumps_one_soul_and_keeps_its_neighbour(self):
         self.assertTrue(self.run_(self.ram.give_item("red_soul", 4)))
@@ -263,11 +259,6 @@ class AccessorBehaviourTest(unittest.TestCase):
         self.assertTrue(self.run_(self.ram.set_received_count(6, expected=5)))
         self.assertFalse(self.run_(self.ram.set_received_count(9, expected=5)))
         self.assertEqual(self.run_(self.ram.get_received_count()), 6)
-
-    def test_kill_player_zeroes_the_signed_hp_field(self):
-        self.run_(self.ram.kill_player())
-        self.assertEqual(self.mem[0x1327A:0x1327C], b"\x00\x00")
-        self.assertEqual(self.run_(self.ram.get_current_hp()), 0)
 
 
 class BizHawkBackendTest(unittest.TestCase):

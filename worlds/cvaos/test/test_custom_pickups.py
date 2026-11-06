@@ -54,7 +54,7 @@ class TestWrites(unittest.TestCase):
         self.assertIn(cp.DESC_TERMINATOR, dt)
 
     def test_button_sets_misc_flag_48(self):
-        b = cp.FORBIDDEN_AREA_BUTTON
+        b = cp.STUDY_SEALSWITCH
         self.assertEqual((b.flag_field, b.flag_number), (cp.FLAG_FIELD_MISC, 48))  # A01 barrier flag
         self.assertEqual(b.sfx, 0x133)
 
@@ -81,7 +81,7 @@ class TestWrites(unittest.TestCase):
 
 class TestRegistry(unittest.TestCase):
     def test_encoding_is_consumable_pickup(self):
-        self.assertEqual(cp.get_encoding(cp.FORBIDDEN_AREA_BUTTON), (4, 2, cp.FORBIDDEN_AREA_BUTTON.item_offset))
+        self.assertEqual(cp.get_encoding(cp.STUDY_SEALSWITCH), (4, 2, cp.STUDY_SEALSWITCH.item_offset))
 
     def test_shadow_outside_saved_soul_block(self):
         # Regression: the Item-Use shadow MUST NOT live in the SRAM-saved 0x190 player block
