@@ -82,14 +82,14 @@ class TickSaveBlockGateTest(unittest.IsolatedAsyncioTestCase):
         await self.tick(INGAME, NORMAL, max_hp=0)
         self.assertEqual(self.ran, [], "a grant here would land in memory the load overwrites")
 
-    async def test_paused_runs_nothing_and_does_not_bother_reading_max_hp(self) -> None:
-        ram = await self.tick(INGAME, PAUSE, max_hp=250)
-        self.assertEqual(self.ran, [])
-        self.assertEqual(ram.max_hp_reads, 0, "the cheap state test should short-circuit")
-
-    async def test_title_screen_runs_nothing(self) -> None:
-        await self.tick(TITLE, NORMAL, max_hp=0)
-        self.assertEqual(self.ran, [])
+    async def test_outside_normal_play_runs_nothing_and_does_not_read_max_hp(self) -> None:
+        # Max HP is a loaded file's, so only the game-state check can stop the save-block concerns.
+        for game_state, menu_state in ((TITLE, NORMAL), (INGAME, PAUSE)):
+            with self.subTest(game_state=game_state, menu_state=menu_state):
+                self.ran.clear()
+                ram = await self.tick(game_state, menu_state, max_hp=250)
+                self.assertEqual(self.ran, [])
+                self.assertEqual(ram.max_hp_reads, 0, "the cheap state test should short-circuit")
 
 
 if __name__ == "__main__":

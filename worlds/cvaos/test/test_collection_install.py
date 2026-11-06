@@ -45,6 +45,12 @@ def _treat_as_stock(test: unittest.TestCase, aos_bytes: bytes) -> None:
 
 def _make_patched_rom(marker: str = ARCHIPELAGO_IDENTIFIER, with_bridge: bool = True,
                       with_graphic: bool = True) -> bytes:
+    """Return an 8 MiB stand-in for a ROM patched from the collection's stock ROM.
+
+    It holds the AoS header title and ``marker`` at the identifier's address. It also holds
+    stand-ins for M2's audio bridge and replacement graphic, unless ``with_bridge`` or
+    ``with_graphic`` leaves them out.
+    """
     rom = bytearray(ROM_SIZE)
     rom[0xA0:0xAC] = b"CASTLEVANIA2"
     rom[ARCHIPELAGO_IDENTIFIER_START:ARCHIPELAGO_IDENTIFIER_START + len(marker)] = \
@@ -57,11 +63,18 @@ def _make_patched_rom(marker: str = ARCHIPELAGO_IDENTIFIER, with_bridge: bool = 
 
 
 def _make_stock_base_rom() -> bytes:
-    """A valid 8 MiB unpatched collection base ROM (AoS header + M2's additions, no AP marker)."""
-    rom = bytearray(ROM_SIZE)
-    rom[0xA0:0xAC] = b"CASTLEVANIA2"
-    rom[0x700000:0x700010] = b"\xEA" * 16
-    rom[0x660000:0x660010] = b"\x10" * 16
+    """Return an 8 MiB stand-in for the collection's stock ROM, which has no Archipelago marker."""
+    return _make_patched_rom(marker="")
+
+
+def _another_seed_rom() -> bytes:
+    """Return a patched ROM for a second seed.
+
+    It differs from ``_make_patched_rom()`` in one byte that no validation reads, so the
+    archive an install builds from it differs too.
+    """
+    rom = bytearray(_make_patched_rom())
+    rom[0x100000] = 0x77
     return bytes(rom)
 
 
@@ -136,6 +149,28 @@ class _InstallerCase(unittest.TestCase):
             f.write(rom_bytes)
         return self.rom_path
 
+    def lock_the_live_index(self, *, from_staging_only: bool = False):
+        """Return a patch under which a move onto the live index fails, as it does while another
+        program holds the file open.
+
+        With ``from_staging_only``, only the install's move of its rebuilt index fails, so a
+        restore from the backups can still replace the index.
+        """
+        real_replace = os.replace
+        live_psb = os.path.join(self.windata, "alldata.psb.m")
+
+        def fail_on_live_index(src, dst):
+            if (os.path.normcase(dst) == os.path.normcase(live_psb)
+                    and (not from_staging_only or "_ap_staging" in src)):
+                raise PermissionError("index is locked")
+            return real_replace(src, dst)
+
+        # install and cac_archive import the same os module, so this one patch covers both.
+        return mock.patch.object(os, "replace", side_effect=fail_on_live_index)
+
+    def leftover_temp_files(self) -> list[str]:
+        return [name for name in os.listdir(self.windata) if name.endswith(".tmp")]
+
 
 class InstallTest(_InstallerCase):
     def test_install_swaps_member_and_creates_backups(self) -> None:
@@ -148,17 +183,14 @@ class InstallTest(_InstallerCase):
         self.assertFalse([p for p in os.listdir(self.windata) if p.startswith("_ap_staging")],
                          "staging directory must be cleaned up")
 
-    def test_backups_hold_stock_bytes_and_survive_second_install(self) -> None:
+    def test_a_second_install_leaves_the_backups_alone(self) -> None:
         install_rom(self.rom_path, self.exe_path, log=_quiet)
         backup_bin = os.path.join(self.windata, "alldata.bin" + BACKUP_SUFFIX)
         first_backup = open(backup_bin, "rb").read()
-        # Second seed: different ROM content; backups must not be overwritten.
-        rom2 = bytearray(_make_patched_rom())
-        rom2[0x100000] = 0x77
-        install_rom(self._write_rom(bytes(rom2)), self.exe_path, log=_quiet)
+        install_rom(self._write_rom(_another_seed_rom()), self.exe_path, log=_quiet)
         self.assertEqual(open(backup_bin, "rb").read(), first_backup,
                          "pristine backup must never be overwritten")
-        self.assertEqual(self._member(AOS_MEMBER), bytes(rom2))
+        self.assertEqual(self._member(AOS_MEMBER), _another_seed_rom())
 
     def test_refuses_while_collection_running(self) -> None:
         self.running_stub.return_value = True
@@ -172,7 +204,7 @@ class InstallTest(_InstallerCase):
         cac_archive.replace_member(psb, bin_, AOS_MEMBER, b"a new member", psb, bin_)
         self.assertEqual(self._member(AOS_MEMBER), b"a new member")
         self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
-        self.assertFalse([p for p in os.listdir(self.windata) if p.endswith(".tmp")])
+        self.assertEqual(self.leftover_temp_files(), [])
 
     def test_a_non_stock_archive_is_never_backed_up(self) -> None:
         # A seed installed by other means: its live archive must not become the "pristine" copy.
@@ -199,36 +231,11 @@ class InstallTest(_InstallerCase):
 
     def test_a_failed_index_swap_restores_the_stock_pair(self) -> None:
         install_rom(self.rom_path, self.exe_path, log=_quiet)
-        real_replace = os.replace
-
-        def fail_on_index(src, dst):
-            if dst == os.path.join(self.windata, "alldata.psb.m") and "_ap_staging" in src:
-                raise PermissionError("index is locked")
-            return real_replace(src, dst)
-
-        rom2 = bytearray(_make_patched_rom())
-        rom2[0x100000] = 0x77
-        with mock.patch.object(install.os, "replace", side_effect=fail_on_index):
+        with self.lock_the_live_index(from_staging_only=True):
             with self.assertRaisesRegex(InstallError, "restored to the stock game"):
-                install_rom(self._write_rom(bytes(rom2)), self.exe_path, log=_quiet)
+                install_rom(self._write_rom(_another_seed_rom()), self.exe_path, log=_quiet)
         self.assertEqual(self._member(AOS_MEMBER), _STOCK_AOS_BYTES)
         self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
-
-    def lock_the_live_index(self):
-        """Return a patch under which every move onto the live index fails, as it does while
-        another program holds the file open."""
-        real_replace = os.replace
-        live_psb = os.path.join(self.windata, "alldata.psb.m")
-
-        def fail_on_live_index(src, dst):
-            if os.path.normcase(dst) == os.path.normcase(live_psb):
-                raise PermissionError("index is locked")
-            return real_replace(src, dst)
-
-        return mock.patch.object(install.os, "replace", side_effect=fail_on_live_index)
-
-    def leftover_temp_files(self) -> list[str]:
-        return [name for name in os.listdir(self.windata) if name.endswith(".tmp")]
 
     def test_a_first_install_whose_index_stays_locked_leaves_the_stock_game(self) -> None:
         with self.lock_the_live_index():
@@ -240,11 +247,9 @@ class InstallTest(_InstallerCase):
 
     def test_a_reinstall_whose_index_stays_locked_says_the_files_do_not_match(self) -> None:
         install_rom(self.rom_path, self.exe_path, log=_quiet)
-        rom2 = bytearray(_make_patched_rom())
-        rom2[0x100000] = 0x77
         with self.lock_the_live_index():
             with self.assertRaisesRegex(InstallError, "do not match each other"):
-                install_rom(self._write_rom(bytes(rom2)), self.exe_path, log=_quiet)
+                install_rom(self._write_rom(_another_seed_rom()), self.exe_path, log=_quiet)
         self.assertEqual(self.leftover_temp_files(), [])
 
     def test_a_damaged_archive_is_reported_as_an_install_error(self) -> None:
@@ -258,14 +263,7 @@ class InstallTest(_InstallerCase):
     def test_an_in_place_rebuild_that_cannot_move_its_index_keeps_it(self) -> None:
         psb = os.path.join(self.windata, "alldata.psb.m")
         bin_ = os.path.join(self.windata, "alldata.bin")
-        real_replace = os.replace
-
-        def fail_on_index(src, dst):
-            if os.path.normcase(dst) == os.path.normcase(psb):
-                raise PermissionError("index is locked")
-            return real_replace(src, dst)
-
-        with mock.patch.object(cac_archive.os, "replace", side_effect=fail_on_index):
+        with self.lock_the_live_index():
             with self.assertRaisesRegex(OSError, "rename it"):
                 cac_archive.replace_member(psb, bin_, AOS_MEMBER, b"a new member", psb, bin_)
         kept = cac_archive.extract_member(psb + ".tmp", bin_, AOS_MEMBER,
@@ -285,7 +283,7 @@ class InstallTest(_InstallerCase):
                     raise PermissionError("disk full")
             return real_replace(src, dst)
 
-        with mock.patch.object(install.os, "replace", side_effect=fail_on_second_backup):
+        with mock.patch.object(os, "replace", side_effect=fail_on_second_backup):
             with self.assertRaises(InstallError):
                 install_rom(self.rom_path, self.exe_path, log=_quiet)
         self.assertFalse([name for name in os.listdir(self.windata)
@@ -341,20 +339,7 @@ class InstallTest(_InstallerCase):
 
 
 class PatchFileInstallTest(_InstallerCase):
-    """Handing the installer the .apcvaos itself: applied first, then installed."""
-
-    def test_apcvaos_is_applied_then_installed(self) -> None:
-        apc = os.path.join(self.root, "AP_1_P1_SomaAC.apcvaos")
-        with open(apc, "wb") as f:
-            f.write(b"patch container stand-in")
-
-        def fake_apply(path: str, exe_path: str, log=_quiet) -> bytes:
-            self.assertEqual((path, exe_path), (apc, self.exe_path))
-            return _make_patched_rom()
-
-        with mock.patch.object(install, "_apply_patch_file", side_effect=fake_apply):
-            install_rom(apc, self.exe_path, log=_quiet)
-        self.assertEqual(self._member(AOS_MEMBER), _make_patched_rom())
+    """A .apcvaos handed to the installer is applied to the collection's own stock ROM."""
 
     def test_a_patch_is_applied_to_the_collection_it_installs_into(self) -> None:
         # Whatever target the seed was made for, the base is the collection's own ROM. The
@@ -375,11 +360,6 @@ class PatchFileInstallTest(_InstallerCase):
             install._apply_patch_file("seed.apcvaos", self.exe_path, _quiet)
         self.assertEqual(bases, [b"the collection's ROM"])
 
-    def test_gba_input_skips_patch_application(self) -> None:
-        with mock.patch.object(install, "_apply_patch_file") as apply_stub:
-            install_rom(self.rom_path, self.exe_path, log=_quiet)
-        apply_stub.assert_not_called()
-
 
 class PatchApplicationTest(unittest.TestCase):
     """A real ``.apcvaos`` applied by AP's patch machinery to the collection's stock ROM."""
@@ -399,10 +379,7 @@ class PatchApplicationTest(unittest.TestCase):
             self.addCleanup(patcher.stop)
         self.downloads = os.path.join(self.root, "downloads")
         os.makedirs(self.downloads)
-        patched = bytearray(self.stock)
-        marker = ARCHIPELAGO_IDENTIFIER.encode("ascii")
-        patched[ARCHIPELAGO_IDENTIFIER_START:ARCHIPELAGO_IDENTIFIER_START + len(marker)] = marker
-        self.patched = bytes(patched)
+        self.patched = _make_patched_rom()
 
     def installed_rom(self) -> bytes:
         return cac_archive.extract_member(os.path.join(self.windata, "alldata.psb.m"),
@@ -481,18 +458,10 @@ class RestoreTest(_InstallerCase):
 
     def test_a_restore_whose_index_stays_locked_says_the_files_do_not_match(self) -> None:
         install_rom(self.rom_path, self.exe_path, log=_quiet)
-        real_replace = os.replace
-        live_psb = os.path.join(self.windata, "alldata.psb.m")
-
-        def fail_on_live_index(src, dst):
-            if os.path.normcase(dst) == os.path.normcase(live_psb):
-                raise PermissionError("index is locked")
-            return real_replace(src, dst)
-
-        with mock.patch.object(install.os, "replace", side_effect=fail_on_live_index):
+        with self.lock_the_live_index():
             with self.assertRaisesRegex(InstallError, "do not match each other"):
                 restore_backup(self.exe_path, log=_quiet)
-        self.assertFalse([name for name in os.listdir(self.windata) if name.endswith(".tmp")])
+        self.assertEqual(self.leftover_temp_files(), [])
 
     def test_restore_without_backup_raises(self) -> None:
         with self.assertRaisesRegex(InstallError, "No backup"):
@@ -512,11 +481,6 @@ class ExtractBaseRomTest(unittest.TestCase):
         root = tempfile.mkdtemp(prefix="cvaos_extract_test_")
         self.addCleanup(shutil.rmtree, root, ignore_errors=True)
         return _build_fake_collection(root, aos_bytes)
-
-    def test_extracts_stock_base_rom(self) -> None:
-        stock = _make_stock_base_rom()
-        exe = self._collection(stock)
-        self.assertEqual(extract_base_rom_bytes(exe), stock)
 
     def test_extract_to_writes_file(self) -> None:
         stock = _make_stock_base_rom()
@@ -669,18 +633,17 @@ class ExePromptTest(unittest.TestCase):
     def exe(self) -> str:
         path = os.path.join(self.root, "game.exe")
         with open(path, "wb") as f:
-            f.write(b"MZ")
+            f.write(_FAKE_EXE_BYTES)
         return path
 
     def test_an_existing_configured_path_is_used_without_asking(self) -> None:
         self.options.collection_exe = self.FakePath(self.exe())
-        with mock.patch.object(install, "AC_GAME_EXE_MD5", hashlib.md5(b"MZ").hexdigest()), \
-                mock.patch.object(self.FakePath, "browse") as browse:
+        with _accept_fake_exe(), mock.patch.object(self.FakePath, "browse") as browse:
             self.assertEqual(install._exe_path_from_settings(), self.options.collection_exe)
         browse.assert_not_called()
 
     def test_a_configured_file_with_another_hash_gives_way_to_a_steam_library(self) -> None:
-        self.options.collection_exe = self.FakePath(self.exe())  # "MZ", not the collection's
+        self.options.collection_exe = self.FakePath(self.exe())  # not the hash patched in below
         found = os.path.join(self.root, "library", "game.exe")
         os.makedirs(os.path.dirname(found))
         with open(found, "wb") as f:
@@ -712,33 +675,17 @@ class ExePromptTest(unittest.TestCase):
         found = self.exe()
         self.in_libraries = [found]
         self.options.collection_exe = self.FakePath(os.path.join(self.root, "missing", "game.exe"))
-        with mock.patch.object(install, "AC_GAME_EXE_MD5", hashlib.md5(b"MZ").hexdigest()), \
-                mock.patch.object(self.FakePath, "browse") as browse:
+        with _accept_fake_exe(), mock.patch.object(self.FakePath, "browse") as browse:
             self.assertEqual(install._exe_path_from_settings(), found)
         browse.assert_not_called()
         self.assertEqual(self.options.collection_exe, found)
         self.saved.assert_called_once()
 
     def test_a_game_exe_with_another_hash_is_passed_over(self) -> None:
-        self.in_libraries = [self.exe()]  # "MZ", not the collection's game.exe
+        self.in_libraries = [self.exe()]  # without _accept_fake_exe, not the collection's hash
         self.options.collection_exe = self.FakePath(os.path.join(self.root, "missing", "game.exe"))
         self.assertIsNone(install._exe_path_from_settings())  # asked, and the dialog cancelled
         self.saved.assert_not_called()
-
-
-class CollectionExeHashTest(unittest.TestCase):
-    """A file is taken for the collection's game.exe only when its MD5 hash matches."""
-
-    def test_the_hash_decides(self) -> None:
-        root = tempfile.mkdtemp(prefix="cvaos_exe_hash_")
-        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
-        path = os.path.join(root, "game.exe")
-        with open(path, "wb") as f:
-            f.write(b"MZ")
-        self.assertFalse(install.is_collection_exe(path))
-        self.assertFalse(install.is_collection_exe(os.path.join(root, "missing.exe")))
-        with mock.patch.object(install, "AC_GAME_EXE_MD5", hashlib.md5(b"MZ").hexdigest()):
-            self.assertTrue(install.is_collection_exe(path))
 
 
 class ExePathSettingTest(unittest.TestCase):

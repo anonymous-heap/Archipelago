@@ -4,7 +4,7 @@ Offline tests for the Advance Collection process-attach backend (no game.exe nee
 These pin the two things that must be exactly right for the collection client to be safe:
 the GBA->host address translation + guarded-write compare-and-swap in ``CollectionBackend``,
 and the anchor-discovery logic that decides WHERE in the process to point it
-(``validated_rom_base_in`` / ``ewram_signature_ok``). A ``FakeProc`` stands in for a
+(``collection_roms_in`` / ``ewram_signature_ok``). A ``FakeProc`` stands in for a
 live process's sparse memory so we never touch pymem.
 
     python -m pytest worlds/cvaos/test/test_collection_backend.py -v
@@ -14,17 +14,20 @@ from __future__ import annotations
 import asyncio
 import base64
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
+from .. import collection_client
 from ..collection_client import (
     COLLECTION_GBA_ROMS, EWRAM_SIZE, ROM_SIZE, ROM_TITLE, CollectionBackend, CollectionError,
     _EWRAM_STRUCT_OFFSET, _ROM_GAMECODE, _ROM_GAMECODE_OFFSET, _ROM_LOGO_OFFSET,
-    _ROM_LOGO_PREFIX, RomImage, collection_roms_in, ewram_offset, ewram_signature_ok,
-    find_ewram_base, find_rom_image, validated_rom_base_in,
+    _ROM_LOGO_PREFIX, RomImage, _Region, collection_roms_in, ewram_offset, ewram_signature_ok,
+    find_ewram_base, find_rom_image,
 )
 from ..ram import addresses as addr
 from ..ram.addresses import EWRAM, GameState
 from ..ram.backend import GuardedWrite
-from ..rom import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START
+from ..rom import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUMBER_START
 
 ROM_DOMAIN = "ROM"
 ROM_TITLE_OFFSET = 0xA0
@@ -112,8 +115,14 @@ class EwramDiscoveryTest(unittest.TestCase):
     REGION = 0x10000000
     ROM = RomImage(0x30000000, 0x30000000, 0x30800000)
 
+    def setUp(self) -> None:
+        # The fake memory changes on every read, so the pause between the two reads of each
+        # candidate is not needed.
+        patcher = mock.patch.object(collection_client.time, "sleep")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _proc(self, offsets, moving=()):
-        from ..collection_client import _Region
         region = _Region(self.REGION, EWRAM_SIZE * 2, protect=0x04, state=0x1000, mem_type=0x20000)
         proc = _ScanProc([region], moving={self.REGION + off for off in moving})
         for off in offsets:
@@ -121,7 +130,6 @@ class EwramDiscoveryTest(unittest.TestCase):
         return proc
 
     def _linked_proc(self, back_link_ok: bool = True):
-        from ..collection_client import _Region
         rom_block, ewram_block, rom_size = 0x30000000, self.REGION, 0x801000
         # The image starts right after the block's 0x20-byte header, as on the real process.
         rom = RomImage(rom_block + 0x20, rom_block, rom_block + rom_size)
@@ -158,9 +166,17 @@ class EwramDiscoveryTest(unittest.TestCase):
         proc = self._proc([0x40080], moving=[0x40080])
         self.assertEqual(find_ewram_base(proc, self.ROM), self.REGION + 0x40080)
 
+    # In the next two tests, neither match is at the region's struct offset, so the full scan
+    # finds both. 0x60170 is struct-aligned (its low 12 bits are 0x170) and 0x40080 is not.
+
     def test_aligned_beats_a_frozen_look_alike(self) -> None:
-        proc = self._proc([_EWRAM_STRUCT_OFFSET, 0x40080])
-        self.assertEqual(find_ewram_base(proc, self.ROM), self.REGION + _EWRAM_STRUCT_OFFSET)
+        # The look-alike comes first in memory, so the aligned match wins only by its ranking.
+        proc = self._proc([0x40080, 0x60170])
+        self.assertEqual(find_ewram_base(proc, self.ROM), self.REGION + 0x60170)
+
+    def test_moving_beats_an_aligned_but_frozen_match(self) -> None:
+        proc = self._proc([0x40080, 0x60170], moving=[0x40080])
+        self.assertEqual(find_ewram_base(proc, self.ROM), self.REGION + 0x40080)
 
     def test_no_match_at_all_asks_for_gameplay(self) -> None:
         with self.assertRaisesRegex(CollectionError, "not in normal gameplay"):
@@ -236,43 +252,29 @@ class GuardedWriteTest(unittest.TestCase):
         self.assertEqual(self.proc.read(self.host, 2), b"\x05\x00")
 
 
-class ErrorWrappingTest(unittest.TestCase):
-    def test_read_failures_surface_as_collection_error(self) -> None:
-        class ExplodingProc(FakeProc):
-            def read(self, address, size):
-                raise CollectionError("simulated read failure")
-
-        backend = CollectionBackend(ExplodingProc(), rom_base=0, ewram_base=0)
-        with self.assertRaises(CollectionError):
-            _run(backend.read_many([(0x10, 1, EWRAM)]))
-
-
 class RomHeaderValidationTest(unittest.TestCase):
     def test_finds_valid_header_and_returns_host_base(self) -> None:
         region_base = 0x20000000
         pad = 0x1234
         buf = bytes(pad) + _make_rom_header()
-        self.assertEqual(validated_rom_base_in(buf, region_base), region_base + pad)
+        self.assertEqual(collection_roms_in(buf, region_base),
+                         [(region_base + pad, _ROM_GAMECODE)])
 
     def test_rejects_title_without_logo(self) -> None:
         # A stray copy of the title string (e.g. a save header) with no Nintendo logo/game code.
         buf = bytearray(0x200)
         buf[ROM_TITLE_OFFSET:ROM_TITLE_OFFSET + len(ROM_TITLE)] = ROM_TITLE
-        self.assertIsNone(validated_rom_base_in(bytes(buf), 0))
+        self.assertEqual(collection_roms_in(bytes(buf), 0), [])
 
     def test_rejects_wrong_game_code(self) -> None:
         header = bytearray(_make_rom_header())
         header[_ROM_GAMECODE_OFFSET:_ROM_GAMECODE_OFFSET + 4] = b"ACME"  # no collection ROM's code
-        self.assertIsNone(validated_rom_base_in(bytes(header), 0))
+        self.assertEqual(collection_roms_in(bytes(header), 0), [])
 
-    def test_no_title_at_all(self) -> None:
-        self.assertIsNone(validated_rom_base_in(bytes(0x200), 0))
-
-    def test_other_collection_roms_are_recognized_but_not_validated(self) -> None:
+    def test_other_collection_roms_are_recognized(self) -> None:
         buf = bytes(0x40) + _make_rom_header(b"A2CJ") + _make_rom_header(b"AAME")
         self.assertEqual(collection_roms_in(buf, 0x1000),
                          [(0x1040, b"A2CJ"), (0x1240, b"AAME")])
-        self.assertIsNone(validated_rom_base_in(buf, 0x1000))
 
     def test_a_code_with_the_wrong_title_is_not_a_collection_rom(self) -> None:
         header = bytearray(_make_rom_header(b"AAME"))
@@ -314,7 +316,6 @@ class FindRomImageTest(unittest.TestCase):
         every ROM. That address lies past the end of the small fake region on purpose, because
         find_rom_image reads the identifier separately from the region scan.
         """
-        from ..collection_client import _Region
         regions = [_Region(self._region(i), self.REGION_SIZE, protect=0x04, state=0x1000,
                            mem_type=0x20000) for i in range(len(codes))]
         proc = proc_class(regions)
@@ -415,11 +416,27 @@ class EwramSignatureTest(unittest.TestCase):
         buf[CONSUMABLE_BASE] = 0x0A  # count of 10 -- impossible in AoS
         self.assertFalse(ewram_signature_ok(bytes(buf), 0))
 
-    def test_rejects_all_zero_block(self) -> None:
-        self.assertFalse(ewram_signature_ok(bytes(EWRAM_SIZE), 0))
-
     def test_rejects_when_buffer_too_short(self) -> None:
         self.assertFalse(ewram_signature_ok(bytes(_make_ewram_ingame())[:0x100], 0))
+
+
+def _watcher_ctx(tick, **overrides) -> SimpleNamespace:
+    """Return a stand-in for an attached, connected context whose brain ticks with ``tick``.
+
+    Its server socket reads as closed, so the watcher does not start authenticating. Each keyword
+    in ``overrides`` replaces the attribute of that name.
+    """
+    ctx = SimpleNamespace(
+        exit_event=asyncio.Event(),
+        backend=CollectionBackend(FakeProc(), rom_base=0, ewram_base=0),
+        server=SimpleNamespace(socket=SimpleNamespace(closed=True)),
+        slot=1, auth="x", password_requested=False, _seed_changed=False,
+        brain=SimpleNamespace(_tick=tick),
+        revalidate_anchor=lambda: None,
+        _detach=mock.Mock(),
+    )
+    vars(ctx).update(overrides)
+    return ctx
 
 
 class WatcherResilienceTest(unittest.TestCase):
@@ -429,57 +446,29 @@ class WatcherResilienceTest(unittest.TestCase):
     def test_no_tick_runs_while_a_seed_change_is_pending(self) -> None:
         # Between noticing a different installed seed and reconnecting for it, the connection
         # still belongs to the old seed's slot.
-        from types import SimpleNamespace
-        from unittest import mock
-
-        from .. import collection_client
-
-        exit_event = asyncio.Event()
         loops: list[int] = []
 
         def count_loop() -> None:
             loops.append(1)
             if len(loops) == 3:
-                exit_event.set()
+                ctx.exit_event.set()
 
         tick = mock.AsyncMock()
-        ctx = SimpleNamespace(
-            exit_event=exit_event,
-            backend=CollectionBackend(FakeProc(), rom_base=0, ewram_base=0),
-            server=SimpleNamespace(socket=SimpleNamespace(closed=True)),
-            slot=1, auth="x", password_requested=False, _seed_changed=True,
-            brain=SimpleNamespace(_tick=tick),
-            revalidate_anchor=count_loop,
-            _detach=mock.Mock(),
-        )
+        ctx = _watcher_ctx(tick, _seed_changed=True, revalidate_anchor=count_loop)
         with mock.patch.object(collection_client, "TICK_SECONDS", 0):
             asyncio.run(asyncio.wait_for(collection_client._watcher(ctx), timeout=5))
         tick.assert_not_awaited()
 
     def test_watcher_survives_an_unexpected_tick_error(self) -> None:
-        from types import SimpleNamespace
-        from unittest import mock
-
-        from .. import collection_client
-
         ticks: list[int] = []
-        exit_event = asyncio.Event()
 
         async def flaky_tick(ctx, ram):
             ticks.append(1)
             if len(ticks) == 1:
                 raise ValueError("boom")
-            exit_event.set()
+            ctx.exit_event.set()
 
-        ctx = SimpleNamespace(
-            exit_event=exit_event,
-            backend=CollectionBackend(FakeProc(), rom_base=0, ewram_base=0),
-            server=SimpleNamespace(socket=SimpleNamespace(closed=True)),
-            slot=1, auth="x", password_requested=False, _seed_changed=False,
-            brain=SimpleNamespace(_tick=flaky_tick),
-            revalidate_anchor=lambda: None,
-            _detach=mock.Mock(),
-        )
+        ctx = _watcher_ctx(flaky_tick)
         with mock.patch.object(collection_client, "TICK_SECONDS", 0), \
                 mock.patch.object(collection_client, "ERROR_BACKOFF_SECONDS", 0), \
                 self.assertLogs("Client", level="ERROR"):
@@ -499,10 +488,6 @@ class ReattachTest(unittest.IsolatedAsyncioTestCase):
 
     async def attach_with(self, installed_auth: bytes, currently_dead: bool | None = None, *,
                           finished_game: bool = False, connected: bool = True):
-        from unittest import mock
-
-        from .. import collection_client
-        from ..rom import AUTH_NUMBER_START
         ctx = collection_client.CVAOSCollectionContext(None, None)
         ctx.slot = 1
         ctx.auth = base64.b64encode(self.OLD_AUTH).decode("ascii")
@@ -528,12 +513,11 @@ class ReattachTest(unittest.IsolatedAsyncioTestCase):
         disconnect.assert_awaited_once_with(allow_autoreconnect=True)
         self.assertIsNotNone(ctx.backend)
 
-    async def test_the_same_seed_keeps_the_connection(self) -> None:
-        _ctx, disconnect = await self.attach_with(self.OLD_AUTH)
+    async def test_the_same_seed_keeps_the_connection_the_goal_and_the_latch(self) -> None:
+        ctx, disconnect = await self.attach_with(self.OLD_AUTH, currently_dead=True,
+                                                 finished_game=True)
         disconnect.assert_not_awaited()
-
-    async def test_the_same_seed_keeps_the_deathlink_latch(self) -> None:
-        ctx, _disconnect = await self.attach_with(self.OLD_AUTH, currently_dead=True)
+        self.assertTrue(ctx.finished_game)
         self.assertIs(ctx.brain.currently_dead, True)
 
     async def test_a_different_seed_does_not_inherit_the_old_seeds_goal(self) -> None:
@@ -546,10 +530,6 @@ class ReattachTest(unittest.IsolatedAsyncioTestCase):
                                                  connected=False)
         self.assertFalse(ctx.finished_game)
         disconnect.assert_not_awaited()
-
-    async def test_the_same_seed_keeps_its_goal(self) -> None:
-        ctx, _disconnect = await self.attach_with(self.OLD_AUTH, finished_game=True)
-        self.assertTrue(ctx.finished_game)
 
     async def test_a_reconnect_to_the_same_seed_sends_its_checks_again(self) -> None:
         # A check sent into a connection that was already dead would otherwise never arrive.

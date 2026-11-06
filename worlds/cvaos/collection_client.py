@@ -319,13 +319,6 @@ def collection_roms_in(buf: bytes, region_base: int) -> list[tuple[int, bytes]]:
     return found
 
 
-def validated_rom_base_in(buf: bytes, region_base: int) -> int | None:
-    """Host base of a byte-valid US Aria of Sorrow ROM header in ``buf`` (title + Nintendo
-    logo + "A2CE" game code), or None. Pure/testable."""
-    return next((base for base, code in collection_roms_in(buf, region_base)
-                 if code == _ROM_GAMECODE), None)
-
-
 def _wrong_rom_message(codes: set[bytes]) -> str:
     """Return the error for a collection that has loaded anything but US Aria of Sorrow, or
     nothing at all.

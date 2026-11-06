@@ -34,25 +34,22 @@ class TestIcon(unittest.TestCase):
         self.assertEqual(out, b"AAAAA")
 
     def test_rom_sprite_extract_remap_and_pack(self):
-        # synthetic 1D page (16 tiles/row): tiles 0,1,16,17 (the (0,0) 16x16 part) are all index 1.
-        tiles = [bytes([0x11] * 32) if t in (0, 1, 16, 17) else bytes(32) for t in range(18)]
+        # A sprite page has 16 tiles per row, so the 16x16 part at (0, 0) is page tiles 0 and 1
+        # on top and 16 and 17 below. In each byte, the low nibble is the left pixel of a pair.
+        # Each of these tiles repeats one byte, and every other tile is empty.
+        tile_bytes = {0: 0x31, 1: 0x22, 16: 0x13, 17: 0x22}
+        tiles = [bytes([tile_bytes.get(t, 0)] * 32) for t in range(18)]
         rom = _lz77_literals(b"".join(tiles))
-        spr = ic.RomSprite(gfx_addr=ic.GBA_ROM_BASE, part=(0, 0, 16, 16), remap={1: 7}, crop=False)
+        spr = ic.RomSprite(gfx_addr=ic.GBA_ROM_BASE, part=(0, 0, 16, 16), remap={1: 7, 2: 5},
+                           crop=False)
         grid = ic.rom_sprite_indices(rom, spr)
-        self.assertEqual(len(grid), 16)
-        self.assertTrue(all(len(r) == 16 for r in grid))
-        self.assertTrue(all(v == 7 for row in grid for v in row))   # index 1 -> remapped to 7
-        blob = ic.pack_icon(grid)
-        self.assertEqual(len(blob), 0x80)
-        self.assertEqual(blob, bytes([0x77] * 0x80))                # both nibbles = 7
-
-    def test_remap_default_transparent(self):
-        # an index with no remap entry becomes 0 (transparent)
-        tiles = [bytes([0x22] * 32) if t in (0, 1, 16, 17) else bytes(32) for t in range(18)]
-        rom = _lz77_literals(b"".join(tiles))
-        spr = ic.RomSprite(gfx_addr=ic.GBA_ROM_BASE, part=(0, 0, 16, 16), remap={1: 7}, crop=False)
-        grid = ic.rom_sprite_indices(rom, spr)
-        self.assertTrue(all(v == 0 for row in grid for v in row))   # index 2 not in remap -> 0
+        # Index 3 has no remap entry, so it becomes 0 (transparent).
+        top_row = [7, 0] * 4 + [5] * 8
+        bottom_row = [0, 7] * 4 + [5] * 8
+        self.assertEqual(grid, [top_row] * 8 + [bottom_row] * 8)
+        # The icon packs its tiles as top-left, top-right, bottom-left, bottom-right.
+        self.assertEqual(ic.pack_icon(grid),
+                         bytes([0x07] * 32 + [0x55] * 32 + [0x70] * 32 + [0x55] * 32))
 
     def test_crop_centres_opaque(self):
         grid = [[0] * 16 for _ in range(16)]

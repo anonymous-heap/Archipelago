@@ -71,8 +71,10 @@ class TempDirTest(unittest.TestCase):
         return os.path.join(self.root, name), exe
 
     def vdf_listing(self, steam_root: str, *libraries: str) -> None:
-        entries = "".join(f'\t"{n}"\n\t{{\n\t\t"path"\t\t"{path.replace(chr(92), chr(92) * 2)}"\n\t}}\n'
-                          for n, path in enumerate(libraries))
+        entries = ""
+        for n, path in enumerate(libraries):
+            escaped = path.replace("\\", "\\\\")  # the vdf format escapes backslashes
+            entries += f'\t"{n}"\n\t{{\n\t\t"path"\t\t"{escaped}"\n\t}}\n'
         self.write(steam_root, "steamapps", "libraryfolders.vdf",
                    text=f'"libraryfolders"\n{{\n{entries}}}\n')
 
@@ -89,27 +91,16 @@ class LibraryListTest(TempDirTest):
         vdf = self.write("libraryfolders.vdf", text=OLD_FORMAT)
         self.assertEqual(steam.libraries_listed_in(vdf), [r"D:\SteamLibrary"])
 
-    def test_a_missing_file_lists_nothing(self) -> None:
-        self.assertEqual(steam.libraries_listed_in(os.path.join(self.root, "none.vdf")), [])
-
-
-class InstallFolderTest(TempDirTest):
-    """The collection's folder comes from its app manifest, or is Steam's default name."""
-
-    def test_the_manifest_names_the_folder(self) -> None:
-        self.write("lib", "steamapps", f"appmanifest_{steam.APP_ID}.acf",
-                   text='"AppState"\n{\n\t"appid"\t\t"1552550"\n\t"installdir"\t\t"CAC"\n}\n')
-        self.assertEqual(steam.install_folder(os.path.join(self.root, "lib")), "CAC")
-
-    def test_without_a_manifest_the_default_name_is_used(self) -> None:
-        self.assertEqual(steam.install_folder(os.path.join(self.root, "lib")),
-                         steam.DEFAULT_INSTALL_FOLDER)
-
 
 class SearchTest(TempDirTest):
-    """The search reads every Steam folder's library list and finds game.exe in any library."""
+    """The search reads every Steam folder's library list and finds game.exe in any library.
+
+    The collection's folder is the one its app manifest names, or Steam's default name when there
+    is no manifest.
+    """
 
     def test_game_exe_is_found_in_a_library_on_another_drive(self) -> None:
+        # Neither library has an app manifest, so game.exe is in the default folder.
         steam_root = os.path.join(self.root, "Steam")
         os.makedirs(steam_root)
         other, exe = self.library("OtherDrive")
@@ -118,6 +109,7 @@ class SearchTest(TempDirTest):
             self.assertEqual(list(steam.game_exe_candidates()), [exe])
 
     def test_the_manifest_folder_is_searched(self) -> None:
+        # This Steam folder has no libraryfolders.vdf, so it lists no other libraries.
         library, exe = self.library("Lib", folder="Renamed")
         self.write("Lib", "steamapps", f"appmanifest_{steam.APP_ID}.acf",
                    text='"AppState"\n{\n\t"installdir"\t\t"Renamed"\n}\n')

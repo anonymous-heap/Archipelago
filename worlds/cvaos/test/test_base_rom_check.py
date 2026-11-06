@@ -10,6 +10,7 @@ import hashlib
 import unittest
 from unittest import mock
 
+from ..options import TARGET_ADVANCE_COLLECTION, TARGET_GBA
 from ..rom import patch as rp
 
 
@@ -39,25 +40,22 @@ class TargetBaseTest(unittest.TestCase):
     """A cart dump is an accepted base for either target, with a warning when the seed was made
     for the collection."""
 
+    def setUp(self) -> None:
+        # The check reads the cart dump's hash from USA_ROM_MD5, so b"cart" stands in for one.
+        patcher = mock.patch.object(rp, "USA_ROM_MD5", hashlib.md5(b"cart").hexdigest())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_a_collection_seed_patched_from_a_cart_dump_warns(self) -> None:
         # The result plays in BizHawk. The collection's installer refuses it anyway, so the check
         # only warns.
-        from ..options import TARGET_ADVANCE_COLLECTION
-        from ..constants import USA_ROM_MD5
-        from ..rom.patch import check_base_for_target
-        with mock.patch("hashlib.md5") as md5:
-            md5.return_value.hexdigest.return_value = USA_ROM_MD5
-            with self.assertLogs("Patch", level="WARNING") as logs:
-                self.assertEqual(check_base_for_target(b"cart", TARGET_ADVANCE_COLLECTION), b"cart")
+        with self.assertLogs("Patch", level="WARNING") as logs:
+            self.assertEqual(rp.check_base_for_target(b"cart", TARGET_ADVANCE_COLLECTION), b"cart")
         self.assertIn("Collection ROM Installer", logs.output[0])
 
-    def test_a_gba_seed_accepts_a_cart_dump(self) -> None:
-        from ..options import TARGET_GBA
-        from ..constants import USA_ROM_MD5
-        from ..rom.patch import check_base_for_target
-        with mock.patch("hashlib.md5") as md5:
-            md5.return_value.hexdigest.return_value = USA_ROM_MD5
-            self.assertEqual(check_base_for_target(b"cart", TARGET_GBA), b"cart")
+    def test_a_gba_seed_accepts_a_cart_dump_without_a_warning(self) -> None:
+        with self.assertNoLogs("Patch", level="WARNING"):
+            self.assertEqual(rp.check_base_for_target(b"cart", TARGET_GBA), b"cart")
 
 
 if __name__ == "__main__":
