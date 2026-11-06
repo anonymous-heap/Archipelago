@@ -5,6 +5,10 @@ __all__ = [
 ]
 
 def parse_int(value: str | int | None, *, base: int = 10) -> int | None:
+    """Parse a CSV cell as an integer in ``base``, returning None for None or a blank cell.
+
+    An int passes through unchanged. A leading ``0x`` is removed before parsing in any base.
+    """
     if value is None:
         return None
     if isinstance(value, int):

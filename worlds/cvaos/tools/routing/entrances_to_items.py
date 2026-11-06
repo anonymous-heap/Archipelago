@@ -1,3 +1,12 @@
+"""
+The entrance graph extended with pickup nodes.
+
+A pickup node is written "PICKUP:N", where N is the pickup number. Each row of
+``symmetric_entrance_to_pickup_region_requirements.csv`` names one or more entrance nodes in the
+pickup's room, and each of those nodes gets two edges with the row's requirement masks: one to the
+pickup node and one back. The searches in :class:`~.entrances.RoutingQueries` work on the
+extended graph as well.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass

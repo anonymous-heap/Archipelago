@@ -1,12 +1,15 @@
 """
-Iterative sphere-building for CVAoS routing.
+Reachability spheres over the routing graph with pickup nodes.
 
-A "sphere" is one round of item collection:
-  - Sphere 0: pickups reachable with no abilities from the starting entrance.
-  - Sphere N: pickups newly reachable after gaining all abilities from spheres 0..N-1.
+A sphere is one round of item collection. Sphere 0 holds the pickups reachable from the starting
+entrance with the starting abilities, which are none by default. Sphere N holds the pickups that
+become reachable once the player has every ability granted in spheres 0 to N-1. The rounds stop
+when a round reaches no new pickup.
 
-This models the dependency chain: collect pickups → gain abilities → reach more pickups.
-Run directly to print sphere generation results from Soma's starting entrance:
+A pickup grants an ability when its item in the unrandomized game is an ability soul, such as
+Malphas for DJump. The spheres therefore describe the vanilla item placement.
+
+Run it from the repository root to print the spheres from Soma's starting entrance:
 
     python -m worlds.cvaos.tools.routing.spheres
 """
@@ -96,13 +99,11 @@ def build_reachability_spheres(
     initial_have_mask: ReqMask = 0,
 ) -> SphereResult:
     """
-    Iteratively expand the reachable pickup set from start_entrance.
+    Build the reachability spheres from ``start_entrance``.
 
-    Each iteration (sphere):
-      1. BFS the graph with the current have_mask.
-      2. Collect all newly reachable pickup_numbers.
-      3. OR their ability grants into have_mask.
-      4. Repeat until stable.
+    Each round searches the graph with the abilities held so far. The pickups that the search
+    reaches for the first time form that round's sphere, and the abilities they grant are added
+    before the next round. The rounds stop when a search reaches no new pickup.
 
     Args:
         graph: Combined entrance+pickup routing graph (from default_graph()).
@@ -111,8 +112,8 @@ def build_reachability_spheres(
         initial_have_mask: Abilities assumed before sphere 0 (default 0).
 
     Returns:
-        SphereResult with one Sphere per iteration plus the set of permanently
-        unreachable pickups.
+        A SphereResult with one Sphere for each round that reached a new pickup, the pickups
+        that no round reached, and the abilities held at the end.
     """
     all_pickup_numbers: FrozenSet[int] = frozenset(
         PickupNodeId.number(node_id)
@@ -133,7 +134,7 @@ def build_reachability_spheres(
 
         newly_reachable = reachable_pickups - collected_pickups
         if not newly_reachable:
-            break  # stable — nothing new opened up
+            break  # stable: no new pickup became reachable
 
         # OR together ability grants from every newly reachable pickup
         new_ability_bits: ReqMask = 0
@@ -208,8 +209,9 @@ def print_sphere_result(
 
 def test_sphere_generation_from_000_003() -> SphereResult:
     """
-    Build reachability spheres starting from Soma's starting entrance (000:003).
-    Asserts at least one sphere is produced and returns the result.
+    Build and print the reachability spheres from Soma's starting entrance, "000:003".
+
+    Asserts that at least one sphere is produced, then returns the result.
     """
     graph = default_graph()
     start = "000:003"

@@ -1,3 +1,15 @@
+"""
+The entrance-node graph and the searches over it.
+
+An entrance node is written "ROOM:NEIGHBOR" and stands for the door in ROOM that leads to
+NEIGHBOR. :class:`RoutingGraphBuilder` turns each row of ``entrance_to_entrance_requirements.csv``
+into an edge from "From:RoomID" to "RoomID:To", so one edge covers crossing the door into the
+room and then reaching its exit door. Each crossing in ``transdoor_connection_collection`` also
+becomes an edge with no requirement.
+
+:class:`RoutingQueries` searches the graph. It finds the nodes reachable with a given set of
+abilities, and the subset-minimal sets of abilities for reaching each node.
+"""
 from __future__ import annotations
 
 from collections import deque
@@ -17,10 +29,17 @@ NodeId = str
 ReqMask = int
 
 
+# ============================================================
+# Graph and result types
+# ============================================================
+
 @dataclass(frozen=True, slots=True)
 class Edge:
     """
-    Directed edge with multiple alternative requirement options.
+    A directed edge with one or more alternative requirement masks.
+
+    The edge leads to ``to_node``. It is traversable when the player has every ability in at
+    least one of the masks in ``req_masks``.
     """
     to_node: NodeId
     connection_number: int
@@ -64,22 +83,26 @@ class MinReqResult:
 @dataclass(frozen=True, slots=True)
 class RouteOption:
     """
-    A minimal sufficient requirement set for reaching a goal
-        and an example path (edge-by-edge) that achieves it
-        using that requirement set.
+    One way to reach a goal: a requirement mask, and an example path that needs only that mask.
+
+    ``required_mask`` is one of the subset-minimal masks for the goal. ``steps`` lists the edges
+    of one path from the start to the goal, and the mask options chosen on those edges together
+    require exactly ``required_mask``.
     """
     required_mask: ReqMask
     steps: Tuple[ParentInfo, ...]
 
 
 # ============================================================
-# Entrance-id helpers
+# Entrance ids and requirement masks
 # ============================================================
 
 class EntranceId:
     """
-    Entrance node IDs are "START_ROOM:END_ROOM", e.g. "000:003".
-        (Soma's starting location)
+    Helpers for entrance node ids.
+
+    An entrance node id such as "000:003" names the door in room 000 that leads to room 003.
+    Soma starts at "000:003".
     """
 
     _SEP = ":"
@@ -157,13 +180,17 @@ class MaskUtils:
         return "|".join(MaskUtils.decode(mask))
 
 
+# ============================================================
+# Routing graph and builder
+# ============================================================
+
 Adjacency = Dict[NodeId, List[Edge]]
 FromToKey = Tuple[NodeId, NodeId]
 
 @dataclass(frozen=True, slots=True)
 class RoutingGraph:
     """
-    Holds the routing adjacency list.
+    The routing graph as an adjacency list, with lookups by connection number and by node pair.
     """
     adj: Adjacency
     by_connection_number: Mapping[int, Tuple[NodeId, Edge]]
@@ -217,7 +244,7 @@ class RoutingGraphBuilder:
                 strict_combo_tokens=strict_combo_tokens,
             )
 
-            # No options => never traversable, ignore
+            # A row with no requirement masks can never be crossed, so it gets no edge
             if not req_masks:
                 continue
 
@@ -266,13 +293,17 @@ class RoutingGraphBuilder:
         )
 
 
+# ============================================================
+# Searches
+# ============================================================
+
 class RoutingQueries:
     """
-    Graph-searching methods over entrance-node graphs.
+    Searches over a routing graph.
 
-    Nodes are entrance identifiers like "000:003".
-    Each DEdge can have multiple requirement options (conjunction masks),
-        encoded as bitmaks.
+    Nodes are entrance ids such as "000:003", plus pickup nodes in the extended graph that
+    ``entrances_to_items`` builds. Each edge has one or more requirement masks, and each mask is
+    a set of abilities that are all needed together.
     """
 
     @staticmethod
@@ -285,20 +316,18 @@ class RoutingQueries:
     @staticmethod
     def reachable_entrance_nodes(graph: RoutingGraph, start: NodeId, have_mask: ReqMask) -> Set[NodeId]:
         """
-        Computes the set of all entrances reachable from the given node with the given bitmask.
+        Return ``start`` and every node reachable from it with the abilities in ``have_mask``.
 
-        Performs BFS over a filtered graph:
-        an edge u->v is considered traversable if any of its option masks is
-        satisfied by have_mask.
+        This is a breadth-first search that crosses an edge only when ``have_mask`` satisfies
+        at least one of the edge's masks.
 
         Args:
-            graph: The routing graph (in adjacency-list format) to traverse.
-            start: Starting entranc identifier.
-            have_mask: Bitmask of abilities/conditions currently available.
+            graph: The routing graph to search.
+            start: The node id to start from.
+            have_mask: Bitmask of the abilities and conditions the player has.
 
         Returns:
-            A set of node IDs: start and every node reachable from it
-                under the provided mask.
+            The set of reachable node ids, including ``start``.
         """
         visited_nodes: Set[NodeId] = {start}
         frontier: deque[NodeId] = deque([start])
@@ -328,7 +357,10 @@ class RoutingQueries:
         have_mask: ReqMask
     ) -> Set[NodeId]:
         """
-        Multi-source bfs
+        Return every node reachable from any door of ``start_room`` under ``have_mask``.
+
+        The breadth-first search starts from all of the room's entrance nodes at once. It
+        returns an empty set when the graph has no entrance node in ``start_room``.
         """
         starting_entrances = RoutingQueries.start_entrances_for_room(graph, start_room)
         if not starting_entrances:
@@ -361,20 +393,21 @@ class RoutingQueries:
         have_mask: ReqMask,
     ) -> BFSResult:
         """
-        Returns a path from start to goal if reachable under the conditions of the have_mask.
+        Return a path from ``start`` to ``goal`` with the abilities in ``have_mask``.
+
+        The search is breadth-first, so the path has the fewest possible edges.
 
         Args:
-            graph: The routing graph (in adjacency-list format) to traverse.
-            start: Starting room identifier.
-            goal: Destination room identifier.
-            have_mask: Bitmask of currently available abilities/conditions.
+            graph: The routing graph to search.
+            start: The node id to start from.
+            goal: The node id to reach.
+            have_mask: Bitmask of the abilities and conditions the player has.
 
         Returns:
-            BFSResult where:
-              - reachable indicates whether the goal was found,
-              - path_nodes is the (inclusive) sequence from start to goal
-              - steps is the per-edge metadata for that path, including the usable
-                option masks on each traversed edge.
+            A BFSResult. ``reachable`` says whether ``goal`` was found, and ``path_nodes`` lists
+            the nodes from ``start`` to ``goal`` with both ends included. ``steps`` describes
+            each edge on the path, including which of its masks ``have_mask`` satisfies. Both
+            tuples are empty when ``goal`` is unreachable.
         """
         if start == goal:
             return BFSResult(True, (start,), ())
@@ -382,7 +415,7 @@ class RoutingQueries:
         frontier: deque[NodeId] = deque([start])
         visited_nodes: Set[NodeId] = {start}
 
-        # How we got to a node: prev[node] = (previous_node, edge_used, usable_masks_on_edge)
+        # How we got to a node: previous_step[node] = (previous node, edge used, usable masks)
         previous_step: Dict[NodeId, Tuple[NodeId, Edge, Tuple[ReqMask, ...]]] = {}
 
         while frontier:
@@ -445,14 +478,14 @@ class RoutingQueries:
     @staticmethod
     def _dominates(subset_mask: ReqMask, superset_mask: ReqMask) -> bool:
         """
-        Returns True iff requirement mask a \\subseteq b.
+        Return True when ``subset_mask`` is a subset of ``superset_mask``.
         """
         return (subset_mask | superset_mask) == superset_mask
 
     @staticmethod
     def _is_dominated(candidate_mask: ReqMask, frontier_masks: Set[ReqMask]) -> bool:
         """
-        Returns True iff candidate_mask \\subseteq mask_i for some mask_i in frontier_masks.
+        Return True when some mask in ``frontier_masks`` is a subset of ``candidate_mask``.
         """
         return any(
             RoutingQueries._dominates(existing_mask, candidate_mask)
@@ -462,7 +495,7 @@ class RoutingQueries:
     @staticmethod
     def _prune_and_add(candidate_mask: ReqMask, frontier_masks: Set[ReqMask]) -> None:
         """
-        Inserts candidate_mask into frontier_masks and prunes any masks that candidate_mask dominates.
+        Add ``candidate_mask`` to ``frontier_masks``, removing every mask that it dominates.
         """
         masks_to_remove = [
             existing_mask
@@ -477,17 +510,20 @@ class RoutingQueries:
     @staticmethod
     def compute_min_requirements(graph: RoutingGraph, start: NodeId) -> MinReqResult:
         """
-        Computes subset-minimal requirement masks sufficient to reach every node from start.
+        Find the subset-minimal requirement masks for reaching each node from ``start``.
+
+        A mask is subset-minimal when no other mask that is enough to reach the node is a subset
+        of it. A node can therefore have several, such as one that needs only DJump and one that
+        needs only Glide.
 
         Args:
             graph: The routing graph.
-            start: Starting room identifier.
+            start: The node id to start from.
 
         Returns:
-            MinReqResult with:
-              - best: dict mapping each node to a set of subset-minimal requirement masks to reach it
-              - parent: dict mapping each (node, mask) to ParentInfo for reconstructing a path that
-                    achieves that (node, mask)
+            A MinReqResult. ``best`` maps each reachable node to its subset-minimal masks.
+            ``parent`` maps each (node, mask) pair to the ParentInfo that
+            :meth:`reconstruct_path_for_mask` follows to rebuild a path for that pair.
         """
         best_masks_by_node: Dict[NodeId, Set[ReqMask]] = {start: {0}}
         parent_by_state: Dict[Tuple[NodeId, ReqMask], ParentInfo] = {}
@@ -515,10 +551,10 @@ class RoutingQueries:
                     if RoutingQueries._is_dominated(new_requirement_mask, frontier_at_next_node):
                         continue
 
-                    # otherwise, add and prune masks dominated
+                    # otherwise, add it and remove the masks it dominates
                     RoutingQueries._prune_and_add(new_requirement_mask, frontier_at_next_node)
 
-                    # store a concrete way to realize this (node,mask) so we can get a path later
+                    # record the edge that produced this (node, mask), so a path can be rebuilt
                     parent_by_state[(next_node, new_requirement_mask)] = ParentInfo(
                         prev_node=current_node,
                         prev_mask=current_requirement_mask,
@@ -542,7 +578,7 @@ class RoutingQueries:
         have_mask: ReqMask
     ) -> Tuple[ReqMask, ...]:
         """
-        Given a bunch of requirement masks, return only the ones we can satisfy right now.
+        Return the masks in ``best_masks`` that ``have_mask`` satisfies, fewest abilities first.
         """
         viable_masks = [
             int(mask)
@@ -560,21 +596,23 @@ class RoutingQueries:
         req_mask: ReqMask,
     ) -> Tuple[ParentInfo, ...]:
         """
-        Reconstruct one example path that achieves (goal, req_mask).
+        Return one path from ``start`` to ``goal`` whose edges together require ``req_mask``.
 
-            This uses the parent mapping returned by `compute_min_requirements`.
-            Each returned ParentInfo describes one traversed edge and which specific
-                edge option mask was chosen.
+        Each ParentInfo in the result describes one edge of the path and the mask option
+        chosen on it.
 
         Args:
-            parent: Mapping of (node, mask) to ParentInfo (from compute_min_requirements).
-            start: Starting room identifier.
-            goal: Destination room identifier.
-            req_mask: A mask that should be present in best[goal].
+            parent: The ``parent`` mapping from :meth:`compute_min_requirements`.
+            start: The node id the search started from.
+            goal: The node id to reach.
+            req_mask: One of the masks in ``best[goal]``.
 
         Returns:
-            A tuple of ParentInfo steps in forward order from start to goal.
+            The steps in order from ``start`` to ``goal``, or an empty tuple when ``start`` is
+            ``goal``.
 
+        Raises:
+            KeyError: ``parent`` has no entry for ``(goal, req_mask)``.
         """
         if start == goal:
             return ()
@@ -611,25 +649,20 @@ class RoutingQueries:
         limit: Optional[int] = None,
     ) -> Tuple[RouteOption, ...]:
         """
-        Return minimal ways to reach goal as (required_mask, example_path) pairs.
+        Return the subset-minimal ways to reach ``goal``, each with one example path.
 
-        This is a wrapper around:
-          1) compute_min_requirements(graph, start)
-          2) select masks in best[goal] (optionally filter by have_mask)
-          3) reconstruct one example path for each selected mask
+        This runs :meth:`compute_min_requirements` from ``start``, then reconstructs one path
+        for each mask it found for ``goal``. Options with fewer abilities come first.
 
         Args:
             graph: The routing graph.
-            start: Starting room identifier.
-            goal: Destination room identifier.
-            have_mask: If provided, only include options whose required_mask is
-                       satisfied by have_mask.
-            limit: If provided, return at most this many options (after sorting).
+            start: The node id to start from.
+            goal: The node id to reach.
+            have_mask: If given, keep only the options whose ``required_mask`` it satisfies.
+            limit: If given, return at most this many options, taken after sorting.
 
         Returns:
-            A tuple of RouteOptions, each containing:
-              - required_mask: a subset-minimal mask sufficient to reach goal
-              - steps: one example path that achieves that required_mask
+            A tuple of RouteOption, which is empty when ``goal`` is unreachable.
         """
         minreq_result = RoutingQueries.compute_min_requirements(graph, start)
         masks_at_goal = minreq_result.best.get(goal, set())
@@ -653,6 +686,10 @@ class RoutingQueries:
 
         return tuple(options)
 
+
+# ============================================================
+# Display
+# ============================================================
 
 class RoutingDisplay:
     @staticmethod
@@ -685,6 +722,10 @@ class RoutingDisplay:
                 f"usable: [{options_text}]"
             )
 
+
+# ============================================================
+# Demos
+# ============================================================
 
 def reachable_entrance_nodes_from_000_003_with_none(graph: RoutingGraph) -> Set[NodeId]:
     start_entrance = "000:003"

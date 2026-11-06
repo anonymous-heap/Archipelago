@@ -11,7 +11,7 @@ Three layers, each building on the one before it:
   search over it.
 * ``entrances_to_items`` extends that graph with pickup nodes.
 * ``spheres`` builds reachability spheres, repeatedly collecting the reachable pickups and
-  adding the abilities they grant until nothing new opens up.
+  adding the abilities they grant until no new pickup becomes reachable.
 
 See ``data/PATHFINDING.md`` for the terminology.
 """

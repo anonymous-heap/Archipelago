@@ -1,19 +1,23 @@
 """
 Update the pickup requirements from the logic spreadsheet.
 
-The spreadsheet's pickup tab is where the requirements are written, and
-``data/routing_info/symmetric_entrance_to_pickup_region_requirements.csv`` is a copy of its
-columns from ``pickup_number`` to the last "Misc. combo" column. This tool downloads the tab,
-checks each pickup's rows the way the loader will read them, and rewrites the CSV.
+The requirements are written in the spreadsheet's pickup tab.
+``data/routing_info/symmetric_entrance_to_pickup_region_requirements.csv`` holds a copy of some
+of the tab's columns: ``pickup_number``, "Room", "Item Name", the unnamed variant column,
+``dest_room_identifier``, and every column from "None" to the last "Misc. combo" column. This
+tool downloads the tab, checks each pickup's rows the way the loader will read them, and
+rewrites the CSV.
 
 A pickup whose sheet rows fail a check keeps the rows the CSV already has, and the report says
-why. These rows are held back:
+why. A pickup is held back when one of its sheet rows has:
 
 * a ``dest_room_identifier`` that names no door of the room, or names a room pair with two
   doors without saying which;
 * a combo with a part that has no ``(Token)``, or a token the loader doesn't know;
 * a TRUE in ``<alt 2>``, which the loader ignores;
 * a blank variant column.
+
+A pickup that has no rows in the sheet also keeps its current rows.
 
 The sheet sometimes holds a sixth combo in the unnamed column after "Misc. combo 5". It is kept
 as "Misc. combo 6", which the loader reads like the others. The columns after that hold notes and
@@ -98,7 +102,7 @@ def _shown(name: str | None) -> str:
 
 
 def problems(row: dict) -> list[str]:
-    """Return why the loader would misread ``row``, or nothing when it reads it correctly."""
+    """Return the reasons the loader would misread ``row``, or an empty list if there are none."""
     found = []
     if not row[""].strip():
         found.append("the variant column is blank")
@@ -127,7 +131,12 @@ def problems(row: dict) -> list[str]:
 
 
 def merge(sheet: list[list[str]], current: list[list[str]], header: list[str]):
-    """Return the merged rows, and the pickups taken from the sheet and those held back."""
+    """Return the merged rows, the pickups whose rows the sheet changed, and those held back.
+
+    A pickup takes its sheet rows when every row passes :func:`problems`, and otherwise keeps its
+    rows from ``current``. The third value maps the number of each held-back pickup to the
+    reasons it was held back.
+    """
     def by_pickup(rows):
         out: dict[int, list[list[str]]] = {}
         for row in rows:
