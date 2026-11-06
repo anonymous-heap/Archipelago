@@ -18,11 +18,11 @@ How it works (all verified against the USA ROM):
 
 * Menu read: the list builder sub_0804B494 (0x0804B494) and the recount sub_0804B648 (0x0804B648)
   read the consumable counts as base+0x38, index 0..0x1f. They read them LIVE (on open, on
-  page-cross and after use) and never cache them. The entry trampolines in MENU_BLOB therefore
-  rebuild the whole shadow on each call. They copy the 32 real counts into shadow[0..31] and
-  derive each custom slot from its DESC-row flag, then override the base to the
-  gEwramData-relative SHADOW_BASE so the loop reads the shadow. The index cap 0x1f is raised to
-  ``menu_slot_bound()``.
+  page-cross and after use) and never cache them. The entry trampolines (inventory_menu.s,
+  assembled into MENU_BLOB) therefore rebuild the whole shadow on each call. They copy the 32
+  real counts into shadow[0..31] and derive each custom slot from its DESC-row flag, then
+  override the base to the gEwramData-relative SHADOW_BASE so the loop reads the shadow. The
+  index cap 0x1f is raised to ``menu_slot_bound()``.
 
 * Per-row data: the menu reads the item table (0x08505B3C), the name table (0x08506734) and the
   description table (0x08506936), and the use-gate sub_0804B36C treats item-table +8 >= 4 as a
@@ -60,26 +60,25 @@ EXT_DESC_TABLE_GBA = 0x08661700     # relocated DESC_TIDS (+ new items' desc tex
 EXT_STRINGPTR_GBA = 0x08662000      # relocated string-pointer array (+ appended new strings)
 NEW_STRINGS_GBA = 0x08665000        # the new name/description string blobs
 
-# --- Menu trampoline entry points (offsets within MENU_BLOB; from `arm-none-eabi-nm` on the .s) ---
-# These offsets MOVE whenever inventory_menu.s changes size, so re-derive them with `nm` after editing
-# the .s. A stale recount offset jumps the sub_0804B648 veneer into the middle of MenuListHook and
-# freezes the whole Item-Use menu, which is what the assert after MENU_BLOB checks for.
-MENU_LIST_HOOK_OFF = 0x00      # MenuListHook   (over sub_0804B494)
-MENU_RECOUNT_HOOK_OFF = 0x5A   # MenuRecountHook (over sub_0804B648)
+# --- Menu trampoline entry points (offsets within MENU_BLOB) ---
+# Each offset is where its label in inventory_menu.s lands in the assembled blob. An edit that
+# changes MenuListHook's size moves MenuRecountHook, and test_thumb_assembler.py then fails and
+# reports the new offset. A stale recount offset sends the sub_0804B648 veneer into the middle of
+# MenuListHook, which freezes the whole Item-Use menu.
+MENU_LIST_HOOK_OFF = 0x00      # label MenuListHook, entered from sub_0804B494
+MENU_RECOUNT_HOOK_OFF = 0x5A   # label MenuRecountHook, entered from sub_0804B648
 MENU_LIST_HOOK_GBA = MENU_BLOB_GBA + MENU_LIST_HOOK_OFF
 MENU_RECOUNT_HOOK_GBA = MENU_BLOB_GBA + MENU_RECOUNT_HOOK_OFF
 B494_ENTRY_FILE = 0x0004B494
 B648_ENTRY_FILE = 0x0004B648
 
-# Assembled from inventory_menu.s at 0x08670500 (THUMB). That source is not in this tree, but
-# commit 16630702 has it. Expanding its REBUILD_SHADOW macro by hand (thumb_assembler.py has no
-# .macro) and changing its DESC_TABLE to 0x08670400 reproduces MENU_BLOB exactly.
-# Its literal pool holds 0x02013294 (real counts), 0x02030000 (shadow), 0x0202FFC8 (shadow base),
-# 0x02000000 (gEwram), 0x08670400 (desc table), the 0xFFFF terminator and the B494/B648 resume
-# addresses. None of these is inside the blob and its branches are all local, so the bytes stay
-# valid at any word-aligned address. Each trampoline mirrors the 32 real counts AND derives the
-# custom slots from each DESC row's saved behaviour flag, so the transient shadow is rebuilt
-# before every read.
+# Assembled from inventory_menu.s at MENU_BLOB_GBA (THUMB). After editing the .s, rebuild this
+# blob from rom/ with `python thumb_assembler.py inventory_menu.s 0x08670500` (it needs keystone).
+# test_thumb_assembler.py fails if the blob and the source disagree.
+# The literal pool holds 0x02013294 (the real counts), 0x02030000 (the shadow), 0x08670400 (the
+# desc table), 0x02000000 (gEwramData), the 0xFFFF terminator, 0x0202FFC8 (the shadow base) and
+# the B494/B648 resume addresses. None of these is inside the blob and its branches are all
+# local, so the bytes stay valid at any word-aligned address.
 MENU_BLOB = bytes.fromhex(
     "02b4f0b42b4a2c4b202011781970013201330138f9d1294c274d294e294f2088b84211d02289002a"
     "0cd06288a388b21859098900521812681f211940ca4001231a402a540c34eae7f0bc02bc1e48f0b5"
@@ -93,9 +92,10 @@ assert cp.SHADOW_BASE_GBA.to_bytes(4, "little") in MENU_BLOB, "shadow base missi
 assert cp.CUSTOM_DESC_TABLE_GBA.to_bytes(4, "little") in MENU_BLOB, "desc-table addr missing from menu blob"
 # Both hooks begin `push {r1}` (b402), and MenuListHook ends `bx r3` (4718). Check that
 # MENU_RECOUNT_HOOK_OFF lands on MenuRecountHook's entry (push {r1}) right after MenuListHook's bx.
-# That catches an offset left stale by a change to inventory_menu.s, which freezes the menu.
+# test_thumb_assembler.py compares both offsets with the labels exactly, while this check runs on
+# every import and catches most stale offsets without keystone or the .s file.
 assert MENU_BLOB[MENU_RECOUNT_HOOK_OFF - 2:MENU_RECOUNT_HOOK_OFF + 2] == bytes.fromhex("184702b4"), \
-    "MENU_RECOUNT_HOOK_OFF is stale -- re-run `arm-none-eabi-nm` on inventory_menu.s and update it"
+    "MENU_RECOUNT_HOOK_OFF is stale: set it to MenuRecountHook's offset in inventory_menu.s"
 assert MENU_BLOB[MENU_LIST_HOOK_OFF:MENU_LIST_HOOK_OFF + 2] == bytes.fromhex("02b4"), "list hook moved"
 
 # --- Menu instruction-literal sites to repoint (file offsets), confirmed against the ROM ---

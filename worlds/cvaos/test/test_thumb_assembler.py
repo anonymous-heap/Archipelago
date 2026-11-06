@@ -1,11 +1,12 @@
 """Every hook's .s source and its shipped blob must agree (rom/thumb_assembler.py).
 
-Each hook in rom/ ships as a hex blob with the assembly it came from beside it. Nothing used to
-connect the two, so editing a .s left the blob alone and the source quietly became fiction. These
-tests assemble each source and compare, which turns that drift into a failure here.
+Each hook in rom/ ships as a hex blob with the assembly it came from beside it. Editing a .s does
+not change the blob, so these tests assemble each source and fail when the result differs from
+the shipped bytes.
 
 Assembling needs keystone (``pip install keystone-engine``), a dev-time dependency, so the
-correspondence tests skip without it. The assembler's own error handling is tested either way.
+correspondence tests skip without it. The assembler's own error handling and the Item-Use menu's
+entry offsets are tested either way, because neither needs keystone.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ import unittest
 
 import worlds.cvaos.rom.custom_pickups as custom_pickups
 import worlds.cvaos.rom.deathlink_hook as deathlink_hook
+import worlds.cvaos.rom.inventory_menu as inventory_menu
 import worlds.cvaos.rom.received_item_box as received_item_box
 import worlds.cvaos.rom.skull_key_warp as skull_key_warp
 import worlds.cvaos.rom.soul_guarantee_hook as soul_guarantee_hook
@@ -29,6 +31,7 @@ HOOKS = {
     "deathlink_hook.s": (deathlink_hook.DEATHLINK_TRAMPOLINE.addr, deathlink_hook._TRAMPOLINE),
     "soul_guarantee_hook.s": (soul_guarantee_hook.GUARANTEE_TRAMPOLINE.addr,
                               soul_guarantee_hook._TRAMPOLINE),
+    "inventory_menu.s": (inventory_menu.MENU_BLOB_GBA, inventory_menu.MENU_BLOB),
 }
 
 
@@ -73,6 +76,29 @@ class SourceMatchesBlobTest(unittest.TestCase):
         for delta in (0x200, 0x1000, -0x100):
             with self.subTest(delta=delta):
                 self.assertEqual(asm.assemble_file(source, base + delta), blob)
+
+
+class MenuHookOffsetsTest(unittest.TestCase):
+    """inventory_menu.py points each of its two veneers at a fixed offset into MENU_BLOB.
+
+    An offset that no longer matches its label sends a veneer into the middle of a trampoline,
+    which freezes the Item-Use menu. Laying out the source needs no keystone, so this runs either
+    way.
+    """
+
+    def test_each_entry_offset_is_its_label_in_the_source(self):
+        base = inventory_menu.MENU_BLOB_GBA
+        with open(os.path.join(ROM_DIR, "inventory_menu.s"), encoding="ascii") as handle:
+            items, _symbols = asm._parse(handle.read())
+        labels, _pool = asm._layout(items, base)
+        for label, offset in (("MenuListHook", inventory_menu.MENU_LIST_HOOK_OFF),
+                              ("MenuRecountHook", inventory_menu.MENU_RECOUNT_HOOK_OFF)):
+            with self.subTest(label=label):
+                self.assertEqual(
+                    labels[label] - base, offset,
+                    f"{label} is at {labels[label] - base:#x} in inventory_menu.s, so the "
+                    f"matching offset constant in inventory_menu.py needs that value",
+                )
 
 
 class AssemblerRefusesBadInputTest(unittest.TestCase):
