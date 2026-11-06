@@ -1,7 +1,7 @@
 """
 Single-Jump Divekick (the "Single Jump Divekick" option).
 
-Port of the "Single Jump Divekick" patch from Xanthus 
+Port of the "Single Jump Divekick" patch from Xanthus
 (https://github.com/Xanthus1/aos_patches) with their generous permission.
 
 Vanilla only allows the divekick out of a double jump (i.e. once Malphas is owned); this lets it
@@ -11,7 +11,8 @@ come out of a first jump too, with two guard rails kept from the original patch:
 * no divekick when there is ground immediately below (you cannot buffer one from the ground,
   which would otherwise stand in for the slide).
 
-Three small edits inside the USA ROM's divekick-eligibility routine (GBA 0x08017D90 area):
+Three small edits to the USA ROM. The first is in the routine that calls the divekick-eligibility
+routine at GBA 0x08017D90, and the other two are in the eligibility routine itself:
 
 * 0x08019320: ``bne`` that, after a double jump, skips the divekick check -> ``nop``.
 * 0x08017DB6: ``cmp r1, #4`` (has-double-jumped state) -> ``cmp r1, #2`` (is-midair state).

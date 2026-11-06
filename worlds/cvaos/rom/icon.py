@@ -1,25 +1,27 @@
 """
 Custom-pickup icon pipeline for Castlevania: Aria of Sorrow.
 
-Produces a 16x16 4bpp "common item icon" (the 0x80-byte blob the engine DMAs: top half tiles 0/1,
-bottom half tiles 2/3) for a custom pickup, from one of two sources:
+Each custom pickup gets a 16x16 4bpp "common item icon": an 0x80-byte blob of four 8x8 tiles,
+which the engine DMAs in two halves. Tiles 0 and 1 form the top half, and tiles 2 and 3 the bottom
+half. The icon comes from one of two sources:
 
-* ``RomSprite`` -- extract the pixel pattern from the **player's own ROM** at build time. Used for art
-  that already exists in the game (e.g. the metal-gate-button). The apworld ships NO copyrighted ROM
-  pixels -- only the (non-copyrightable) ROM address, the frame's tile layout, and a palette-index
-  remap. The raw 4bpp indices (the art) come from the player's ROM each build.
+* ``RomSprite`` extracts the pixel pattern from the **player's own ROM** at build time. It is used
+  for art that already exists in the game, such as the metal-gate button. The apworld ships no
+  copyrighted ROM pixels. It ships only the ROM address, the frame's pixel region, and a
+  palette-index remap, none of which is copyrightable.
 
-* ``ImageFile`` -- a vendored **original** PNG (the modder's own art, under ``rom/icons/``), quantised
-  to the shared items palette (bank 6) at build time. (Palettes are not copyrighted, so bank 6's
-  colours may be read from the ROM or hardcoded; we hardcode them in custom_pickups.BANK6_PALETTE.)
+* ``ImageFile`` names an **original** PNG (the modder's own art) vendored under ``rom/icons/``. It
+  is quantised to the shared items palette (bank 6) at build time. Palettes are not copyrighted, so
+  the apworld can ship bank 6's colours itself. They are hardcoded in
+  ``custom_pickups.BANK6_PALETTE`` rather than read from the ROM.
 
-Both paths end as a 16x16 grid of **bank-6 palette indices**, packed by :func:`pack_icon` into the
-0x80-byte blob. Index 0 is transparent.
+Both sources produce a 16x16 grid of **bank-6 palette indices**, which :func:`pack_icon` packs into
+the 0x80-byte blob. Index 0 is transparent.
 
-ROM-sprite extraction details (all verified against the USA ROM): a sprite's GFX is LZ77-compressed
-(BIOS LZ77UnComp, type 0x10); the decompressed bytes are 8x8 4bpp tiles laid out "1-dimensionally"
-into a page 16 tiles (128 px) wide, i.e. minitile *i* occupies page cell ``(i % 16, i // 16)``. A
-frame's part selects a ``w x h`` pixel region at page offset ``(x, y)``.
+A sprite's GFX is LZ77-compressed (BIOS LZ77UnComp, type 0x10). The decompressed bytes are a run
+of 8x8 4bpp tiles that wraps into a page 16 tiles (128 px) wide, so tile *i* occupies page cell
+``(i % 16, i // 16)``. A frame's part selects a ``w x h`` pixel region at page offset ``(x, y)``.
+These details are verified against the USA ROM.
 """
 from __future__ import annotations
 
@@ -36,10 +38,14 @@ _PAGE_TILES_PER_ROW = 16         # 1-dimensional sprite-gfx page width, in 8x8 t
 
 @dataclass(frozen=True)
 class RomSprite:
-    """A 16x16 icon extracted from the player's ROM at build time. ``gfx_addr`` is the GBA address of
-    the (LZ77-compressed) sprite GFX; ``part`` = (x, y, w, h) pixel region of the 1D-laid page for the
-    frame to use; ``remap`` maps each source 4bpp index -> a bank-6 index (0 = transparent). ``crop``
-    re-centres the opaque content into 16x16 (to match a clean icon framing)."""
+    """An icon whose pixels are extracted from the player's ROM at build time.
+
+    ``gfx_addr`` is the GBA address of the LZ77-compressed sprite GFX, and ``part`` is the frame's
+    ``(x, y, w, h)`` pixel region on the decompressed page. ``remap`` maps each source 4bpp index to
+    a bank-6 index. A source index missing from ``remap`` becomes 0, which is transparent.
+
+    With ``crop`` set, the region's opaque content is cropped and centred in 16x16, so the region
+    can be any size whose opaque content fits. Without it, the region must be exactly 16x16."""
     gfx_addr: int
     part: Tuple[int, int, int, int]
     remap: Dict[int, int]
@@ -48,7 +54,10 @@ class RomSprite:
 
 @dataclass(frozen=True)
 class ImageFile:
-    """An original 16x16 (or smaller, auto-fit) PNG under rom/icons/, quantised to bank 6 at build."""
+    """An original 8-bit RGBA PNG under rom/icons/, quantised to bank 6 at build time.
+
+    An image that is not 16x16 is cropped to its opaque content and centred, so that content must
+    fit in 16x16."""
     filename: str
 
 
@@ -148,7 +157,7 @@ def build_icon_tiles(base_rom: bytes, source) -> bytes:
 
 
 def _image_file_tiles(source: ImageFile) -> bytes:
-    """Quantise a vendored original PNG (rom/icons/<filename>) to bank 6 -> the icon blob."""
+    """Quantise the PNG at rom/icons/<filename> to bank 6, and pack it into the icon blob."""
     import os
     from .custom_pickups import BANK6_PALETTE  # local import to avoid a cycle at module load
     from .tools.png_to_icon import decode_png_rgba, fit_16x16, bgr555_to_rgb

@@ -1,22 +1,22 @@
 """
-Received-item announcement: the vanilla "Got <name>" textbox + pickup SFX for an item another
+Received-item announcement: the vanilla "Got <name>" textbox and pickup SFX for an item another
 world sent us.
 
-The ROM owns the whole sequence. The client only posts a request into a mailbox in free EWRAM;
-a per-frame hook reads it, waits for the game to be able to take a textbox, then makes the two
-calls vanilla makes on a normal pickup. Doing it ROM-side is what makes the announcement
-reliable: the game's textbox request has a busy state, and a client writing the request fields
-directly would have its box silently dropped whenever a transition or another box was up.
+The ROM runs the whole sequence. The client only posts a request into a mailbox in free EWRAM,
+and a per-frame hook reads it, waits until the game can take a textbox, then makes the two calls
+vanilla makes on a normal pickup. The hook runs in the ROM because the game's textbox request has
+a busy state. A client that wrote the request fields directly would have its box dropped silently
+whenever a transition or another box was up.
 
-* ``sub_0800EF98`` (GBA 0x0800EF98) queues the "Got <name>" box. It is two stores behind a
-  guard -- ``if (!(gEwramData->unk_60.unk_42C & 0x03000200)) { unk_423 = 1; unk_420 = text_id; }``
-  at absolute 0x0200042C (the ewram.h field offsets are absolute from gEwramData, NOT relative
-  to unk_60; reading them relative was a real bug, caught in a playtest by the box being
-  dropped mid-cutscene while the sound still played)
-  -- and ``sub_0800EFD4`` dispatches request kind 1 to the real textbox ``sub_0800E0E8`` on a
-  later frame. The hook checks that same guard so a request is retried rather than lost. It also
+* ``sub_0800EF98`` (GBA 0x0800EF98) queues the "Got <name>" box. It is two stores behind a guard,
+  ``if (!(gEwramData->unk_60.unk_42C & 0x03000200)) { unk_423 = 1; unk_420 = text_id; }``, and
+  ``sub_0800EFD4`` dispatches request kind 1 to the real textbox ``sub_0800E0E8`` on a later
+  frame. The hook checks that same guard, so a request is retried rather than lost. It also
   waits while an earlier request is still queued (``unk_423`` nonzero). Otherwise sub_0800EF98
   would overwrite that request's text, and the soul banner would clear it.
+* The ewram.h field offsets in that guard are absolute from gEwramData, NOT relative to unk_60,
+  so the guard reads the word at 0x0200042C. Reading them as offsets from unk_60 would test the
+  wrong word, and the box would then be dropped mid-cutscene while the sound still played.
 * ``PlaySong`` (GBA 0x080D7910) plays the sound the mailbox names. Vanilla's collect path plays
   :data:`SFX_MONEY` for gold, :data:`SFX_ITEM` for a consumable, :data:`SFX_ITEM_TO_INVENTORY`
   for a weapon or armor (accessories included), and :data:`SFX_SOUL` for a soul.
@@ -27,15 +27,16 @@ directly would have its box silently dropped whenever a transition or another bo
   makes, in vanilla's order: ``sub_08045C34(soulType)`` for a new soul only (its effect entity
   freezes the entity update loop, which is the pause the player dismisses with A),
   ``sub_0800E708(soulIndex, soulType, isNew)`` to start the banner, and
-  ``sub_08049E64(soulType, soulIndex)`` to queue the soul the banner displays. Then
-  ``PlaySong(0xBC)``. Mind the argument order: it is reversed between those last two, and
-  reversed again relative to the ``SoulInventory_*`` functions. :func:`soul_mailbox_write` takes
-  the SoulInventory order and the hook sorts it out.
+  ``sub_08049E64(soulType, soulIndex)`` to queue the soul the banner displays. It then calls
+  ``PlaySong(0xBC)``. Mind the argument order: sub_0800E708 takes the index first, while
+  sub_08049E64 and the ``SoulInventory_*`` functions take the type first.
+  :func:`soul_mailbox_write` takes the index first, like sub_0800E708, and the hook swaps the
+  pair for sub_08049E64.
 
-Source: received_item_box.s, beside this file, which rom/thumb_assembler.py assembles; the blob
-below is exactly what it produces, and test_thumb_assembler.py holds the two together. The pool
-holds no address of its own, so the bytes are the same at any word-aligned link address (see the
-relocation note in the .s).
+Source: received_item_box.s, beside this file, which rom/thumb_assembler.py assembles. The blob
+below is exactly what it produces, and test_thumb_assembler.py checks that the two match. The
+pool holds no address inside the blob, so the bytes are the same at any word-aligned link address
+(see the relocation note in the .s).
 
 The per-frame hook is registered in the shared update-hook framework
 (rom/xanthus_framework.py), which owns the 0x08043104 pointer and the dispatcher. This feature
@@ -110,9 +111,10 @@ def mailbox_write(text_id: int, sfx: int = SFX_ITEM) -> bytes:
     """The 8 mailbox bytes announcing one item, for the client to write at :data:`MAILBOX_GBA`.
 
     Write the block in one transfer: ``pending`` is its final byte, so the request cannot be
-    seen half-filled. Do not post another request while ``pending`` still reads 1 -- the ROM
-    clears it once the banner is queued, which also paces announcements so they cannot stomp
-    each other. Queue the rest client-side and post the next when it clears.
+    seen half-filled. Do not post another request while ``pending`` still reads 1. The hook
+    clears it after queueing the announcement, so waiting for that also keeps one announcement
+    from overwriting the previous one. Queue the rest client-side and post the next when it
+    clears.
     """
     if not 0 <= text_id <= 0xFFFF:
         raise ValueError(f"text_id out of range: {text_id}")
@@ -126,9 +128,10 @@ def soul_mailbox_write(soul_index: int, soul_type: int, is_new: bool = True,
                        sfx: int = SFX_SOUL) -> bytes:
     """The 8 mailbox bytes announcing one soul, for the client to write at :data:`MAILBOX_GBA`.
 
-    ``soul_type``/``soul_index`` are the pair the ``SoulInventory_*`` functions take, in that
-    order -- note the ROM's banner call ``sub_0800E708`` takes them the other way round, which
-    the hook handles. ``is_new`` is what vanilla derives from ``SoulInventory_GetSoulTotal``.
+    ``soul_index`` and ``soul_type`` identify the soul as the ``SoulInventory_*`` functions do,
+    though those take the type first. Here the index comes first, matching the ROM's banner call
+    ``sub_0800E708``, and the hook swaps the pair for ``sub_08049E64``. ``is_new`` is what
+    vanilla derives from ``SoulInventory_GetSoulTotal``.
 
     This announces only; it does not add the soul to the inventory.
     """

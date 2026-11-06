@@ -1,16 +1,17 @@
 """
 Oops! All Whips (the "Oops All Whips" option).
 
-Port of the "Oops All Whips" patch from Xanthus 
+Port of the "Oops All Whips" patch from Xanthus
 (https://github.com/Xanthus1/aos_patches) with their generous permission.
 
 Every weapon attacks with the Whip Sword's swing animation.
 
-The edits all land in the USA ROM's weapon attribute table (first touched entry at 0x08505D4D,
-0x1C bytes per weapon, ~58 entries edited). Per weapon the patch forces the two attack-animation-id
-bytes to 0x22 (the Whip Sword's animation), sets bit 0x20 in the adjacent animation-flag byte, and
-zeroes two animation-category bytes. Weapon stats/hitboxes are untouched, but effective reach
-follows the whip swing, so feel (and some incidental enemy hits) will differ.
+The edits all land in the USA ROM's weapon attribute table (first edited byte at 0x08505D4D,
+0x1C bytes per weapon, 58 weapons edited). For each weapon the patch sets the two
+attack-animation-id bytes to 0x22 (the Whip Sword's animation) and zeroes up to two
+animation-category bytes. For 35 of the weapons it also sets bit 0x20 in the animation-flag byte
+just before the ids. Weapon stats/hitboxes are untouched, but effective reach follows the whip
+swing, so feel (and some incidental enemy hits) will differ.
 
 Logic impact: a weapon breaks floors and ceilings through its own swing, and the Whip Sword's
 swing breaks neither. With this option on, no weapon can break them, so logic counts only the

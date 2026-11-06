@@ -1,36 +1,37 @@
 """
 Shuffle which soul each enemy drops.
 
-The enemy table is a flat array at GBA 0x080E9644 (0x24 = 36 bytes per entry), 113 entries
-indexed by enemy id (Bat..Chaos) -- the same table :mod:`.soul_drop_rates` adjusts. Three bytes
-of each entry describe the soul that enemy drops:
+The enemy table is a flat array at GBA 0x080E9644 (0x24 = 36 bytes per entry), with 113 entries
+indexed by enemy id (Bat..Chaos). It is the same table that :mod:`.soul_drop_rates` adjusts.
+Three bytes of each entry describe the soul that enemy drops:
 
     +0x12  drop rate   -- chance ~= numerator / (rate*8 + 32 - LCK/16), so a LOWER byte is a
                          MORE common drop; 0 makes the death routine skip the roll (no drop)
     +0x17  soul type   -- 0 red/bullet, 1 blue/guardian, 2 yellow/enchant, 3 ability
     +0x18  soul index  -- 1-based within the type; 0 means the enemy drops no soul at all
 
-The meanings of +0x17/+0x18 were recovered by correlating the table against
-``data/item_info/item_info.csv``: all 110 soul-dropping entries resolve to exactly one named
-soul, the mapping is 1:1 (no soul has two sources), and the three enemies
-:mod:`.soul_drop_rates` already knows (43 Curly, 48 Devil, 54 Manticore) land on their
-expected souls. The AoS decompilation leaves both bytes inside an undocumented pad, so this
-module is the reference for them.
+The AoS decompilation leaves +0x17 and +0x18 inside an undocumented pad, so this module is the
+reference for them. Their meanings come from matching the table against
+``data/item_info/item_info.csv``. Each of the 110 soul-dropping entries resolves to exactly one
+named soul, and the mapping is 1:1, so no soul has two sources. The three enemies whose rates
+:mod:`.soul_drop_rates` overrides (43 Curly, 48 Devil, 54 Manticore) resolve to their expected
+souls.
 
 What gets shuffled
 ------------------
-The 7 enemies whose soul is *progression* are never touched, so logic is untouched by
-construction -- :mod:`..regions` only builds enemy regions for Flame Demon, Succubus, Devil and
-Manticore, so freezing all 7 is strictly more conservative than logic requires. The remaining
-103 enemies are permuted; because the vanilla mapping is 1:1, a permutation gives every soul
+The 7 enemies whose soul is *progression* are never touched, so the shuffle cannot move a soul
+that logic depends on. This is more conservative than logic requires, because :mod:`..regions`
+builds enemy regions only for Flame Demon, Succubus, Devil and Manticore. The remaining 103
+enemies are permuted, within each soul type or across all types depending on the
+``soul_shuffle`` option. Because the vanilla mapping is 1:1, a permutation gives every soul
 exactly one new source and leaves none unobtainable.
 
 Drop rates
 ----------
 Controlled by the ``keep_soul_drop_rates`` option:
 
-* ``False`` -- the rate byte stays with the ENEMY, so a soul is as rare as whatever now drops it.
-* ``True`` -- the rate byte moves WITH THE SOUL, so each soul keeps its vanilla rarity and only
+* ``False``: the rate byte stays with the ENEMY, so a soul is as rare as whatever now drops it.
+* ``True``: the rate byte moves WITH THE SOUL, so each soul keeps its vanilla rarity and only
   its source changes.
 
 Rate 0 tells the death routine to skip the soul roll. Vanilla gives it to four one-time bosses
@@ -44,8 +45,8 @@ they die. When the option is ``True``, that causes two exceptions:
   soul moves to an ordinary enemy, that enemy keeps its own rate, because moving the 0 would
   stop the soul from ever dropping.
 
-Generation is ROM-free, so the vanilla table below is committed data. :func:`build_writes`
-verifies it against the base ROM before writing anything.
+Generation runs without the base ROM, so the vanilla table is written out below.
+:func:`build_writes` checks it against the base ROM before building any writes.
 """
 from __future__ import annotations
 
@@ -74,9 +75,10 @@ MODE_WITHIN_TYPE = "within_type"
 MODE_ANY_TYPE = "any_type"
 
 # --- The free starting soul -------------------------------------------------------------
-# The intro hands Soma one Winged Skeleton soul. That is NOT an enemy drop: it is baked into
-# the intro code as THUMB immediates, so the enemy-table shuffle above cannot reach it and the
-# player would still start with a vanilla Winged Skeleton. The site (file 0x5D004) is:
+# The intro gives Soma one Winged Skeleton soul. The grant is not an enemy drop: the soul's type
+# and index are THUMB immediates in the intro code, so shuffling the enemy table does not change
+# them. Without the writes from _starting_soul_writes, the player would still start with a
+# vanilla Winged Skeleton. The site (file 0x5D004) is:
 #
 #     movs r0, #0            <- soul type,  0-based   (STARTING_GRANT_TYPE_OFF)
 #     movs r1, #0            <- soul index, 0-based   (STARTING_GRANT_INDEX_OFF)
@@ -91,10 +93,10 @@ MODE_ANY_TYPE = "any_type"
 # Note the two different bases: the grant takes a 0-based index while the equip field is
 # 1-based, so vanilla granting index 0 and equipping 1 name the same soul.
 #
-# The equip is not red-only by nature -- r4 is the 0x1325C player struct and the three
-# equipped-soul fields are just consecutive displacements off it, so pointing the ldrb/strb
-# at 0xE or 0xF equips the blue or yellow slot instead. That is what lets the starting soul
-# be any type the shuffle produces.
+# The equip is not limited to red souls. r4 points at the 0x1325C player struct, and the three
+# equipped-soul fields are consecutive displacements from it, so pointing the ldrb/strb at 0xE
+# or 0xF equips the blue or yellow slot instead. The starting soul can therefore be of any type
+# the shuffle produces.
 STARTING_GRANT_TYPE_OFF = 0x05D004
 STARTING_GRANT_INDEX_OFF = 0x05D006
 STARTING_EQUIP_LOAD_OFF = 0x05D00E
@@ -130,7 +132,8 @@ def _strb_r0_to_r4(displacement: int) -> bytes:
     return (0x7000 | (displacement << 6) | (4 << 3)).to_bytes(2, "little")
 
 # enemy_id -> (soul type at +0x17, 1-based soul index at +0x18, drop rate at +0x12) in the
-# unmodified USA ROM. Comments name the soul each row resolves to.
+# unmodified USA ROM. Each comment gives the soul's type, its 0-based index within that type,
+# and its name.
 VANILLA: Dict[int, tuple[int, int, int]] = {
       0: (0,   2,   7),   # red 1 Bat
       1: (2,  12, 180),   # yellow 11 Zombie
@@ -248,13 +251,13 @@ VANILLA: Dict[int, tuple[int, int, int]] = {
 }
 
 # Enemies whose vanilla soul is flagged ``progression`` in data/item_info/item_importance.csv.
-# Frozen so that shuffling can never move a soul logic depends on. Derived from VANILLA plus
-# that CSV; kept literal here because rom/ modules stay ROM-only leaves (data access lives in
-# rom/patch.py).
+# Frozen so that shuffling can never move a soul logic depends on. The set comes from VANILLA and
+# that CSV but is written out here, because the rom/ feature modules do not import the world's
+# data; only rom/patch.py does.
 PROGRESSION_SOUL_ENEMIES: frozenset[int] = frozenset([40, 43, 48, 54, 83, 95, 104])
 
-# The enemy the intro's free soul belongs to: whichever one drops red index 0 (Winged
-# Skeleton) in vanilla. Derived rather than hardcoded so it cannot drift from VANILLA.
+# The enemy the intro's free soul belongs to: the one that drops Winged Skeleton, the first red
+# soul (index 1 in VANILLA). Derived rather than hardcoded so it cannot drift from VANILLA.
 STARTING_SOUL_ENEMY: int = next(
     eid for eid, (soul_type, index, _rate) in sorted(VANILLA.items())
     if soul_type == SOUL_TYPE_RED and index == 1)
@@ -338,10 +341,10 @@ def _starting_soul_writes(plan: Dict[int, int]) -> Dict[int, bytes]:
     """
     Retarget the intro's free soul at whatever now drops from :data:`STARTING_SOUL_ENEMY`.
 
-    Keeps the gift tied to the same enemy it came from in vanilla, so the intro stays
-    consistent with the shuffled world, whatever type that soul turns out to be: the equip
-    is repointed at the matching equipped-soul slot. Returns nothing when that enemy kept
-    its own soul.
+    The gift stays tied to the enemy it came from in vanilla, so the player starts with the soul
+    that enemy now drops and the intro stays consistent with the shuffled world. That soul can
+    be of any type, so the equip is repointed at the matching equipped-soul slot. Returns an
+    empty dict when that enemy kept its own soul.
     """
     source = plan.get(STARTING_SOUL_ENEMY)
     if source is None:
@@ -349,8 +352,8 @@ def _starting_soul_writes(plan: Dict[int, int]) -> Dict[int, bytes]:
 
     soul_type, soul_index, _rate = VANILLA[source]
     if soul_type not in EQUIP_SLOT_DISPLACEMENT:
-        # Only ability souls, and the sole ability-soul enemy is progression-frozen, so it can
-        # never reach the shuffle pool. Fail loudly rather than emit a bad equip.
+        # Only ability souls have no equip slot, and the one enemy that drops an ability soul is
+        # progression-frozen, so this cannot happen. Raise rather than write a bad equip.
         raise ValueError(
             f"starting soul from enemy {source} has type {soul_type}, which has no equip slot")
 
@@ -367,7 +370,7 @@ def _starting_soul_writes(plan: Dict[int, int]) -> Dict[int, bytes]:
 def build_writes(base_rom: bytes, plan: Dict[int, int], keep_soul_drop_rates: bool,
                  shuffle_starting_soul: bool = False) -> Dict[int, bytes]:
     """
-    Writes reassigning enemy soul drops according to ``plan``.
+    Return the writes that reassign enemy soul drops according to ``plan``.
 
     Args:
         base_rom: the original ROM bytes, verified against :data:`VANILLA` first.
@@ -379,14 +382,14 @@ def build_writes(base_rom: bytes, plan: Dict[int, int], keep_soul_drop_rates: bo
         shuffle_starting_soul: also retarget the intro's free Winged Skeleton soul at
             whatever now drops from the enemy it belonged to.
 
-    Returns the written dict.
+    Returns ``{file offset: bytes}``.
     """
     _verify_vanilla(base_rom)
     _validate_plan(plan)
 
-    # Built as a plain offset map rather than through a Patch: a Patch coalesces the adjacent
-    # type/index bytes into one edit and omits a write whose value the ROM already holds, while
-    # this module's contract (and patch.py's merge) is one entry per field, emitted always.
+    # The writes are built as a plain offset map rather than through a Patch. A Patch would merge
+    # the adjacent type and index bytes into one edit and leave out any byte that does not change,
+    # but this function returns a separate entry for every field it sets, changed or not.
     writes: Dict[int, bytes] = {}
     for target, source in plan.items():
         soul_type, soul_index, soul_rate = VANILLA[source]

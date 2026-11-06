@@ -10,9 +10,10 @@ GBA_ROM_BASE = 0x08000000
 
 class AoSPickupEntity(Struct, endian="little"):
     """
-    12-byte AoS room entity as stored in ROM (the pickup record; room object lists use the
-    same layout with ``type``/``subtype`` meaning object kind and ``var_a``/``var_b`` object
-    parameters).
+    A 12-byte AoS room entity, as stored in the ROM.
+
+    Pickups use this record. Room object lists use the same layout, with ``type`` and
+    ``subtype`` giving the object's kind and ``var_a`` and ``var_b`` holding its parameters.
 
     Offset  Size  Field
     0x00    2     x           Position
@@ -25,11 +26,12 @@ class AoSPickupEntity(Struct, endian="little"):
     0x07    1     unknown     Spawn flag: when its low nibble is nonzero, the room spawns the
                                entity regardless of the screen position (sub_0800F4F8). 0 on
                                every pickup.
-    0x08    2     var_a       flag_offset — per-location save flag. Unchanged when shuffling items.
-    0x0A    2     var_b       item_offset — index of item within its subtype category
+    0x08    2     var_a       flag_offset: per-location save flag. Unchanged when shuffling items.
+    0x0A    2     var_b       item_offset: index of item within its subtype category
 
-    Fields read as plain ``int``; stores narrow to the field width. ``pack()`` / ``parse()``
-    are the byte conversions; ``offset_of(AoSPickupEntity, name)`` answers where a field sits.
+    Fields read as plain ``int``, and a stored value is truncated to the field's width.
+    ``pack()`` and ``parse()`` convert to and from bytes, and
+    ``offset_of(AoSPickupEntity, name)`` returns a field's byte offset.
     """
 
     x: s16

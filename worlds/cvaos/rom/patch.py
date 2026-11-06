@@ -1,5 +1,12 @@
 """
-ROM patching for Castlevania: Aria of Sorrow.
+Build each seed's patch file, and apply it to the base ROM.
+
+Generation runs without the base ROM, so :func:`patch_rom` fills the patch file with plain
+writes: the location items from :func:`get_location_data`, the identifier and slot auth, and the
+DeathLink hook when that option is on. It also stores ``rom_config.json``, which records the
+seed's settings for the features that must read the base ROM. :class:`CVAOSPatchExtension`
+applies those features on the player's machine when the patch is applied. The base ROM is a cart
+dump or the copy inside the Advance Collection's game.exe (:func:`get_base_rom_bytes`).
 """
 from __future__ import annotations
 
@@ -30,23 +37,23 @@ if TYPE_CHECKING:
     from BaseClasses import Location
     from .. import CVAOSWorld
 
-# Archipelago metadata written into clean ROM free space. These are
-# *file offsets* — both APProcedurePatch tokens and the BizHawk ROM domain the client reads
-# are file-offset based. The region at file 0x670000+ (GBA 0x08670000) is well clear of the
-# last real cart data at 0x651163 and of the Advance Collection ROM's M2 additions
-# (rom/address_space.py M2_NO_GO: 0x660000-0x6610BC and 0x700000-0x7000E3).
-# ARCHIPELAGO_IDENTIFIER doubles as the client/patch compatibility gate; bump it whenever the
+# Archipelago metadata written into clean ROM free space. These are *file offsets*, because
+# both APProcedurePatch tokens and the BizHawk ROM domain the client reads use file offsets.
+# The region at file 0x670000+ (GBA 0x08670000) is well clear of the last real cart data at
+# 0x651163 and of the Advance Collection ROM's M2 additions (rom/address_space.py M2_NO_GO:
+# 0x660000-0x6610BC and 0x700000-0x7000E3).
+# ARCHIPELAGO_IDENTIFIER is also the client/patch compatibility gate, so bump it whenever the
 # patch/client contract changes.
 ARCHIPELAGO_IDENTIFIER_START = 0x670000   # 13 bytes
 ARCHIPELAGO_IDENTIFIER = "CVAOS_AP_V0.4"  # V0.4: Progressive Movement items need a newer client
-# Identifiers this version's clients and installer still accept. A V0.3 ROM (hook/metadata block at
-# 0x670000) holds nothing the current client cannot handle, so seeds already in progress keep
-# working. Older clients accept only their own identifier, so they refuse a V0.4 ROM.
 # A seed with enemy checks carries this identifier instead. The ROM never hands out the item at a
 # defeat location, so its client must ask the server for the player's own items and filter out the
 # ones the ROM already gave (client_logic._grantable_items). An older client refuses such a ROM
 # rather than silently never delivering those items.
 OWN_ITEMS_FROM_SERVER_IDENTIFIER = "CVAOS_AP_V0.5"
+# Identifiers this version's clients and installer still accept. A V0.3 ROM already has its hooks
+# and metadata at 0x670000 and holds nothing the current client cannot handle, so seeds already in
+# progress keep working. Older clients do not know newer identifiers, so they refuse newer ROMs.
 COMPATIBLE_IDENTIFIERS = frozenset({ARCHIPELAGO_IDENTIFIER, OWN_ITEMS_FROM_SERVER_IDENTIFIER,
                                     "CVAOS_AP_V0.3"})
 AUTH_NUMBER_START = 0x670010              # 16 bytes
@@ -66,16 +73,20 @@ _SOUL_SHUFFLE_MODES = {
 def _item_encodings() -> Dict[int, tuple[int, int, int]]:
     """Return the encoding of each item that the ROM can show on a pickup, by its code.
 
-    An item that pickups hold takes their subtype and item_offset. Its type is always PICKUP, even
-    for the five items that vanilla holds only in HARD_PICKUPs, which the game spawns only in Hard
-    Mode. One code stands for every copy of an item, and a copy that an enemy check adds has to
-    spawn in normal mode too. Writing PICKUP changes nothing for a Hard Mode item's own copy:
-    whenever one is in the pool, either Hard Mode is on, which the client enforces, or Hard Mode
-    Pickups is ``always``.
+    An item that a vanilla pickup holds uses that pickup's subtype and item_offset. Its type is
+    always PICKUP, even for the five items that vanilla holds only in HARD_PICKUPs, which the game
+    spawns only in Hard Mode. One code stands for every copy of an item, and a copy that an enemy
+    check adds has to spawn in normal mode too.
 
-    An item that only an enemy check adds follows its category's rule: every vanilla PICKUP of a
-    category stores the same type and subtype, and an item_offset that is the item's id plus a
-    fixed amount. This checks that the vanilla pickups agree on each rule.
+    PICKUP is also correct for the copies that those five HARD_PICKUPs add to the pool. They are
+    in the pool only when Hard Mode is on or Hard Mode Pickups is ``always``. With Hard Mode on,
+    which the client enforces, a PICKUP spawns just as a HARD_PICKUP would. With ``always``, the
+    items are meant to spawn in normal mode.
+
+    An item that only an enemy check adds follows its category's rule: every vanilla pickup of a
+    category stores the same subtype, and an item_offset that is the item's id plus a fixed
+    amount. Raises ValueError when the vanilla pickups disagree on an item's encoding or on their
+    category's rule.
     """
     info_by_name = {info.name: info for info in item_info_collection}
     info_by_number = {info.item_number: info for info in item_info_collection}
@@ -109,22 +120,22 @@ def get_item_encoding(item_code: int) -> tuple[int, int, int]:
     return _item_encoding[item_code]
 
 
-# Placeholder appearance for locations holding another world's item. AoS must physically give the
-# collector *something* when a pickup is collected, and the data has no "null item", so we use a
-# Skull Key (PICKUP type 4, consumable subtype 2, item_offset 25): an item not available in the game
-# (and therefore an item that is *not* a placed)
-# pickup anywhere, so it reads as an obvious "this was someone else's item" token.\
-# This is intentional: the AP location check is driven by the collected-pickup save flag (the client reads
-# PICKUP_FLAGS), NOT by what the pickup grants, so the substitute never affects check-sending. The
-# real behaviour -- grant nothing locally and show a "sent X to Player Y" multiworld textbox -- needs
-# an ASM hook on the collect path, which is not written yet. Keep type=4 so the entity still
-# sets its save flag.
+# Placeholder for a location whose item the ROM does not give (see rom_gives_item), such as another
+# world's item. The vanilla collect path always grants an item, and the item data has no "null
+# item", so the placeholder is a Skull Key (PICKUP type 4, consumable subtype 2, item_offset 25).
+# No vanilla pickup holds a Skull Key, so one on the ground stands out as an AP placeholder.
+# The location check does not depend on what the pickup grants, because the client reads the
+# collected-pickup save flags (PICKUP_FLAGS). The type stays 4 so that the entity still sets its
+# save flag. Granting nothing and showing a "sent X to Player Y" textbox instead would need the
+# collect path to recognise the placeholder, and the collect hook in rom/custom_pickups.py
+# handles only custom pickups.
 _AP_PLACEHOLDER = (4, 2, 25)  # Skull Key
 
 # Synthetic items (no ground pickup) that appear in the local world as a custom behaviour-pickup.
-# The Study Sealswitch AP item spawns the in-game Study Sealswitch custom pickup, which sets misc #48
-# on collection -- the same flag its FLAG_ONLY receive path sets, so the unlock works whether collected
-# locally or received from elsewhere. Keyed by item display name (codes are packed, not name-derived).
+# The Study Sealswitch AP item spawns the in-game Study Sealswitch custom pickup, which sets misc
+# #48 on collection. Its FLAG_ONLY receive path sets the same flag, so the unlock works whether the
+# item is collected locally or received from elsewhere. Keyed by item name (codes are packed, not
+# name-derived).
 _ITEM_CUSTOM_PICKUP = {FORBIDDEN_AREA_SWITCH: custom_pickups.STUDY_SEALSWITCH}
 
 # Where the two edited fields sit inside the 12-byte entity record, from the record's own
@@ -134,7 +145,7 @@ _TYPE_OFF = offset_of(AoSPickupEntity, "type")
 _ITEM_OFF = offset_of(AoSPickupEntity, "var_b")   # var_b carries the item_offset
 assert offset_of(AoSPickupEntity, "subtype") == _TYPE_OFF + 1
 
-# Location data lookup: Location number -> ROM bytes
+# Location writes: ROM file offset -> bytes
 
 def seed_identifier(world) -> str:
     """Return the identifier the patched ROM carries, which tells a client how to deliver items."""
@@ -159,8 +170,8 @@ def rom_gives_item(world, location) -> bool:
 def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Dict[int, bytes]:
     """Build a dict of {rom_file_offset: bytes_to_write} for every location.
 
-    Each location takes its entity type from the item placed there. Every item the ROM shows is
-    written as a PICKUP (see _item_encodings), so it spawns in normal mode and in Hard Mode alike.
+    Each location's entity takes its subtype and item_offset from the item placed there. Its type
+    is always PICKUP (see _item_encodings), so it spawns in normal mode and in Hard Mode alike.
     """
     writes: Dict[int, bytes] = {}
 
@@ -169,9 +180,9 @@ def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Di
 
         custom = custom_pickups.CUSTOM_PICKUP_TEST_PLACEMENTS.get(loc.name)
         if custom is None and loc.item.player == world.player:
-            # The local player's shuffled synthetic items (e.g. the Study Sealswitch) spawn their
-            # real in-game custom pickup. A foreign player's copy stays a placeholder and is delivered
-            # through its FLAG_ONLY receive path.
+            # This player's synthetic items, such as the Study Sealswitch, spawn their in-game
+            # custom pickup. Another player's copy appears as the placeholder, and that player
+            # receives it through its FLAG_ONLY receive path.
             custom = _ITEM_CUSTOM_PICKUP.get(loc.item.name)
         if custom is not None:
             type_num, subtype_num, item_offset = custom_pickups.get_encoding(custom)
@@ -189,14 +200,14 @@ def get_location_data(world: CVAOSWorld, active_locations: List[Location]) -> Di
     return writes
 
 
-# Patch classes
+# Base ROM and patch classes
 
 def _read_base_rom_source(path: str) -> bytes:
     """Read a base ROM from *path*, which may be a GBA ROM or the collection's game.exe.
 
-    A game.exe is detected by extension or PE (``MZ``) magic; in that case the stock AoS ROM is
-    extracted from the ``windata/`` archive next to it (so the exe must be the real install file,
-    not a copy). Anything else is returned as-is.
+    A path ending in ``.exe``, or a file that starts with the PE magic ``MZ``, is treated as the
+    collection's game.exe. The stock AoS ROM is then extracted from the ``windata/`` archive next
+    to it, so the exe must be the real install file, not a copy. Any other file is returned as-is.
     """
     if path.lower().endswith(".exe"):
         from ..advance_collection.install import extract_base_rom_bytes
@@ -261,7 +272,10 @@ class CVAOSPatchExtension(APPatchExtension):
     @staticmethod
     def apply_rom_features(caller: APProcedurePatch, rom: bytes, config_file_name: str) -> bytes:
         """
-        Apply the ROM-reading feature patches at patch-apply time (non-host side)
+        Apply the features that must read the base ROM, on the player's machine.
+
+        ``config_file_name`` names the JSON file in the patch that records which features the seed
+        enabled. Most features read the ROM as patched so far, so the order below matters.
         """
 
         config = json.loads(caller.get_file(config_file_name).decode("utf-8"))
@@ -283,8 +297,9 @@ class CVAOSPatchExtension(APPatchExtension):
             apply(soul_guarantee_hook.build_writes(bytes(working)))
             apply(soul_guarantee_hook.build_description_writes(bytes(working)))
 
-        # Forbidden Area gate-unlock pickup toggle (replaces the A01 press-button
-        # with an inert object and a shuffled Study Sealswitch).
+        # Forbidden Area button (rom/forbidden_area_button.py): with the pickup option, the A01
+        # press-button becomes an inert object, so only the shuffled Study Sealswitch opens the
+        # barrier.
         if config["forbidden_area_pickup"]:
             apply(forbidden_area_button.build_writes(bytes(working)))
 
@@ -317,14 +332,15 @@ class CVAOSPatchExtension(APPatchExtension):
             apply(oops_all_whips.build_writes(bytes(working)))
 
         # Received-item announcement (rom/received_item_box.py): the vanilla "Got <name>" textbox
-        # and pickup SFX for an item or soul another world sent. Unconditional -- announcing what
-        # you receive is not a gameplay option, and the writes are inert until the client posts a
-        # request to the mailbox. Order-independent: it registers a slot in the shared
-        # update-hook framework (rom/xanthus_framework.py), which is idempotent.
+        # and pickup SFX for an item or soul another world sent. It is always applied, because
+        # announcing what you receive is not a gameplay option. The writes do nothing until the
+        # client posts a request to the mailbox. Its place in this order does not matter,
+        # since it registers a slot in the shared update-hook framework (rom/xanthus_framework.py),
+        # which is idempotent.
         apply(received_item_box.build_writes(bytes(working)))
 
         # Custom-pickup framework (rom/custom_pickups.py): collect hook, extended consumable-icon
-        # table, and the apply icons.
+        # table, and the custom icons' tiles.
         apply(custom_pickups.build_writes_from_rom(bytes(working)))
 
         # Item-Use menu extension (rom/inventory_menu.py): relocated name/desc/string tables built
@@ -367,10 +383,11 @@ class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
         return base
 
     def get_source_data_with_cache(self) -> bytes:  # type: ignore[override]
-        # Per-seed override of the base-class classmethod: the base ROM source depends on the
-        # target platform the YAML declared, which patch_rom embedded in rom_config.json. Read it
-        # here (files are loaded by patch() before this runs) so an advance_collection seed sources
-        # the collection ROM and a gba seed prompts for a ROM/exe. No caching: single apply.
+        # This replaces the base class's cached classmethod, because the base ROM's source depends
+        # on the seed. patch_rom stores the YAML's target platform in rom_config.json, and patch()
+        # has already loaded the container's files when this runs. An advance_collection seed
+        # therefore reads the collection's ROM, while a gba seed asks for a ROM or game.exe.
+        # Nothing is cached, since each patch is applied once.
         try:
             target = int(json.loads(self.get_file("rom_config.json")).get("target_platform",
                                                                           TARGET_GBA))
@@ -395,9 +412,12 @@ def check_base_for_target(base: bytes, target: int) -> bytes:
 
 
 def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[int, bytes]) -> None:
-    """Fill the patch container. ROM-free: tokens for everything derivable without the base ROM,
-    plus ``rom_config.json`` telling ``apply_rom_features`` (patch-apply time, on the player's
-    machine) which ROM-reading features this seed enabled."""
+    """Fill the patch container without reading the base ROM.
+
+    Everything that can be derived without the base ROM is written as a token.
+    ``rom_config.json`` records which ROM-reading features this seed enabled, for
+    ``apply_rom_features`` to apply on the player's machine.
+    """
     for offset, data in offset_data.items():
         patch.write_token(APTokenTypes.WRITE, offset, data)
 
@@ -407,8 +427,8 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
                       seed_identifier(world).encode("ascii"))
     patch.write_token(APTokenTypes.WRITE, AUTH_NUMBER_START, bytes(world.auth))
 
-    # DeathLink "real kill" hook (the "Death Link" option; see rom/deathlink_hook.py). A fixed
-    # blob + veneer needing no ROM reads, so it can stay a plain token.
+    # DeathLink "real kill" hook (the "Death Link" option; see rom/deathlink_hook.py). It is a
+    # fixed blob and veneer that needs no ROM reads, so it can be written as plain tokens.
     if world.options.death_link:
         for offset, data in deathlink_hook.build_writes().items():
             patch.write_token(APTokenTypes.WRITE, offset, data)
@@ -426,8 +446,9 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
         "single_jump_divekick": bool(world.options.single_jump_divekick),
         "classicvania_movement": bool(world.options.classicvania_movement),
         "oops_all_whips": bool(world.options.oops_all_whips),
-        # Which enemy now drops which enemy's vanilla soul. Decided here (seeded, ROM-free --
-        # soul_shuffle carries the vanilla table) and applied against the base ROM later.
+        # Which enemy now drops which enemy's vanilla soul. soul_shuffle carries the vanilla
+        # table, so the plan is drawn here from the seed, without the ROM, and applied against
+        # the base ROM later.
         "soul_shuffle_plan": soul_shuffle.plan_shuffle(
             world.random, _SOUL_SHUFFLE_MODES[world.options.soul_shuffle.value]),
         "keep_soul_drop_rates": bool(world.options.keep_soul_drop_rates),

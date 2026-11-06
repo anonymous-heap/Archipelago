@@ -1,23 +1,25 @@
 """
 DeathLink "real kill" ROM hook for Castlevania: Aria of Sorrow.
 
-Instead of zeroing CURRENT_HP and hoping the engine notices (the old ``kill_player`` hack, which
-loses to HP regen and only resolves when the player next takes damage), this installs a tiny THUMB
-trampoline so the BizHawk client can ask the game to run its *real* death routine.
+This installs a tiny THUMB trampoline that lets the client ask the game to run its *real* death
+routine. Zeroing CURRENT_HP is not enough to kill the player: HP regen can undo it, and the game
+only acts on it the next time the player takes damage.
 
 How it works:
 
-* AoS has no per-frame "if HP<=0 die" check -- death is driven by the damage routine, which only
-  runs the player update's ``bl sub_0801AF20`` block while the damage-active guard
-  gEwramData[0x131D6] != 0. So we must NOT hook that block (it would only fire on taking damage).
-* We hook ``_0801B9D0`` (GBA 0x0801B9D0): the per-frame position/animation tail of the player
-  update, reached every normal frame (the guard's else-branch ``b _0801B9D0``) and exactly where
-  the engine's own death lands after ``bl sub_0801AF20``. There r6 = player entity.
+* AoS has no per-frame "if HP<=0 die" check, because death is driven by the damage routine. The
+  player update runs its ``bl sub_0801AF20`` block only while the damage-active guard
+  gEwramData[0x131D6] != 0, so a hook in that block would fire only when the player takes damage.
+* The hook is at ``_0801B9D0`` (GBA 0x0801B9D0) instead: the per-frame position/animation tail of
+  the player update. Every normal frame reaches it (the guard's else-branch ``b _0801B9D0``), and
+  it is exactly where the engine's own death lands after ``bl sub_0801AF20``. There r6 = player
+  entity.
 * The trampoline checks the client's one-byte kill-request flag (EWRAM 0x0201324C, ``pad_1324C``,
-  verified dead). If set (and not already dying), it clears the flag and calls the real death
-  handler; then -- set or not -- it reproduces _0801B9D0's stolen prologue and resumes the tail,
-  which plays the death animation the handler selected. So a received DeathLink kills Soma through
-  the canonical routine, immediately and regen-proof, and normal play is untouched.
+  a byte the game does not use). If the flag is set and the player is not already dying, it
+  clears the flag and calls the real death handler. Either way, it then reproduces _0801B9D0's
+  stolen prologue and resumes the tail. After a kill, the tail plays the death animation the
+  handler selected. A received DeathLink therefore kills Soma through the game's own routine,
+  immediately and regardless of HP regen, while normal play is unchanged.
 * Before calling the death handler, the trampoline clears status bits 0x820, as the damage path
   does before its own call. The handler skips the death animation while bit 0x800 is set, and
   the Sky Fish soul sets that bit.
@@ -27,9 +29,9 @@ The trampoline bytes below are assembled from ``deathlink_hook.s`` at DEV time w
 with the command in that .s file if you edit it; test_thumb_assembler checks that the two agree.
 
 Placement is declared as two ``Entry`` objects. The hook site is bounded to the 8 stolen bytes and
-the trampoline to its free-ROM reservation, so a blob that outgrows its slot refuses to build
-instead of silently overwriting its neighbour, and the veneer's jump target is read from the
-trampoline's own declaration rather than kept as a second copy of the address.
+the trampoline to its free-ROM reservation, so a blob that outgrows its slot fails to build
+instead of silently overwriting its neighbour. The veneer's jump target is also read from the
+trampoline's own declaration, rather than kept as a second copy of the address.
 """
 from __future__ import annotations
 
@@ -54,7 +56,8 @@ TRAMPOLINE_GBA = DEATHLINK_TRAMPOLINE.addr
 # Trampoline assembled from deathlink_hook.s at 0x08670040 (THUMB, ARMv4T). 88 bytes: 31
 # instructions, 2 bytes of padding, and a 6-word literal pool (KILL_REQUEST, gEwramData ptr,
 # 0x131B8, sub_0801AF20, .Lresume+1, _0801B9D0+8). Verified with capstone. Position-DEPENDENT: the
-# pool bakes absolute addresses, so the blob only runs at DEATHLINK_TRAMPOLINE.addr.
+# pool holds .Lresume+1, an address inside the blob, so the blob only runs at
+# DEATHLINK_TRAMPOLINE.addr.
 _TRAMPOLINE = bytes.fromhex(
     "0f490b78002b14d0331c6d331b78332b0fd000230b700b4b1b680b4a9b181a68"
     "8220000182431a60301c084b08498e461847044d2868044c0019064908470000"
@@ -86,9 +89,9 @@ def build_writes() -> Dict[int, bytes]:
     _0801B9D0 tail, and the trampoline in its free-ROM reservation. Call only when the seed enables
     DeathLink.
 
-    Built against a geometry-only space -- the ROM is the player's, not ours -- so both writes are
-    recorded blind; the entry bounds (``count(8)`` for the veneer, ``reserve=0xC0`` for the blob)
-    still check the fit at build time.
+    These writes are made at generation time, when the player's ROM is not available, so both are
+    recorded blind against a geometry-only space. The entry bounds still check the fit at build
+    time: ``count(8)`` for the veneer and ``reserve=0xC0`` for the blob.
     """
     space = gba_space()
     patch = Patch(name="deathlink kill hook")

@@ -1,22 +1,22 @@
 """
 Classicvania Movement (the "Classicvania Movement" option).
 
-Port of the "Classicvania Movement v1" patch from Xanthus 
+Port of the "Classicvania Movement v1" patch from Xanthus
 (https://github.com/Xanthus1/aos_patches) with their generous permission.
 
-NES-style
-movement with no air control. Jump trajectory is committed on takeoff; walking off a ledge drops
-nearly straight down. Direction can still be changed with a double jump or Hippogryph, and the
-flight passives (Flying Armor / Giant Bat) retain normal air control.
+NES-style movement with no air control. Jump trajectory is committed on takeoff; walking off a
+ledge drops nearly straight down. Direction can still be changed with a double jump or
+Hippogryph, and the flight passives (Flying Armor / Giant Bat) retain normal air control.
 
-Two pieces, kept at the addresses the original patch uses (position-dependent THUMB blobs whose
-literal pools bake absolute 0x087Dxxxx addresses; also clear of this world's own free-space
-allocations at 0x661400..0x666xxx and 0x670000..0x671xxx, and of the Advance Collection ROM's
-M2 additions at 0x660000-0x6610BC / 0x700000-0x7000E3):
+The two pieces below stay at the addresses the original patch uses, GBA 0x087Dxxxx (file offset
+0x7D0000 onward). They are linked by absolute addresses: the dispatcher's literal pool holds the
+slot list's address (0x087D0040), and the slot list holds the hook body's. The region is also
+clear of this world's own free-space allocations at 0x661400..0x666xxx and 0x670000..0x671xxx,
+and of the Advance Collection ROM's M2 additions at 0x660000-0x6610BC / 0x700000-0x7000E3.
 
-1. The Xanthus update-hook framework, which now lives in rom/xanthus_framework.py because
-   every per-frame hook has to share the one 0x08043104 pointer. That module installs the
-   dispatcher and registers a slot; this feature owns slot 1.
+1. The Xanthus update-hook framework, which lives in rom/xanthus_framework.py because every
+   per-frame hook has to share the one 0x08043104 pointer. That module installs the dispatcher
+   and registers a slot; this feature owns slot 1.
 
 2. The no-air-control hook itself, registered in slot 1 (list entry -> 0x087D0101) with its body at
    0x087D0100. Per frame it snapshots the player's X velocity (player entity at EWRAM 0x020004E4,

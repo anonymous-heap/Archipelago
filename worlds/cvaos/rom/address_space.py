@@ -1,10 +1,9 @@
 """
 The AoS cartridge as a bytemaker address space.
 
-Every ROM feature module used to restate the same two facts — the cart is mapped at
-``0x08000000`` and is little-endian — inside its own ``GBA - base`` arithmetic. A ``Space``
-states them once; ``Entry`` declarations then address the ROM by GBA address and the
-``file_offset = gba - base`` conversion happens in one place.
+A ``Space`` records two facts about the cart: it is mapped at ``0x08000000``, and it is
+little-endian. ``Entry`` declarations address the ROM by GBA address, and the ``Space`` converts
+each one with ``file_offset = gba - base``, so that conversion happens in one place.
 
 The Steam Castlevania Advance Collection ships its own copy of the ROM, and M2 changed it in 23
 places. Most are small patches to the game's code and data, and one zeroes a sound-mixer routine.
@@ -30,12 +29,11 @@ ROM_SIZE = 0x800000  # exactly 8 MiB, cart dump and Advance Collection alike
 
 
 def gba_space(buf: Optional[bytes] = None) -> Space:
-    """The cart as a ``Space``: over an image when we have one, geometry-only when we do not.
+    """Return the cart as a ``Space``, over ``buf`` when it is given and geometry-only otherwise.
 
-    Generation never has the player's ROM, so a feature that builds writes blind (nothing to
-    read, only addresses to place things at) asks for the geometry-only form and records its
-    edits into a ``Patch``. A feature that must read the ROM first (to verify or transform
-    bytes) binds over the image.
+    Generation never has the player's ROM. A feature that only places writes, with nothing to
+    read, uses the geometry-only form and records its edits into a ``Patch``. A feature that
+    must read the ROM first, to verify or transform bytes, passes the image as ``buf``.
     """
     if buf is None:
         return Space(None, size=ROM_SIZE, base=GBA_ROM_BASE, endian="little", name="AoS")

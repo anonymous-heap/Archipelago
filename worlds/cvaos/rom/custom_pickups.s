@@ -1,10 +1,10 @@
-@ Custom-pickup dispatcher -- Castlevania: Aria of Sorrow.
+@ Custom-pickup dispatcher for Castlevania: Aria of Sorrow.
 @
-@ A small, extensible framework for adding *pickups that run custom on-collection behaviour*
-@ (e.g. set an arbitrary memory flag + play a sound) without granting an item and without
-@ touching any existing item identity. The first user is the "button pickup": collecting it
-@ has the same net effect as pressing the A01 Forbidden-Area press-button -- it sets MISC flag
-@ #48 so the paired barrier sinks/opens -- and plays the button's SFX (song 0x133).
+@ A small, extensible framework for pickups that run their own behaviour on collection, such as
+@ setting a memory flag and playing a sound, instead of granting an item. No existing item
+@ changes. The first user is the Study Sealswitch. Collecting it has the same effect as pressing
+@ the A01 Forbidden-Area press-button, since it sets MISC flag #48 and the paired barrier opens.
+@ It also plays the button's SFX (song 0x133).
 @
 @ ---- How a pickup is collected (verified against the USA ROM) ----
 @ A room pickup entity is 12 bytes: x,y(s16) id,type,subtype,unk(u8) var_a,var_b(u16), where
@@ -19,26 +19,26 @@
 @
 @ ---- How the A01 button's effect is reproduced ----
 @ The button (object 0x35, varB=48) sets MISC flag #48 with an INLINE write to the 0x02000344
-@ misc-flag field -- NOT SetEventFlag (which writes the 0x33C *event* field). Flag #48 ->
+@ misc-flag field, NOT through SetEventFlag (which writes the 0x33C *event* field). Flag #48 is at
 @ 0x02000344 + (48>>5)*4 = 0x02000348, bit 48&0x1F = 16. The barrier (object 0x35, varA=1) polls
-@ misc #48 and sinks. We replicate that exact field write generically (any flag field/number) and
-@ PlaySong(0x133).
+@ misc #48 and sinks. This hook makes the same field write for any flag field and number, then
+@ plays the row's sound, which is PlaySong(0x133) for the Sealswitch.
 @
 @ ---- Install ----
 @ Overwrite the first 8 bytes of sub_080441F8 with a Thumb far-jump trampoline
-@ (ldr r3,[pc,#0]; bx r3; .word CustomPickupHook|1 -- r3 is dead at entry). This routine replicates
-@ the 4 stolen prologue insns + the first real insn (adds r4,r0,#0), then:
-@   - if the pickup is a consumable (category 2) whose var_b matches a row in DESC_TABLE: (optionally)
-@     queue its "Got <name>" textbox, set its flag, play its SFX, despawn the floating pickup, and jump
-@     to the vanilla finish at 0x08044508 (writes the 0x360 collected flag from var_a, returns) -- no
-@     normal item is granted. (Owned-state for the Item-Use menu is NOT written here; the menu derives
-@     it from the flag this sets -- see inventory_menu.s.);
-@   - else -> resume vanilla pickup-collect at 0x08044202.
-@ Custom items live at consumable var_b >= 32 (new item space added by repointing the spawn-path
-@ icon-table literal at file 0x440B4 to an extended table; existing consumables 0..31 are untouched).
-@ "Inventory" items additionally appear at Item-Use menu slot == var_b via the relocated
-@ item/name/desc tables; the menu derives their owned-state from this item's behaviour flag into a
-@ transient shadow array (see inventory_menu.s) -- no per-item saved storage is used.
+@ (ldr r3,[pc,#0]; bx r3; .word CustomPickupHook|1, with r3 dead at entry). This routine replicates
+@ the 4 stolen prologue insns and the first real insn (adds r4,r0,#0). Then:
+@   - If the pickup is a consumable (category 2) whose var_b matches a row in DESC_TABLE, it
+@     queues the row's "Got <name>" textbox when the row has one, sets the flag, plays the SFX and
+@     despawns the floating pickup. It then jumps to the vanilla finish at 0x08044508, which writes
+@     the 0x360 collected flag from var_a and returns, so no normal item is granted.
+@   - Otherwise it resumes the vanilla pickup-collect at 0x08044202.
+@ Custom items live at consumable var_b >= 32. That item space comes from repointing the spawn-path
+@ icon-table literal at file 0x440B4 to an extended table, which leaves consumables 0..31
+@ untouched. An "inventory" item also appears at Item-Use menu slot == var_b through the relocated
+@ item, name and description tables. This hook writes no owned-state for it. Instead, the menu
+@ trampolines (inventory_menu.py) derive it from the item's behaviour flag into a transient shadow
+@ array, so no per-item saved storage is used.
 @
 @ ---- DESC_TABLE (built + written by custom_pickups.py at CUSTOM_DESC_TABLE_GBA) ----
 @ Array of 12-byte rows, terminated by key == 0xFFFF:
@@ -51,9 +51,10 @@
 @                             (no inventory row, no textbox)
 @     +10 u16 (reserved)
 @
-@ Position-DEPENDENT: the literal pool bakes absolute addresses, so keep the link address in sync
-@ with CUSTOMHOOK_BASE_GBA / CUSTOM_DESC_TABLE_GBA in custom_pickups.py. To (re)assemble, from
-@ this directory (needs `pip install keystone-engine`):
+@ No literal in the pool is an address inside this hook, and every branch is local, so the bytes
+@ are the same at any word-aligned link address. The pool does hold DESC_TABLE's address, which
+@ must match CUSTOM_DESC_TABLE_GBA in custom_pickups.py. To (re)assemble, from this directory
+@ (needs `pip install keystone-engine`):
 @   python thumb_assembler.py custom_pickups.s 0x08670300   @ -> CUSTOMHOOK_BLOB
 .syntax unified
 .thumb
@@ -102,10 +103,10 @@ CustomPickupHook:
     bx   r3
 
 .Lfound:
-    @ r6 -> matched row, r4 = entity, r5 = var_b. Inventory item (name_text_id != 0): queue the
-    @ "Got <name>" textbox. We do NOT store owned-state here: the Item-Use menu trampoline re-derives
-    @ it from this item's behaviour flag (set just below in .Lflag) into a transient shadow, so the
-    @ saved flag is the single source of truth and no inventory array is written on collection.
+    @ r6 -> matched row, r4 = entity, r5 = var_b. For an inventory item (name_text_id != 0), queue
+    @ the "Got <name>" textbox. Owned-state is NOT stored here. The Item-Use menu trampolines derive
+    @ it into a transient shadow from this item's behaviour flag, which .Lflag sets just below, so
+    @ the saved flag is the only record and collection writes no inventory array.
     ldrh r0, [r6, #8]             @ name_text_id
     cmp  r0, #0
     beq  .Lflag
@@ -147,7 +148,7 @@ CustomPickupHook:
     strb r1, [r4, r0]
 
     @ Finish like a vanilla collected pickup: 0x08044508 writes the 0x360 flag (from var_a at
-    @ entity[0x30]) and returns -- no item granted. Needs r4 = entity (set) + the balanced stack.
+    @ entity[0x30]) and returns without granting an item. It needs r4 = entity and a balanced stack.
     ldr  r3, =(VANILLA_FINISH + 1)
     bx   r3
 

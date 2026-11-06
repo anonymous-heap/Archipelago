@@ -1,21 +1,29 @@
 #!/usr/bin/env python3
 """
-Convert a 16x16 RGBA PNG into an AoS "common item icon": four 4bpp GBA tiles laid out as the
-two 0x40-byte halves the engine DMAs (top row = tiles 0,1; bottom row = tiles 2,3), against a
-given 16-colour OBJ palette.
+Convert an RGBA PNG into an AoS "common item icon", and print its bytes as Python source.
 
-AoS pickup icons are loaded on demand by DMAing the 0x40 bytes (top half) from
-sheet_base+off and another 0x40 (bottom half) from sheet_base+off+0x200. So a 16x16 icon is
-0x80 bytes split into two 0x40 blocks; this tool emits that 0x80-byte blob.
+The icon is four 4bpp GBA tiles, with each pixel mapped to the nearest colour of a 16-colour OBJ
+palette. The engine loads a pickup icon on demand with two DMAs: 0x40 bytes for the top half
+(tiles 0 and 1) from sheet_base+off, and 0x40 bytes for the bottom half (tiles 2 and 3) from
+sheet_base+off+0x200. This tool prints the two halves together as one 0x80-byte blob. A source
+image that is not 16x16 is cropped to its opaque content and centred, so that content must fit in
+16x16.
 
-Palette: floor pickups all render through OBJ palette bank 6 -- the shared items palette, loaded for
-every pickup in every room (so it never gets clobbered). Bank 6 is items-palette sub-palette 2: its
-16 colours are static in the ROM at 0x082099FC + 4 + 2*0x20 = 0x08209A40 (a rainbow incl. gold
-#F8D848, tan #F8B070, greys #A0A0A8/#E8D8D0). Pass them via --palette (BGR555 hwords; they are also
-kept as ``BANK6_PALETTE`` in rom/custom_pickups.py). Index 0 is transparent. If --palette is omitted,
-a palette is derived from the image (provisional structure only; in-game colours wrong until re-run
-against bank 6). Nearest-colour can pull mid-tones to off-hues (e.g. dark brass -> brown/red); for a
-deliberate look, pre-map the source colours (see how custom_pickups._BUTTON_TILES was generated).
+rom/icon.py also imports this module's PNG decoder, 16x16 fit, and BGR555 conversion to build
+``ImageFile`` icons, so this module is imported during a build, not only run by hand.
+
+Palette: floor pickups all render through OBJ palette bank 6, the shared items palette. Because it
+is loaded for every pickup in every room, it holds the same colours wherever a pickup appears. Bank
+6 is items-palette sub-palette 2, and its 16 colours are static in the ROM at
+0x082099FC + 4 + 2*0x20 = 0x08209A40. They form a rainbow that includes gold #F8D848, tan #F8B070,
+and greys #A0A0A8 and #E8D8D0. Pass them as BGR555 hwords with --palette. ``BANK6_PALETTE`` in
+rom/custom_pickups.py holds the same values. Index 0 is transparent.
+
+Without --palette, the tool derives a palette from the image's own colours. That output has the
+right tile structure, but its in-game colours are wrong until the tool is rerun with --palette.
+
+Nearest-colour matching can map a mid-tone to a different hue, so dark brass may come out brown or
+red. For a deliberate look, recolour the source to bank-6 colours before converting it.
 
 Usage:
   python png_to_icon.py button_pickup.png                       # provisional (image's own colours)
@@ -130,8 +138,11 @@ def tile_4bpp(grid, tx: int, ty: int) -> bytes:
 
 
 def fit_16x16(w, h, px):
-    """Crop the opaque bounding box and centre it in a 16x16 transparent canvas. Lets a tightly- or
-    loosely-cropped source (e.g. a 32x48 DSVEdit object frame) become a 16x16 icon."""
+    """Crop the opaque bounding box and centre it in a 16x16 transparent canvas.
+
+    The source can be any size, such as a 32x48 object frame exported from DSVEdit, as long as its
+    opaque content fits in 16x16. A fully transparent source, or one whose content does not fit,
+    raises SystemExit rather than ValueError."""
     opaque = [(x, y) for y in range(h) for x in range(w) if px[y * w + x][3] != 0]
     if not opaque:
         raise SystemExit("image is fully transparent")

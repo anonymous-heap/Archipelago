@@ -1,21 +1,22 @@
 """
 A small THUMB assembler for this package's ROM hooks.
 
-Every hook here ships as a hex blob in its .py module with the assembly it came from beside it in
-a .s file, and until now nothing connected the two. The .s was documentation: editing it left the
-blob untouched, and one of them went missing entirely without any test noticing. This module
-closes that gap, so a test can assert a blob really is what its source says it is, and so revising
-a hook is a source edit rather than a hand-laid literal pool and a page of recomputed offsets.
+Every hook here ships as a hex blob in its .py module, with the assembly it came from beside it in
+a .s file. This module assembles those sources, so a test can check that each blob is what its
+source assembles to. Revising a hook is then a source edit, rather than a hand-laid literal pool
+and a page of recomputed offsets.
 
 Deliberately NOT a general assembler. It implements the idioms these files use and nothing else:
 ``.equ`` constants, labels, ``ldr rN, =expr`` with an automatically placed literal pool, local
-branches, and ``.word`` / ``.hword`` / ``.align`` / ``.pool``. Instruction encoding is delegated to
-keystone; this module only does the parts keystone cannot, which are resolving symbols and laying
-out the pool. Anything unrecognised raises :class:`AsmError` rather than being skipped, because a
-silently dropped line would assemble into a blob that looks plausible and is wrong.
+branches, and ``.word`` / ``.hword`` / ``.align`` / ``.pool``. This module resolves symbols, lays
+out the pool, and encodes the instructions that need a resolved address: ``b``, ``b<cond>`` and
+``bl`` to a named target, and ``ldr rN, =expr``. keystone encodes every other instruction.
+Anything unrecognised raises :class:`AsmError` rather than being skipped, because a silently
+dropped line would assemble into a blob that looks plausible and is wrong.
 
-keystone is a dev-time dependency, imported lazily. Nothing at run time needs it, and the tests
-that use this module skip when it is absent.
+keystone is a dev-time dependency, imported lazily. Nothing at run time needs it. The tests that
+compare each source with its blob skip when it is absent, while the tests of this module's error
+handling run either way.
 
 Two conventions worth knowing, both chosen to match the blobs that already shipped:
 
@@ -49,14 +50,21 @@ _BRANCH = re.compile(r"^(b|bl|bx?)([a-z][a-z])?\s+([A-Za-z_.$][A-Za-z_0-9.$]*)\s
 
 
 class AsmError(Exception):
-    """A line this assembler does not implement, or an operand that will not encode."""
+    """Raised when a source cannot be assembled.
+
+    The message names the cause, such as an unimplemented line, an undefined symbol, an operand
+    that will not encode, or keystone not being installed.
+    """
 
 
 def assemble(source: str, base: int) -> bytes:
     """Assemble ``source`` as THUMB linked at GBA address ``base``.
 
-    ``base`` matters because these hooks are position-dependent: the literal pool holds absolute
-    addresses and ``ldr rN, =x`` resolves against the program counter.
+    Labels resolve to absolute addresses, so the bytes depend on ``base`` whenever a literal or a
+    ``.word`` names a label. A branch or ``bl`` to an address outside the source, such as an
+    ``.equ`` constant, depends on ``base`` too, because THUMB branches are PC-relative. Alignment
+    padding also depends on ``base``, because ``.align`` and the literal pool align to the
+    absolute address.
     """
     if base % 2:
         raise AsmError(f"base address {base:#x} is not halfword aligned")
@@ -66,7 +74,7 @@ def assemble(source: str, base: int) -> bytes:
 
 
 def assemble_file(path: str, base: int) -> bytes:
-    """:func:`assemble` the .s file at ``path``."""
+    """Assemble the .s file at ``path`` linked at ``base``, as :func:`assemble` does."""
     with open(path, "r", encoding="ascii") as handle:
         return assemble(handle.read(), base)
 
@@ -74,8 +82,8 @@ def assemble_file(path: str, base: int) -> bytes:
 def _print_listing(blob: bytes, base: int, code_size: int) -> None:
     """Disassemble ``blob`` so the result can be read back against the source.
 
-    Worth doing when authoring a hook: it is the check that the bytes say what the source meant.
-    capstone is optional, and its absence is reported rather than fatal.
+    Use it when writing a hook to check that the bytes encode the instructions the source
+    intended. capstone is optional, and its absence is reported rather than fatal.
     """
     try:
         from capstone import CS_ARCH_ARM, CS_MODE_THUMB, Cs
@@ -112,7 +120,8 @@ def _main(argv: List[str]) -> int:
         return 1
     print(blob.hex())
     if listing:
-        # The pool is the tail; everything before it is code.
+        # The listing assumes the pool is the tail, so everything before it, including any .word
+        # data, is disassembled as code.
         items, symbols = _parse(open(argv[0], encoding="ascii").read())
         _, pool_order = _layout(items, base)
         _print_listing(blob, base, len(blob) - 4 * len(pool_order))
@@ -134,7 +143,10 @@ def _strip_comment(line: str) -> str:
 
 
 def _parse(source: str) -> Tuple[List[Item], Dict[str, str]]:
-    """Source to items plus the ``.equ`` table (values stay as text and are evaluated later)."""
+    """Parse ``source`` into items and an ``.equ`` table, whose values stay as text for now.
+
+    :func:`_resolve` evaluates the ``.equ`` values once layout has given every label an address.
+    """
     items: List[Item] = []
     symbols: Dict[str, str] = {}
     for number, raw in enumerate(source.splitlines(), start=1):
@@ -214,7 +226,7 @@ def _item_size(item: Item, pool_size: int) -> int:
 
 
 def _layout(items: List[Item], base: int) -> Tuple[Dict[str, int], List[str]]:
-    """Assign an address to every label and fix the pool's contents and order.
+    """Assign an address to every label, and decide the pool's contents and order.
 
     The pool is collected here, in first-use order, so its size is known before anything after it
     is placed. Pool entries are keyed by expression text, which needs no label addresses and so
@@ -257,11 +269,11 @@ def _layout(items: List[Item], base: int) -> Tuple[Dict[str, int], List[str]]:
 
 
 def _resolve(symbols: Dict[str, str], labels: Dict[str, int]) -> Dict[str, int]:
-    """The whole symbol table as integers: label addresses plus every ``.equ``.
+    """Return the whole symbol table as integers: every label address plus every ``.equ``.
 
-    A ``.equ`` value may name other symbols, so names resolve on demand with the chain in
-    progress tracked. That turns a circular definition into a clear error rather than a stack
-    overflow.
+    An ``.equ`` value may name other symbols, so each name is resolved when it is first needed.
+    The names still being resolved are tracked, so a circular definition raises a clear error
+    instead of recursing until the stack overflows.
     """
     table: Dict[str, int] = dict(labels)
     chain: List[str] = []
@@ -286,10 +298,11 @@ def _resolve(symbols: Dict[str, str], labels: Dict[str, int]) -> Dict[str, int]:
 
 
 def _evaluate_with(expression: str, resolve) -> int:
-    """Evaluate a constant expression, looking each name it mentions up through ``resolve``.
+    """Evaluate a constant expression, getting the value of each name in it from ``resolve``.
 
-    Names are substituted as literals rather than passed in a scope, because a GAS local label
-    like ``.Ldone`` is not a Python identifier and would be a syntax error.
+    Each name is replaced by its value in the text rather than passed to ``eval`` as a variable,
+    because a GAS local label like ``.Ldone`` is not a Python identifier and would be a syntax
+    error.
     """
     unresolved: List[str] = []
 
@@ -320,9 +333,9 @@ def _evaluate(expression: str, table: Dict[str, int]) -> int:
 
 
 def _expand_symbols(text: str, table: Dict[str, int]) -> str:
-    """Substitute symbol names with their values, so keystone never sees one.
+    """Replace each symbol name in ``text`` with its value, so keystone receives no symbol names.
 
-    Only names in the table are touched, and register names are never in it.
+    Only names in the table are replaced, and register names are never in it.
     """
     def replace(match: "re.Match[str]") -> str:
         name = match.group(0)

@@ -1,14 +1,18 @@
 """
-The enemy table is a flat array at GBA 0x080E9644 (0x24=36) bytes per entry).
+Change how often enemies drop their souls.
 
-113 entries indexed by enemy id (Bat-Chaos).
+:func:`build_writes` makes three progression souls (Manticore, Devil and Curly) about four times
+as likely to drop. :func:`build_multiplier_writes` scales every enemy's soul-drop chance by a
+percentage.
 
-The enemy-death routine derives the soul-drop chance from the byte at entry +0x12:
+The enemy table is a flat array at GBA 0x080E9644, with 113 entries of 0x24 (36) bytes each,
+indexed by enemy id (Bat..Chaos). The enemy-death routine derives the soul-drop chance from the
+byte at entry +0x12:
 
     chance ~= numerator / (rate*8 + 32 - LCK/16)      (denominator clamped to a floor of 16)
 
-where `rate` is that +0x12 byte and the numerator is 3 if the soul is already owned, 6 if not,
-more with the Soul Eater Ring
+where ``rate`` is that +0x12 byte. The numerator is 3 if the soul is already owned and 6 if not,
+and Hard Mode and the Soul Eater Ring raise it.
 """
 from __future__ import annotations
 
@@ -50,18 +54,19 @@ def scaled_rate(rate: int, percent: int) -> int:
     """
     The rate byte that makes a soul closest to ``percent``% as likely to drop as ``rate`` does.
 
-    Inverts ``(old + 4) / (new + 4)``. Only 256 multipliers exist for a given rate, and the
-    mapping is reciprocal, so the nearest *rate* to the ideal is not always the nearest
-    *multiplier* -- rate 25 at 2x wants 14.5, and while 14 is the nearer rate, 15 gives 1.93x
-    against 14's 2.07x and so is the better answer. Both candidates are therefore compared in
-    multiplier space, ties going to the more common drop.
+    Inverts ``(old + 4) / (new + 4)``. The new rate must be a whole number, and the multiplier
+    varies with its reciprocal, so the nearest *rate* to the ideal is not always the nearest
+    *multiplier*. For example, scaling rate 7 by 1.7x needs a new rate of 2.47. The nearer rate
+    is 2, which gives 1.83x, but 3 gives 1.57x and so is closer to 1.7x. Both candidates are
+    therefore compared by the multiplier they give, and a tie goes to the lower rate, which is
+    the more common drop.
 
-    A rate of 0 is left untouched. The death routine skips the soul roll entirely for it (that
-    is how the one-time bosses, whose own scripts award their souls, stay out of the generic
-    drop), so scaling it would switch a drop on rather than make one more common. For the same
-    reason a nonzero rate never scales below 1: 0 would turn the drop off. So the best a rate
-    can become is 1, worth ``(rate + 4) / 5``, and an already-common soul cannot be sped up much
-    however large ``percent`` is.
+    A rate of 0 is left untouched, because the death routine skips the soul roll entirely for
+    it. That is how the one-time bosses, whose own scripts award their souls, stay out of the
+    generic drop. Scaling a 0 would switch a drop on rather than make one more common. For the
+    same reason a nonzero rate never scales below 1: 0 would turn the drop off. So a rate can go
+    no lower than 1, which multiplies the chance by ``(rate + 4) / 5``. An already-common soul
+    therefore cannot be made much more common, however large ``percent`` is.
     """
     if rate == 0 or percent == 100:
         return rate
@@ -79,7 +84,7 @@ def scaled_rate(rate: int, percent: int) -> int:
 
 def build_multiplier_writes(base_rom: bytes, percent: int) -> Dict[int, bytes]:
     """
-    Writes scaling *every* enemy's soul-drop rate by ``percent``%.
+    Return the writes that scale *every* enemy's soul-drop chance by ``percent``%.
 
     Reads the rates out of ``base_rom`` rather than assuming vanilla, so this composes with
     both :func:`build_writes` and a soul shuffle that moved rates around: run it last and it
@@ -89,7 +94,7 @@ def build_multiplier_writes(base_rom: bytes, percent: int) -> Dict[int, bytes]:
         base_rom: the ROM as it stands *after* any earlier rate edits.
         percent: 100 leaves everything alone; 120 makes souls drop 1.2x as often.
 
-    Returns the written dict.
+    Returns ``{file offset: bytes}`` for the rates that change.
     """
     if percent == 100:
         return {}
@@ -107,12 +112,13 @@ def build_multiplier_writes(base_rom: bytes, percent: int) -> Dict[int, bytes]:
 
 def build_writes(base_rom: bytes) -> Dict[int, bytes]:
     """
-    Writes the adjusted soul-drop rates into the ROM.
+    Return the writes that apply the rate overrides in :data:`SOUL_RATE_OVERRIDES`.
 
     Args:
-        base_rom: the original ROM bytes, used to verify the current +0x12 byte matches the expected value.
+        base_rom: the ROM to patch. Each overridden +0x12 byte must still hold its expected
+            vanilla value, or a ValueError is raised.
 
-    Returns the written dict.
+    Returns ``{file offset: bytes}``.
     """
     enemies = ENEMY_TABLE.bind(gba_space(base_rom))
     patch = Patch(name="soul drop rates")
