@@ -247,6 +247,10 @@ PIN_SPACING = 0.5
 _OFFSETS = sorted(((dx / 8, dy / 8) for dx in range(-12, 13) for dy in range(-12, 13)),
                   key=lambda offset: (math.hypot(*offset), offset))
 
+# The farthest a pin can move from its start. A pin farther than this plus PIN_SPACING from the
+# start can't come within PIN_SPACING of any spot the moving pin might take, so placement ignores it.
+_MAX_MOVE = max(math.hypot(*offset) for offset in _OFFSETS)
+
 
 @functools.cache
 def defeat_pins() -> tuple[tuple[str, tuple[tuple[str, tuple[float, float]], ...]], ...]:
@@ -273,7 +277,8 @@ def defeat_pins() -> tuple[tuple[str, tuple[tuple[str, tuple[float, float]], ...
     pins: dict[str, list[tuple[str, tuple[float, float]]]] = {}
     for index, (name, room, start) in enumerate(starts):
         waiting = (cell for _, _, cell in starts[index + 1:])
-        others = [cell for cell in (*placed, *waiting) if math.dist(start, cell) < 2]
+        others = [cell for cell in (*placed, *waiting)
+                  if math.dist(start, cell) < _MAX_MOVE + PIN_SPACING]
         cell = _free_spot(room, start, others)
         placed.append(cell)
         pins.setdefault(name, []).append((room, cell))
