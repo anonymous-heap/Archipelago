@@ -1,293 +1,315 @@
-# Item balancing — desirability smoothing
+# Item balancing: desirability smoothing
 
-Make **less-useful items show up earlier and more-useful items later**, so a player isn't handed
-something in sphere 1 that makes every later pickup boring — while keeping enough randomness that
-you can still *get lucky*. This doc is the plan; the apworld wiring in **Stage 2 is not implemented
-yet** (Stage 1, the aggregation script, is).
+Item smoothing places less useful items earlier in a run and more useful items later, so that a
+player isn't handed something in sphere 1 that makes every later pickup boring. Placement keeps
+enough randomness that a lucky early find is still possible.
 
-**Orientation, stated once so nothing downstream has to invert it:**
-*higher desirability ⇒ place later.* Desirability runs `0.0` (junk, earliest) → `1.0` (best, latest),
-and the placement target `t` ("lateness", `0` = first sphere, `1` = last) is simply `t = desirability`.
+This directory holds the data: the community tier lists, the script that combines them, and the
+resulting desirability table. The placement code is in
+[`../../item_smoothing.py`](../../item_smoothing.py), and it runs only when the `item_smoothing`
+option is `loose` or `strict`.
 
-## The two axes
+**Orientation:** higher desirability means a later placement. Desirability runs from `0.0` (junk,
+placed earliest) to `1.0` (the best items, placed latest). Positions in the run go from `0` (the
+start) to `1` (the end). A placement target is a position plus random jitter, so it can fall
+outside that range.
 
-We rank items by community consensus on:
+## What the tier lists measure
 
-1. **"How much would this break things early in a run?"** (absolute power available too soon), and
-2. **"How much would this make me unexcited to find new pickups past this?"** (obsolescence / ceiling).
+The raters judged items on two questions:
 
-Both point the same way — high desirability should arrive **late** — so we collapse them into one
-desirability scalar. This is deliberately **separate from progression** (see
-[below](#progression-vs-desirability)).
+1. How much would this break the game if found early in a run? (absolute power that comes too soon)
+2. How much would finding this make later pickups less exciting? (obsolescence)
 
-## Why tier lists instead of raw ATK
+A high answer to either question means the item should arrive late, so the two are combined into
+one desirability value. Desirability is kept separate from progression; see
+[Progression vs desirability](#progression-vs-desirability).
 
-Raw weapon ATK can't tell you that Black Panther's dash or Satan's Ring trivialize the early game,
-or that Valmanway/Claimh Solais outclass everything via multi-hit/element. The four community tier
-lists in [`tier_jsons/`](tier_jsons/) encode exactly the two axes above and cover the whole loot
-table (weapons, armor, accessories, souls, consumables), not just weapons.
+Tier lists are used instead of raw weapon ATK because ATK can't show that Black Panther's dash or
+Satan's Ring trivialize the early game, and it covers only weapons. The four lists in
+[`tier_jsons/`](tier_jsons/) cover weapons, armor, accessories, souls and consumables.
 
-Bonus: **cross-rater disagreement is a free luck signal.** Items everyone agrees on get tight
-placement; contested items breathe (see [jitter](#per-item-jitter-long-tails-in-position-space)).
+Disagreement between raters is useful too. It widens the placement jitter of contested items (see
+[Jitter in position space](#jitter-in-position-space)), while items that every rater agrees on stay
+closer to their targets.
 
-## Pipeline at a glance
+## Pipeline
 
-| Stage | Input | Output | Status |
+| Stage | Input | Output | Code |
 |---|---|---|---|
-| 1 — Aggregate | [`tier_jsons/*.json`](tier_jsons/) + [`../item_info/item_info.csv`](../item_info/item_info.csv) | [`desirability.csv`](desirability.csv) | **Done** — [`aggregate_tiers.py`](aggregate_tiers.py) |
-| 2 — Placement | `desirability.csv` + per-category config | rearranged item placements | **Planned** — `stage_post_fill` + book `pre_fill` |
+| 1. Aggregate | [`tier_jsons/*.json`](tier_jsons/) and [`../item_info/item_info.csv`](../item_info/item_info.csv) | [`desirability.csv`](desirability.csv) | [`aggregate_tiers.py`](aggregate_tiers.py), run by hand |
+| 2. Place | `desirability.csv`, loaded by [`__init__.py`](__init__.py) | rearranged item placements | [`../../item_smoothing.py`](../../item_smoothing.py), during generation |
 
 ---
 
-## Stage 1 — Aggregation (done)
+## Stage 1: aggregation
 
-[`aggregate_tiers.py`](aggregate_tiers.py) collapses the raters into one consensus.
+[`aggregate_tiers.py`](aggregate_tiers.py) combines the raters into one consensus.
 
-- **Per-rater desirability** = `1 - tier_index / (n_tiers - 1)` ∈ `[0, 1]`; top tier → `1.0`. Lists
-  differ in tier count (7–9), so normalizing per rater keeps them comparable.
-- **Within-tier order is ignored** — inspection shows it's category-grouped (souls, then weapons,
-  then armor), not finely ranked, so we use tier *level* only.
-- **`desirability`** = mean across raters who listed the item; **`disagreement`** = population stdev
-  (the per-item jitter width downstream).
-- **Name reconciliation:** strip `(+…HP)` annotations, alias `Vijaya → Vjaya`, recognize
-  `"<n> Gold"` as the `money` category. The script raises if any tier-list name fails to resolve,
-  so a future rename can't silently drop an item.
+- **Per-rater desirability** is `1 - tier_index / (n_tiers - 1)`, in `[0, 1]`, so a rater's top
+  tier scores `1.0`. The lists have 7 to 9 tiers, and normalizing per rater keeps them comparable.
+- **Only the tier is used.** The order within a tier is not a ranking, because the lists group a
+  tier by category (souls, then weapons, then armor) or sort it alphabetically.
+- **`desirability`** is the mean across the raters who listed the item, and **`disagreement`** is
+  the population standard deviation. Placement uses `disagreement` to widen an item's jitter.
+- **Name reconciliation:** the script strips `(+…HP)` annotations, maps `Vijaya` to `Vjaya`, and
+  recognizes `"<n> Gold"` as the `money` category. It raises an error if any tier-list name fails
+  to resolve, so a renamed item can't drop out silently.
 
-**Output schema** ([`desirability.csv`](desirability.csv)): `name, category, desirability,
-disagreement, n_raters`, most-desirable first.
+The output, [`desirability.csv`](desirability.csv), has the columns `name, category,
+desirability, disagreement, n_raters`, most desirable first:
 
 ```
-Giant Bat,blue_soul,1.0,0.0,4            <- most desirable: place LATE
+Giant Bat,blue_soul,1.0,0.0,4            <- most desirable
+Hippogryph,ability_soul,1.0,0.0,4
 Claimh Solais,weapon,0.9688,0.0541,4
 ...
-Bamboo Sword,weapon,0.0,0.0,4            <- least desirable: place EARLY
-100 Gold,money,0.0,0.0,4
+100 Gold,money,0.0,0.0,4                 <- least desirable
+Bamboo Sword,weapon,0.0,0.0,4
+CASTLE MAP 1,consumable,0.0,0.0,4
+CASTLE MAP 3,consumable,0.0,0.0,4
 ```
 
-**Coverage:** 86 items ranked (31 weapons, 13 armor, 12 accessories, 16 consumables, ~10 notable
-souls, 4 gold). **174 canonical items are unranked** — mostly the minor soul roster and unremarkable
-mid gear. That's fine, and it's actually load-bearing: see [the uniform background](#why-the-bands-mean-what-they-say-the-uniform-background).
+**Coverage:** 86 items are rated: 31 weapons, 13 armor, 12 accessories, 16 consumables, 10 souls
+and 4 gold amounts. The other 174 items in `item_info.csv` are unrated, mostly minor souls and
+unremarkable mid-game gear. Placement gives each unrated item a random base value (see
+[Base values and the rank-transform](#base-values-and-the-rank-transform)). In a default seed,
+though, every item that the post-fill pass moves is rated or gold.
 
 ---
 
-## Stage 2 — Placement (planned)
+## Stage 2: placement
 
-### The core: least-displacement assignment
+### Where it runs
 
-Two ingredients:
-
-- Every **location** gets a progress coordinate `q ∈ [0, 1]` = its rank in sphere order ÷ (N−1)
-  (earliest sphere → 0, last → 1).
-- Every **non-progression item** gets a target `t ∈ [0, 1]` from its category's generator (below).
-
-Then sort items by `t`, sort locations by `q`, and zip them together. For two 1-D sequences,
-sorted-to-sorted is the assignment that **minimizes total displacement** `Σ|t − q|` — so this is the
-"closest to its wish" placement, not a heuristic. It's **logic-safe** because it only permutes
-*non-progression* items among the locations already holding them; reachability never depends on them.
-This mirrors Dark Souls III's proven *item smoothing*:
-[`worlds/dark_souls_3/__init__.py:1385-1513`](../../../dark_souls_3/__init__.py#L1385-L1513).
-
-The only thing that varies per category is **how `t` is generated**.
-
-### Why the bands mean what they say: the uniform background
-
-Subtle but important: zip preserves *order*, so an item's realized sphere is its **quantile among
-all the target-`t`s**, not its raw `t`. A band like "gold in `[0, 0.55]`" is only literal if quantile
-≈ value — i.e. if the *combined* target distribution is roughly uniform on `[0, 1]`.
-
-It is, and the 174 unranked items are why. We give each unranked item a **uniform prior**
-`t ~ U(0, 1)` (honest: nobody ranked it, so place it anywhere). They outnumber the ranked items 2:1,
-so they form a near-uniform background; the ranked points, the gold band, and the books ride on top
-as perturbations. Result: quantile ≈ value, and **the absolute bands are honored**. (This also
-replaces an earlier mistake — clumping unranked items at a narrow "neutral" `[0.35, 0.65]` would have
-swamped the mid-game and buried the ranked signal.)
-
-⚠️ The one thing to verify on real seeds is that the combined `t` distribution stays roughly uniform;
-if a future content change makes it lumpy, switch from sort-zip to explicit quantile binning (place
-each item in the location whose `q` is nearest its `t`, nearest-free on collision).
-
-### Base targets per category
-
-Each item first gets a **base target** (in desirability space); these are then rank-transformed to
-positions and [jittered](#per-item-jitter-long-tails-in-position-space).
-
-| Category | Base target | `scale` (jitter width) | Effect |
-|---|---|---|---|
-| weapons / armor / accessories / souls | `desirability` | `sigma_base + k · disagreement` | monotone weak-early/strong-late; contested items breathe more |
-| **gold (money)** | **stratified** over `[0.0, ~0.55]`, all 18 copies | flat global | sprinkled early-to-mid; the tail rarely sends one late |
-| **unranked** | `U(0, 1)` (uniform prior) | small/none (already broad) | background that keeps the aggregate uniform |
-
-**Stratified band** (gold): for `K` copies, copy `i` draws its base from
-`[lo + i/K·(hi−lo), lo + (i+1)/K·(hi−lo)]`, guaranteeing an even sprinkle with intra-stratum luck.
-Gold's desirability (`~0.0`, the floor) would otherwise pin it to the very first spheres; the explicit
-early-to-mid band is what lifts the top of its range to mid-game.
-
-Money joins by **category, not name**: all 18 money pickups (`100/500/1000/2000 Gold`, see
-`item_name` in [`../pickup_info/__init__.py`](../pickup_info/__init__.py)) feed the one stratified
-band.
-
-### Per-item jitter: long tails, in *position* space
-
-We want each item's placement **peaked at its target but with long tails**, so it *usually* lands
-where it belongs yet can occasionally turn up far away — "you can still get lucky." Two pieces:
-
-**(a) Jitter in position space, not desirability space.** The naive approach — add the jitter to the
-item's *desirability* and re-rank — has no middle ground. Desirability is densely packed at the low
-end and sparse at the top, so a top item has to cross the whole dense pack: a small jitter barely
-moves it, a big one overshoots all the way to the very first pickup, with almost nothing in between
-(landings pile up bimodally at "late" or "≈0.00"). The fix is to **rank-transform the bases into
-evenly spaced positions first**, then jitter the *position* — now displacement is linear, so a
-moderate draw moves an item a moderate fraction of the run.
-
-**(b) A moderate-weight Student-t** (not Cauchy). `nu` sets the tail weight; `nu = 1` (Cauchy) is so
-heavy that early jumps still overshoot and pile at the front, so we use `nu ≈ 2` (loose) / `4`
-(strict) — heavy enough for the occasional lucky-early find, light enough that those finds land
-across the early game instead of always at pickup #1.
-
-```python
-def student_t(nu, rng):
-    # nu -> inf is Gaussian (thin tails); smaller nu = heavier tails / more extreme jumps.
-    chi2 = rng.gammavariate(nu / 2.0, 2.0)
-    return 0.0 if chi2 <= 0.0 else rng.gauss(0.0, 1.0) / math.sqrt(chi2 / nu)
-
-def assign_targets(items, params, rng):
-    base  = {it: base_target(it, params, rng) for it in items}   # gold band / desirability / U(0,1)
-    order = sorted(items, key=base.get)                          # rank-transform ->
-    pos   = {it: i / (len(order) - 1) for i, it in enumerate(order)}  #   uniform positions
-    out = {}
-    for it in items:
-        if rng.random() < params.eps:                            # wildcard: place anywhere
-            out[it] = rng.random()
-        else:
-            out[it] = pos[it] + scale_of(it, params) * student_t(params.nu, rng)  # jitter the POSITION
-    return out                                                   # placement sorts by this; no clamp
-```
-
-The rank-transform also helps the *many-upper-tier-items* case: several items at similar desirability
-get spread to distinct positions, so they don't all crater together. Tails still apply to every
-category (a gold piece can rarely surface late), and out-of-range draws need no clamping — the
-placement pass sorts by target, so they simply yield an extreme rank.
-
-**The three knobs:**
-
-| Knob | Controls | Default intent |
+| Step | World method | Function |
 |---|---|---|
-| `nu` (tail weight) | how often a draw is extreme | moderate: **2** (loose) / **4** (strict) — low enough to reach early, high enough to keep a middle ground |
-| `scale` (width) | central spread (fraction of run), per item = `sigma_base + k · disagreement` | tight; a small `sigma_base` floor so even unanimous items keep a tail |
-| `eps` (wildcard) | flat "anywhere" floor, independent of the item's target | small (≈0.02–0.05) |
+| Hold the books, the mobility souls and Black Panther out of the pool | `create_items` | `take_smoothing_items` |
+| Place the mobility souls and Black Panther near their targets | `pre_fill` | `bias_progression_souls` |
+| Place the Ancient Books in early, middle and late bands of map depth | `pre_fill` | `spread_ancient_books` |
+| Put anything left unplaced into the pool for the main fill | `pre_fill` | `add_unplaced_to_pool` |
+| Move the souls and books closer to their targets in sphere order | `stage_post_fill` | `refine_soul_positions`, `refine_ancient_books` |
+| Reorder the placed non-progression items and the floor and ceiling breakers | `stage_post_fill` | `smooth_placed_items` |
 
-`scale` is also the overall strength dial: the `item_smoothing: off | loose | strict` option maps onto
-`sigma_base`/`k` (`off` skips the pass). Tying part of `scale` to `disagreement` keeps the
-center-of-mass behavior honest — contested items breathe more than unanimous ones — while `nu` and
-`eps` guarantee *nobody* is fully locked.
+Items that `pre_fill` places must not be in the multiworld pool, and `create_items` is the last
+step that may change the pool, so these items are held back there. Until they are placed, the world
+returns them from `get_pre_fill_items`, so `get_all_state` still collects them. An item named by an
+item link, a plando or `non_local_items` stays in the pool. Nothing is held back at all when doing
+so would leave too few progression items for the priority locations.
 
-**Worked example (records the intent).** Claimh Solais, center `0.9688`, width ≈ its disagreement
-`0.054`: with `nu = 1` (Cauchy), `P(first third) ≈ 2.7%`; the same width as a Gaussian gives ~10⁻³².
-Add `eps = 0.03` → about `2.7% + 1% ≈ 3.7%`. Dial `nu` up to make the lucky-early seed rarer, down to
-make it juicier.
+### The post-fill pass: least-displacement assignment
 
-> Named **`item_smoothing`**, not `weapon_smoothing`: it covers armor, accessories, souls,
-> consumables and gold too.
+`smooth_placed_items` works with two orderings:
 
-### Ancient Books — logic-aware `pre_fill` (option 2, chosen)
+- Every movable **location** has a place `q` in run order, from `0` to `1` (see
+  [Location order](#location-order)).
+- Every movable **item** gets a target `t` (see [Item targets](#item-targets)).
 
-The three Ancient Books are flagged **progression** in
-[`../item_info/item_importance.csv`](../item_info/item_importance.csv) but **gate nothing** (no access
-rule references them). We keep the progression flag and **spread them throughout the game** with a
-dedicated `pre_fill` — they can't ride the post-fill pass (it only moves non-progression items).
+The items are sorted by `t`, and the earliest location gets the lowest-`t` item, the next location
+the next item, and so on. For two 1-D sequences, matching sorted to sorted minimizes the total
+displacement `Σ|t − q|`, so each item lands as close to its target as the other items allow. A
+location whose item rule rejects the next item takes the first later item it accepts, or the next
+item anyway if it accepts none.
 
-- Spheres don't exist yet at `pre_fill` time, so use a fill-independent progress proxy: **region BFS
-  depth from the origin**. (Same "how far into the run" axis as `q`, just the estimator available
-  before fill.) Bin locations into early / mid / late by depth.
-- Target one book per band with the same jittered edges (so they drift and lightly overlap rather
-  than landing at clockwork thirds), restrict to currently-reachable unfilled locations in that band,
-  and place with `fill_restrictive`. Run **before** the main fill so the books claim their slots.
+The pass is logic-safe because it only permutes non-progression items among the locations that
+already hold them, and reachability never depends on those items. The one exception is the floor
+and ceiling breakers, described under [Progression vs desirability](#progression-vs-desirability).
+
+The design follows Dark Souls III's item smoothing (`stage_post_fill` and `_pop_item` in
+[`worlds/dark_souls_3/__init__.py`](../../../dark_souls_3/__init__.py)).
+
+### Location order
+
+`smoothable_locations_in_order` collects the locations the pass may change. They are this player's
+reachable pickup locations that hold one of this player's own items, either a non-progression item
+or a floor or ceiling breaker. Locked, excluded and priority locations are skipped. Defeat
+locations (enemy checks) are left out too, because most of them come late in logic and counting
+them would push every pickup's position earlier.
+
+The `item_smoothing_order` option picks the order:
+
+- `map_distance` (the default): by breadth-first distance from the start in the region graph,
+  ignoring access rules, then by name. A room comes as early as its place on the map, whatever the
+  seed.
+- `spheres`: by logical sphere in this seed, then by map distance, then by name.
+
+### Item targets
+
+`_assign_targets` gives each item a position in the run, then adds random jitter to get its
+target.
+
+#### Base values and the rank-transform
+
+Most items get their position from a base value:
+
+| Item | Base value | Jitter width (`scale`) |
+|---|---|---|
+| Rated item | its `desirability` | `sigma_base + k · disagreement` |
+| Unrated item | uniform random in `[0, 1]` | `sigma_base` |
+| One copy of each gold amount except 100 Gold | above every rated item | `sigma_base` |
+
+The bases are then **rank-transformed** into evenly spaced positions in `[0, 1]`, so the item with
+the lowest base gets `0` and the highest gets `1`. The random bases scatter the unrated items
+evenly through the run, between the rated ones. The promoted gold copies have the highest bases,
+so they take the last positions.
+
+#### Items with fixed bands
+
+Two groups skip the base value and get a position directly. Both are left out of the
+rank-transform, and both get the jitter width `sigma_base`.
+
+- **Gold.** Every gold copy that isn't promoted is spread over the whole run. For `K` such copies
+  in shuffled order, copy `i` gets a position drawn uniformly from `[i/K, (i+1)/K]`, so each `1/K`
+  slice of the run holds one copy. Gold's desirability is near zero, so ranking it would put all of
+  it at the very start and push every other item later. Gold is recognized by its category, so
+  every amount (`100`, `500`, `1000` and `2000 Gold`) is included.
+- **Second-half consumables.** A fixed number of copies of some mid-tier consumables (2 High
+  Potion, 3 Super Potion, 4 Mana Prism and 1 High Mind Up) are spread the same way over `[0.5, 1]`,
+  so that not all the healing and mana items come early. Their other copies are ranked as usual.
+
+#### Why a position means a fraction of the run
+
+The assignment preserves order, so an item's real place in the run is the quantile of its target
+among all the targets, not the target itself. A band such as "the second half" therefore means what
+it says only when the combined targets are close to uniform on `[0, 1]`. The rank-transformed
+positions are evenly spaced by construction and the gold band is uniform too, so the only skew is
+the second-half consumables (at most 10 items), which add a little weight to the back half.
+
+#### Jitter in position space
+
+Each target is the item's position plus `scale · T`, where `T` is a Student-t draw with `nu`
+degrees of freedom. With probability `eps`, the item gets a uniformly random target instead (a
+wildcard). Targets are not clamped, because the pass sorts by target and an out-of-range draw just
+gives an extreme rank.
+
+The jitter goes on the position rather than on the desirability. Desirability values are packed
+densely at the low end and sparsely at the top, so a top item jittered in desirability would have
+to cross the whole dense group. A small draw would barely move it, and a large one would send it to
+the very first pickup, with almost nothing in between. Positions are evenly spaced, so a moderate
+draw moves an item a moderate fraction of the run.
+
+`nu` sets the tail weight. With `nu = 1` (the Cauchy distribution), the tails are so heavy that
+most items that jump early overshoot to the very first pickups. The presets therefore use `nu = 2`
+(`loose`) and `nu = 4` (`strict`). That is heavy enough for an occasional lucky early find, and
+light enough that those finds land across the early game rather than always at the first pickup.
+
+The parameters are in `PARAMS_BY_KEY`, keyed by the `item_smoothing` option:
+
+| Parameter | Controls | `loose` | `strict` |
+|---|---|---|---|
+| `nu` | tail weight: how often a draw is extreme | 2 | 4 |
+| `sigma_base` | jitter width every item gets, as a fraction of the run | 0.08 | 0.03 |
+| `k` | extra jitter width per unit of `disagreement` | 1.5 | 0.8 |
+| `eps` | chance of a wildcard target | 0.05 | 0.02 |
+
+`sigma_base` gives some jitter even to an item that every rater agrees on, and `nu` and `eps` mean
+that no item's location is ever certain.
+
+**Worked example.** Claimh Solais has desirability `0.9688` and disagreement `0.0541`. In a default
+seed, only the promoted gold copies and at most one other item rank above it after the
+rank-transform, so its position is about `0.95`. Under `loose`, its jitter width is
+`0.08 + 1.5 · 0.0541 ≈ 0.16`. The chance that its target is below `1/3`, which puts it in about the
+first third of the run, is then about 4.6%: about 2.9% from the Student-t tail and 1.7% from the
+wildcard. Under `strict`, the width is about `0.073` and the chance is about 0.7%, nearly all of it
+from the wildcard. A lower `nu`, a wider `scale` or a higher `eps` makes a lucky early find more
+common.
+
+> The option is named `item_smoothing`, not `weapon_smoothing`, because it covers armor,
+> accessories, souls, consumables and gold too.
+
+### Ancient Books
+
+The three Ancient Books are progression, because the gate on the way to Chaos needs all three (see
+`_chaotic_realm_gate` in [`../../regions.py`](../../regions.py)). The post-fill pass moves only
+non-progression items, so the books get two passes of their own.
+
+- **Before the main fill**, `spread_ancient_books` sorts this player's empty, non-excluded pickup
+  locations by map depth and splits them into early, middle and late bands. The books are shuffled
+  and aimed at one band each, with the long-tailed jitter described above, so a book sometimes
+  lands in another band. A book goes only where it is reachable without any of the books. Map
+  depth stands in for run order here because the spheres don't exist yet.
+- **After the main fill**, `refine_ancient_books` draws one target from each of `[0, 1/3]`,
+  `[1/3, 2/3]` and `[1/2, 3/4]` of the run in sphere order. It moves each book toward its target
+  by swapping it with a non-progression item at a location reachable without that book. A swap is
+  kept only if the whole multiworld still fulfills accessibility.
+
+If no band has a free location reachable without the books, the main fill places that book instead.
+A book that can't be moved safely after the fill stays where it is, and a book that plando locked in
+place is never moved.
+
+### Mobility souls and Black Panther
+
+Malphas (double jump), Hippogryph (high jump) and Giant Bat (flight) gate movement, so they are
+placed by lateness targets of their own rather than by desirability, which rates all three highly.
+
+- `early_mobility_souls` decides whether one of them is aimed into the first third of the run: in
+  about 93% of runs under `bias_early`, and in every run under `guarantee_early`. The early soul is
+  Malphas 80% of the time and Hippogryph otherwise. Giant Bat is never chosen, because its flight
+  reaches nearly everything the other two souls do. The souls that aren't chosen get late targets
+  from `SOUL_LATE_TARGETS`, centered at `0.60` for Malphas, `0.86` for Hippogryph and `0.92` for
+  Giant Bat.
+- `black_panther_bias` aims Black Panther into the first half of the run, with a target drawn
+  uniformly from `[0, 0.5]`.
+- Before the main fill, `bias_progression_souls` puts each soul at the reachable location whose
+  lateness is nearest its target. Lateness comes from ability tiers: the step at which a location
+  first becomes reachable when the movement souls are collected one at a time, most useful first.
+  After the main fill, `refine_soul_positions` moves each soul toward its target in sphere order,
+  with the same safety checks as the books.
+
+With Progressive Movement on, two of the Progressive Movement copies are aimed like Malphas and the
+third like Giant Bat. The post-fill refine pass doesn't move them.
 
 ---
 
 ## Progression vs desirability
 
-Use the tier lists **only** as a desirability signal. Whether an item is *progression* stays owned by
-the existing logic (`item_importance.csv` + [`../../regions.py`](../../regions.py)). The lists
-conflate the two (sprasshu has a "Required for progression" tier; M names tiers "…progression +
-…equips") and raters even disagree on what's progression (e.g. Galamoth) — all irrelevant noise once
-their output is treated as pure desirability. Concretely: the smoothing pass skips any
-`progression` item; the books are the one progression category we *also* want spread, via their own
-`pre_fill`.
+The tier lists are used only as a desirability signal. Whether an item is progression is decided by
+the logic ([`../item_info/item_importance.csv`](../item_info/item_importance.csv) and
+[`../../regions.py`](../../regions.py)). The lists mix the two: sprasshu has a "Required for
+progression" tier, M names tiers like "Strong progression + Best equips", and raters even disagree
+on what counts as progression (Galamoth, for example). None of that matters once the lists are read
+purely as desirability.
 
-## Correctness notes (multiworld / accessibility / determinism)
+The post-fill pass therefore moves only non-progression items, with one exception: the weapons
+whose only progression use is breaking floors or ceilings. Logic counts them as progression, but
+they are reordered by desirability like other equipment. The reordering doesn't check
+reachability, so `smooth_placed_items` first records where the main fill put each breaker. If the
+new arrangement fails the accessibility check, the breakers go back to those locations. The
+Ancient Books, the mobility souls and Black Panther are the other progression items that smoothing
+places, each through the passes described above.
 
-- **Scoped to on-world locations.** Unlike DS3, the pass only reorders this world's items that sit in
-  *this world's own* locations (`loc.player == loc.item.player == player`). A cvaos weapon sent
-  off-world isn't gear its recipient can use, so ordering it in a foreign world is meaningless — and
-  staying on-world makes the order a deterministic total order (own location names are unique) and
-  respects `local_items`/`non_local_items` for free. The `can_fill` guard still protects excluded /
-  item-rule constraints; excluded locations are skipped outright (they may hold only filler).
-- **Limited accessibility:** `get_spheres()` yields any unreachable *filled* locations as a trailing
-  set, so under `accessibility: minimal` those items **are** smoothed too (placed "latest"). Benign —
-  the player may never reach them, and they're still valid placements.
-- **Determinism:** everything stochastic goes through `self.random`; `stage_post_fill` computes
-  `get_spheres()` **once** for all cvaos worlds.
+## Correctness notes
 
----
+- **Only this world's own locations.** Unlike DS3, the post-fill pass reorders only this world's
+  items that sit in this world's locations (`loc.player == loc.item.player == player`). A cvaos
+  weapon sent to another world isn't gear its recipient can use, so ordering it there has no
+  meaning. Staying in this world also makes the order a total order, since this world's location
+  names are unique, and it respects `local_items` and `non_local_items` without extra work.
+- **Location settings.** Excluded and priority locations are skipped, and the `can_fill` check
+  still applies each location's item rule. An excluded location may hold only filler, so a useful
+  item can't move into one. A priority location could lose its progression item if a breaker moved
+  out of it.
+- **Minimal accessibility.** `get_spheres()` reports the unreachable filled locations as one set
+  after an empty set. `smoothable_locations_in_order` stops at the empty set, so under
+  `accessibility: minimal` those locations are never smoothed.
+- **Determinism.** Every random draw comes from the world's own `random`, and `smooth_placed_items`
+  computes `get_spheres()` once for all cvaos worlds.
 
-## Where this hooks into the apworld (not yet wired)
+## Open questions
 
-Today [`__init__.py:89-94`](../../__init__.py#L89-L94) just dumps the pool into `multiworld.itempool` —
-no fill hooks, so any item can land in sphere 1. Planned changes:
-
-1. **Load** `desirability.csv` (package data, like the other CSVs) into `name → (desirability,
-   disagreement, n)`, plus the per-category config.
-2. **`pre_fill`** — spread the three Ancient Books across early/mid/late depth bands (logic-aware).
-3. **`stage_post_fill`** — smooth this world's non-progression items, modeled on DS3 (one
-   `get_spheres()`; `_pop_item`/`_shuffle` helpers at
-   [`worlds/dark_souls_3/__init__.py:1515-1532`](../../../dark_souls_3/__init__.py#L1515-L1532)).
-4. **`options.py`** — add `item_smoothing: off | loose | strict` (→ `sigma`); `off` keeps today's
-   behavior.
-
-### Reference sketch (post-fill smoothing)
-
-```python
-@classmethod
-def stage_post_fill(cls, multiworld):
-    worlds = [w for w in multiworld.get_game_worlds(cls.game) if w.options.item_smoothing]
-    if not worlds:
-        return
-    spheres = list(multiworld.get_spheres())  # earliest -> latest, computed once
-    for world in worlds:
-        depth = region_bfs_depth(world)        # map-distance tiebreaker (spheres are coarse: ~3-7)
-        # THIS player's own non-progression items in THIS player's own, unlocked, non-excluded
-        # locations, ordered by (sphere, map depth, name) -- a deterministic total order.
-        locs = []
-        for sphere in spheres:
-            band = [loc for loc in sphere
-                    if loc.player == world.player and loc.item.player == world.player
-                    and not loc.locked and loc.progress_type != EXCLUDED
-                    and not loc.item.advancement]
-            band.sort(key=lambda loc: (depth.get(loc.parent_region.name, BIG), loc.name))
-            locs += band
-        items = [loc.item for loc in locs]
-        t = {item: world._target_t(item) for item in items}   # per-category band + long-tailed jitter
-        items.sort(key=lambda it: t[it])                       # ascending t == low desirability first
-        for loc in locs:                                       # earliest loc gets lowest-t fillable item
-            loc.item = pop_fillable(loc, items)                # can_fill guard (excluded / item rules)
-```
-
----
-
-## Open knobs / verify
-
-- **Jitter knobs:** `nu` (tail weight, default 1–2), `sigma_base` + `k` (width / strength, mapped by
-  `item_smoothing`), `eps` (wildcard floor, ≈0.02–0.05), and gold's `[0.0, 0.55]` band are all
-  starting guesses — tune against real seeds (and against how many spheres a seed produces; few
-  spheres → coarse banding, softened by the jitter). Watch the *combined* extremes: with `nu = 1` and
-  18 gold + others all carrying Cauchy tails, expect a couple of "wrong-place" items per seed by
-  design — that's the long tail working, not a bug.
-- **Smooth globally or per-category?** One global pass can drop a potion where a weak weapon "wanted"
-  the same `t` (fine — pickups aren't category-locked). Per-category passes keep each silo's curve
-  independent. Start global; split only if a category feels off.
-- ⚠️ **Eyeball a real seed sphere-by-sphere:** gold not clustered; books early/mid/late; early game
-  not *all* junk (if it is, lower `scale` or raise `nu`); combined `t` distribution roughly uniform.
-- ⚠️ **Re-confirm books gate nothing** before relying on the `pre_fill` — if regions ever reference
-  them, they become ordinary progression and drop out of the spread.
-- **Adding a rater** is drop-in: a new `tier_jsons/*.json`, re-run [`aggregate_tiers.py`](aggregate_tiers.py).
+- **Tuning.** The parameters, the second-half quotas and the gold rules are starting values. Tune
+  them against real seeds, including how many spheres a seed has: with few spheres, the `spheres`
+  order is coarse, which the jitter softens.
+- **Long tails are intended.** Every item's jitter has a long tail, so expect a few items per seed
+  in surprising places.
+- **One global pass or one per category?** One global pass can give a potion the location that a
+  weak weapon with a similar target would otherwise get. That is fine, because pickups aren't tied
+  to a category. Per-category passes would give each category its own curve. Split only if a
+  category feels wrong.
+- **Check a real seed sphere by sphere.** Look for gold that isn't clustered, books early, middle
+  and late, an early game that isn't all junk, and combined targets that are roughly uniform. If
+  the early game is all junk, widen the jitter (raise `sigma_base` or `k`) or lower `nu`. If the
+  targets ever become lumpy, replace the sort-and-match assignment with quantile binning: place
+  each item at the free location whose `q` is nearest its `t`.
+- **Adding a rater** takes a new `tier_jsons/*.json` file and a rerun of
+  [`aggregate_tiers.py`](aggregate_tiers.py).

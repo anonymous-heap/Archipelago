@@ -1,18 +1,15 @@
 """
-Aggregates the community tier lists in ``tier_jsons/`` into a single ``desirability.csv``.
+Combine the community tier lists in ``tier_jsons/`` into ``desirability.csv``.
 
-Turns N raters' tier lists into per-item consensus *desirability* values along with
-  cross-rater *disagreement*.
+Each rater's list gives every item it names a desirability in ``[0, 1]``, where higher means more
+desirable. That rater's desirability for an item is ``1 - tier_index / (n_tiers - 1)``, so their
+top tier scores ``1.0`` and their bottom tier ``0.0``. The CSV stores the mean across raters as
+``desirability`` and the population standard deviation as ``disagreement``.
 
-Orientation: **higher = more desirable**.
-Per-rater desirability = ``1 - tier_index / (n_tiers - 1)`` in ``[0, 1]``,
-so the rater's top tier is ``1.0`` and their worst is ``0.0``.
+Only an item's tier is used. The order within a tier is not a ranking (the lists group a tier by
+category or sort it alphabetically), so it is ignored.
 
-Currently, only the tier *level* is used. Ideally, the tier lists are
-   also more finely ranked within each tier, but we don't currently
-   use that fact.
-
-Run from anywhere.
+Run this script directly, from any directory, to rewrite ``desirability.csv``.
 """
 
 from __future__ import annotations
@@ -49,7 +46,7 @@ class Row(NamedTuple):
     name: str
     category: str
     desirability: float  # mean across raters; higher = more desirable = place later
-    disagreement: float  # population stdev across raters; the per-item jitter width
+    disagreement: float  # population stdev across raters; widens the item's placement jitter
     n_raters: int
 
 

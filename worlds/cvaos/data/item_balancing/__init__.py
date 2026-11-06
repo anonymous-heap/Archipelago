@@ -1,9 +1,10 @@
 """
-Item-desirability data.
+Item desirability ratings from the community tier lists.
 
-Loads ``desirability.csv`` into ``DesirabilityInfo`` rows keyed by item name.
-
-``disagreement`` is the cross-rater stddev.
+Loads ``desirability.csv``, which ``aggregate_tiers.py`` writes, into ``DesirabilityInfo`` rows.
+``rows`` holds them in the file's order, most desirable first, and ``by_name`` maps each item name
+to its row. ``desirability`` runs from 0 (least desirable) to 1, and ``disagreement`` is its
+standard deviation across raters.
 """
 
 from __future__ import annotations
