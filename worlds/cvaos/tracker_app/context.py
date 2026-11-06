@@ -133,7 +133,9 @@ class TrackerContext(CommonContext):
             return
         async with self._connection_change:
             if slot_name != self.slot_name or not same_address(address, self.room_address or ""):
-                self.route_target = None  # the route was asked for in another AP room or slot
+                # The route and the door Soma came in by belong to another AP room or slot.
+                self.route_target = None
+                self.entry_room = self.entry_point = None
             self.slot_name = slot_name
             self.room_address = address
             self.username = slot_name  # CommonContext reconnects on its own only when this is set
@@ -273,7 +275,7 @@ class TrackerContext(CommonContext):
                 self.changed()
             if self.hints_key in keys:
                 self.update()
-            elif keys & {self.position_key, self.exploration_key}:
+            if keys & {self.position_key, self.exploration_key}:
                 self.follow_position()
                 self.changed()
 

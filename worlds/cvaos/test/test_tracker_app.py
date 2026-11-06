@@ -289,6 +289,22 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         await self.ctx.connect_to("localhost:38281", "Alucard", None)
         self.assertIsNone(self.ctx.route_target)
 
+    async def test_a_reply_with_the_hints_and_the_position_follows_soma(self):
+        # After a reconnect, one Retrieved reply brings back both keys.
+        self.ctx.stored_data[self.ctx.position_key] = ["003", 100, 50]
+        self.ctx.stored_data[self.ctx.hints_key] = []
+        self.ctx.on_package("Retrieved", {"keys": {self.ctx.position_key: ["003", 100, 50],
+                                                   self.ctx.hints_key: []}})
+        self.assertEqual(self.ctx.entry_room, "003")
+
+    async def test_the_entry_door_is_forgotten_for_another_slot(self):
+        self.store(self.ctx.position_key, ["003", 100, 50])
+        self.assertEqual(self.ctx.entry_room, "003")
+        self.ctx.connect = mock.AsyncMock()
+        await self.ctx.connect_to("localhost:38281", "Alucard", None)
+        self.assertIsNone(self.ctx.entry_room)
+        self.assertIsNone(self.ctx.entry_point)
+
     async def test_there_is_no_route_out_of_reach(self):
         self.ctx.set_route(location_name_to_id[TERRACE])
         snapshot = self.ctx.snapshot()
