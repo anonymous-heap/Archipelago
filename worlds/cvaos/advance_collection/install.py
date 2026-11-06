@@ -7,10 +7,10 @@ The collection keeps every ROM inside ``windata/alldata.bin`` (payload) plus
 AoS member replaced. This module is the friendly wrapper around
 ``cac_archive.replace_member`` behind the "CVAoS Collection ROM Installer"
 Launcher component. It finds the collection from the hash-validated
-``CVAOSSettings.collection_exe`` path. When no file is at that path, it looks in
-every Steam library (``steam.py``), and asks for game.exe with a browse dialog
-only when the collection isn't in any of them. Either answer is saved in
-host.yaml.
+``CVAOSSettings.collection_exe`` path. When the file at that path is missing
+or has another hash, it looks in every Steam library (``steam.py``), and asks
+for game.exe with a browse dialog only when the collection isn't in any of
+them. Either answer is saved in host.yaml.
 
 Safety model, in order:
 
@@ -52,6 +52,7 @@ import filecmp
 import hashlib
 import os
 import shutil
+import tempfile
 import zlib
 from typing import Callable
 
@@ -309,23 +310,31 @@ def _restore_from_backups(windata: str, log: Log) -> OSError | None:
 # Install
 # ---------------------------------------------------------------------------
 
-def _apply_patch_file(patch_path: str, exe_path: str, log: Log = print) -> str:
-    """Apply a ``.apcvaos`` with AP's own machinery; returns the produced ``.gba`` path.
+def _apply_patch_file(patch_path: str, exe_path: str, log: Log = print) -> bytes:
+    """Apply a ``.apcvaos`` with AP's own machinery, and return the patched ROM.
 
     The base ROM is always the stock ROM of the collection at *exe_path*, whatever target the
     seed was generated for, because that is the only base the collection can run. A gba-target
     patch applies to it as well as to a cart dump.
+
+    The patched ROM is written to a temporary folder, which is removed afterwards. Opening the
+    patch for BizHawk writes a ``.gba`` of the same name beside the patch, and the installer
+    leaves that file alone.
     """
     log(f"applying {os.path.basename(patch_path)}...")
-    import Patch  # deferred: full AP import chain, only needed for this path
-    from ..rom.patch import base_rom_override
-    with base_rom_override(extract_base_rom_bytes(exe_path)):
+    from ..rom.patch import CVAOSProcedurePatch, base_rom_override
+    # AP looks up a patch's handler by its exact file extension, so it finds none for a file
+    # named ``.APCVAOS``. The handler class is used directly to accept any letter case.
+    handler = CVAOSProcedurePatch(patch_path)
+    with base_rom_override(extract_base_rom_bytes(exe_path)), \
+            tempfile.TemporaryDirectory(prefix="cvaos_patch_") as scratch:
+        out_path = os.path.join(scratch, "patched" + handler.result_file_ending)
         try:
-            _meta, out_path = Patch.create_rom_file(patch_path)
+            handler.patch(out_path)
         except ValueError as exc:  # a failed base ROM check, reported as an install error
             raise InstallError(str(exc)) from exc
-    log(f"patched ROM written to {out_path}")
-    return out_path
+        with open(out_path, "rb") as f:
+            return f.read()
 
 
 def _swap_failed_message(windata: str, exc: OSError, log: Log) -> str:
@@ -365,12 +374,13 @@ def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
     as the collection's AoS ROM. Returns a user-facing summary."""
     windata = windata_dir_from_exe(exe_path)
     if rom_path.lower().endswith(".apcvaos"):
-        rom_path = _apply_patch_file(rom_path, exe_path, log)
-    try:
-        with open(rom_path, "rb") as f:
-            rom_bytes = f.read()
-    except OSError as exc:
-        raise InstallError(f"Could not read {rom_path!r}: {exc}") from exc
+        rom_bytes = _apply_patch_file(rom_path, exe_path, log)
+    else:
+        try:
+            with open(rom_path, "rb") as f:
+                rom_bytes = f.read()
+        except OSError as exc:
+            raise InstallError(f"Could not read {rom_path!r}: {exc}") from exc
     validate_patched_rom(rom_bytes)
     if collection_running():
         raise InstallError("The Castlevania Advance Collection is running — close it first.")
@@ -447,12 +457,13 @@ def is_collection_exe(path: str) -> bool:
 def find_collection_exe(options) -> str | None:
     """Return the collection's game.exe, or None when it can't be found.
 
-    That is the ``collection_exe`` setting in ``options`` when a file is there. Otherwise it is
-    the first game.exe in the player's Steam libraries that has the collection's hash, and the
-    setting is changed to it. The caller saves the settings, so the next search is immediate.
+    That is the ``collection_exe`` setting in ``options`` when the file there has the collection's
+    hash. Otherwise it is the first game.exe in the player's Steam libraries that has the hash,
+    and the setting is changed to it. The caller saves the settings, so the next search is
+    immediate.
     """
     current = options.collection_exe
-    if current and os.path.isfile(current):
+    if current and is_collection_exe(current):
         return str(current)
     found = next((exe for exe in steam.game_exe_candidates() if is_collection_exe(exe)), None)
     if found is not None:

@@ -17,16 +17,19 @@ import types
 import unittest
 from unittest import mock
 
+from worlds.Files import APTokenTypes
+
 from ..advance_collection import cac_archive, install
 from ..advance_collection.install import (
     AOS_MEMBER, BACKUP_SUFFIX, ROM_SIZE, InstallError, extract_base_rom_bytes,
     extract_base_rom_to, install_rom, restore_backup, validate_patched_rom, windata_dir_from_exe,
 )
-from ..rom.patch import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START
+from ..rom.patch import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, CVAOSProcedurePatch
 
 _OTHER_MEMBER = "system/roms/99_other_game.bin"
 _OTHER_BYTES = b"\x11untouched-neighbor-member\x22" * 4
 _STOCK_AOS_BYTES = b"stock collection AoS rom stand-in"  # size need not be 8 MiB in the archive
+_FAKE_EXE_BYTES = b"MZ fake collection exe"
 
 
 def _quiet(_msg: str) -> None:
@@ -62,13 +65,32 @@ def _make_stock_base_rom() -> bytes:
     return bytes(rom)
 
 
+def _accept_fake_exe():
+    """Make the installer take the fake collection's game.exe for the real one."""
+    return mock.patch.object(install, "AC_GAME_EXE_MD5", hashlib.md5(_FAKE_EXE_BYTES).hexdigest())
+
+
+def _write_marker_patch(path: str) -> None:
+    """Write a ``.apcvaos`` that only writes the Archipelago marker into its base ROM.
+
+    A seed's patch also applies the ROM features, which check the real ROM's code, so they would
+    fail on the stand-in base ROMs used here.
+    """
+    patch = CVAOSProcedurePatch(player=1, player_name="Soma")
+    patch.procedure = [("apply_tokens", ["token_data.bin"])]
+    patch.write_token(APTokenTypes.WRITE, ARCHIPELAGO_IDENTIFIER_START,
+                      ARCHIPELAGO_IDENTIFIER.encode("ascii"))
+    patch.write_file("token_data.bin", patch.get_token_binary())
+    patch.write(path)
+
+
 def _build_fake_collection(root: str, aos_bytes: bytes = _STOCK_AOS_BYTES) -> str:
     """Create <root>/game.exe + <root>/windata/{alldata.bin, alldata.psb.m}; returns exe path."""
     windata = os.path.join(root, "windata")
     os.makedirs(windata)
     exe_path = os.path.join(root, "game.exe")
     with open(exe_path, "wb") as f:
-        f.write(b"MZ fake collection exe")
+        f.write(_FAKE_EXE_BYTES)
 
     members = {AOS_MEMBER: aos_bytes, _OTHER_MEMBER: _OTHER_BYTES}
     file_info: dict[str, list[int]] = {}
@@ -325,13 +347,10 @@ class PatchFileInstallTest(_InstallerCase):
         apc = os.path.join(self.root, "AP_1_P1_SomaAC.apcvaos")
         with open(apc, "wb") as f:
             f.write(b"patch container stand-in")
-        produced = os.path.join(self.root, "AP_1_P1_SomaAC.gba")
 
-        def fake_apply(path: str, exe_path: str, log=_quiet) -> str:
+        def fake_apply(path: str, exe_path: str, log=_quiet) -> bytes:
             self.assertEqual((path, exe_path), (apc, self.exe_path))
-            with open(produced, "wb") as f:
-                f.write(_make_patched_rom())
-            return produced
+            return _make_patched_rom()
 
         with mock.patch.object(install, "_apply_patch_file", side_effect=fake_apply):
             install_rom(apc, self.exe_path, log=_quiet)
@@ -344,11 +363,13 @@ class PatchFileInstallTest(_InstallerCase):
         from ..rom import patch as patch_module
         bases = []
 
-        def fake_create_rom_file(path):
+        def fake_patch(_handler, target: str) -> None:
             bases.append(patch_module.get_base_rom_bytes(TARGET_GBA))
-            return {}, self.rom_path
+            with open(target, "wb") as f:
+                f.write(_make_patched_rom())
 
-        with mock.patch("Patch.create_rom_file", side_effect=fake_create_rom_file), \
+        with mock.patch.object(CVAOSProcedurePatch, "patch", autospec=True,
+                               side_effect=fake_patch), \
                 mock.patch.object(install, "extract_base_rom_bytes",
                                   return_value=b"the collection's ROM"):
             install._apply_patch_file("seed.apcvaos", self.exe_path, _quiet)
@@ -358,6 +379,57 @@ class PatchFileInstallTest(_InstallerCase):
         with mock.patch.object(install, "_apply_patch_file") as apply_stub:
             install_rom(self.rom_path, self.exe_path, log=_quiet)
         apply_stub.assert_not_called()
+
+
+class PatchApplicationTest(unittest.TestCase):
+    """A real ``.apcvaos`` applied by AP's patch machinery to the collection's stock ROM."""
+
+    def setUp(self) -> None:
+        self.root = tempfile.mkdtemp(prefix="cvaos_patch_apply_")
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.stock = _make_stock_base_rom()
+        self.exe_path = _build_fake_collection(os.path.join(self.root, "collection"), self.stock)
+        self.windata = os.path.join(self.root, "collection", "windata")
+        _treat_as_stock(self, self.stock)
+        # The patch checks its base ROM's md5, so the stand-in's md5 replaces the real ones.
+        for patcher in (mock.patch.object(install, "collection_running", return_value=False),
+                        mock.patch.object(CVAOSProcedurePatch, "hash",
+                                          [hashlib.md5(self.stock).hexdigest()])):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.downloads = os.path.join(self.root, "downloads")
+        os.makedirs(self.downloads)
+        patched = bytearray(self.stock)
+        marker = ARCHIPELAGO_IDENTIFIER.encode("ascii")
+        patched[ARCHIPELAGO_IDENTIFIER_START:ARCHIPELAGO_IDENTIFIER_START + len(marker)] = marker
+        self.patched = bytes(patched)
+
+    def installed_rom(self) -> bytes:
+        return cac_archive.extract_member(os.path.join(self.windata, "alldata.psb.m"),
+                                          os.path.join(self.windata, "alldata.bin"), AOS_MEMBER)
+
+    def test_installing_a_patch_leaves_the_bizhawk_rom_beside_it_alone(self) -> None:
+        apc = os.path.join(self.downloads, "AP_1_P1_Soma.apcvaos")
+        _write_marker_patch(apc)
+        bizhawk_rom = os.path.join(self.downloads, "AP_1_P1_Soma.gba")
+        with open(bizhawk_rom, "wb") as f:
+            f.write(b"the ROM patched from a cart for BizHawk")
+        temp = os.path.join(self.root, "temp")
+        os.makedirs(temp)
+        with mock.patch.object(tempfile, "tempdir", temp):
+            install_rom(apc, self.exe_path, log=_quiet)
+        self.assertEqual(self.installed_rom(), self.patched)
+        with open(bizhawk_rom, "rb") as f:
+            self.assertEqual(f.read(), b"the ROM patched from a cart for BizHawk")
+        self.assertEqual(sorted(os.listdir(self.downloads)),
+                         ["AP_1_P1_Soma.apcvaos", "AP_1_P1_Soma.gba"])
+        self.assertEqual(os.listdir(temp), [], "the temporary patched ROM must be removed")
+
+    def test_a_patch_with_an_upper_case_extension_installs(self) -> None:
+        apc = os.path.join(self.downloads, "AP_1_P1_SOMA.APCVAOS")
+        _write_marker_patch(apc)
+        install_rom(apc, self.exe_path, log=_quiet)
+        self.assertEqual(self.installed_rom(), self.patched)
 
 
 class RomValidationTest(_InstallerCase):
@@ -513,14 +585,15 @@ class BaseRomSourceTest(unittest.TestCase):
         exe = _build_fake_collection(self.root, stock)
         # rom_file points somewhere that must NOT be read for an AC-target seed.
         self._patch_settings(exe, os.path.join(self.root, "unused-cart.gba"))
-        self.assertEqual(self.patch.get_base_rom_bytes(self.TARGET_AC), stock)
+        with _accept_fake_exe():
+            self.assertEqual(self.patch.get_base_rom_bytes(self.TARGET_AC), stock)
 
     def test_ac_target_finds_the_collection_in_a_steam_library(self) -> None:
         stock = _make_stock_base_rom()
         exe = _build_fake_collection(self.root, stock)
         self.in_libraries = [exe]
         self._patch_settings(os.path.join(self.root, "no-such-game.exe"), "unused-cart.gba")
-        with mock.patch.object(install, "is_collection_exe", return_value=True):
+        with _accept_fake_exe():
             self.assertEqual(self.patch.get_base_rom_bytes(self.TARGET_AC), stock)
         self.assertEqual(self.settings.cvaos_options.collection_exe, exe)
         self.settings.save.assert_called_once()
@@ -558,7 +631,8 @@ class BaseRomSourceTest(unittest.TestCase):
 
 
 class ExePromptTest(unittest.TestCase):
-    """The installer asks for game.exe only when no file is at the configured path.
+    """The installer asks for game.exe only when neither the configured path nor a Steam library
+    holds a file with the collection's hash.
 
     It saves the chosen path to host.yaml, so it does not ask again. A cancelled dialog saves
     nothing.
@@ -600,9 +674,25 @@ class ExePromptTest(unittest.TestCase):
 
     def test_an_existing_configured_path_is_used_without_asking(self) -> None:
         self.options.collection_exe = self.FakePath(self.exe())
-        with mock.patch.object(self.FakePath, "browse") as browse:
+        with mock.patch.object(install, "AC_GAME_EXE_MD5", hashlib.md5(b"MZ").hexdigest()), \
+                mock.patch.object(self.FakePath, "browse") as browse:
             self.assertEqual(install._exe_path_from_settings(), self.options.collection_exe)
         browse.assert_not_called()
+
+    def test_a_configured_file_with_another_hash_gives_way_to_a_steam_library(self) -> None:
+        self.options.collection_exe = self.FakePath(self.exe())  # "MZ", not the collection's
+        found = os.path.join(self.root, "library", "game.exe")
+        os.makedirs(os.path.dirname(found))
+        with open(found, "wb") as f:
+            f.write(b"MZ the collection")
+        self.in_libraries = [found]
+        with mock.patch.object(install, "AC_GAME_EXE_MD5",
+                               hashlib.md5(b"MZ the collection").hexdigest()), \
+                mock.patch.object(self.FakePath, "browse") as browse:
+            self.assertEqual(install._exe_path_from_settings(), found)
+        browse.assert_not_called()
+        self.assertEqual(self.options.collection_exe, found)
+        self.saved.assert_called_once()
 
     def test_a_missing_path_is_asked_for_and_saved(self) -> None:
         chosen = self.exe()
@@ -622,7 +712,7 @@ class ExePromptTest(unittest.TestCase):
         found = self.exe()
         self.in_libraries = [found]
         self.options.collection_exe = self.FakePath(os.path.join(self.root, "missing", "game.exe"))
-        with mock.patch.object(install, "is_collection_exe", return_value=True), \
+        with mock.patch.object(install, "AC_GAME_EXE_MD5", hashlib.md5(b"MZ").hexdigest()), \
                 mock.patch.object(self.FakePath, "browse") as browse:
             self.assertEqual(install._exe_path_from_settings(), found)
         browse.assert_not_called()
