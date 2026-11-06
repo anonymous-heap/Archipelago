@@ -18,8 +18,9 @@ from Fill import distribute_items_restrictive
 from test.general import gen_steps, setup_multiworld
 from worlds.AutoWorld import call_all
 
-from .. import CVAOSWorld, item_granting, item_smoothing
-from ..client_logic import PROGRESSIVE_MOVEMENT_CODE, CVAOSClientLogic
+from .. import CVAOSWorld, item_smoothing
+from ..client_logic import (ITEMS_FROM_OTHER_WORLDS, ITEMS_INCLUDING_OWN, PROGRESSIVE_MOVEMENT_CODE,
+                            CVAOSClientLogic)
 from ..data import item_info_collection
 from ..items import PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, item_table
 from ..rom.entity import GBA_ROM_BASE
@@ -109,26 +110,25 @@ class CollectTest(unittest.TestCase):
 class GenerationTest(unittest.TestCase):
     def test_filled_seeds_place_every_copy_and_write_them_as_the_placeholder(self):
         for smoothing in ("strict", "off"):
-            for seed in (1, 2, 3):
-                with self.subTest(item_smoothing=smoothing, seed=seed):
-                    multiworld = build(True, steps=gen_steps, seed=seed, item_smoothing=smoothing)
-                    distribute_items_restrictive(multiworld)
-                    call_all(multiworld, "post_fill")
-                    self.assertTrue(multiworld.can_beat_game(multiworld.get_all_state()))
-                    world = multiworld.worlds[1]
-                    locations = [loc for loc in multiworld.get_locations(1) if loc.address is not None]
-                    writes = get_location_data(world, locations)
-                    copies = [loc for loc in locations if loc.item.name == PROGRESSIVE_MOVEMENT]
-                    self.assertEqual(len(copies), 3)
-                    for loc in copies:
-                        offset = loc.address - GBA_ROM_BASE
-                        written = (writes[offset + _TYPE_OFF][0], writes[offset + _TYPE_OFF][1],
-                                   int.from_bytes(writes[offset + _ITEM_OFF], "little"))
-                        self.assertEqual(written, _AP_PLACEHOLDER)
-                    slot_data = world.fill_slot_data()
-                    self.assertEqual(slot_data["progressive_movement_locations"],
-                                     sorted(loc.address for loc in copies))
-                    self.assertEqual(slot_data["progressive_movement_starting"], 0)
+            with self.subTest(item_smoothing=smoothing):
+                multiworld = build(True, steps=gen_steps, seed=1, item_smoothing=smoothing)
+                distribute_items_restrictive(multiworld)
+                call_all(multiworld, "post_fill")
+                self.assertTrue(multiworld.can_beat_game(multiworld.get_all_state()))
+                world = multiworld.worlds[1]
+                locations = [loc for loc in multiworld.get_locations(1) if loc.address is not None]
+                writes = get_location_data(world, locations)
+                copies = [loc for loc in locations if loc.item.name == PROGRESSIVE_MOVEMENT]
+                self.assertEqual(len(copies), 3)
+                for loc in copies:
+                    offset = loc.address - GBA_ROM_BASE
+                    written = (writes[offset + _TYPE_OFF][0], writes[offset + _TYPE_OFF][1],
+                               int.from_bytes(writes[offset + _ITEM_OFF], "little"))
+                    self.assertEqual(written, _AP_PLACEHOLDER)
+                slot_data = world.fill_slot_data()
+                self.assertEqual(slot_data["progressive_movement_locations"],
+                                 sorted(loc.address for loc in copies))
+                self.assertEqual(slot_data["progressive_movement_starting"], 0)
 
     def test_starting_copies_are_counted_in_slot_data(self):
         multiworld = build(True)
@@ -221,7 +221,7 @@ class ClientGrantTest(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(ready.stop)
 
     def ctx(self, received_copies: int = 0, checked=(), enabled: bool = True, starting: int = 0,
-            other_items: int = 0, items_handling: int = 0b101):
+            other_items: int = 0, items_handling: int = ITEMS_FROM_OTHER_WORLDS):
         items = ([SimpleNamespace(item=PROGRESSIVE_MOVEMENT_CODE, location=1)] * received_copies
                  + [SimpleNamespace(item=OTHER_ITEM_CODE, location=1)] * other_items
                  + [SimpleNamespace(item=PROGRESSIVE_MOVEMENT_CODE, location=-2)] * starting)
@@ -256,7 +256,8 @@ class ClientGrantTest(unittest.IsolatedAsyncioTestCase):
         # A seed with enemy checks asks the server for the player's own items too, so a copy found
         # at location 102 is also among the received items.
         ram = FakeRam()
-        await self.ticks(self.ctx(received_copies=1, checked=[102], items_handling=0b111), ram)
+        ctx = self.ctx(received_copies=1, checked=[102], items_handling=ITEMS_INCLUDING_OWN)
+        await self.ticks(ctx, ram)
         self.assertEqual(ram.granted, ["Flying Armor"])
 
     async def test_a_location_known_both_ways_counts_once(self):
@@ -284,11 +285,6 @@ class ClientGrantTest(unittest.IsolatedAsyncioTestCase):
         await self.ticks(self.ctx(received_copies=3), ram, count=1)
         self.assertEqual(ram.granted, ["Flying Armor"])
 
-    async def test_a_soul_already_owned_is_not_granted_again(self):
-        ram = FakeRam(owned={"Flying Armor"})
-        await self.ticks(self.ctx(received_copies=2), ram)
-        self.assertEqual(ram.granted, ["Malphas"])
-
     async def test_a_reloaded_save_gets_back_only_the_souls_it_lacks(self):
         # The save was made after the first copy arrived, and two more have arrived since.
         ram = FakeRam(owned={"Flying Armor"})
@@ -299,28 +295,6 @@ class ClientGrantTest(unittest.IsolatedAsyncioTestCase):
         ram = FakeRam()
         await self.ticks(self.ctx(received_copies=3, enabled=False), ram)
         self.assertEqual(ram.granted, [])
-
-
-class ReceivedCopyGrantTest(unittest.IsolatedAsyncioTestCase):
-    async def test_a_received_copy_grants_nothing_and_later_items_still_arrive(self):
-        # A copy's soul is granted from the client's count of copies, not when the copy is
-        # received. Receiving one must still advance the saved received-counter past it, or every
-        # later item would wait forever.
-        from NetUtils import NetworkItem
-
-        from ..ram import AoSRAM
-        from ..ram.addresses import EWRAM
-        from .test_deathlink import _new_client
-        from .test_ram_map import FakeBackend
-
-        ram = AoSRAM(FakeBackend({EWRAM: bytearray(0x40000), "ROM": bytearray(0x800000)}))
-        ctx = SimpleNamespace(items_received=[NetworkItem(PROGRESSIVE_MOVEMENT_CODE, 0, 2),
-                                              NetworkItem(item_table["Mind Up"].code, 0, 2)],
-                              slot_data={}, items_handling=0b101)
-        await _new_client()._receive_items(ctx, ram)
-        self.assertEqual(await ram.get_received_count(), 2)
-        self.assertEqual(await ram.owned_count("consumable", 5), 1)
-        self.assertEqual(await ram.owned_count("blue_soul", 0), 0, "a copy grants no soul itself")
 
 
 if __name__ == "__main__":

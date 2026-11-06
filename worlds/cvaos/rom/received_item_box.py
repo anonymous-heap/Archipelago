@@ -21,7 +21,8 @@ directly would have its box silently dropped whenever a transition or another bo
   :data:`SFX_MONEY` for gold, :data:`SFX_ITEM` for a consumable, :data:`SFX_ITEM_TO_INVENTORY`
   for a weapon or armor (accessories included), and :data:`SFX_SOUL` for a soul.
 * Item name text-ids are the u16 table at 0x08506734 indexed by item global-id, which is the
-  same table the vanilla collect path (``sub_080441F8``) reads. :func:`name_text_id` wraps it.
+  same table the vanilla collect path (``sub_080441F8``) reads. The client looks up each
+  announced item's text-id in it (see announce.py).
 * Souls use a different renderer, not the textbox. The hook makes the three calls vanilla
   makes, in vanilla's order: ``sub_08045C34(soulType)`` for a new soul only (its effect entity
   freezes the entity update loop, which is the pause the player dismisses with A),
@@ -45,8 +46,6 @@ from __future__ import annotations
 from typing import Dict
 
 from . import xanthus_framework
-
-GBA_ROM_BASE = 0x08000000
 
 # --- This hook: slot 2 of the shared framework's pointer list ---
 HOOK_SLOT = 2
@@ -105,18 +104,6 @@ assert (0x0800E708 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_0800E708 missi
 assert (0x08049E64 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_08049E64 missing from hook body"
 assert (0x08045C34 + 1).to_bytes(4, "little") in _HOOK_BODY, "sub_08045C34 missing from hook body"
 assert (0x080D7910 + 1).to_bytes(4, "little") in _HOOK_BODY, "PlaySong missing from hook body"
-
-
-def name_text_id(base_rom: bytes, item_global_id: int) -> int:
-    """The "Got <name>" string id for ``item_global_id``, read from the ROM's own table.
-
-    This is the table the vanilla collect path reads, so an announcement names an item exactly
-    as picking it up would.
-    """
-    if not 0 <= item_global_id <= 256:
-        raise ValueError(f"item global-id out of range: {item_global_id}")
-    at = ITEM_NAME_TEXT_IDS_GBA - GBA_ROM_BASE + item_global_id * 2
-    return int.from_bytes(base_rom[at:at + 2], "little")
 
 
 def mailbox_write(text_id: int, sfx: int = SFX_ITEM) -> bytes:

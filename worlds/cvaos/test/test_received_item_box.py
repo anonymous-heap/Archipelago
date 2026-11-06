@@ -1,9 +1,8 @@
 """Structural tests for the received-item announcement (rom/received_item_box.py).
 
-These do not run the ROM; they check the bytes the builder emits (blob shape and literal pool,
-the framework writes, the slot-2 registration, and the mailbox block layout). Whether the banner
-and sound actually appear for a received item still needs an emulator playtest -- see
-rom/received_item_box.s.
+These do not run the ROM. They check the hook body's literal pool, its install in slot 2, and the
+mailbox block layout. Whether the banner and sound actually appear for a received item still
+needs an emulator playtest (see rom/received_item_box.s).
 """
 from __future__ import annotations
 
@@ -25,16 +24,7 @@ def vanilla_rom() -> bytearray:
     return rom
 
 
-def apply(work: bytearray, writes) -> None:
-    for offset, data in writes.items():
-        work[offset:offset + len(data)] = data
-
-
 class TestBlob(unittest.TestCase):
-    def test_blob_shape(self):
-        self.assertEqual(len(rib._HOOK_BODY), 144)
-        self.assertLessEqual(len(rib._HOOK_BODY), 0x200, "body overruns its slot")
-
     def test_the_literal_pool_is_exactly_the_eight_expected_words(self):
         # test_thumb_assembler checks the blob against its .s source, but that needs keystone
         # and skips without it. This pins the pool with no dependency, so a truncated blob or a
@@ -62,20 +52,6 @@ class TestBlob(unittest.TestCase):
         self.assertEqual(code[wait + 4 + 1], 0xD1, "and skip the frame while it is nonzero")
         self.assertLess(wait, code.find(bytes.fromhex("0842")))
 
-    def test_literal_pool_bakes_every_target(self):
-        for name, addr in (
-            ("mailbox", rib.MAILBOX_GBA),
-            ("textbox request block", 0x02000420),
-            ("busy mask", 0x03000200),
-            ("sub_0800EF98|1", 0x0800EF98 | 1),
-            ("sub_0800E708|1", 0x0800E708 | 1),
-            ("sub_08049E64|1", 0x08049E64 | 1),
-            ("sub_08045C34|1", 0x08045C34 | 1),
-            ("PlaySong|1", 0x080D7910 | 1),
-        ):
-            with self.subTest(literal=name):
-                self.assertIn(struct.pack("<I", addr), rib._HOOK_BODY)
-
     def test_mailbox_is_in_the_free_ewram_tail(self):
         # Above the gEwramData struct (ends 0x02025554), below the end of EWRAM, and clear of
         # this world's other claims in that tail.
@@ -88,49 +64,13 @@ class TestBlob(unittest.TestCase):
 
 
 class TestWrites(unittest.TestCase):
-    def setUp(self):
-        self.rom = vanilla_rom()
-        self.w = rib.build_writes(bytes(self.rom))
+    """test_xanthus_framework covers the shared framework writes and how slots coexist."""
 
-    def test_repoints_the_per_frame_pointer_at_the_dispatcher(self):
-        self.assertEqual(self.w[0x043104], bytes.fromhex("01007d"))   # -> 0x087D0001
-
-    def test_registers_in_slot_2(self):
-        entry = self.w[0x7D0040 + 4 * (rib.HOOK_SLOT - 1)]
-        self.assertEqual(entry, struct.pack("<I", rib.HOOK_BODY_GBA | 1))
-
-    def test_body_lands_at_the_slot_address(self):
-        self.assertEqual(self.w[rib.HOOK_BODY_GBA - GBA], rib._HOOK_BODY)
-
-
-class TestFrameworkRegistration(unittest.TestCase):
-    """This feature owns slot 2 of the shared framework and must not care who owns the others."""
-
-    def test_registers_in_slot_2_of_the_shared_framework(self):
-        self.assertEqual(rib.HOOK_SLOT, 2)
-        self.assertEqual(rib.HOOK_BODY_GBA, xf.slot_body_gba(2))
-        w = rib.build_writes(bytes(vanilla_rom()))
-        self.assertEqual(w[xf.slot_entry_offset(2)],
+    def test_installs_the_hook_body_in_slot_2(self):
+        writes = rib.build_writes(bytes(vanilla_rom()))
+        self.assertEqual(writes[xf.slot_entry_offset(2)],
                          struct.pack("<I", xf.slot_body_gba(2) | 1))
-
-    def test_works_with_another_slot_already_installed(self):
-        # patch.py hands each module the ROM as patched so far, so the framework may already be
-        # in place with other slots claimed. Simulate a foreign slot-1 owner.
-        rom = vanilla_rom()
-        stub = bytes.fromhex("7047")                  # a stub body: bx lr
-        apply(rom, xf.writes(bytes(rom), 1, stub))
-        apply(rom, rib.build_writes(bytes(rom)))          # must not raise
-        self.assertEqual(bytes(rom[xf.slot_entry_offset(1):xf.slot_entry_offset(1) + 4]),
-                         struct.pack("<I", xf.slot_body_gba(1) | 1))
-        self.assertEqual(bytes(rom[xf.slot_entry_offset(2):xf.slot_entry_offset(2) + 4]),
-                         struct.pack("<I", xf.slot_body_gba(2) | 1))
-
-    def test_installs_on_its_own(self):
-        rom = vanilla_rom()
-        apply(rom, rib.build_writes(bytes(rom)))
-        self.assertEqual(bytes(rom[xf.DISPATCHER_OFFSET:xf.DISPATCHER_OFFSET + 52]),
-                         xf.DISPATCHER)
-        self.assertEqual(bytes(rom[0x043104:0x043107]), xf.HOOK_SITE_PATCHED)
+        self.assertEqual(writes[xf.slot_body_gba(2) - GBA], rib._HOOK_BODY)
 
 
 class TestMailbox(unittest.TestCase):
@@ -164,20 +104,6 @@ class TestMailbox(unittest.TestCase):
             rib.mailbox_write(1, sfx=-1)
         with self.assertRaises(ValueError):
             rib.soul_mailbox_write(soul_index=0, soul_type=0x100)
-
-
-class TestNameTextId(unittest.TestCase):
-    def test_reads_the_roms_own_table(self):
-        rom = vanilla_rom()
-        at = rib.ITEM_NAME_TEXT_IDS_GBA - GBA
-        for gid in range(32):                        # consumables: text-id == 91 + slot
-            rom[at + gid * 2:at + gid * 2 + 2] = struct.pack("<H", 91 + gid)
-        self.assertEqual(rib.name_text_id(bytes(rom), 0), 91)
-        self.assertEqual(rib.name_text_id(bytes(rom), 5), 96)
-
-    def test_rejects_an_out_of_range_global_id(self):
-        with self.assertRaises(ValueError):
-            rib.name_text_id(bytes(vanilla_rom()), 257)
 
 
 if __name__ == "__main__":

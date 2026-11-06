@@ -10,26 +10,27 @@ from collections import Counter
 from types import SimpleNamespace
 from unittest import mock
 
-from BaseClasses import CollectionState, Entrance, ItemClassification, MultiWorld
+from BaseClasses import CollectionState, Entrance, MultiWorld
 from test.general import setup_multiworld
 
 from .. import CVAOSWorld, item_smoothing
-from ..client_logic import (ITEMS_FROM_OTHER_WORLDS, ITEMS_INCLUDING_OWN, CVAOSClientLogic,
-                            items_handling_for)
-from ..data import enemy_placements, enemy_type_by_name, enemy_type_collection
+from ..client_logic import ITEMS_FROM_OTHER_WORLDS, ITEMS_INCLUDING_OWN, CVAOSClientLogic
+from ..data import (enemy_placements, enemy_type_by_name, enemy_type_collection,
+                    item_info_collection, pickup_info_collection)
 from ..enemy_checks import (BOSS_TYPES, FALLBACK_SOULS, SPAWNS_AFTER_BOSS_IN, defeat_location_id,
                             defeat_location_name, enemy_check_types, enemy_id_for_location,
                             has_recorded_route, placements_of)
-from ..items import ENEMY_ITEM, PROGRESSIVE_MOVEMENT, create_enemy_item, item_table
+from ..items import ENEMY_ITEM, item_table
 from ..locations import defeat_location_names, location_name_to_id, pickup_location_ids
 from ..options import EnemyChecks, Goal
 from ..rom.entity import GBA_ROM_BASE, PICKUP
 from ..rom.patch import (_ITEM_OFF, _TYPE_OFF, ARCHIPELAGO_IDENTIFIER, COMPATIBLE_IDENTIFIERS,
-                         OWN_ITEMS_FROM_SERVER_IDENTIFIER, get_item_encoding, get_location_data,
-                         rom_gives_item, seed_identifier)
+                         OWN_ITEMS_FROM_SERVER_IDENTIFIER, get_location_data, rom_gives_item,
+                         seed_identifier)
 from .test_smoothing_location_settings import generate
 
 BUILD_STEPS = ("generate_early", "create_regions", "create_items", "set_rules")
+POOL_STEPS = ("generate_early", "create_regions", "create_items")
 
 
 def options(enemy_checks: int, goal: int = Goal.default) -> SimpleNamespace:
@@ -39,6 +40,11 @@ def options(enemy_checks: int, goal: int = Goal.default) -> SimpleNamespace:
 def build(enemy_checks: str, steps=BUILD_STEPS, seed: int = 1, **extra) -> MultiWorld:
     return setup_multiworld(CVAOSWorld, steps, seed=seed,
                             options={"enemy_checks": enemy_checks, **extra})
+
+
+def item_pool(multiworld: MultiWorld) -> Counter:
+    items = [*multiworld.itempool, *multiworld.worlds[1].get_pre_fill_items()]
+    return Counter(item.name for item in items)
 
 
 def state_with_all_items_but(multiworld: MultiWorld, left_out: str = "") -> CollectionState:
@@ -106,38 +112,24 @@ class WhichTypesTest(unittest.TestCase):
 
 
 class GenerationTest(unittest.TestCase):
-    def test_seeds_generate_beatable_with_one_item_per_defeat_location(self):
+    def test_seeds_generate_beatable_with_one_defeat_location_per_type(self):
         for setting in ("bosses", "all"):
-            for seed in range(2):
-                multiworld = generate(seed, {"enemy_checks": setting})
-                types = enemy_check_types(multiworld.worlds[1].options)
-                with self.subTest(setting=setting, seed=seed):
-                    self.assertTrue(multiworld.can_beat_game(multiworld.state))
-                    defeats = [location for location in multiworld.get_locations(1)
-                               if location.name in defeat_location_names]
-                    self.assertEqual(len(defeats), len(types))
-                    items = Counter(item.name for item in multiworld.get_items()
-                                    if item.player == 1)
-                    added = Counter(ENEMY_ITEM[enemy.name] for enemy in types)
-                    self.assertEqual(items & added, added)
+            multiworld = generate(0, {"enemy_checks": setting})
+            types = enemy_check_types(multiworld.worlds[1].options)
+            with self.subTest(setting=setting):
+                self.assertTrue(multiworld.can_beat_game(multiworld.state))
+                defeats = [location for location in multiworld.get_locations(1)
+                           if location.name in defeat_location_names]
+                self.assertEqual(len(defeats), len(types))
 
-    def test_enemy_items_never_hold_progression(self):
-        world = build("all", steps=("generate_early",)).worlds[1]
-        self.assertEqual([enemy for enemy in ENEMY_ITEM
-                          if create_enemy_item(world, enemy).classification
-                          & ItemClassification.progression], [])
-
-    def test_a_drop_shows_as_the_same_pickup_that_holds_it_elsewhere(self):
-        from ..data import pickup_info_collection
-        vanilla = {pickup.item_name: (pickup.type_num, pickup.subtype_num, pickup.item_offset)
-                   for pickup in pickup_info_collection if pickup.type_num == PICKUP}
-        compared = 0
-        for name in set(ENEMY_ITEM.values()):
-            if name in vanilla:
-                compared += 1
-                with self.subTest(item=name):
-                    self.assertEqual(get_item_encoding(item_table[name].code), vanilla[name])
-        self.assertGreater(compared, 10)
+    def test_each_checked_type_adds_one_copy_of_its_item_to_the_pool(self):
+        without_checks = item_pool(build("off", steps=POOL_STEPS))
+        for setting in ("bosses", "all"):
+            multiworld = build(setting, steps=POOL_STEPS)
+            types = enemy_check_types(multiworld.worlds[1].options)
+            added = Counter(ENEMY_ITEM[enemy.name] for enemy in types)
+            with self.subTest(setting=setting):
+                self.assertEqual(item_pool(multiworld), without_checks + added)
 
     def test_off_adds_no_defeat_locations(self):
         multiworld = build("off")
@@ -254,24 +246,33 @@ class DeliveryTest(unittest.TestCase):
         self.assertEqual(listed, expected)
         self.assertTrue(listed)
 
-    def test_the_rom_shows_each_own_enemy_item_on_a_pickup_as_itself(self):
+    def test_the_rom_shows_an_enemy_only_item_by_its_categorys_rule(self):
+        # An item that only enemies hold has no vanilla pickup to copy, so it takes the subtype
+        # that vanilla pickups of its category use. Its item_offset is its id plus that
+        # category's fixed amount. Accessories use the armor subtype, with an item_offset 25 more
+        # than their id.
+        rules = {"consumable": (2, 0), "weapon": (3, 0), "armor": (4, 0), "accessory": (4, 25)}
+        info_by_name = {info.name: info for info in item_info_collection}
+        held_by_a_pickup = {pickup.item_name for pickup in pickup_info_collection}
+        enemy_only = set(ENEMY_ITEM.values()) - held_by_a_pickup
         world = self.with_checks.worlds[1]
         pickups = [location for location in self.with_checks.get_locations(1)
                    if location.address in pickup_location_ids]
         writes = get_location_data(world, pickups)
-        added = {item_table[name].code for name in ENEMY_ITEM.values()}
-        placed = [location for location in pickups if location.item.code in added]
+        placed = [location for location in pickups if location.item.name in enemy_only]
         self.assertTrue(placed)
         for location in placed:
+            info = info_by_name[location.item.name]
+            subtype_num, added = rules[info.item_category]
             with self.subTest(location=location.name, item=location.item.name):
                 self.assertTrue(rom_gives_item(world, location))
                 offset = location.address - GBA_ROM_BASE
-                type_num, subtype_num, item_offset = get_item_encoding(location.item.code)
-                self.assertEqual(writes[offset + _TYPE_OFF], bytes([type_num, subtype_num]))
-                self.assertEqual(writes[offset + _ITEM_OFF], item_offset.to_bytes(2, "little"))
+                self.assertEqual(writes[offset + _TYPE_OFF], bytes([PICKUP, subtype_num]))
+                self.assertEqual(writes[offset + _ITEM_OFF],
+                                 (info.id + added).to_bytes(2, "little"))
 
     def test_slot_data_has_no_list_without_enemy_checks(self):
-        self.assertNotIn("rom_given_locations", generate(3, {}).worlds[1].fill_slot_data())
+        self.assertNotIn("rom_given_locations", build("off").worlds[1].fill_slot_data())
 
     def test_item_smoothing_moves_items_only_between_pickups(self):
         positions = item_smoothing._run_position(self.with_checks, 1)
@@ -348,13 +349,6 @@ class ClientTest(unittest.IsolatedAsyncioTestCase):
                        slot_data={"rom_given_locations": [pickup],
                                   "starting_inventory_from_server": True})
         self.assertEqual(CVAOSClientLogic._grantable_items(ctx), [item])
-
-    def test_the_rom_identifier_picks_the_items_handling(self):
-        self.assertEqual(items_handling_for(ARCHIPELAGO_IDENTIFIER.encode("ascii")),
-                         ITEMS_FROM_OTHER_WORLDS)
-        self.assertEqual(items_handling_for(b"CVAOS_AP_V0.3"), ITEMS_FROM_OTHER_WORLDS)
-        self.assertEqual(items_handling_for(OWN_ITEMS_FROM_SERVER_IDENTIFIER.encode("ascii")),
-                         ITEMS_INCLUDING_OWN)
 
 
 if __name__ == "__main__":

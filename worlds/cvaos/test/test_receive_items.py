@@ -16,12 +16,12 @@ from types import SimpleNamespace
 from NetUtils import NetworkItem
 
 from .. import announce, item_granting
-from ..client_logic import MAX_ITEMS_PER_TICK, STARTING_LOCATION
-from ..items import FORBIDDEN_AREA_SWITCH, item_table
+from ..client_logic import (ITEMS_FROM_OTHER_WORLDS, MAX_ITEMS_PER_TICK, STARTING_LOCATION,
+                            CVAOSClientLogic)
+from ..items import FORBIDDEN_AREA_SWITCH, PROGRESSIVE_MOVEMENT, item_table
 from ..ram import AoSRAM, addresses as addr
 from ..ram.addresses import EWRAM
 from ..rom import received_item_box as box
-from .test_deathlink import _new_client
 from .test_ram_map import FakeBackend
 
 ROM = "ROM"
@@ -87,13 +87,14 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
         self.ewram = bytearray(0x40000)
         self.memory = {EWRAM: self.ewram, ROM: bytearray(0x800000)}
         self.ram = AoSRAM(FakeBackend(self.memory))
-        self.client = _new_client()
+        self.client = CVAOSClientLogic()
+        self.client._reset_session_state()
 
     @staticmethod
     def ctx(*names: str, codes: tuple[int, ...] = ()) -> SimpleNamespace:
         codes = (*codes, *(item_table[name].code for name in names))
         return SimpleNamespace(items_received=[NetworkItem(code, 0, 2) for code in codes],
-                               slot_data={}, items_handling=0b101)
+                               slot_data={}, items_handling=ITEMS_FROM_OTHER_WORLDS)
 
     def gold(self) -> int:
         return int.from_bytes(self.ewram[GOLD_OFFSET:GOLD_OFFSET + 4], "little")
@@ -190,6 +191,16 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.ram.owned_count("consumable", 5), 9)
         self.assertEqual(await self.ram.get_received_count(), 1)
 
+    async def test_a_progressive_movement_copy_grants_nothing_and_later_items_arrive(self) -> None:
+        # A copy's soul is granted from the client's count of copies, not when the copy is
+        # received. Receiving one must still advance the saved received-counter past it, or every
+        # later item would wait forever.
+        await self.client._receive_items(self.ctx(PROGRESSIVE_MOVEMENT, "Mind Up"), self.ram)
+        self.assertEqual(await self.ram.get_received_count(), 2)
+        self.assertEqual(await self.ram.owned_count("consumable", 5), 1)
+        self.assertEqual(await self.ram.owned_count("blue_soul", 0), 0,
+                         "a copy grants no soul itself")
+
     async def test_a_flag_only_item_sets_its_flag_and_advances_the_counter(self) -> None:
         action = item_granting.resolve(item_table[FORBIDDEN_AREA_SWITCH].code)
         await self.client._receive_items(self.ctx(FORBIDDEN_AREA_SWITCH), self.ram)
@@ -213,7 +224,8 @@ class ReceiveItemsTest(unittest.IsolatedAsyncioTestCase):
         # The server sends the starting inventory first, at location -2.
         items = [NetworkItem(item_table["500 Gold"].code, STARTING_LOCATION, 2),
                  NetworkItem(item_table["Mind Up"].code, 5, 2)]
-        return SimpleNamespace(items_received=items, slot_data=slot_data, items_handling=0b101)
+        return SimpleNamespace(items_received=items, slot_data=slot_data,
+                               items_handling=ITEMS_FROM_OTHER_WORLDS)
 
     async def test_an_older_seeds_save_counts_only_items_from_other_worlds(self) -> None:
         # An older client already granted Mind Up and counted it, but never received the gold.

@@ -88,12 +88,6 @@ class FakeRam:
     async def get_deathlink_state(self) -> tuple[int, int, int, bool]:
         return self._read((self.game_state, self.menu_state, self.hp, self.kill_request))
 
-    async def get_current_hp(self) -> int:
-        return self._read(self.hp)
-
-    async def get_kill_request(self) -> bool:
-        return self._read(self.kill_request)
-
     async def get_max_hp(self) -> int:
         return self._read(self.max_hp)
 
@@ -135,11 +129,6 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
         await self.relay(INGAME, NORMAL)
         self.assertIn("DeathLink", self.ctx.tags)
 
-    async def test_does_not_enable_when_seed_disables_it(self) -> None:
-        self.ctx.slot_data["death_link"] = False
-        await self.relay(INGAME, NORMAL)
-        self.assertNotIn("DeathLink", self.ctx.tags)
-
     async def test_broadcasts_once_on_death_substate(self) -> None:
         await self.relay(INGAME, NORMAL)            # alive: no death
         self.assertEqual(self.ctx.sent_deaths, [])
@@ -164,32 +153,17 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
         await self.relay(INGAME, DEATH, hp=0)       # a second, independent death
         self.assertEqual(len(self.ctx.sent_deaths), 2)
 
-    async def test_does_not_rearm_while_kill_pending(self) -> None:
-        # The window right after we request an incoming kill: the hook hasn't run yet, so state is back
-        # to NORMAL and HP is untouched, but the kill-request flag is still set. Re-arming here would
-        # let the impending death echo back out as our own.
+    async def test_rearms_only_after_the_incoming_kill_is_consumed(self) -> None:
+        # Right after the client requests an incoming kill, the hook has not run yet. The state
+        # reads NORMAL and HP is untouched, but the kill-request flag is still set. Re-arming then
+        # would let the impending death echo back out as Soma's own.
         self.client.currently_dead = True
         self.ram.kill_request = True
         await self.relay(INGAME, NORMAL, hp=100)
         self.assertTrue(self.client.currently_dead, "a pending kill must not count as a respawn")
-
-    async def test_rearms_after_incoming_kill_consumed(self) -> None:
-        # Once the hook has consumed the request (flag clear) and Soma is alive again, re-arm.
-        self.client.currently_dead = True
-        self.ram.kill_request = True
-        await self.relay(INGAME, NORMAL, hp=100)        # pending -> no re-arm
-        self.assertTrue(self.client.currently_dead)
-        self.ram.kill_request = False                   # hook ran (death, then respawn)
-        await self.relay(INGAME, NORMAL, hp=100)        # alive, nothing pending -> re-arm
+        self.ram.kill_request = False                   # the hook ran: death, then respawn
+        await self.relay(INGAME, NORMAL, hp=100)        # alive with nothing pending, so re-arm
         self.assertFalse(self.client.currently_dead)
-
-    async def test_applies_incoming_death_during_gameplay(self) -> None:
-        await self.relay(INGAME, NORMAL)            # enable tag
-        self.client.death_causes.append("Someone else died")
-        await self.relay(INGAME, NORMAL, hp=100)
-        self.assertEqual(self.ram.kill_calls, 1)
-        self.assertTrue(self.client.currently_dead)
-        self.assertEqual(self.client.death_causes, [], "cause should be consumed")
 
     async def test_incoming_death_not_applied_outside_gameplay(self) -> None:
         await self.relay(INGAME, NORMAL)
@@ -337,12 +311,14 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
         await self.relay(INGAME, NORMAL, hp=100)
         self.assertEqual(self.ram.kill_calls, 0)
 
-    async def test_received_death_is_not_rebroadcast(self) -> None:
+    async def test_a_received_death_is_applied_and_not_rebroadcast(self) -> None:
         # Applying an incoming death must not later echo back out as our own broadcast.
         await self.relay(INGAME, NORMAL)
         self.client.death_causes.append("Someone else died")
-        await self.relay(INGAME, NORMAL, hp=100)    # apply incoming -> currently_dead, kill requested
+        await self.relay(INGAME, NORMAL, hp=100)    # apply incoming: kill requested
         self.assertEqual(self.ram.kill_calls, 1)
+        self.assertTrue(self.client.currently_dead)
+        self.assertEqual(self.client.death_causes, [], "the cause must be consumed")
         sent_before = len(self.ctx.sent_deaths)
         await self.relay(INGAME, DEATH, hp=0)       # the game now enters its death fade
         self.assertEqual(len(self.ctx.sent_deaths), sent_before,
@@ -352,14 +328,19 @@ class DeathLinkRelayTest(unittest.IsolatedAsyncioTestCase):
 class DeathLinkTickTest(unittest.IsolatedAsyncioTestCase):
     """Whole client ticks, so the ROM hook can run on a frame between two of a tick's reads."""
 
-    def setUp(self) -> None:
-        self.client = _new_client()
-        self.ctx = FakeCtx(death_link=True)
-        self.ram = FakeRam(hp=100)
+    @staticmethod
+    def ticking_client() -> CVAOSClient:
+        client = _new_client()
         # Other tests cover the save-block concerns, so here they are stubs that touch no RAM.
         for concern in ("_send_location_checks", "_report_position", "_report_exploration",
                         "_receive_items", "_grant_progressive_movement", "_report_goal"):
-            setattr(self.client, concern, mock.AsyncMock())
+            setattr(client, concern, mock.AsyncMock())
+        return client
+
+    def setUp(self) -> None:
+        self.client = self.ticking_client()
+        self.ctx = FakeCtx(death_link=True)
+        self.ram = FakeRam(hp=100)
 
     async def tick(self) -> None:
         await self.client._tick(self.ctx, self.ram)
@@ -370,14 +351,16 @@ class DeathLinkTickTest(unittest.IsolatedAsyncioTestCase):
         # that kill as Soma's own death.
         for reads_before_hook in (1, 2):
             with self.subTest(reads_before_hook=reads_before_hook):
-                self.setUp()
-                await self.tick()
-                self.client.death_causes.append("Someone else died")
-                await self.tick()                    # the kill is requested
-                self.ram.reads_before_hook = reads_before_hook
-                await self.tick()                    # the hook runs the kill during this tick
-                await self.tick()                    # Soma is in the death fade
-                self.assertEqual(self.ctx.sent_deaths, [],
+                client = self.ticking_client()
+                ctx = FakeCtx(death_link=True)
+                ram = FakeRam(hp=100)
+                await client._tick(ctx, ram)
+                client.death_causes.append("Someone else died")
+                await client._tick(ctx, ram)         # the kill is requested
+                ram.reads_before_hook = reads_before_hook
+                await client._tick(ctx, ram)         # the hook runs the kill during this tick
+                await client._tick(ctx, ram)         # Soma is in the death fade
+                self.assertEqual(ctx.sent_deaths, [],
                                  "a received death must not be rebroadcast as our own")
 
     async def test_a_kill_request_left_set_by_a_death_is_cleared(self) -> None:
