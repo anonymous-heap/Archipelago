@@ -32,7 +32,7 @@ from ..data.item_balancing.soul_tiers import soul_rating
 from ..data.item_balancing.worth import item_worth
 from ..data.item_info import by_item_number
 from ..options import cvaos_options_presets
-from ..rom import enemy_drop_rates, patch
+from ..rom import enemy_drop_rates, identifiers, patch
 from ..rom.address_space import gba_space
 from ..rom.enemy_table import ENEMY_COUNT, ENEMY_TABLE, EnemyDNA, field_offset, row_offset
 from ..rom.soul_drop_rates import scaled_rate
@@ -200,7 +200,7 @@ class PresetPatchTest(unittest.TestCase):
         self.assertIs(self.config["keep_soul_drop_rates"], False)
         self.assertTrue(self.config["enemy_drop_rates"])
         self.assertTrue(self.config["drop_table"])
-        start = patch.ARCHIPELAGO_IDENTIFIER_START
+        start = identifiers.ARCHIPELAGO_IDENTIFIER_START
         for name, (before, after) in self.patched_roms().items():
             with self.subTest(base=name):
                 self.assertEqual(after[start:start + 13], b"CVAOS_AP_V0.6")

@@ -24,7 +24,7 @@ from ..advance_collection.install import (
     AOS_MEMBER, BACKUP_SUFFIX, ROM_SIZE, InstallError, extract_base_rom_bytes,
     extract_base_rom_to, install_rom, restore_backup, validate_patched_rom, windata_dir_from_exe,
 )
-from ..rom.patch import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, CVAOSProcedurePatch
+from ..rom import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, CVAOSProcedurePatch
 
 _OTHER_MEMBER = "system/roms/99_other_game.bin"
 _OTHER_BYTES = b"\x11untouched-neighbor-member\x22" * 4

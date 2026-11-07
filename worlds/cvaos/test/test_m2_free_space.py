@@ -19,7 +19,7 @@ import unittest
 from ..rom import custom_pickups as cp
 from ..rom import deathlink_hook as dh
 from ..rom import inventory_menu as im
-from ..rom import patch
+from ..rom import identifiers
 from ..rom import skull_key_warp as skw
 from ..rom import soul_guarantee_hook as sgh
 from ..rom import received_item_box as rib
@@ -36,8 +36,9 @@ def free_rom_spans() -> list[tuple[str, int, int]]:
     of each payload.
     """
     return [
-        ("identifier", patch.ARCHIPELAGO_IDENTIFIER_START, len(patch.ARCHIPELAGO_IDENTIFIER)),
-        ("auth number", patch.AUTH_NUMBER_START, 16),
+        ("identifier", identifiers.ARCHIPELAGO_IDENTIFIER_START,
+         len(identifiers.ARCHIPELAGO_IDENTIFIER)),
+        ("auth number", identifiers.AUTH_NUMBER_START, 16),
         ("deathlink trampoline", dh.DEATHLINK_TRAMPOLINE.addr - GBA_ROM_BASE,
          dh.DEATHLINK_TRAMPOLINE.size),
         ("Skull Key warp hook", skw.WARPHOOK_BASE_FILE_OFFSET, len(skw.WARPHOOK_BLOB)),

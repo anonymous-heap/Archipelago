@@ -26,7 +26,7 @@ from worlds.Files import APTokenTypes
 from .. import CVAOSWorld
 from ..client_logic import ITEMS_FROM_OTHER_WORLDS, ITEMS_INCLUDING_OWN, items_handling_for
 from ..locations import pickup_location_ids
-from ..rom import patch
+from ..rom import identifiers, patch
 from . import find_rom
 from .test_smoothing_location_settings import generate
 from .test_soul_guarantee_hook import run_apply_rom_features
@@ -47,23 +47,23 @@ class IdentifierTest(unittest.TestCase):
     def test_a_seed_carries_at_least_the_minimum_identifier(self):
         world = setup_multiworld(CVAOSWorld, ("generate_early",), seed=1).worlds[1]
         config = patch.build_rom_config(world)
-        self.assertEqual(patch.identifier_for(config), patch.MIN_SEED_IDENTIFIER)
-        self.assertIn(patch.identifier_for(config), patch.COMPATIBLE_IDENTIFIERS)
+        self.assertEqual(identifiers.identifier_for(config), identifiers.MIN_SEED_IDENTIFIER)
+        self.assertIn(identifiers.identifier_for(config), identifiers.COMPATIBLE_IDENTIFIERS)
 
     def test_a_newer_key_raises_the_identifier(self):
         newer = "CVAOS_AP_V0.9"
-        with mock.patch.object(patch, "IDENTIFIERS", (*patch.IDENTIFIERS, newer)), \
-                mock.patch.dict(patch.ROM_CONFIG_KEY_IDENTIFIERS, {"newer_feature": newer}):
-            self.assertEqual(patch.identifier_for({"skull_key_warp": True, "newer_feature": 1}),
-                             newer)
+        with mock.patch.object(identifiers, "IDENTIFIERS", (*identifiers.IDENTIFIERS, newer)), \
+                mock.patch.dict(identifiers.ROM_CONFIG_KEY_IDENTIFIERS, {"newer_feature": newer}):
+            config = {"skull_key_warp": True, "newer_feature": 1}
+            self.assertEqual(identifiers.identifier_for(config), newer)
 
     def test_the_client_asks_for_own_items_after_the_released_identifiers(self):
-        for identifier in sorted(patch.COMPATIBLE_IDENTIFIERS | {"CVAOS_AP_V0.9"}):
-            expected = (ITEMS_FROM_OTHER_WORLDS if identifier in patch.RELEASED_IDENTIFIERS
+        for identifier in sorted(identifiers.COMPATIBLE_IDENTIFIERS | {"CVAOS_AP_V0.9"}):
+            expected = (ITEMS_FROM_OTHER_WORLDS if identifier in identifiers.RELEASED_IDENTIFIERS
                         else ITEMS_INCLUDING_OWN)
             with self.subTest(identifier=identifier):
                 self.assertEqual(items_handling_for(identifier.encode("ascii")), expected)
-        self.assertEqual(patch.RELEASED_IDENTIFIERS, {"CVAOS_AP_V0.3", "CVAOS_AP_V0.4"})
+        self.assertEqual(identifiers.RELEASED_IDENTIFIERS, {"CVAOS_AP_V0.3", "CVAOS_AP_V0.4"})
 
 
 class SlotDataTest(unittest.TestCase):
@@ -87,7 +87,7 @@ class PatchProcedureTest(unittest.TestCase):
 
     def test_an_unknown_key_raises_and_names_the_seeds_identifier(self):
         rom = bytearray(0x800000)
-        start = patch.ARCHIPELAGO_IDENTIFIER_START
+        start = identifiers.ARCHIPELAGO_IDENTIFIER_START
         rom[start:start + 13] = b"CVAOS_AP_V0.9"
         with self.assertRaisesRegex(ValueError, "newer_feature.*CVAOS_AP_V0.9"):
             run_apply_rom_features(self, bytes(rom), newer_feature=[])
@@ -98,8 +98,8 @@ class PatchProcedureTest(unittest.TestCase):
     def test_every_key_a_seed_writes_is_known(self):
         world = setup_multiworld(CVAOSWorld, ("generate_early",), seed=1).worlds[1]
         self.assertLessEqual(set(patch.build_rom_config(world)),
-                             set(patch.ROM_CONFIG_KEY_IDENTIFIERS))
-        self.assertLessEqual(set(RELEASED_CONFIG), set(patch.ROM_CONFIG_KEY_IDENTIFIERS))
+                             set(identifiers.ROM_CONFIG_KEY_IDENTIFIERS))
+        self.assertLessEqual(set(RELEASED_CONFIG), set(identifiers.ROM_CONFIG_KEY_IDENTIFIERS))
 
     def test_a_released_patch_without_the_step_still_applies(self):
         rom_path = find_rom()
@@ -109,7 +109,7 @@ class PatchProcedureTest(unittest.TestCase):
             base = fh.read()
         released = patch.CVAOSProcedurePatch(player=1, player_name="Soma")
         released.procedure = RELEASED_PROCEDURE
-        released.write_token(APTokenTypes.WRITE, patch.ARCHIPELAGO_IDENTIFIER_START,
+        released.write_token(APTokenTypes.WRITE, identifiers.ARCHIPELAGO_IDENTIFIER_START,
                              b"CVAOS_AP_V0.4")
         released.write_file("rom_config.json", json.dumps(RELEASED_CONFIG).encode("utf-8"))
         released.write_file("token_data.bin", released.get_token_binary())
@@ -124,7 +124,7 @@ class PatchProcedureTest(unittest.TestCase):
             with open(out_path, "rb") as fh:
                 result = fh.read()
         step.assert_not_called()
-        start = patch.ARCHIPELAGO_IDENTIFIER_START
+        start = identifiers.ARCHIPELAGO_IDENTIFIER_START
         self.assertEqual(result[start:start + 13], b"CVAOS_AP_V0.4")
         self.assertNotEqual(result, base)
 

@@ -31,7 +31,7 @@ from .items import PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, item_table
 from .locations import flag_offset_to_location_id
 from .options import Goal
 from .ram import AoSRAM, addresses as addr
-from .rom.patch import RELEASED_IDENTIFIERS
+from .rom import RELEASED_IDENTIFIERS
 
 if TYPE_CHECKING:
     from CommonClient import CommonContext

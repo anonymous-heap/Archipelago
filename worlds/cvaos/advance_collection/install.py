@@ -61,7 +61,7 @@ from . import cac_archive, steam
 from .._bytemaker_compat import Entry
 from ..constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5
 from ..rom.address_space import M2_AUDIO_BRIDGE, M2_GRAPHIC, gba_space
-from ..rom.patch import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, COMPATIBLE_IDENTIFIERS
+from ..rom import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, COMPATIBLE_IDENTIFIERS
 
 AOS_MEMBER = "system/roms/03_Akatsuki_US.patch_210623m.bin"
 ROM_SIZE = 0x800000
