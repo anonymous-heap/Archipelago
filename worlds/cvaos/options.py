@@ -356,8 +356,12 @@ class EnemyChecks(Choice):
        Gold.
 
     The item at an enemy check comes through the client a moment after the defeat. The client
-       sends no checks from a save file that belongs to another seed, including New Game+ started
-       from such a file, and prints a warning instead.
+       holds back the checks from a save file that has received more items than this seed has
+       sent, and prints a warning. Such a save may belong to another seed, or be New Game+
+       started from one. It may also be your own save, if the server lost its most recent checks
+       in a crash or a restart. For your own save, type /trust_save in the client to send its
+       checks. A save from another seed is caught only when it has received more items, so load
+       only this seed's saves.
 
     A hint for one of these checks names the rooms where the enemy appears. With all, hints cost
        more: 22 checks each at the default hint cost of 10%, against 11 without enemy checks.
