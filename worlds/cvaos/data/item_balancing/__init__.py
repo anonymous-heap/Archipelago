@@ -5,6 +5,9 @@ Loads ``desirability.csv``, which ``aggregate_tiers.py`` writes, into ``Desirabi
 ``rows`` holds them in the file's order, most desirable first, and ``by_name`` maps each item name
 to its row. ``desirability`` runs from 0 (least desirable) to 1, and ``disagreement`` is its
 standard deviation across raters.
+
+The package's other tables load from their own modules: ``worth`` holds each item's worth, and
+``soul_tiers`` holds each soul's rating and tier.
 """
 
 from __future__ import annotations
