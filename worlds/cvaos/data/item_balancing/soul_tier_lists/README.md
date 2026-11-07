@@ -9,6 +9,7 @@ folder records which soul each picture shows, and holds rankings decoded from su
 | `template_images_17251266.csv` | Which soul each image of the second template shows. |
 | `lists/` | Rankings decoded from lists, in the format of `../tier_jsons/`. |
 
+`../build_soul_tiers.py` reads `lists/` to rate each soul in `../soul_tiers.csv`.
 `aggregate_tiers.py` reads only `../tier_jsons/`, so nothing here changes `desirability.csv`
 until a list is copied there.
 

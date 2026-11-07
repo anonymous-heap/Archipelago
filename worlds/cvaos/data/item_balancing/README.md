@@ -9,8 +9,8 @@ resulting desirability table. The placement code is in
 [`../../item_smoothing.py`](../../item_smoothing.py), and it runs only when the `item_smoothing`
 option is `loose` or `strict`.
 
-The directory also holds a table that the Experimental options read: each item's worth
-(see [Worth](#worth)).
+The directory also holds two tables that the Experimental options read: each item's worth (see
+[Worth](#worth)) and each soul's rating and tier (see [Soul tiers](#soul-tiers)).
 
 **Orientation:** higher desirability means a later placement. Desirability runs from `0.0` (junk,
 placed earliest) to `1.0` (the best items, placed latest). Positions in the run go from `0` (the
@@ -368,3 +368,26 @@ repository).
   those it reaches at the same point. The route gains abilities one at a time, in the order a
   vanilla run first gains them, and orders the pickups of one step by how many rooms away they
   are.
+
+---
+
+## Soul tiers
+
+[`soul_tiers.csv`](soul_tiers.csv) gives every soul a rating from 0 to 1 and a tier from D to S.
+[`build_soul_tiers.py`](build_soul_tiers.py) writes it, and is run by hand.
+[`soul_tiers.py`](soul_tiers.py) loads it for the Experimental options.
+
+- **Rating.** Each list in [`soul_tier_lists/lists/`](soul_tier_lists/lists/) scores a soul
+  `1 - tier_index / (n_tiers - 1)`, as stage 1 does for items. The rating is the mean over the
+  lists that rank the soul. A soul that fewer than three lists rank takes its `desirability.csv`
+  value instead when it has one, because the four item raters ranked the movement souls that most
+  soul lists leave out.
+- **Tier.** Ratings are cut at 0.2, 0.4, 0.6 and 0.8 into the tiers D, C, B, A and S. A soul in
+  tier A or S, rated 0.6 or more, is strong: 23 of the 110 souls that enemies drop are.
+- **Matched groups.** Under `matched`, a soul trades places only with souls of the same colour and
+  tier, which `matched_group` returns.
+
+The table's columns are `soul`, `colour` (`red`, `blue`, `yellow` or `ability`), `rating`,
+`tier`, `raters` (how many soul lists rank it) and `rating_source`. The red soul Cagnazzo in
+`item_info.csv` has no source in the game, so it has no row. The lists' Cagnazzo is the blue
+soul.
