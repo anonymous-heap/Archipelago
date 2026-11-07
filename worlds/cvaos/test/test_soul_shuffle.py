@@ -3,8 +3,10 @@
 These do not run the ROM. They check the committed vanilla table's shape, that a planned shuffle
 is always a soul-preserving permutation that leaves progression souls alone, and that the emitted
 writes say what the plan says. When rates move with their souls, a scripted boss still keeps its
-rate of 0, and an ordinary enemy that receives a boss's soul keeps its own rate. Confirming the
-table's field meanings in-game still needs an emulator playtest (see rom/soul_shuffle.py).
+rate of 0, and an ordinary enemy that receives a boss's soul keeps its own rate. Under matched, a
+soul trades places only within its colour and tier, and every rate byte stays on its row.
+Confirming the table's field meanings in-game still needs an emulator playtest (see
+rom/soul_shuffle.py).
 """
 from __future__ import annotations
 
@@ -217,6 +219,48 @@ class TestBuildWrites(unittest.TestCase):
                 patched = _apply(patched, sdr.build_multiplier_writes(bytes(patched), 1000))
                 with self.subTest(mode=mode, seed=seed):
                     _assert_every_soul_obtainable(self, patched)
+
+
+class TestMatched(unittest.TestCase):
+    """matched trades souls only within a colour and tier, and every rate byte stays on its row."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        from worlds.cvaos.rom.patch import matched_groups
+        cls.groups = matched_groups()
+        cls.plans = [ss.plan_shuffle(Random(seed), ss.MODE_MATCHED, cls.groups)
+                     for seed in range(20)]
+
+    def test_souls_trade_places_only_within_their_colour_and_tier(self):
+        self.assertEqual(sorted(self.groups), ss.shuffleable_enemies(ss.MODE_MATCHED))
+        for seed, plan in enumerate(self.plans):
+            with self.subTest(seed=seed):
+                self.assertGreater(len(plan), 50)
+                for target, source in plan.items():
+                    self.assertEqual(self.groups[target], self.groups[source])
+                _assert_every_soul_obtainable(self, _apply(ROM, ss.build_writes(ROM, plan, False)))
+
+    def test_every_rate_byte_stays_on_its_row_whatever_keep_soul_drop_rates_says(self):
+        from worlds.cvaos.rom.patch import build_rom_config
+        from .test_experimental_options import early
+        config = build_rom_config(early(soul_shuffle="matched", keep_soul_drop_rates=True))
+        plan = {int(target): source for target, source in config["soul_shuffle_plan"].items()}
+        self.assertTrue(plan)
+        patched = _apply(ROM, ss.build_writes(ROM, plan, config["keep_soul_drop_rates"],
+                                              config["shuffle_starting_soul"]))
+        for enemy_id, (_type, _index, rate) in ss.VANILLA.items():
+            self.assertEqual(patched[ss._entry(enemy_id) + ss.SOUL_RATE_OFF], rate, enemy_id)
+
+    def test_the_starting_soul_is_a_red_soul_of_winged_skeletons_tier(self):
+        from worlds.cvaos.soul_sources import soul_name
+        from worlds.cvaos.data.item_balancing.soul_tiers import matched_group
+        for seed, plan in enumerate(self.plans):
+            patched = _apply(ROM, ss.build_writes(ROM, plan, False, shuffle_starting_soul=True))
+            soul_type = patched[ss.STARTING_GRANT_TYPE_OFF]
+            granted = soul_name(soul_type, patched[ss.STARTING_GRANT_INDEX_OFF] + 1)
+            with self.subTest(seed=seed, soul=granted):
+                self.assertEqual(soul_type, ss.SOUL_TYPE_RED)
+                self.assertEqual(matched_group(granted), matched_group("Winged Skeleton"))
 
 
 class TestGuards(unittest.TestCase):

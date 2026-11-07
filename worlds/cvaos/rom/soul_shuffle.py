@@ -22,15 +22,23 @@ What gets shuffled
 The 7 enemies whose soul is *progression* are never touched, so the shuffle cannot move a soul
 that logic depends on. This is more conservative than logic requires, because :mod:`..regions`
 builds enemy regions only for Flame Demon, Succubus, Devil and Manticore. The remaining 103
-enemies are permuted, within each soul type or across all types depending on the
-``soul_shuffle`` option. Because the vanilla mapping is 1:1, a permutation gives every soul
-exactly one new source and leaves none unobtainable.
+enemies are permuted in groups that depend on the ``soul_shuffle`` option:
+
+* ``within_type``: one group per soul type.
+* ``any_type``: one group of all 103.
+* ``matched``: one group per soul type and strength tier, so a soul trades places only with a
+  soul of the same colour and tier. The world passes in each enemy's group, because the tiers
+  come from its soul ratings, which rom/ modules do not import.
+
+Because the vanilla mapping is 1:1, a permutation gives every soul exactly one new source and
+leaves none unobtainable.
 
 Drop rates
 ----------
 Controlled by the ``keep_soul_drop_rates`` option:
 
 * ``False``: the rate byte stays with the ENEMY, so a soul is as rare as whatever now drops it.
+  The world always sets this under ``matched``, so every rate byte stays on its row.
 * ``True``: the rate byte moves WITH THE SOUL, so each soul keeps its vanilla rarity and only
   its source changes.
 
@@ -51,7 +59,7 @@ Generation runs without the base ROM, so the vanilla table is written out below.
 from __future__ import annotations
 
 from random import Random
-from typing import Dict, List
+from typing import Dict, Hashable, List, Mapping, Optional
 
 from .._bytemaker_compat import offset_of, sizeof
 from .address_space import gba_space
@@ -277,16 +285,19 @@ def shuffleable_enemies(mode: str) -> List[int]:
             if index != 0 and eid not in PROGRESSION_SOUL_ENEMIES]
 
 
-def plan_shuffle(random: Random, mode: str) -> Dict[int, int]:
+def plan_shuffle(random: Random, mode: str,
+                 matched_groups: Optional[Mapping[int, Hashable]] = None) -> Dict[int, int]:
     """
     Decide the shuffle: ``{target_enemy_id: source_enemy_id}``, meaning *target* now drops the
     soul that *source* dropped in vanilla.
 
     Reads only :data:`VANILLA`, so this runs at generation time without a base ROM. Enemies
     that keep their own soul are omitted, so the result is a permutation of its own key set.
+
+    ``matched_groups`` gives the group of every enemy that ``matched`` may shuffle, such as the
+    colour and tier of its vanilla soul. Souls trade places only within a group. The other
+    modes ignore it, and ``matched`` raises ValueError without it.
     """
-    if mode == MODE_MATCHED:
-        raise NotImplementedError("Soul Shuffle's matched value has no shuffle in this version")
     eligible = shuffleable_enemies(mode)
     if not eligible:
         return {}
@@ -294,10 +305,18 @@ def plan_shuffle(random: Random, mode: str) -> Dict[int, int]:
     if mode == MODE_ANY_TYPE:
         groups = [eligible]
     else:
-        by_type: Dict[int, List[int]] = {}
+        if mode == MODE_MATCHED:
+            if matched_groups is None:
+                raise ValueError(
+                    "Soul Shuffle's matched needs the group of every enemy it shuffles")
+            key_of = matched_groups.__getitem__
+        else:
+            def key_of(eid: int) -> int:
+                return VANILLA[eid][0]
+        by_key: Dict[Hashable, List[int]] = {}
         for eid in eligible:
-            by_type.setdefault(VANILLA[eid][0], []).append(eid)
-        groups = [group for _type, group in sorted(by_type.items())]
+            by_key.setdefault(key_of(eid), []).append(eid)
+        groups = [group for _key, group in sorted(by_key.items())]
 
     plan: Dict[int, int] = {}
     for group in groups:

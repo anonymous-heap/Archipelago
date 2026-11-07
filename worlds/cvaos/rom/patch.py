@@ -106,6 +106,22 @@ _SOUL_SHUFFLE_MODES = {
 }
 
 
+def matched_groups() -> Dict[int, tuple[str, str]]:
+    """Return the group of each enemy that Soul Shuffle's matched may shuffle: the colour and
+    strength tier of its vanilla soul, such as ``("red", "B")``."""
+    from ..data.item_balancing.soul_tiers import matched_group
+    from ..soul_sources import vanilla_soul_name
+    return {eid: matched_group(vanilla_soul_name(eid))
+            for eid in soul_shuffle.shuffleable_enemies(soul_shuffle.MODE_MATCHED)}
+
+
+def _plan_soul_shuffle(world: CVAOSWorld) -> Dict[int, int]:
+    """Draw the seed's soul shuffle plan from the world's random."""
+    mode = _SOUL_SHUFFLE_MODES[world.options.soul_shuffle.value]
+    groups = matched_groups() if mode == soul_shuffle.MODE_MATCHED else None
+    return soul_shuffle.plan_shuffle(world.random, mode, groups)
+
+
 # Item encoding lookup: AP item *code* -> (type_num, subtype_num, item_offset). Keyed by the stable
 # packed code (not the name) so renaming AP items can never desync ROM item placement.
 
@@ -540,8 +556,7 @@ def build_rom_config(world: CVAOSWorld) -> Dict[str, object]:
         # Which enemy now drops which enemy's vanilla soul. soul_shuffle carries the vanilla
         # table, so the plan is drawn here from the seed, without the ROM, and applied against
         # the base ROM later.
-        "soul_shuffle_plan": soul_shuffle.plan_shuffle(
-            world.random, _SOUL_SHUFFLE_MODES[world.options.soul_shuffle.value]),
+        "soul_shuffle_plan": _plan_soul_shuffle(world),
         "keep_soul_drop_rates": bool(world.options.keep_soul_drop_rates),
         "shuffle_starting_soul": bool(world.options.shuffle_starting_soul),
         "multiply_soul_drop_rates": bool(world.options.multiply_soul_drop_rates),
