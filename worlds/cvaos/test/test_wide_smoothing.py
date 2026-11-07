@@ -24,6 +24,7 @@ from worlds.AutoWorld import AutoWorldRegister
 
 from .. import CVAOSWorld, wide_smoothing
 from ..data.item_balancing import worth
+from ..items import logic_only_progression_names
 from ..locations import CVAOSLocation
 from ..wide_smoothing import BAND, OrderResult, _is_defeat, promote_mid_game_gear
 
@@ -51,7 +52,9 @@ def generate(seed: int, players: list[tuple[str, dict]],
         for key, option in AutoWorldRegister.world_types[game].options_dataclass.type_hints.items():
             if not hasattr(args, key):
                 setattr(args, key, {})
-            getattr(args, key)[player] = option.from_any(options.get(key, option.default))
+            value = option.from_any(options.get(key, option.default))
+            value.verify(AutoWorldRegister.world_types[game], args.name[player], args.plando)
+            getattr(args, key)[player] = value
     return Main.main(args, seed)
 
 
@@ -127,8 +130,9 @@ class TradeTest(unittest.TestCase):
             return False
 
         with mock.patch.object(wide_smoothing, "_deal", side_effect=scramble_and_fail):
-            result = wide_smoothing._order_player(multiworld, multiworld.worlds[1],
-                                                  wide_smoothing.walk(multiworld, room_clock=True))
+            result = wide_smoothing._order_player(
+                multiworld, multiworld.worlds[1], wide_smoothing.walk(multiworld, room_clock=True),
+                wide_smoothing.walk(multiworld, room_clock=False))
         self.assertTrue(result.undone)
         self.assertEqual(placement_hash(multiworld), before)
 
@@ -151,15 +155,31 @@ class WideScenario:
                     yield multiworld, world
 
     def test_every_unlocked_location_accepts_its_item(self):
+        # Wide moves only its own players' items. Another world's own smoothing, such as Dark Souls
+        # III's, may leave that world's items where its own rules reject them.
         for multiworld in self.runs:
+            moved = {world.player for _multiworld, world in self.wide_worlds()
+                     if _multiworld is multiworld}
             broken = [f"{loc.player}:{loc.name} <- {loc.item.name}"
                       for loc in multiworld.get_filled_locations()
-                      if not loc.locked and not loc.can_fill(multiworld.state, loc.item, False)]
+                      if loc.item.player in moved and not loc.locked
+                      and not loc.can_fill(multiworld.state, loc.item, False)]
             self.assertEqual(broken, [], multiworld.seed)
 
     def test_equal_seeds_give_equal_placements(self):
         self.assertEqual(placement_hash(generate(self.SEEDS[0], self.PLAYERS)),
                          placement_hash(self.runs[0]))
+
+    def test_pinned_locations_hold_breakers(self):
+        for multiworld, world in self.wide_worlds():
+            for order in world.wide_report.orders:
+                pinned = [order.placed[loc].name for loc in order.pinned]
+                self.assertTrue(all(name in logic_only_progression_names for name in pinned),
+                                (multiworld.seed, pinned))
+
+    def test_the_restore_never_fires(self):
+        for multiworld, world in self.wide_worlds():
+            self.assertEqual(world.wide_report.restores, 0, multiworld.seed)
 
     def test_nothing_sits_above_the_band_except_counted_placements(self):
         for multiworld, world in self.wide_worlds():
@@ -180,6 +200,10 @@ class WideDuoTest(WideScenario, unittest.TestCase):
             self.assertTrue(any(loc.player == world.player and not _is_defeat(loc)
                                 for loc in dealt))
             self.assertTrue(any(loc.player != world.player for loc in dealt))
+
+    def test_the_pin_keeps_a_breaker_where_logic_first_finds_one(self):
+        self.assertTrue(any(order.pinned for _multiworld, world in self.wide_worlds()
+                            for order in world.wide_report.orders))
 
 
 def scenario(cls):

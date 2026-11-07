@@ -19,6 +19,9 @@ Every placement passes the location's ``can_fill``, so item rules, Local Items a
 hold. When no remaining item fits a location, it trades with an earlier location that both accept
 (see ``_trade``). If no such pair exists, the order is undone for that player.
 
+Moving a breaker can change what logic reaches, so the order pins one of each kind (see ``_pin``).
+Logic then reaches every location no later than before, and the breakers never need to go back.
+
 Positions run from 0 to 1 on the player's own clock: the share of their pickup locations that the
 seed's sphere order reaches first. The order reads the room clock, on which a defeat location counts
 as reached once one of its enemy's rooms is. Logic reaches most defeat locations much later, through
@@ -42,6 +45,7 @@ from .item_smoothing import (PARAMS_BY_KEY, SmoothingParams, _UNREACHED_DEPTH, _
                              _category, _jittered, _region_depth, _restore_breakers)
 from .items import logic_only_progression_names
 from .locations import CVAOSLocation, pickup_location_ids
+from .regions import _breakers
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -192,6 +196,7 @@ class OrderResult:
     over_band: int = 0                 # items given above the band, because nothing else fit
     trades: int = 0                    # trades with an earlier location, by _trade
     undone: bool = False               # some location had no remaining item and no trade
+    pinned: List[Location] = field(default_factory=list)  # the locations _pin gave a breaker
     # Each breaker the order dealt, with the location that held it before.
     breaker_homes: List[Tuple[Item, Location]] = field(default_factory=list)
 
@@ -333,11 +338,54 @@ def _trade(location: Location, dealt: List[Location], pool: List[Item],
     return None
 
 
-def _order_player(multiworld: MultiWorld, world: "CVAOSWorld", room: Walk) -> OrderResult:
+def _pin(multiworld: MultiWorld, world: "CVAOSWorld", positions: Dict[Location, float],
+         pool: List[Item], logic: Walk) -> List[Location]:
+    """Keep a breaker where logic first finds each kind of the player's breakers.
+
+    Logic asks only whether the player holds some ceiling breaker and some floor breaker. Among the
+    locations holding the player's ceiling breakers, the one that logic reaches first keeps a
+    ceiling breaker: the cheapest in ``pool`` that it accepts. The same goes for floor breakers, and
+    one location may need both kinds. Logic then finds each kind no later than before, so it reaches
+    every location no later than before.
+
+    Each breaker placed leaves ``pool``. Return the locations that got one.
+    """
+    ceiling, floor = _breakers(world)
+    held = [location for location in multiworld.get_filled_locations()
+            if location.item.player == world.player and _is_breaker(location.item)]
+    needs: Dict[Location, List[bool]] = {}
+    for kind, names in enumerate((ceiling, floor)):
+        homes = [location for location in held if location.item.name in names]
+        if not homes:
+            continue
+        first = min(homes, key=lambda location: (logic.sphere_of.get(location, _UNREACHED_DEPTH),
+                                                 positions.get(location, 1.0), location.name))
+        # A location outside the order keeps its breaker anyway.
+        if first in positions:
+            needs.setdefault(first, [False, False])[kind] = True
+    pinned = []
+    for location, (needs_ceiling, needs_floor) in needs.items():
+        fitting = [item for item in pool if _is_breaker(item)
+                   and (not needs_ceiling or item.name in ceiling)
+                   and (not needs_floor or item.name in floor)
+                   and location.can_fill(multiworld.state, item, False)]
+        if not fitting:
+            continue
+        item = min(fitting, key=lambda item: (_worth(item.name), item.name))
+        del pool[next(index for index, other in enumerate(pool) if other is item)]
+        location.item = item
+        item.location = location
+        pinned.append(location)
+    return pinned
+
+
+def _order_player(multiworld: MultiWorld, world: "CVAOSWorld", room: Walk,
+                  logic: Walk) -> OrderResult:
     """Deal one player's items again among the locations that hold them.
 
-    The items are sorted by their targets, and ``_deal`` hands them out. When it fails, every
-    location gets back the item it held before.
+    The items are sorted by their targets. ``_pin`` places its breakers first, and ``_deal`` hands
+    out the rest. A pinned breaker above the band counts as such a placement. When the deal fails,
+    every location gets back the item it held before.
     """
     positions = _dealt_locations(multiworld, world.player, Clock(multiworld, world.player, room))
     result = OrderResult(positions)
@@ -348,25 +396,34 @@ def _order_player(multiworld: MultiWorld, world: "CVAOSWorld", room: Walk) -> Or
     params = PARAMS_BY_KEY[world.options.item_smoothing.current_key]
     targets = _targets(items, params, world.random)
     pool = [items[index] for index in sorted(range(len(items)), key=targets.__getitem__)]
-    if not _deal(locations, pool, positions, multiworld.state, result):
+    result.pinned = _pin(multiworld, world, positions, pool, logic)
+    result.over_band += sum(1 for location in result.pinned
+                            if _worth(location.item.name) > positions[location] + BAND)
+    pinned = set(result.pinned)
+    rest = [location for location in locations if location not in pinned]
+    if not _deal(rest, pool, positions, multiworld.state, result):
         for location, item in before.items():
             location.item = item
             item.location = location
         result.undone = True
+        result.pinned = []
     result.placed = {location: location.item for location in locations}
     return result
 
 
 def _order_round(multiworld: MultiWorld, worlds: List["CVAOSWorld"]) -> None:
-    """Order every player in ``worlds`` once, on one walk of the room clock.
+    """Order every player in ``worlds`` once.
 
-    If the new placement breaks the multiworld's accessibility, the breakers go back to the
-    locations they held before this round.
+    One walk of the room clock gives every player's positions, and one walk of logic gives every
+    player's pins. The pins keep logic from losing ground, so the check that follows is only a
+    safety net: if the new placement breaks the multiworld's accessibility, the breakers go back to
+    the locations they held before this round.
     """
     room = walk(multiworld, room_clock=True)
+    logic = walk(multiworld, room_clock=False)
     homes: List[Tuple[Item, Location]] = []
     for world in worlds:
-        result = _order_player(multiworld, world, room)
+        result = _order_player(multiworld, world, room, logic)
         world.wide_report.orders.append(result)
         homes += result.breaker_homes
     if homes and not _accessible(multiworld):
