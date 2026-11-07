@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import re
 import unittest
 from random import Random
 from types import SimpleNamespace
@@ -35,20 +36,29 @@ def config_for(mode: str, seed: int, **options) -> dict:
             "multiply_soul_drop_rates": False, "soul_drop_rate_multiplier": 100, **options}
 
 
+def spoiler_sections(world) -> dict[str, list[str]]:
+    """Return each table that ``world`` writes into the spoiler, by title, as unindented lines."""
+    spoiler = io.StringIO()
+    world.write_spoiler(spoiler)
+    sections = {}
+    for block in re.split(r"\n\n(?=\S)", spoiler.getvalue())[1:]:
+        head, *lines = block.rstrip("\n").split("\n")
+        title = head.removesuffix(f" ({world.player_name}):")
+        sections[title] = [line.removeprefix("    ") for line in lines]
+    return sections
+
+
 class SpoilerTest(unittest.TestCase):
     def test_the_spoiler_lists_what_the_patched_rom_holds(self):
         seed = preset_seed()
         if not seed.patched:
             self.skipTest("needs a USA Aria of Sorrow ROM")
-        spoiler = io.StringIO()
-        seed.world.write_spoiler(spoiler)
+        sections = spoiler_sections(seed.world)
         boss_souls = {vanilla_soul_name(boss) for boss in SCRIPTED_BOSSES}
         for name, (_before, after) in seed.patched.items():
             lines = rom_soul_table_lines(after)
             with self.subTest(base=name):
-                self.assertEqual(spoiler.getvalue(),
-                                 f"\n\nSoul sources ({seed.world.player_name}):\n"
-                                 + "".join(f"    {line}\n" for line in lines))
+                self.assertEqual(sections["Soul sources"], lines)
                 # Live test 9 compares the host of a boss soul, so this seed must have one.
                 rows = parse_table(after[TABLE_OFFSET:TABLE_OFFSET + TABLE_SIZE])
                 hosts = [enemy_id for enemy_id, row in enumerate(rows)
@@ -104,9 +114,8 @@ class SoulsCommandTest(unittest.TestCase):
         seed = preset_seed()
         if not seed.patched:
             self.skipTest("needs a USA Aria of Sorrow ROM")
-        spoiler = io.StringIO()
-        seed.world.write_spoiler(spoiler)
-        expected = "Soul sources:\n" + spoiler.getvalue().split(":\n", 1)[1].rstrip("\n")
+        expected = "\n".join(["Soul sources:", *(f"    {line}" for line in
+                                                  spoiler_sections(seed.world)["Soul sources"])])
         for name, (_before, after) in seed.patched.items():
             read = rom_reads(after)
             bizhawk_read = mock.AsyncMock(side_effect=lambda _ctx, requests: read(requests))

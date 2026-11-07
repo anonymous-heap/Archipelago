@@ -411,12 +411,14 @@ class CVAOSWorld(World):
         patch.write(rom_path)
 
     def write_spoiler(self, spoiler_handle: TextIO) -> None:
-        # Which enemy drops which soul and how often, when the seed changes either.
+        # Which enemy drops which soul and which item, and how often, when the seed changes them.
+        from .drop_sources import spoiler_drop_table_lines
         from .soul_sources import spoiler_soul_table_lines
-        lines = spoiler_soul_table_lines(self)
-        if lines:
-            spoiler_handle.write(f"\n\nSoul sources ({self.player_name}):\n")
-            spoiler_handle.writelines(f"    {line}\n" for line in lines)
+        for title, lines in (("Soul sources", spoiler_soul_table_lines(self)),
+                             ("Item drops", spoiler_drop_table_lines(self))):
+            if lines:
+                spoiler_handle.write(f"\n\n{title} ({self.player_name}):\n")
+                spoiler_handle.writelines(f"    {line}\n" for line in lines)
 
     def fill_slot_data(self) -> dict:
         from .rom.patch import rom_gives_item

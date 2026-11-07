@@ -32,7 +32,7 @@ from ..item_granting import TransferCategory, pack
 from ..items import (CONSUMABLE_CAP, DROP_ITEMS, HP_RESTORATIVES, check_item_names,
                      item_name_to_id, item_table)
 from ..options import EnemyChecks, Goal
-from ..rom.drop_table import build_writes, encode_table, stored_value
+from ..rom.drop_table import build_writes, encode_table, stored_value, vanilla_bytes
 from ..rom.enemy_table import TABLE_OFFSET, TABLE_SIZE, field_offset, parse_table
 from . import base_roms
 
@@ -138,11 +138,8 @@ class ItemIdTest(unittest.TestCase):
 def stand_in() -> bytes:
     """Return a stand-in for the base ROM that holds only the enemy table's vanilla drop fields."""
     rom = bytearray(TABLE_OFFSET + TABLE_SIZE)
-    for enemy in enemy_type_collection:
-        for slot, (item, rarity) in enumerate(zip(enemy.drops, enemy.drop_rarities), start=1):
-            offset = field_offset(enemy.id, f"drop_{slot}")
-            rom[offset:offset + 2] = stored_value(item or None).to_bytes(2, "little")
-            rom[field_offset(enemy.id, f"drop_{slot}_rarity")] = rarity
+    for offset, data in vanilla_bytes().items():
+        rom[offset:offset + len(data)] = data
     return bytes(rom)
 
 

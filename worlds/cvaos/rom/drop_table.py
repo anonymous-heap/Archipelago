@@ -24,12 +24,14 @@ from .._bytemaker_compat import Patch
 from ..data import enemy_type_collection
 from ..data.item_info import by_name as item_info_by_name
 from .address_space import gba_space
-from .enemy_table import ENEMY_COUNT, ENEMY_TABLE, row_offset
+from .enemy_table import ENEMY_COUNT, ENEMY_TABLE, field_offset, row_offset
 
-__all__ = ["FIELDS", "MAX_VALUE", "build_writes", "encode_table", "stored_value"]
+__all__ = ["FIELDS", "MAX_VALUE", "build_writes", "encode_table", "stored_value", "vanilla_bytes"]
 
-# The row fields that each listed row sets, in the order rom_config.json lists them.
+# The row fields that each listed row sets, in the order rom_config.json lists them, with their
+# sizes in bytes.
 FIELDS = ("drop_1", "drop_1_rarity", "drop_2", "drop_2_rarity")
+_FIELD_SIZES = {"drop_1": 2, "drop_1_rarity": 1, "drop_2": 2, "drop_2_rarity": 1}
 _ITEM_FIELDS = frozenset({"drop_1", "drop_2"})
 
 # The largest value the spawn routine decodes: the last accessory's number (0x87) plus 1.
@@ -73,6 +75,17 @@ def _vanilla_row(enemy_id: int) -> Tuple[int, ...]:
     enemy = enemy_type_collection[enemy_id]
     return tuple(number for item, rarity in zip(enemy.drops, enemy.drop_rarities)
                  for number in (stored_value(item or None), rarity))
+
+
+def vanilla_bytes() -> Dict[int, bytes]:
+    """Return the bytes of every row's drop fields in the base ROM, by file offset.
+
+    They come from ``enemy_types.csv`` and ``enemy_stats.csv``. A stand-in for the base ROM that
+    holds them is enough for :func:`build_writes`.
+    """
+    return {field_offset(enemy.id, name): value.to_bytes(_FIELD_SIZES[name], "little")
+            for enemy in enemy_type_collection
+            for name, value in zip(FIELDS, _vanilla_row(enemy.id))}
 
 
 def build_writes(rom: bytes, rows: Mapping[str, Sequence[int]]) -> Dict[int, bytes]:
