@@ -312,13 +312,32 @@ class EnemyChecks(Choice):
       is the goal.
     - all: one check for every kind of enemy except Chaos: 112, or 111 under the Graham goal.
 
-    The item at an enemy check comes through the client a moment after the defeat.
+    Each check adds one cheap item from this game to the item pool. "Cheap" means no better than
+       what the castle's own pickups offer a quarter of the way in. The item is the enemy's
+       common drop when that drop is cheap, a food or potion that restores HP when it is not, and
+       100 Gold when the enemy drops nothing. The food or potion is the one your pool holds
+       fewest of, and the pool never holds more copies of one than the 9 the game lets you carry.
+
+    The item at an enemy check comes through the client a moment after the defeat. The client
+       sends no checks from a save file that belongs to another seed, including New Game+ started
+       from such a file, and prints a warning instead.
+
+    A hint for one of these checks names the rooms where the enemy appears. With all, hints cost
+       more: 22 checks each at the default hint cost of 10%, against 11 without enemy checks.
+
+    Iron Golem's and Final Guard's checks hold only filler for now. Nobody has yet measured how
+       long these fights take with ordinary gear.
 
     Logic counts an enemy as defeatable once you can reach a room where it appears. For most
-       rooms, the logic spreadsheet doesn't record the route to their enemies yet. Until it
-       does, logic also expects Flying Armor, Skeleton Blaze, Malphas, Hippogryph, Undine,
-       Skula, Black Panther and Giant Bat before those enemies' checks, so many of these checks
-       come late in logic.
+       rooms, the logic spreadsheet doesn't record the route to their enemies yet. Until it does,
+       logic also expects Flying Armor, Skeleton Blaze, Malphas, Hippogryph, Undine, Skula, Black
+       Panther and Giant Bat before those enemies' checks. So many of these checks come late in
+       logic although you usually make them early, and another game's item placed on one may
+       arrive sooner than that game expects. Universal Tracker shows them in its "reachable with
+       tricks" colour. The location group "Unrouted Enemy Defeats" holds them, and "Boss Defeats"
+       holds the bosses.
+
+    Experimental: its balance is measured but not play-tested, and it may change between versions.
     """
     display_name = "Enemy Checks"
     option_off = 0
