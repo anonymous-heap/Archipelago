@@ -22,7 +22,7 @@ from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin, APTok
 from .. import item_granting
 from ..data import item_info_collection, pickup_info_collection as pickup_infos
 from ..constants import AC_USA_ROM_MD5, USA_ROM_MD5
-from ..items import ENEMY_ITEM, FORBIDDEN_AREA_SWITCH, item_table
+from ..items import CHECK_ITEM_CHOICES, FORBIDDEN_AREA_SWITCH, item_table
 from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
                inventory_menu, oops_all_whips, received_item_box, single_jump_divekick,
                skull_key_pickup, skull_key_warp, soul_drop_rates, soul_guarantee_hook,
@@ -143,7 +143,7 @@ def _item_encodings() -> Dict[int, tuple[int, int, int]]:
         if rules.setdefault(info.item_category, rule) != rule:
             raise ValueError(
                 f"{p.display_name}: {info.item_category} pickups disagree on their encoding")
-    for name in ENEMY_ITEM.values():
+    for name in sorted(CHECK_ITEM_CHOICES):
         code = item_table[name].code
         if code not in encodings:
             info = info_by_number[item_granting.resolve(code).id_or_value]

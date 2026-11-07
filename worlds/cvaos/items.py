@@ -4,11 +4,12 @@ The item table, item groups and item pool for Castlevania: Aria of Sorrow.
 
 from __future__ import annotations
 
-from typing import Dict, List, NamedTuple, TYPE_CHECKING
+from collections import Counter
+from typing import Dict, Iterable, List, NamedTuple, Sequence, TYPE_CHECKING
 
 from BaseClasses import Item, ItemClassification
 
-from .data import item_info_collection, pickup_info_collection as pickup_infos
+from .data import EnemyType, item_info_collection, pickup_info_collection as pickup_infos
 from .data.item_balancing import worth
 from .enemy_checks import checkable_types, enemy_check_types
 from .item_granting import ID_MAX, TransferCategory, pack
@@ -117,34 +118,44 @@ item_table[PROGRESSIVE_MOVEMENT] = ItemData(
     ItemClassification.progression, pack(TransferCategory.PROGRESSIVE, 0))
 
 # --- Enemy check items (enemy_checks.py) ---
-# Each defeat location adds one item to the pool: the enemy's own drop, from slot 1 or else slot 2,
-# or ENEMY_GOLD gold for an enemy that drops nothing. A type always adds the same item, because
-# Universal Tracker rebuilds the pool from the slot data and has to arrive at the same pool. The
-# item has its usual name and code, so an enemy's Potion is the same item as a pickup's Potion. A
-# drop that is normally progression counts only as useful here (create_enemy_item), so enemy checks
-# never add progression.
+# Each defeat location adds one cheap item to the pool, which check_item_names chooses from the
+# enemy's common drop. The item has its usual name and code, so an enemy's Potion is the same item
+# as a pickup's Potion. A drop that is normally progression counts only as useful here
+# (create_enemy_item), so enemy checks never add progression.
 # ENEMY_GOLD is an amount that gold pickups hold, so the ROM can show the gold on a pickup too.
 ENEMY_GOLD = 100
+ENEMY_GOLD_NAME = f"{ENEMY_GOLD} Gold"
 
+# The most copies of one consumable that the game lets Soma carry.
+CONSUMABLE_CAP = 9
 
-def _enemy_item_name(drops: tuple[str, str]) -> str:
-    return drops[0] or drops[1] or f"{ENEMY_GOLD} Gold"
+# enemy name -> the name of its common drop: its slot 1 drop, or else its slot 2 drop. It is ""
+# for an enemy that drops nothing.
+ENEMY_DROP: Dict[str, str] = {enemy.name: enemy.drops[0] or enemy.drops[1]
+                              for enemy in checkable_types()}
 
+# The HP restoratives worth worth.CHEAP_WORTH or less, cheapest first. A check whose enemy's drop
+# is worth more adds one of these instead.
+HP_RESTORATIVES: tuple[str, ...] = tuple(
+    row.name for row in sorted(worth.rows, key=lambda row: (row.worth, row.name))
+    if row.item_class == "hp" and row.worth <= worth.CHEAP_WORTH)
 
-# enemy name -> the name of the item its defeat location adds
-ENEMY_ITEM: Dict[str, str] = {enemy.name: _enemy_item_name(enemy.drops) for enemy in checkable_types()}
-if f"{ENEMY_GOLD} Gold" not in item_table:
+# Every item an enemy check can add under some options. Every enemy drop is here too, so the drops'
+# ids stay the same in the data package whichever items the rule picks.
+CHECK_ITEM_CHOICES: frozenset[str] = frozenset(
+    {ENEMY_GOLD_NAME, *HP_RESTORATIVES, *(drop for drop in ENEMY_DROP.values() if drop)})
+if ENEMY_GOLD_NAME not in item_table:
     raise ValueError(f"no gold pickup holds {ENEMY_GOLD} gold, so the ROM can't show it")
-for _name in ENEMY_ITEM.values():
+for _name in sorted(CHECK_ITEM_CHOICES):
     if _name not in item_table:
-        # A drop that no pickup holds is transferred as OTHER_ITEM, the category for an item with no
-        # ground pickup.
+        # An item that no pickup holds is transferred as OTHER_ITEM, the category for an item with
+        # no ground pickup.
         _info = _item_info_by_name[_name]
         item_table[_name] = ItemData(_classification_for_pickup(_name),
                                      pack(TransferCategory.OTHER_ITEM, _info.item_number))
 
 # The World's item_name_to_id. It holds every item in item_table whatever the options, including
-# the synthetic items, the drops that only enemy checks add and Hard Mode pickups' items, so item
+# the synthetic items, the items that only enemy checks add and Hard Mode pickups' items, so item
 # ids stay the same in the data package. create_itempool picks the items that a seed uses.
 item_name_to_id: Dict[str, int] = {name: data.code for name, data in item_table.items()}
 
@@ -196,14 +207,51 @@ def create_item(world: "CVAOSWorld", name: str) -> CVAOSItem:
     return CVAOSItem(name, data.classification, data.code, world.player)
 
 
-def create_enemy_item(world: "CVAOSWorld", enemy_name: str) -> CVAOSItem:
-    """Create the item that ``enemy_name``'s defeat location adds to the pool.
+def _at_cap(name: str, held: Counter) -> bool:
+    info = _item_info_by_name.get(name)
+    return info is not None and info.item_category == "consumable" and held[name] >= CONSUMABLE_CAP
+
+
+def check_item_names(types: Sequence[EnemyType], pool: Iterable[Item]) -> List[str]:
+    """Return the item that each check of ``types`` adds to ``pool``, in the order of ``types``.
+
+    A check adds its enemy's common drop (ENEMY_DROP) when that drop is worth worth.CHEAP_WORTH or
+    less. A dearer drop could put mid-game gear early in the run, so its check adds an HP
+    restorative instead: the one of HP_RESTORATIVES that the pool holds fewest copies of, counting
+    what earlier checks add, and the cheaper one on a tie. A check whose enemy drops nothing adds
+    ENEMY_GOLD gold.
+
+    No check adds a consumable that the pool already holds CONSUMABLE_CAP copies of. A cheap drop
+    at the cap gives way to an HP restorative, and an HP restorative at the cap gives way to gold.
+
+    The choice depends only on ``types`` and ``pool``, which the options decide. So Universal
+    Tracker, which rebuilds the pool from the slot data, arrives at the same items.
+    """
+    held = Counter(item.name for item in pool)
+    names = []
+    for enemy in types:
+        drop = ENEMY_DROP[enemy.name]
+        if not drop:
+            name = ENEMY_GOLD_NAME
+        elif worth.item_worth(drop) <= worth.CHEAP_WORTH and not _at_cap(drop, held):
+            name = drop
+        else:
+            name = min(HP_RESTORATIVES, key=lambda rung: (held[rung], worth.item_worth(rung), rung))
+            if _at_cap(name, held):
+                name = ENEMY_GOLD_NAME
+        held[name] += 1
+        names.append(name)
+    return names
+
+
+def create_enemy_item(world: "CVAOSWorld", name: str) -> CVAOSItem:
+    """Create the item named ``name`` for a defeat location to add to the pool.
 
     A drop that is normally progression is created as useful, so enemy checks never add
     progression. Another copy of the same item, such as one a pickup holds, keeps its own
     classification.
     """
-    item = create_item(world, ENEMY_ITEM[enemy_name])
+    item = create_item(world, name)
     if item.classification & ItemClassification.progression:
         item.classification = ItemClassification.useful
     return item
@@ -226,5 +274,6 @@ def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
         pool = [create_item(world, PROGRESSIVE_MOVEMENT) if item.name in PROGRESSIVE_MOVEMENT_STAGES
                 else item for item in pool]
     # One item per defeat location, so the pool still matches the location count.
-    pool += [create_enemy_item(world, enemy.name) for enemy in enemy_check_types(world.options)]
+    pool += [create_enemy_item(world, name)
+             for name in check_item_names(enemy_check_types(world.options), pool)]
     return pool

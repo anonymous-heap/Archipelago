@@ -19,7 +19,8 @@ from .. import CVAOSWorld
 from ..data import pickup_info_collection
 from ..item_granting import canonical_code
 from ..item_smoothing import PARAMS_BY_KEY, _assign_targets
-from ..items import ENEMY_ITEM, CVAOSItem, create_enemy_item, item_name_groups, item_table
+from ..items import (CHECK_ITEM_CHOICES, ENEMY_DROP, CVAOSItem, create_enemy_item,
+                     item_name_groups, item_table)
 
 # The item ids of the last version that named each copy of an item, such as "Potion (A)".
 with open(os.path.join(os.path.dirname(__file__), "item_ids_with_copy_names.json")) as _file:
@@ -87,12 +88,12 @@ class PoolTest(unittest.TestCase):
     def test_an_enemy_copy_never_holds_progression_but_other_copies_keep_theirs(self):
         world = setup_multiworld(CVAOSWorld, ("generate_early",), seed=1,
                                  options={"enemy_checks": "all"}).worlds[1]
-        progression = [name for name in set(ENEMY_ITEM.values())
+        progression = [name for name in CHECK_ITEM_CHOICES
                        if item_table[name].classification & ItemClassification.progression]
         self.assertTrue(progression)
-        for enemy_name, name in ENEMY_ITEM.items():
-            with self.subTest(enemy=enemy_name):
-                self.assertFalse(create_enemy_item(world, enemy_name).advancement)
+        for name in CHECK_ITEM_CHOICES:
+            with self.subTest(item=name):
+                self.assertFalse(create_enemy_item(world, name).advancement)
         for name in progression:
             with self.subTest(item=name):
                 self.assertTrue(world.create_item(name).advancement)
@@ -102,7 +103,7 @@ class PoolTest(unittest.TestCase):
         # four drops are well known, so an off-by-one in enemy_types.csv shows up here.
         expected = {"Dryad": "Mystletain", "Flame Demon": "Laevatain", "Poison Worm": "Anti-Venom",
                     "Arachne": "Potion"}
-        self.assertEqual({enemy: ENEMY_ITEM[enemy] for enemy in expected}, expected)
+        self.assertEqual({enemy: ENEMY_DROP[enemy] for enemy in expected}, expected)
 
 
 class SmoothingTest(unittest.TestCase):

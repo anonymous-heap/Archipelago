@@ -17,10 +17,12 @@ from .. import CVAOSWorld, item_smoothing, regions
 from ..client_logic import ITEMS_FROM_OTHER_WORLDS, ITEMS_INCLUDING_OWN, CVAOSClientLogic
 from ..data import (enemy_placements, enemy_type_by_name, enemy_type_collection,
                     item_info_collection, pickup_info_collection)
+from ..data.item_balancing.worth import MID_GAME_WORTH, item_worth
 from ..enemy_checks import (ARENA_PLACEMENTS, BOSS_TYPES, FALLBACK_SOULS, SPAWNS_AFTER_BOSS_IN,
                             defeat_location_id, defeat_location_name, enemy_check_types,
                             enemy_id_for_location, has_recorded_route, placements_of)
-from ..items import ENEMY_ITEM, item_table
+from ..items import (CHECK_ITEM_CHOICES, CONSUMABLE_CAP, ENEMY_GOLD_NAME, HP_RESTORATIVES,
+                     check_item_names, create_item, item_table)
 from ..locations import (defeat_hint_text, defeat_location_names, location_name_to_id,
                          pickup_location_ids)
 from ..options import EnemyChecks, Goal
@@ -134,19 +136,56 @@ class GenerationTest(unittest.TestCase):
             with self.subTest(location=name, item=item.name):
                 self.assertFalse(item.advancement or item.useful)
 
-    def test_each_checked_type_adds_one_copy_of_its_item_to_the_pool(self):
+    def test_each_checked_type_adds_one_cheap_item_to_the_pool(self):
         without_checks = item_pool(build("off", steps=POOL_STEPS))
         for setting in ("bosses", "all"):
             multiworld = build(setting, steps=POOL_STEPS)
             types = enemy_check_types(multiworld.worlds[1].options)
-            added = Counter(ENEMY_ITEM[enemy.name] for enemy in types)
+            pool = item_pool(multiworld)
+            added = pool - without_checks
             with self.subTest(setting=setting):
-                self.assertEqual(item_pool(multiworld), without_checks + added)
+                self.assertEqual(pool - added, without_checks)
+                self.assertEqual(added.total(), len(types))
+                # Nothing a check adds is mid-game gear, and no consumable passes the game's cap.
+                self.assertEqual([name for name in added if item_worth(name) >= MID_GAME_WORTH], [])
+                self.assertEqual({name: count for name, count in pool.items()
+                                  if name in CONSUMABLES and count > CONSUMABLE_CAP}, {})
 
     def test_off_adds_no_defeat_locations(self):
         multiworld = build("off")
         self.assertEqual([location.name for location in multiworld.get_locations(1)
                           if location.name in defeat_location_names], [])
+
+
+CONSUMABLES = frozenset(info.name for info in item_info_collection
+                        if info.item_category == "consumable")
+
+
+class CheckItemTest(unittest.TestCase):
+    """Which item each check adds to the pool, from the worth of its enemy's common drop."""
+
+    def names(self, enemies: tuple[str, ...], pool_names: list[str] = ()) -> list[str]:
+        pool = [create_item(SimpleNamespace(player=1), name) for name in pool_names]
+        return check_item_names([enemy_type_by_name[name] for name in enemies], pool)
+
+    def test_a_check_copies_a_cheap_drop_and_replaces_a_dear_one(self):
+        # Arachne drops a Potion, Flame Demon drops Laevatain, and Bat drops nothing.
+        self.assertLess(item_worth("Potion"), 0.25)
+        self.assertGreater(item_worth("Laevatain"), 0.25)
+        self.assertEqual(self.names(("Arachne", "Flame Demon", "Bat")),
+                         ["Potion", HP_RESTORATIVES[0], ENEMY_GOLD_NAME])
+
+    def test_a_dear_drop_adds_the_hp_restorative_the_pool_holds_fewest_of(self):
+        self.assertEqual(self.names(("Flame Demon", "Flame Demon"), list(HP_RESTORATIVES[:-1])),
+                         [HP_RESTORATIVES[-1], HP_RESTORATIVES[0]])
+        self.assertTrue(all(item_worth(name) <= 0.25 for name in HP_RESTORATIVES))
+
+    def test_no_check_adds_a_consumable_the_pool_holds_nine_of(self):
+        self.assertEqual(CONSUMABLE_CAP, 9)
+        nine_potions = ["Potion"] * 9
+        self.assertEqual(self.names(("Arachne",), nine_potions), [HP_RESTORATIVES[0]])
+        every_restorative = [name for name in HP_RESTORATIVES for _ in range(9)]
+        self.assertEqual(self.names(("Flame Demon",), every_restorative), [ENEMY_GOLD_NAME])
 
 
 class LogicTest(unittest.TestCase):
@@ -381,7 +420,7 @@ class DeliveryTest(unittest.TestCase):
         rules = {"consumable": (2, 0), "weapon": (3, 0), "armor": (4, 0), "accessory": (4, 25)}
         info_by_name = {info.name: info for info in item_info_collection}
         held_by_a_pickup = {pickup.item_name for pickup in pickup_info_collection}
-        enemy_only = set(ENEMY_ITEM.values()) - held_by_a_pickup
+        enemy_only = CHECK_ITEM_CHOICES - held_by_a_pickup
         world = self.with_checks.worlds[1]
         pickups = [location for location in self.with_checks.get_locations(1)
                    if location.address in pickup_location_ids]
