@@ -38,7 +38,6 @@ __all__ = [
     "has_recorded_route",
     "pin_rooms",
     "placements_of",
-    "uses_enemy_checks",
 ]
 
 # Defeat locations take ids DEFEAT_ID_BASE + enemy id. Pickup locations are numbered by their ROM
@@ -115,10 +114,6 @@ def enemy_check_types(options: "CVAOSOptions") -> tuple[EnemyType, ...]:
         # Under the Graham goal, defeating Graham is the goal itself.
         types = tuple(enemy for enemy in types if enemy.name != "Graham")
     return types
-
-
-def uses_enemy_checks(options: "CVAOSOptions") -> bool:
-    return options.enemy_checks.value != options.enemy_checks.option_off
 
 
 def placements_of(enemy_name: str):

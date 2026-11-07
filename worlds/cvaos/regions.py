@@ -44,7 +44,6 @@ if TYPE_CHECKING:
 __all__ = [
     "create_regions",
     "can_reach_any_enemy",
-    "can_reach_enemy_instance",
     "can_reach_room",
     "LOGIC_ENEMY_TYPES",
 ]
@@ -316,8 +315,8 @@ def create_regions(world: CVAOSWorld) -> None:
         enemy_region_name_by_number[enemy_number] = region_name
         multiworld.regions.append(region)
 
-    # Expose the name index on the world so can_reach_any_enemy / can_reach_enemy_instance
-    # can resolve enemy_number -> region name for this generation.
+    # Expose the name index on the world so can_reach_any_enemy can resolve enemy_number ->
+    # region name for this generation.
     world.enemy_region_name_by_number = enemy_region_name_by_number
 
     for enemy_routing in entrance_to_enemy_region_info_collection:
@@ -674,20 +673,6 @@ def can_reach_any_enemy(state: CollectionState, world: CVAOSWorld, enemy_name: s
         for number in by_enemy_name_for_enemy_regions.get(enemy_name, set())
         if number in name_by_number
     )
-
-
-def can_reach_enemy_instance(state: CollectionState, world: CVAOSWorld, enemy_number: int) -> bool:
-    """
-    Return whether the player can reach the single enemy instance ``enemy_number``.
-
-    ``data.resolve_enemy_number`` converts the readable form ``(room, name, specifier)`` to that
-    number. Raises ValueError when the instance has no enemy region.
-    """
-    region_name = world.enemy_region_name_by_number.get(enemy_number)
-    if region_name is None:
-        raise ValueError(
-            f"enemy_number {enemy_number} has no region (not logic-relevant or unresolved)")
-    return state.can_reach_region(region_name, world.player)
 
 
 def can_reach_room(state: CollectionState, world: CVAOSWorld, room_id: str) -> bool:
