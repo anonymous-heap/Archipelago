@@ -60,7 +60,7 @@ TABLE_NOTE = ("Chances are per kill, for a soul you don't own yet, before luck, 
 
 
 def soul_name(soul_type: int, soul_index: int) -> str:
-    """Return the name of the soul that a table row's type byte and 1-based index byte name.
+    """Return the name of the soul that a table row's type byte and 1-based index byte identify.
 
     Raises KeyError for an index of 0, which means the enemy drops no soul.
     """
@@ -141,8 +141,10 @@ def planned_soul_table_lines(rom_config: Dict[str, object]) -> List[str]:
 
 
 def spoiler_soul_table_lines(world: CVAOSWorld) -> List[str]:
-    """Return the soul table for ``world``'s spoiler, or no lines when the seed changes neither
-    which enemy drops which soul nor how often."""
+    """Return the soul table for ``world``'s spoiler.
+
+    Returns no lines when the seed changes neither which enemy drops which soul nor how often.
+    """
     from .rom.patch import seed_rom_config
 
     config = seed_rom_config(world)

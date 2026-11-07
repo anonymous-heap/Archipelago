@@ -57,7 +57,8 @@ class SpoilerTest(unittest.TestCase):
             lines = rom_soul_table_lines(after)
             with self.subTest(base=name):
                 self.assertEqual(sections["Soul sources"], lines)
-                # Live test 9 compares the host of a boss soul, so this seed must have one.
+                # The in-game check of /souls looks at an ordinary enemy that holds a boss soul,
+                # so this seed must give one a boss soul at a nonzero rate.
                 rows = parse_table(after[TABLE_OFFSET:TABLE_OFFSET + TABLE_SIZE])
                 hosts = [enemy_id for enemy_id, row in enumerate(rows)
                          if row.soul_index and enemy_id not in SCRIPTED_BOSSES

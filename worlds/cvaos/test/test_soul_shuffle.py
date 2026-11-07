@@ -1,12 +1,13 @@
 """Structural tests for the enemy soul-drop shuffle (rom/soul_shuffle.py).
 
-These do not run the ROM. They check the committed vanilla table's shape, that a planned shuffle
+These do not run the game. They check the committed vanilla table's shape, that a planned shuffle
 is always a soul-preserving permutation that leaves progression souls alone, and that the emitted
 writes say what the plan says. When rates move with their souls, a scripted boss still keeps its
 rate of 0, and an ordinary enemy that receives a boss's soul keeps its own rate. Under matched, a
 soul trades places only within its colour and tier, and every rate byte stays on its row.
-Confirming the table's field meanings in-game still needs an emulator playtest (see
-rom/soul_shuffle.py).
+
+These tests cannot confirm what the table's fields mean in the game. rom/soul_shuffle.py says
+where those meanings come from.
 """
 from __future__ import annotations
 
@@ -18,10 +19,10 @@ from worlds.cvaos.test import early, run_apply_rom_features
 
 
 def _fake_rom() -> bytes:
-    """A synthetic base ROM carrying the vanilla soul table and the intro grant site.
+    """Return a stand-in base ROM that holds the vanilla soul table and the intro's grant site.
 
-    Both regions matter: build_writes verifies the enemy table AND, when asked to move the
-    starting soul, the intro's grant/equip instructions.
+    build_writes verifies the enemy table, and when it moves the starting soul it also verifies
+    the intro's grant and equip instructions.
     """
     size = ss._entry(max(ss.VANILLA)) + ss.ENEMY_STRIDE
     rom = bytearray(size)
@@ -38,7 +39,7 @@ def _fake_rom() -> bytes:
 ROM = _fake_rom()
 
 # The four scripted bosses: their death scripts award the soul in their row. Three of them also run
-# the generic drop routine, and rate 0 keeps it from rolling for that soul a second time.
+# the generic death routine, and rate 0 keeps it from rolling for that soul a second time.
 SCRIPTED_BOSSES = frozenset(e for e, (_t, index, rate) in ss.VANILLA.items() if index and rate == 0)
 
 
@@ -71,6 +72,7 @@ def _assert_every_soul_obtainable(test: unittest.TestCase, patched: bytes) -> No
     test.assertCountEqual(souls, [(t, i) for t, i, _r in ss.VANILLA.values() if i])
 
 
+# The modes that need no groups. TestMatched covers matched.
 ALL_MODES = (ss.MODE_WITHIN_TYPE, ss.MODE_ANY_TYPE)
 
 
@@ -84,7 +86,7 @@ class TestVanillaTable(unittest.TestCase):
         self.assertEqual(len(ss.VANILLA) - len(with_soul), 3)
 
     def test_mapping_is_one_to_one(self):
-        """No soul has two enemy sources -- this is what makes a permutation lossless."""
+        """No soul has two enemy sources, so permuting the sources loses no soul."""
         pairs = [(t, index) for t, index, _r in ss.VANILLA.values() if index]
         self.assertEqual(len(pairs), len(set(pairs)))
 
@@ -287,11 +289,11 @@ class TestGuards(unittest.TestCase):
 
 
 class TestStartingSoul(unittest.TestCase):
-    """The intro's free soul is hardcoded immediates, not an enemy drop."""
+    """The intro grants its free soul through instruction immediates, not as an enemy drop."""
 
     def test_starting_enemy_is_the_winged_skeleton_one(self):
         soul_type, index, _rate = ss.VANILLA[ss.STARTING_SOUL_ENEMY]
-        self.assertEqual((soul_type, index), (ss.SOUL_TYPE_RED, 1))   # red, 1-based idx 1 == 0
+        self.assertEqual((soul_type, index), (ss.SOUL_TYPE_RED, 1))   # red, 1-based index 1
         self.assertNotIn(ss.STARTING_SOUL_ENEMY, ss.PROGRESSION_SOUL_ENEMIES)
 
     def test_off_by_default_leaves_the_intro_alone(self):
@@ -357,7 +359,7 @@ class TestStartingSoul(unittest.TestCase):
 
 
 class TestWiring(unittest.TestCase):
-    """The seams between the option, rom_config.json and build_writes."""
+    """How the option's value reaches build_writes through rom_config.json."""
 
     def test_every_soul_shuffle_option_maps_to_a_mode(self):
         from worlds.cvaos.options import SoulShuffle

@@ -1,6 +1,6 @@
 """
-Pins for the soul guarantee hook (``rom/soul_guarantee_hook.py``): the book-to-soul table, the
-blob's layout, the veneer, the base-ROM check, and, when capstone is installed, a real
+Tests that pin the soul guarantee hook (``rom/soul_guarantee_hook.py``): the book-to-soul table,
+the blob's layout, the veneer, the base-ROM check, and, when capstone is installed, a real
 disassembly of the trampoline.
 
 The tests also cover the pause-menu descriptions: which books gain the note that their soul always

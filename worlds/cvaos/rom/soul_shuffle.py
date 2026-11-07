@@ -27,8 +27,9 @@ enemies are permuted in groups that depend on the ``soul_shuffle`` option:
 * ``within_type``: one group per soul type.
 * ``any_type``: one group of all 103.
 * ``matched``: one group per soul type and strength tier, so a soul trades places only with a
-  soul of the same colour and tier. The world passes in each enemy's group, because the tiers
-  come from its soul ratings, which rom/ modules do not import.
+  soul of the same colour and tier. ``rom/patch.py`` passes in each enemy's group, because the
+  tiers come from the soul ratings in ``data/item_balancing``, which the rom/ feature modules do
+  not import.
 
 Because the vanilla mapping is 1:1, a permutation gives every soul exactly one new source and
 leaves none unobtainable.
@@ -38,7 +39,7 @@ Drop rates
 Controlled by the ``keep_soul_drop_rates`` option:
 
 * ``False``: the rate byte stays with the ENEMY, so a soul is as rare as whatever now drops it.
-  The world always sets this under ``matched``, so every rate byte stays on its row.
+  The world always uses ``False`` under ``matched``, so every rate byte stays on its row.
 * ``True``: the rate byte moves WITH THE SOUL, so each soul keeps its vanilla rarity and only
   its source changes.
 
@@ -288,13 +289,13 @@ def shuffleable_enemies(mode: str) -> List[int]:
 def plan_shuffle(random: Random, mode: str,
                  matched_groups: Optional[Mapping[int, Hashable]] = None) -> Dict[int, int]:
     """
-    Decide the shuffle: ``{target_enemy_id: source_enemy_id}``, meaning *target* now drops the
+    Return the shuffle as ``{target_enemy_id: source_enemy_id}``, meaning *target* now drops the
     soul that *source* dropped in vanilla.
 
     Reads only :data:`VANILLA`, so this runs at generation time without a base ROM. Enemies
     that keep their own soul are omitted, so the result is a permutation of its own key set.
 
-    ``matched_groups`` gives the group of every enemy that ``matched`` may shuffle, such as the
+    ``matched_groups`` maps every enemy that ``matched`` can shuffle to its group, such as the
     colour and tier of its vanilla soul. Souls trade places only within a group. The other
     modes ignore it, and ``matched`` raises ValueError without it.
     """
@@ -361,12 +362,11 @@ def _verify_starting_grant(base_rom: bytes) -> None:
 
 def _starting_soul_writes(plan: Dict[int, int]) -> Dict[int, bytes]:
     """
-    Retarget the intro's free soul at whatever now drops from :data:`STARTING_SOUL_ENEMY`.
+    Return the writes that make the intro grant the soul that :data:`STARTING_SOUL_ENEMY` now
+    drops.
 
-    The gift stays tied to the enemy it came from in vanilla, so the player starts with the soul
-    that enemy now drops and the intro stays consistent with the shuffled world. That soul can
-    be of any type, so the equip is repointed at the matching equipped-soul slot. Returns an
-    empty dict when that enemy kept its own soul.
+    That soul can be of any type, so the equip is repointed at the matching equipped-soul slot.
+    Returns an empty dict when that enemy kept its own soul.
     """
     source = plan.get(STARTING_SOUL_ENEMY)
     if source is None:
@@ -401,8 +401,8 @@ def build_writes(base_rom: bytes, plan: Dict[int, int], keep_soul_drop_rates: bo
             the target has a vanilla rate of 0 (a scripted boss). In that case the target keeps
             its own rate: a boss keeps its 0, and an ordinary enemy that receives a boss's soul
             keeps its nonzero rate.
-        shuffle_starting_soul: also retarget the intro's free Winged Skeleton soul at
-            whatever now drops from the enemy it belonged to.
+        shuffle_starting_soul: also make the intro grant the soul that the Winged Skeleton
+            enemy now drops, instead of the Winged Skeleton soul.
 
     Returns ``{file offset: bytes}``.
     """
