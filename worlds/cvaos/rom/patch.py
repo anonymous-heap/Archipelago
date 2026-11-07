@@ -23,10 +23,10 @@ from .. import item_granting
 from ..data import item_info_collection, pickup_info_collection as pickup_infos
 from ..constants import AC_USA_ROM_MD5, USA_ROM_MD5
 from ..items import CHECK_ITEM_CHOICES, FORBIDDEN_AREA_SWITCH, item_table
-from . import (classicvania_movement, custom_pickups, deathlink_hook, enemy_drop_rates,
-               forbidden_area_button, inventory_menu, oops_all_whips, received_item_box,
-               single_jump_divekick, skull_key_pickup, skull_key_warp, soul_drop_rates,
-               soul_guarantee_hook, soul_shuffle)
+from . import (classicvania_movement, custom_pickups, deathlink_hook, drop_table,
+               enemy_drop_rates, forbidden_area_button, inventory_menu, oops_all_whips,
+               received_item_box, single_jump_divekick, skull_key_pickup, skull_key_warp,
+               soul_drop_rates, soul_guarantee_hook, soul_shuffle)
 from .entity import GBA_ROM_BASE, PICKUP, AoSPickupEntity
 from .._bytemaker_compat import offset_of
 from ..options import (ForbiddenAreaButton, SoulShuffle, TARGET_ADVANCE_COLLECTION,
@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 ARCHIPELAGO_IDENTIFIER_START = 0x670000   # 13 bytes
 # Every identifier, oldest first. Each one is 13 bytes long.
 IDENTIFIERS: tuple[str, ...] = ("CVAOS_AP_V0.1", "CVAOS_AP_V0.2", "CVAOS_AP_V0.3",
-                                "CVAOS_AP_V0.4", "CVAOS_AP_V0.5")
+                                "CVAOS_AP_V0.4", "CVAOS_AP_V0.5", "CVAOS_AP_V0.6")
 # The newest identifier this version knows. Clients read len(ARCHIPELAGO_IDENTIFIER) bytes.
 ARCHIPELAGO_IDENTIFIER = IDENTIFIERS[-1]
 assert all(len(identifier) == len(ARCHIPELAGO_IDENTIFIER) for identifier in IDENTIFIERS)
@@ -84,6 +84,7 @@ ROM_CONFIG_KEY_IDENTIFIERS: dict[str, str] = {
     "target_platform": "CVAOS_AP_V0.3",
     "ancient_book_soul_drops": "CVAOS_AP_V0.3",
     "enemy_drop_rates": "CVAOS_AP_V0.5",
+    "drop_table": "CVAOS_AP_V0.6",
 }
 assert set(ROM_CONFIG_KEY_IDENTIFIERS.values()) <= set(IDENTIFIERS)
 
@@ -359,6 +360,10 @@ class CVAOSPatchExtension(APPatchExtension):
         # The soul shuffle and the soul-rate edits (apply_soul_edits).
         apply_soul_edits(working, config)
 
+        # The seed's drop table (rom/drop_table.py). apply_enemy_table then scales the common
+        # rarities that it leaves.
+        apply_drop_table_edits(working, config)
+
         # Gameplay tweaks ported from Xanthus's AoS patches (see each module's docstring).
         if config["single_jump_divekick"]:
             apply(single_jump_divekick.build_writes(bytes(working)))
@@ -443,6 +448,17 @@ def apply_soul_edits(working: bytearray, config: Dict[str, object]) -> None:
     if config["multiply_soul_drop_rates"]:
         _apply_writes(working, soul_drop_rates.build_multiplier_writes(
             bytes(working), config["soul_drop_rate_multiplier"]))
+
+
+def apply_drop_table_edits(working: bytearray, config: Dict[str, object]) -> None:
+    """Write the seed's drop table into ``working``, in place, when the config has one.
+
+    The writes read only the enemy table's drop fields, so ``drop_sources`` also runs them on a
+    stand-in for the base ROM.
+    """
+    rows = config.get("drop_table")
+    if rows:
+        _apply_writes(working, drop_table.build_writes(bytes(working), rows))
 
 
 def apply_drop_rate_edits(working: bytearray, config: Dict[str, object]) -> None:
@@ -584,8 +600,8 @@ def build_rom_config(world: CVAOSWorld) -> Dict[str, object]:
     also drives base-ROM source selection at apply time (get_source_data_with_cache), and
     apply_rom_features ignores it.
 
-    With Enemy Drop Rate above 100, this reads the seed depths, so call it only after
-    progression balancing.
+    With Item Drop Shuffle on or Enemy Drop Rate above 100, this reads the seed depths, so call
+    it only after progression balancing.
     """
     config: Dict[str, object] = {
         "target_platform": world.options.target_platform.value,
@@ -605,10 +621,19 @@ def build_rom_config(world: CVAOSWorld) -> Dict[str, object]:
         "multiply_soul_drop_rates": bool(world.options.multiply_soul_drop_rates),
         "soul_drop_rate_multiplier": int(world.options.soul_drop_rate_multiplier.value),
     }
+    # The drop table, when the seed changes it. Its common drops also decide which rows Enemy Drop
+    # Rate exempts below.
+    from ..drop_sources import final_drop_table
+    table = final_drop_table(world)
+    common_drops = None
+    if table is not None:
+        config["drop_table"] = drop_table.encode_table(table)
+        common_drops = {enemy_id: row[0].item for enemy_id, row in table.items()}
     # Enemy Drop Rate's percent for each row's soul and common drop. They are percents rather
     # than final bytes, because apply_enemy_table scales the bytes that the shuffle and the
     # overrides leave. At 100 the option changes nothing, so the key is left out.
     if world.options.enemy_drop_rate.value != 100:
         from ..enemy_drop_rate import drop_rate_percents
-        config["enemy_drop_rates"] = drop_rate_percents(world, config["soul_shuffle_plan"])
+        config["enemy_drop_rates"] = drop_rate_percents(world, config["soul_shuffle_plan"],
+                                                        common_drops)
     return config

@@ -199,10 +199,11 @@ class PresetPatchTest(unittest.TestCase):
         self.assertTrue(self.config["soul_shuffle_plan"])
         self.assertIs(self.config["keep_soul_drop_rates"], False)
         self.assertTrue(self.config["enemy_drop_rates"])
+        self.assertTrue(self.config["drop_table"])
         start = patch.ARCHIPELAGO_IDENTIFIER_START
         for name, (before, after) in self.patched_roms().items():
             with self.subTest(base=name):
-                self.assertEqual(after[start:start + 13], patch.MIN_SEED_IDENTIFIER.encode())
+                self.assertEqual(after[start:start + 13], b"CVAOS_AP_V0.6")
                 # The overrides for Manticore, Devil and Curly applied before the last step.
                 rows = rows_of(before)
                 self.assertEqual([rows[e].soul_rate for e in (54, 48, 43)], [5, 5, 9])
@@ -237,15 +238,14 @@ class PresetPatchTest(unittest.TestCase):
         kept = 0
         for name, (before, after) in self.patched_roms().items():
             for enemy, old, new in zip(enemy_type_collection, rows_of(before), rows_of(after)):
-                common = enemy.drops[0]
-                if old.drop_1 and item_worth(common) < 0.45:
+                if old.drop_1 and item_worth(by_item_number[old.drop_1 - 1].name) < 0.45:
                     expected = scaled_rate(old.drop_1_rarity, self.kind(enemy.id))
                 else:
                     expected, kept = old.drop_1_rarity, kept + bool(old.drop_1)
                 with self.subTest(base=name, enemy=enemy.name):
-                    # Each slot holds the item number plus 1, which names the CSV's drops.
-                    self.assertEqual([by_item_number[slot - 1].name if slot else ""
-                                      for slot in (old.drop_1, old.drop_2)], list(enemy.drops))
+                    # Before the last step, the row holds the drop table that the config lists.
+                    self.assertEqual([old.drop_1, old.drop_1_rarity, old.drop_2, old.drop_2_rarity],
+                                     self.config["drop_table"][str(enemy.id)])
                     self.assertEqual(new.drop_1_rarity, expected)
                     self.assertEqual((new.drop_1, new.drop_2, new.drop_2_rarity),
                                      (old.drop_1, old.drop_2, old.drop_2_rarity))

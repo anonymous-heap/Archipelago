@@ -89,11 +89,11 @@ class PatchProcedureTest(unittest.TestCase):
         rom = bytearray(0x800000)
         start = patch.ARCHIPELAGO_IDENTIFIER_START
         rom[start:start + 13] = b"CVAOS_AP_V0.9"
-        with self.assertRaisesRegex(ValueError, "drop_table.*CVAOS_AP_V0.9"):
-            run_apply_rom_features(self, bytes(rom), drop_table=[])
+        with self.assertRaisesRegex(ValueError, "newer_feature.*CVAOS_AP_V0.9"):
+            run_apply_rom_features(self, bytes(rom), newer_feature=[])
         # Without an identifier in the ROM, the message still names the key.
-        with self.assertRaisesRegex(ValueError, "drop_table"):
-            run_apply_rom_features(self, bytes(0x800000), drop_table=[])
+        with self.assertRaisesRegex(ValueError, "newer_feature"):
+            run_apply_rom_features(self, bytes(0x800000), newer_feature=[])
 
     def test_every_key_a_seed_writes_is_known(self):
         world = setup_multiworld(CVAOSWorld, ("generate_early",), seed=1).worlds[1]
