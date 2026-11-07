@@ -40,7 +40,6 @@ __all__ = [
     "by_enemy_name_for_enemy_regions",
     "by_enemy_number_for_enemy_regions",
     "enemy_meta_by_number",
-    "resolve_enemy_number",
     "TransdoorConnection",
     "transdoor_connection_rows",
     "by_from_entrance_for_transdoor",
@@ -745,8 +744,6 @@ by_enemy_number_for_enemy_regions: dict[int, list[EntranceToEnemyRegionInfo]] = 
 by_enemy_name_for_enemy_regions: dict[str, set[int]] = {}
 # enemy_number -> (enemy_name, specifier, room) for region naming / reverse lookup
 enemy_meta_by_number: dict[int, tuple[str, str, str]] = {}
-# (room, enemy_name, specifier) -> enemy_number (unique within a room)
-_enemy_number_by_room_name_spec: dict[tuple[str, str, str], int] = {}
 
 for _enemy_row in enemy_region_rows:
     by_enemy_number_for_enemy_regions.setdefault(_enemy_row.enemy_number, []).append(_enemy_row)
@@ -754,9 +751,6 @@ for _enemy_row in enemy_region_rows:
     enemy_meta_by_number[_enemy_row.enemy_number] = (
         _enemy_row.enemy_name, _enemy_row.specifier, _enemy_row.enemy_room,
     )
-    _enemy_number_by_room_name_spec[
-        (_enemy_row.enemy_room, _enemy_row.enemy_name, _enemy_row.specifier)
-    ] = _enemy_row.enemy_number
 
 
 class EnemyPlacement(NamedTuple):
@@ -792,8 +786,3 @@ def _load_enemy_placements() -> tuple[EnemyPlacement, ...]:
 
 
 enemy_placements: tuple[EnemyPlacement, ...] = _load_enemy_placements()
-
-
-def resolve_enemy_number(room_id: str, enemy_name: str, specifier: str = "") -> int:
-    """Map the human form ``(room, name, specifier)`` to the unique ``enemy_number``."""
-    return _enemy_number_by_room_name_spec[(room_id, enemy_name, specifier)]

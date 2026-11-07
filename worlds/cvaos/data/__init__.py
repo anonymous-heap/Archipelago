@@ -34,7 +34,6 @@ from .routing_info import (
     enemy_region_rows as entrance_to_enemy_region_info_collection,
     lookup_pickup_region_requirement,
     pickup_region_rows as entrance_to_pickup_region_info_collection,
-    resolve_enemy_number,
     rows as entrance_to_entrance_info_collection,
     transdoor_connection_rows as transdoor_connection_collection,
 )
@@ -68,7 +67,6 @@ __all__ = [
     "item_info_collection",
     "lookup_pickup_region_requirement",
     "pickup_info_collection",
-    "resolve_enemy_number",
     "room_info_collection",
     "transdoor_connection_collection",
 ]

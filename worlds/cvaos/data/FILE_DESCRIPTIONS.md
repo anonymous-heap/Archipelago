@@ -169,7 +169,7 @@ One row per directed door crossing, as `from_entrance,to_entrance`: the two entr
 Adjustments layered over the file above. A row with `does_exist=FALSE` removes that crossing, and a row with `is_override=TRUE` adds one. This is where the chaotic-realm portals live, since they are not real doors in `entrance_info`.
 
 **`__init__.py`**
-Defines `AbilityCombo` (IntFlag enum of all ability bits) along with `RoutingInfo`, `EntranceToPickupRegionInfo`, `EntranceToEnemyRegionInfo`, `EnemyPlacement`, and `TransdoorConnection`. Loads all five CSVs at module init. Each requirement row keeps its ability columns and combo cells, and its `get_requirement_bitmasks()` turns them into a minimized tuple of ReqMasks. Transdoors load first, because resolving the `dest_room_identifier` column of the pickup and enemy files needs them. Exports the `rows`, `pickup_region_rows`, `enemy_region_rows`, `transdoor_connection_rows`, and `enemy_placements` tuples, the lookup indexes over them, `lookup_pickup_region_requirement()`, and `resolve_enemy_number()`.
+Defines `AbilityCombo` (IntFlag enum of all ability bits) along with `RoutingInfo`, `EntranceToPickupRegionInfo`, `EntranceToEnemyRegionInfo`, `EnemyPlacement`, and `TransdoorConnection`. Loads all five CSVs at module init. Each requirement row keeps its ability columns and combo cells, and its `get_requirement_bitmasks()` turns them into a minimized tuple of ReqMasks. Transdoors load first, because resolving the `dest_room_identifier` column of the pickup and enemy files needs them. Exports the `rows`, `pickup_region_rows`, `enemy_region_rows`, `transdoor_connection_rows`, and `enemy_placements` tuples, the lookup indexes over them, and `lookup_pickup_region_requirement()`.
 
 ---
 
