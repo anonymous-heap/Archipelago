@@ -356,26 +356,8 @@ class CVAOSPatchExtension(APPatchExtension):
         if config["forbidden_area_pickup"]:
             apply(forbidden_area_button.build_writes(bytes(working)))
 
-        # Reassign which enemy drops which soul (rom/soul_shuffle.py). Must precede
-        # soul_drop_rates: it verifies the whole vanilla soul table, including the three rate
-        # bytes soul_drop_rates then overwrites.
-        soul_plan = {int(target): source
-                     for target, source in config.get("soul_shuffle_plan", {}).items()}
-        if soul_plan:
-            apply(soul_shuffle.build_writes(bytes(working), soul_plan,
-                                            config["keep_soul_drop_rates"],
-                                            config["shuffle_starting_soul"]))
-
-        # Adjust selected enemy soul-drop rates (rom/soul_drop_rates.py).
-        apply(soul_drop_rates.build_writes(bytes(working)))
-
-        # Global soul-drop-rate multiplier. Last of the rate edits in this step on purpose: it
-        # reads the rates as they now stand, so it composes with both the overrides above and a
-        # shuffle that moved rates around. Enemy Drop Rate replaces it, and apply_enemy_table
-        # applies that option after this whole step.
-        if config["multiply_soul_drop_rates"]:
-            apply(soul_drop_rates.build_multiplier_writes(
-                bytes(working), config["soul_drop_rate_multiplier"]))
+        # The soul shuffle and the soul-rate edits (apply_soul_edits).
+        apply_soul_edits(working, config)
 
         # Gameplay tweaks ported from Xanthus's AoS patches (see each module's docstring).
         if config["single_jump_divekick"]:
@@ -423,13 +405,51 @@ class CVAOSPatchExtension(APPatchExtension):
         instead of building a ROM without these edits.
         """
         config = json.loads(caller.get_file(config_file_name).decode("utf-8"))
-        percents = config.get("enemy_drop_rates")
-        if not percents:
+        if not config.get("enemy_drop_rates"):
             return rom
         working = bytearray(rom)
-        for offset, data in enemy_drop_rates.build_writes(rom, percents).items():
-            working[offset:offset + len(data)] = data
+        apply_drop_rate_edits(working, config)
         return bytes(working)
+
+
+def _apply_writes(working: bytearray, writes: Dict[int, bytes]) -> None:
+    for offset, data in writes.items():
+        working[offset:offset + len(data)] = data
+
+
+def apply_soul_edits(working: bytearray, config: Dict[str, object]) -> None:
+    """Apply the seed's soul shuffle and soul-rate edits to ``working``, in place.
+
+    These are apply_rom_features' edits to the enemy table and the intro's starting soul. They read
+    nothing else, so ``soul_sources`` also runs them on a stand-in for the base ROM.
+    """
+    # Reassign which enemy drops which soul (rom/soul_shuffle.py). Must precede soul_drop_rates:
+    # it verifies the whole vanilla soul table, including the three rate bytes soul_drop_rates
+    # then overwrites.
+    soul_plan = {int(target): source
+                 for target, source in config.get("soul_shuffle_plan", {}).items()}
+    if soul_plan:
+        _apply_writes(working, soul_shuffle.build_writes(bytes(working), soul_plan,
+                                                         config["keep_soul_drop_rates"],
+                                                         config["shuffle_starting_soul"]))
+
+    # Adjust selected enemy soul-drop rates (rom/soul_drop_rates.py).
+    _apply_writes(working, soul_drop_rates.build_writes(bytes(working)))
+
+    # Global soul-drop-rate multiplier. Last of the rate edits in apply_rom_features on purpose:
+    # it reads the rates as they now stand, so it composes with both the overrides above and a
+    # shuffle that moved rates around. Enemy Drop Rate replaces it, and apply_enemy_table applies
+    # that option after the whole of apply_rom_features.
+    if config["multiply_soul_drop_rates"]:
+        _apply_writes(working, soul_drop_rates.build_multiplier_writes(
+            bytes(working), config["soul_drop_rate_multiplier"]))
+
+
+def apply_drop_rate_edits(working: bytearray, config: Dict[str, object]) -> None:
+    """Apply Enemy Drop Rate's percents to ``working``, in place, when the config has them."""
+    percents = config.get("enemy_drop_rates")
+    if percents:
+        _apply_writes(working, enemy_drop_rates.build_writes(bytes(working), percents))
 
 
 def _check_known_keys(config: Dict[str, object], rom: bytes) -> None:
@@ -522,7 +542,7 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
     ``rom_config.json`` records which ROM-reading features this seed enabled, for
     ``apply_rom_features`` to apply on the player's machine.
     """
-    rom_config = build_rom_config(world)
+    rom_config = seed_rom_config(world)
 
     for offset, data in offset_data.items():
         patch.write_token(APTokenTypes.WRITE, offset, data)
@@ -542,6 +562,17 @@ def patch_rom(world: CVAOSWorld, patch: CVAOSProcedurePatch, offset_data: Dict[i
     patch.write_file("rom_config.json", json.dumps(rom_config).encode("utf-8"))
 
     patch.write_file("token_data.bin", patch.get_token_binary())
+
+
+def seed_rom_config(world: CVAOSWorld) -> Dict[str, object]:
+    """Return the seed's ``rom_config.json``, building it on the first call.
+
+    The soul shuffle plan is drawn from the world's random, so the patch and the spoiler read one
+    shared build rather than drawing two plans.
+    """
+    if world.rom_config is None:
+        world.rom_config = build_rom_config(world)
+    return world.rom_config
 
 
 def build_rom_config(world: CVAOSWorld) -> Dict[str, object]:

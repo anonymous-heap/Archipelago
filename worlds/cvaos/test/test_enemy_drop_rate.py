@@ -14,6 +14,7 @@ is available: a cart dump, and the Advance Collection's copy.
 """
 from __future__ import annotations
 
+import functools
 import glob
 import json
 import os
@@ -21,9 +22,10 @@ import tempfile
 import unittest
 import zipfile
 from types import SimpleNamespace
+from typing import NamedTuple
 from unittest import mock
 
-from .. import enemy_drop_rate
+from .. import CVAOSWorld, enemy_drop_rate
 from .._bytemaker_compat import sizeof
 from ..data import enemy_type_by_name, enemy_type_collection
 from ..data.item_balancing.soul_tiers import soul_rating
@@ -144,20 +146,35 @@ def rows_of(rom: bytes) -> list:
     return ENEMY_TABLE.bind(gba_space(rom)).read()
 
 
+class PresetSeed(NamedTuple):
+    world: CVAOSWorld
+    config: dict  # the patch's rom_config.json
+    patched: dict[str, tuple[bytes, bytes]]  # base name -> ROM before the last step, and after
+
+
+@functools.cache
+def preset_seed() -> PresetSeed:
+    """Generate one seed with the Experimental preset, write its patch, and apply the patch to each
+    available base ROM. The result is shared by every test that reads it."""
+    world = generate(2, dict(PRESET)).worlds[1]
+    with tempfile.TemporaryDirectory() as folder:
+        world.generate_output(folder)
+        (patch_path,) = glob.glob(os.path.join(folder, "*.apcvaos"))
+        with zipfile.ZipFile(patch_path) as patch_file:
+            config = json.loads(patch_file.read("rom_config.json"))
+        patched = {name: apply_patch(patch_path, base, folder)
+                   for name, base in base_roms().items()}
+    return PresetSeed(world, config, patched)
+
+
 class PresetPatchTest(unittest.TestCase):
     """The Experimental preset generates, and its patch applies to each available base ROM."""
 
     @classmethod
     def setUpClass(cls) -> None:
-        world = generate(2, dict(PRESET)).worlds[1]
-        cls.depths = enemy_seed_depths(world)
-        with tempfile.TemporaryDirectory() as folder:
-            world.generate_output(folder)
-            (patch_path,) = glob.glob(os.path.join(folder, "*.apcvaos"))
-            with zipfile.ZipFile(patch_path) as patch_file:
-                cls.config = json.loads(patch_file.read("rom_config.json"))
-            cls.patched = {name: apply_patch(patch_path, base, folder)
-                           for name, base in base_roms().items()}
+        seed = preset_seed()
+        cls.depths = enemy_seed_depths(seed.world)
+        cls.config, cls.patched = seed.config, seed.patched
 
     def patched_roms(self) -> dict[str, tuple[bytes, bytes]]:
         """Return each base's ROM before the enemy-table step and after it, or skip without one."""

@@ -51,6 +51,14 @@ ENEMY_TABLE = Entry(0x080E9644, EnemyDNA, count(ENEMY_COUNT), name="enemy table"
 # Address math only: the table bound to the cart's geometry, no image behind it.
 _TABLE_GEOMETRY = ENEMY_TABLE.bind(gba_space())
 
+# The whole table's file offset and size in bytes, for reading it from a running game.
+TABLE_OFFSET, TABLE_SIZE = _TABLE_GEOMETRY.request()
+
+
+def parse_table(data: bytes) -> list[EnemyDNA]:
+    """Decode the whole table from ``data``, its TABLE_SIZE bytes read from a ROM."""
+    return _TABLE_GEOMETRY.parse(data)
+
 
 def row_offset(enemy_id: int) -> int:
     """File offset of ``enemy_id``'s row."""

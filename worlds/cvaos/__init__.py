@@ -1,7 +1,7 @@
 import base64
 import logging
 import os
-from typing import ClassVar, Sequence
+from typing import ClassVar, Sequence, TextIO
 
 from BaseClasses import CollectionState, Item, ItemClassification, MultiWorld, Tutorial
 from worlds.AutoWorld import WebWorld, World
@@ -170,6 +170,10 @@ class CVAOSWorld(World):
     # Per-slot authentication: baked into the ROM (rom/patch.py) and registered under
     # connect_names (modify_multidata) so the client can connect by reading it from the ROM.
     auth: bytearray
+
+    # The seed's rom_config.json, built on first use by rom.patch.seed_rom_config, so that the
+    # patch and the spoiler read the same soul shuffle plan.
+    rom_config: dict | None = None
 
     # Universal Tracker rebuilds this world from the seed's slot data, without the player's YAML. It
     # passes the slot data through interpret_slot_data and stores the result in
@@ -405,6 +409,14 @@ class CVAOSWorld(World):
             output_directory,
             f"{self.multiworld.get_out_file_name_base(self.player)}{patch.patch_file_ending}")
         patch.write(rom_path)
+
+    def write_spoiler(self, spoiler_handle: TextIO) -> None:
+        # Which enemy drops which soul and how often, when the seed changes either.
+        from .soul_sources import spoiler_soul_table_lines
+        lines = spoiler_soul_table_lines(self)
+        if lines:
+            spoiler_handle.write(f"\n\nSoul sources ({self.player_name}):\n")
+            spoiler_handle.writelines(f"    {line}\n" for line in lines)
 
     def fill_slot_data(self) -> dict:
         from .rom.patch import rom_gives_item
