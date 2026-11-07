@@ -244,7 +244,7 @@ class CVAOSWorld(World):
     # check requires all eight fallback souls, and the fill places progression on priority
     # locations first. The souls must then go where none of the progression on those checks is
     # needed, and with many such checks they run out of places. Seeds stop generating reliably with
-    # 25 or more, as measured in local_docs/ENEMY_CHECKS_DESIGN.md.
+    # 25 or more.
     MAX_FALLBACK_PRIORITY = 10
 
     def generate_early(self) -> None:
