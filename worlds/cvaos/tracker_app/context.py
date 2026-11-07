@@ -25,6 +25,7 @@ from Utils import async_start
 
 from .. import CVAOSWorld, exploration, tracker_map, tracker_route
 from ..data import item_info_collection
+from ..enemy_checks import enemy_id_for_location
 from ..item_granting import canonical_code
 from ..regions import UT_TRICKS_ITEM
 from . import without_login
@@ -97,6 +98,9 @@ class TrackerContext(CommonContext):
         self.room_address = server_address  # the address asked for, as given
         self.core = TrackerCore(logger, False, False)
         self.result: CurrentTrackerState | None = None
+        # For each defeat location in logic or with tricks, by location id: its rooms in logic or
+        # with tricks, each with that status (defeat_room_statuses).
+        self.defeat_rooms: dict[int, dict[str, str]] = {}
         self.listeners: list[Callable[[], None]] = []
         self.status = "Not connected"
         self.route_target: int | None = None  # the location id a route was asked for
@@ -303,6 +307,7 @@ class TrackerContext(CommonContext):
         super().reset_server_state()
         self.core.disconnect()
         self.result = None
+        self.defeat_rooms = {}
         self.route = None  # planned again once the seed is rebuilt, to the same target
         # A status that says why the connection failed stays on screen. "Connecting", "Rebuilding"
         # and "Tracking" are no longer true, so they become "Not connected". They become
@@ -350,6 +355,7 @@ class TrackerContext(CommonContext):
                                       for item in self.items_received])
         self.core.set_hints(self.hinted_locations())
         self.result = self.core.updateTracker()
+        self.defeat_rooms = self.defeat_room_statuses()
         self.plan_route()
         self.changed()
 
@@ -361,6 +367,30 @@ class TrackerContext(CommonContext):
         if location_id in self.core.glitched_locations:
             return "tricks"
         return "out_of_logic"
+
+    def defeat_room_statuses(self) -> dict[int, dict[str, str]]:
+        """Return the rooms where each defeat location in logic or with tricks can be checked.
+
+        A defeat location has a pin in each room where its enemy appears, and logic can reach the
+        enemy in some of those rooms only. Each room listed has the status "in_logic" or "tricks",
+        and the page shows the pins in the other rooms as out of logic.
+        """
+        world = self.core.get_current_world()
+        defeats = {location.address: location for location in world.get_locations()
+                   if enemy_id_for_location(location.address or 0) is not None}
+        rooms: dict[int, dict[str, str]] = {}
+        for location_id in self.server_locations:
+            location = defeats.get(location_id)
+            if location is None or self.location_status(location_id) not in ("in_logic", "tricks"):
+                continue
+            statuses = {}
+            if self.result.glitches_state is not None:
+                statuses = dict.fromkeys(
+                    tracker_route.defeat_rooms(location, self.result.glitches_state), "tricks")
+            statuses.update(dict.fromkeys(
+                tracker_route.defeat_rooms(location, self.result.state), "in_logic"))
+            rooms[location_id] = statuses
+        return rooms
 
     # --- Soma and routes -----------------------------------------------------------------------
 
@@ -493,6 +523,8 @@ class TrackerContext(CommonContext):
         progression = sorted((in_pool | set(self.result.prog_items)) - {UT_TRICKS_ITEM})
         snapshot.update({
             "locations": {str(location_id): status for location_id, status in locations.items()},
+            "defeat_rooms": {str(location_id): statuses
+                             for location_id, statuses in self.defeat_rooms.items()},
             "hinted": sorted(location_id for location_id in hinted if location_id in locations),
             "goal": goal,
             "items": [{"name": name, "count": self.result.all_items.get(name, 0),

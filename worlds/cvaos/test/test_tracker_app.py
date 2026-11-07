@@ -349,6 +349,44 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("A Link to the Past", ctx.snapshot()["status"])
 
 
+class DefeatPinTest(unittest.IsolatedAsyncioTestCase):
+    """A defeat location's pins, one in each room where its enemy appears, in a seed with every
+    enemy check."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.slot_data = generate({"enemy_checks": "all"}).worlds[1].fill_slot_data()
+
+    async def asyncSetUp(self) -> None:
+        self.ctx = TrackerContext(None, None, "Soma")
+        self.addCleanup(self.ctx.close)
+        ids = set(location_name_to_id.values())
+        self.ctx.slot, self.ctx.team = 1, 0
+        self.ctx.slot_info = {1: NetworkSlot("Soma", CVAOSWorld.game, SlotType.player)}
+        self.ctx.server_locations = set(ids)
+        self.ctx.missing_locations = set(ids)
+        self.ctx.checked_locations = set()
+        self.ctx.on_package("Connected", {"slot_data": self.slot_data})
+
+    async def test_each_room_lists_whether_logic_reaches_the_enemy_there(self):
+        snapshot = self.ctx.snapshot()
+        zombie, bat, lilith = (str(location_name_to_id[f"Defeat {name}"])
+                               for name in ("Zombie", "Bat", "Lilith"))
+        # Zombie appears in rooms 003 and 016, and only 003 is in logic from the start. The page
+        # shows the pin in 016 as out of logic.
+        self.assertEqual(snapshot["locations"][zombie], "in_logic")
+        self.assertEqual(snapshot["defeat_rooms"][zombie], {"003": "in_logic"})
+        # Bat has no recorded route, so the rooms the tracker can reach show it with tricks.
+        self.assertEqual(snapshot["locations"][bat], "tricks")
+        self.assertEqual(set(snapshot["defeat_rooms"][bat].values()), {"tricks"})
+        self.assertNotIn(lilith, snapshot["defeat_rooms"])
+
+    async def test_a_route_to_a_defeat_ends_in_a_room_where_logic_reaches_the_enemy(self):
+        # The page ends the route's line at the pin in the route's last room.
+        self.ctx.set_route(location_name_to_id["Defeat Zombie"])
+        self.assertEqual(self.ctx.snapshot()["route"]["steps"][-1]["room"], "003")
+
+
 class TrackerServerTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.ctx = TrackerContext(None, None, None)

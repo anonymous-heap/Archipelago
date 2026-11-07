@@ -9,6 +9,10 @@ each room needs, such as a soul, a weapon to break a ceiling, or a trick.
 UT's routes always begin at the start of the game, no matter where Soma is. :func:`plan_route` can
 start in Soma's current room instead. :func:`route_points` returns the doors a route goes through
 as points on the map, so the tracker can draw the route.
+
+A defeat location can be checked in any room where its enemy appears. :func:`defeat_rooms` returns
+the rooms where a state can reach the enemy, so the tracker page can show each room's pin with its
+own status.
 """
 from __future__ import annotations
 
@@ -149,6 +153,17 @@ def plan_route(world: CVAOSWorld, location: Location,
             if path is not None:
                 return Route(location, path, room, state.has(UT_TRICKS_ITEM, world.player))
     return None
+
+
+def defeat_rooms(location: Location, state: CollectionState) -> set[str]:
+    """Return the rooms where ``state`` can reach the enemy whose defeat is ``location``.
+
+    Each placement of the enemy connects to the location's region from doors of its own room
+    (regions._create_enemy_checks). So the room of each such door that ``state`` can use is a room
+    where the player can defeat the enemy.
+    """
+    return {_room_of(entrance.parent_region) for entrance in location.parent_region.entrances
+            if entrance.can_reach(state)} - {None}
 
 
 def route_steps(state: CollectionState, entrances: list[Entrance]) -> list[tuple[str, list[str]]]:

@@ -393,6 +393,26 @@ function shownSpots(location, visible, visited, inArea = () => true) {
   return location.spots.filter((spot) => inArea(spot.area) && spotShown(spot, visible, visited));
 }
 
+// A pin's status. A defeat location has a pin in each room where its enemy appears, and the
+// snapshot lists the rooms where logic, or logic with tricks, reaches the enemy. While the
+// location is in logic or with tricks, its pins in other rooms show as out of logic. Every other
+// pin takes its location's status.
+function spotStatus(location, spot) {
+  const status = (page.snapshot.locations || {})[location.id];
+  const rooms = (page.snapshot.defeat_rooms || {})[location.id];
+  if (!rooms || (status !== "in_logic" && status !== "tricks")) return status;
+  return rooms[spot.room] || "out_of_logic";
+}
+
+// The best status among some of a location's spots: "in_logic", then "tricks", and otherwise
+// undefined.
+function bestStatus(location, spots) {
+  const statuses = spots.map((spot) => spotStatus(location, spot));
+  if (statuses.includes("in_logic")) return "in_logic";
+  if (statuses.includes("tricks")) return "tricks";
+  return undefined;
+}
+
 function renderMap() {
   const visible = visibleCells();
   const visited = visitedCells();
@@ -448,7 +468,7 @@ function renderPins(visible = visibleCells()) {
                     && (status !== "checked" || page.showChecked);
       pins[index].style.display = shown ? "" : "none";
       const focus = inFocus(spot.area) ? "" : " unfocused";
-      pins[index].setAttribute("class", `pin ${status || ""}${hint}${focus}`);
+      pins[index].setAttribute("class", `pin ${spotStatus(location, spot) || ""}${hint}${focus}`);
     });
   }
   renderSelectionRing();
@@ -523,10 +543,14 @@ function renderRoute() {
     points.unshift([marker.x, marker.y]);  // the line starts at Soma's dot, wherever it is drawn
   }
   // A defeat location has a spot in each room where its enemy appears, and the route leads to one
-  // of them. The line ends at the spot nearest the route's last point.
+  // of them. The line ends at the spot in the route's last room, or else at the spot nearest the
+  // route's last point.
   const target = locationsById.get(route.target);
+  const endRoom = route.steps.length ? route.steps[route.steps.length - 1].room : null;
+  const inEndRoom = target ? target.spots.filter((spot) => spot.room === endRoom) : [];
+  const spots = inEndRoom.length ? inEndRoom : target ? target.spots : [];
   const last = points[points.length - 1];
-  const end = target && (last ? nearestSpot(target, last) : target.spots[0]);
+  const end = spots.length ? (last ? nearestSpot(spots, last) : spots[0]) : null;
   if (end) points.push([end.x, end.y]);
   const coordinates = points.map(([x, y]) => `${x},${y}`).join(" ");
   svg("polyline", { points: coordinates, class: "route-casing" }, layer);
@@ -534,9 +558,9 @@ function renderRoute() {
   if (end) svg("circle", { cx: end.x, cy: end.y, r: 0.45, class: "route-end" }, layer);
 }
 
-function nearestSpot(location, [x, y]) {
+function nearestSpot(spots, [x, y]) {
   const distance = (spot) => Math.hypot(spot.x - x, spot.y - y);
-  return location.spots.reduce((best, spot) => (distance(spot) < distance(best) ? spot : best));
+  return spots.reduce((best, spot) => (distance(spot) < distance(best) ? spot : best));
 }
 
 function renderSelectionRing() {
@@ -554,18 +578,17 @@ function renderSelectionRing() {
 
 // Count an area's locations that are in logic, and those with tricks, among the ones that show
 // (shownSpots). So while unexplored cells are hidden, the numbers don't give away what lies in
-// rooms Soma hasn't visited.
+// rooms Soma hasn't visited. A defeat location counts by the status of its pins in the area.
 function counts(area, visible, visited) {
-  const statuses = page.snapshot.locations || {};
   let inLogic = 0;
   let tricks = 0;
-  for (const [id, status] of Object.entries(statuses)) {
+  for (const id of Object.keys(page.snapshot.locations || {})) {
     const location = locationsById.get(Number(id));
     if (!location) continue;
     const inArea = area === CASTLE ? (spotArea) => spotArea !== REALM : (spotArea) => spotArea === area;
-    if (!shownSpots(location, visible, visited, inArea).length) continue;
-    if (status === "in_logic") inLogic += 1;
-    if (status === "tricks") tricks += 1;
+    const best = bestStatus(location, shownSpots(location, visible, visited, inArea));
+    if (best === "in_logic") inLogic += 1;
+    if (best === "tricks") tricks += 1;
   }
   return { inLogic, tricks };
 }
@@ -673,11 +696,12 @@ function renderHeader() {
   const visited = visitedCells();
   let inLogic = 0;
   let tricks = 0;
-  for (const [id, status] of Object.entries(snapshot.locations || {})) {
+  for (const id of Object.keys(snapshot.locations || {})) {
     const location = locationsById.get(Number(id));
-    if (!location || !shownSpots(location, visible, visited).length) continue;
-    if (status === "in_logic") inLogic += 1;
-    if (status === "tricks") tricks += 1;
+    if (!location) continue;
+    const best = bestStatus(location, shownSpots(location, visible, visited));
+    if (best === "in_logic") inLogic += 1;
+    if (best === "tricks") tricks += 1;
   }
   $("stat-logic").textContent = inLogic;
   $("stat-tricks").textContent = tricks;
@@ -761,17 +785,19 @@ function renderRouteSteps() {
 function renderLocationList() {
   const list = $("locations");
   list.replaceChildren();
-  const statuses = page.snapshot.locations || {};
   const focusName = page.focus === CASTLE ? "Whole castle" : areaName(page.focus);
   $("list-heading").textContent = `In logic · ${focusName}`;
   const visible = visibleCells({ countRealm: true });
   const visited = visitedCells();
-  const shown = page.map.locations.filter((location) => {
-    const status = statuses[location.id];
-    if (status !== "in_logic" && status !== "tricks") return false;
-    return shownSpots(location, visible, visited, inFocus).length > 0;
-  });
-  shown.sort((a, b) => (statuses[a.id] === statuses[b.id] ? a.name.localeCompare(b.name) : statuses[a.id] === "in_logic" ? -1 : 1));
+  // Each location's best status among its spots in focus that show. So a defeat location is
+  // listed only when one of its pins here is in logic or with tricks.
+  const listed = new Map();
+  for (const location of page.map.locations) {
+    const best = bestStatus(location, shownSpots(location, visible, visited, inFocus));
+    if (best) listed.set(location, best);
+  }
+  const shown = [...listed.keys()];
+  shown.sort((a, b) => (listed.get(a) === listed.get(b) ? a.name.localeCompare(b.name) : listed.get(a) === "in_logic" ? -1 : 1));
   if (!shown.length) {
     const item = document.createElement("li");
     item.className = "muted";
@@ -786,7 +812,7 @@ function renderLocationList() {
     button.type = "button";
     button.classList.toggle("selected", location.id === page.selected);
     const dot = document.createElement("span");
-    dot.className = `status-dot ${statuses[location.id]}`;
+    dot.className = `status-dot ${listed.get(location)}`;
     const name = document.createElement("span");
     name.className = "name";
     name.textContent = describeLocation(location).title;
@@ -794,7 +820,8 @@ function renderLocationList() {
     room.className = "room-id";
     room.textContent = location.spots.length > 1 ? `${location.spots.length} rooms` : location.room;
     button.append(dot, name, room);
-    const [spot] = shownSpots(location, visible, visited, inFocus);
+    const [spot] = shownSpots(location, visible, visited, inFocus)
+      .filter((each) => spotStatus(location, each) === listed.get(location));
     button.addEventListener("click", () => {
       select(location.id);
       centerOn(spot.x, spot.y);
