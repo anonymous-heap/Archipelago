@@ -13,7 +13,11 @@ and early items stay where they are. A linked item belongs to its group, so it n
 Items are ranked by worth (``data/item_balancing/worth.csv``), with the jitter of strict Item
 Smoothing. An item is too early for a location when its worth exceeds the location's position by
 more than ``BAND``. The order gives a location such an item only when no other remaining item fits
-there. If no remaining item fits a location at all, the order is undone for that player.
+there.
+
+Every placement passes the location's ``can_fill``, so item rules, Local Items and Non-Local Items
+hold. When no remaining item fits a location, it trades with an earlier location that both accept
+(see ``_trade``). If no such pair exists, the order is undone for that player.
 
 Positions run from 0 to 1 on the player's own clock: the share of their pickup locations that the
 seed's sphere order reaches first. The order reads the room clock, on which a defeat location counts
@@ -186,7 +190,8 @@ class OrderResult:
     positions: Dict[Location, float]   # each location the order dealt to, at its position
     placed: Dict[Location, Item] = field(default_factory=dict)  # their items when it finished
     over_band: int = 0                 # items given above the band, because nothing else fit
-    undone: bool = False               # no remaining item fitted some location
+    trades: int = 0                    # trades with an earlier location, by _trade
+    undone: bool = False               # some location had no remaining item and no trade
     # Each breaker the order dealt, with the location that held it before.
     breaker_homes: List[Tuple[Item, Location]] = field(default_factory=list)
 
@@ -279,8 +284,10 @@ def _deal(locations: List[Location], pool: List[Item], positions: Dict[Location,
     """Give each location, in order, the first item of ``pool`` that it accepts within the band.
 
     A location that accepts no item within the band takes the first one it accepts at all, and the
-    result counts it. Return False when some location accepts no remaining item.
+    result counts it. A location that accepts no remaining item trades with an earlier one (see
+    ``_trade``). Return False when that fails too.
     """
+    dealt: List[Location] = []
     for location in locations:
         limit = positions[location] + BAND
         item = _take(pool, lambda it: _worth(it.name) <= limit and location.can_fill(state, it, False))
@@ -288,10 +295,42 @@ def _deal(locations: List[Location], pool: List[Item], positions: Dict[Location,
             item = _take(pool, lambda it: location.can_fill(state, it, False))
             result.over_band += item is not None
         if item is None:
+            item = _trade(location, dealt, pool, positions, state, result)
+        if item is None:
             return False
         location.item = item
         item.location = location
+        dealt.append(location)
     return True
+
+
+def _trade(location: Location, dealt: List[Location], pool: List[Item],
+           positions: Dict[Location, float], state: CollectionState,
+           result: OrderResult) -> Optional[Item]:
+    """Find an item for a location that accepts no remaining item, and return it.
+
+    The item comes from an earlier location that this one accepts, and the earlier location takes a
+    remaining item that it accepts in exchange. Both checks use ``can_fill``. The latest earlier
+    location is tried first, and a pair that keeps the earlier location within the band comes
+    before any other. The item that moves here arrives no earlier than it would have, so it stays
+    within the band if it was. Return None when no pair exists.
+    """
+    for within_band in (True, False):
+        for earlier in reversed(dealt):
+            item = earlier.item
+            if not location.can_fill(state, item, False):
+                continue
+            limit = positions[earlier] + BAND
+            replacement = _take(pool, lambda it: (not within_band or _worth(it.name) <= limit)
+                                and earlier.can_fill(state, it, False))
+            if replacement is None:
+                continue
+            earlier.item = replacement
+            replacement.location = earlier
+            result.trades += 1
+            result.over_band += not within_band
+            return item
+    return None
 
 
 def _order_player(multiworld: MultiWorld, world: "CVAOSWorld", room: Walk) -> OrderResult:

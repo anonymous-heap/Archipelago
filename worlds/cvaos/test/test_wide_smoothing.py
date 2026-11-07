@@ -15,14 +15,17 @@ import hashlib
 import os
 import unittest
 from argparse import Namespace
+from unittest import mock
 
 import Main
 from BaseClasses import ItemClassification, MultiWorld, PlandoOptions
+from test.general import setup_multiworld
 from worlds.AutoWorld import AutoWorldRegister
 
-from .. import CVAOSWorld
+from .. import CVAOSWorld, wide_smoothing
 from ..data.item_balancing import worth
-from ..wide_smoothing import BAND, _is_defeat, promote_mid_game_gear
+from ..locations import CVAOSLocation
+from ..wide_smoothing import BAND, OrderResult, _is_defeat, promote_mid_game_gear
 
 GAME = CVAOSWorld.game
 PRESET = {"enemy_checks": "all", "soul_shuffle": "matched", "enemy_drop_rate": 350,
@@ -86,6 +89,50 @@ class PoolTest(unittest.TestCase):
                           ItemClassification.filler])
 
 
+class TradeTest(unittest.TestCase):
+    """The order's step for a location that accepts no remaining item."""
+
+    def deal(self, accepted: list[set[str]]) -> tuple[bool, list[CVAOSLocation], OrderResult]:
+        """Deal a Potion and a High Potion to locations that accept only the named items."""
+        multiworld = setup_multiworld(CVAOSWorld, (), seed=1)
+        locations = []
+        for index, names in enumerate(accepted):
+            location = CVAOSLocation(1, f"Test {index}")
+            location.item_rule = lambda item, names=names: item.name in names
+            locations.append(location)
+        positions = {location: 0.1 * index for index, location in enumerate(locations, 1)}
+        pool = [multiworld.worlds[1].create_item(name) for name in ("Potion", "High Potion")]
+        result = OrderResult(positions)
+        dealt = wide_smoothing._deal(locations, pool, positions, multiworld.state, result)
+        return dealt, locations, result
+
+    def test_a_location_that_fits_no_remaining_item_trades_with_an_earlier_one(self):
+        dealt, locations, result = self.deal([{"Potion", "High Potion"}, {"Potion"}])
+        self.assertTrue(dealt)
+        self.assertEqual([location.item.name for location in locations], ["High Potion", "Potion"])
+        self.assertEqual(result.trades, 1)
+
+    def test_the_deal_fails_when_no_pair_of_locations_accepts_the_trade(self):
+        dealt, _locations, _result = self.deal([{"Potion"}, {"Potion"}])
+        self.assertFalse(dealt)
+
+    def test_an_order_that_fails_to_deal_is_undone(self):
+        multiworld = generate(3, [(GAME, PRESET)])
+        before = placement_hash(multiworld)
+
+        def scramble_and_fail(locations, pool, *_args):
+            for location, item in zip(locations, reversed(pool)):
+                location.item = item
+                item.location = location
+            return False
+
+        with mock.patch.object(wide_smoothing, "_deal", side_effect=scramble_and_fail):
+            result = wide_smoothing._order_player(multiworld, multiworld.worlds[1],
+                                                  wide_smoothing.walk(multiworld, room_clock=True))
+        self.assertTrue(result.undone)
+        self.assertEqual(placement_hash(multiworld), before)
+
+
 class WideScenario:
     """The mechanisms every scenario asserts. A subclass names its players and seeds."""
 
@@ -110,6 +157,10 @@ class WideScenario:
                       if not loc.locked and not loc.can_fill(multiworld.state, loc.item, False)]
             self.assertEqual(broken, [], multiworld.seed)
 
+    def test_equal_seeds_give_equal_placements(self):
+        self.assertEqual(placement_hash(generate(self.SEEDS[0], self.PLAYERS)),
+                         placement_hash(self.runs[0]))
+
     def test_nothing_sits_above_the_band_except_counted_placements(self):
         for multiworld, world in self.wide_worlds():
             for order in world.wide_report.orders:
@@ -129,6 +180,35 @@ class WideDuoTest(WideScenario, unittest.TestCase):
             self.assertTrue(any(loc.player == world.player and not _is_defeat(loc)
                                 for loc in dealt))
             self.assertTrue(any(loc.player != world.player for loc in dealt))
+
+
+def scenario(cls):
+    return unittest.skipUnless(SCENARIOS, "set CVAOS_WIDE_SCENARIOS=1 to run")(cls)
+
+
+@scenario
+class SoloPresetTest(WideScenario, unittest.TestCase):
+    PLAYERS = [(GAME, PRESET)]
+    SEEDS = tuple(range(100, 130))
+
+
+@scenario
+class HollowKnightDuoTest(WideScenario, unittest.TestCase):
+    PLAYERS = [(GAME, PRESET), ("Hollow Knight", {})]
+    SEEDS = tuple(range(200, 210))
+
+
+@scenario
+class DarkSoulsDuoTest(WideScenario, unittest.TestCase):
+    PLAYERS = [(GAME, PRESET), ("Dark Souls III", {})]
+    SEEDS = tuple(range(300, 310))
+
+
+@scenario
+class LocalityDuoTest(WideScenario, unittest.TestCase):
+    PLAYERS = [(GAME, {**PRESET, "local_items": ["Weapons"], "non_local_items": ["Armor"]}),
+               ("Hollow Knight", {})]
+    SEEDS = tuple(range(400, 410))
 
 
 if __name__ == "__main__":
