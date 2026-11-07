@@ -93,8 +93,9 @@ class CVAOSSettings(settings.Group):
         advance_collection seed uses the installed collection's ROM instead, and falls back to
         this file only when it can't find the collection."""
         description = "Castlevania AoS (US) ROM, or Advance Collection game.exe"
-        # Accept a GBA ROM (cart or collection-extracted) or the collection exe. No copy_to:
-        # if the user hands us the exe, it must stay next to its windata/ so we can extract.
+        # Accepts the collection's exe, or a GBA ROM from a cart or extracted from the collection.
+        # There is no copy_to, because the ROM is extracted from an exe only while the exe stays
+        # next to its windata/ folder.
         md5s = [USA_ROM_MD5, AC_USA_ROM_MD5, AC_GAME_EXE_MD5]
 
         def browse(self, **kwargs):  # type: ignore[override]
@@ -118,10 +119,11 @@ class CVAOSSettings(settings.Group):
 
     class WideSmoothingRunsBalancing(settings.Bool):
         """Whether Wide Item Smoothing runs Archipelago's progression balancing itself in a
-        multiworld, three times, ordering its players' items after each. Core's own balancing then
-        seldom brings their mid-game gear into the first fifth of the run. Turned off, Wide orders
-        once, and about a quarter of its players then get such gear that early. Wide never runs
-        balancing when generation skips it."""
+        multiworld. When on, Wide runs balancing and then orders its players' items, three times in
+        a row, so the balancing that Archipelago runs afterward seldom brings their mid-game gear
+        into the first fifth of the run. When off, Wide orders once, and about a quarter of its
+        players then get such gear that early. Wide never runs balancing itself in a solo seed,
+        when no player has progression balancing on, or when generation skips balancing."""
 
     rom_file: RomFile = RomFile("Castlevania - Aria of Sorrow (USA).gba")
     collection_exe: CollectionExePath = CollectionExePath(AC_DEFAULT_EXE_PATH)
@@ -175,12 +177,12 @@ class CVAOSWorld(World):
     enemy_region_name_by_number: dict[int, str]
     entrance_region_names_by_room: dict[str, list[str]]
 
-    # Per-slot authentication: baked into the ROM (rom/patch.py) and registered under
-    # connect_names (modify_multidata) so the client can connect by reading it from the ROM.
+    # Per-slot authentication: written into the ROM (rom/patch.py) and registered under
+    # connect_names (modify_multidata), so the client can connect by reading it from the ROM.
     auth: bytearray
 
-    # The seed's rom_config.json, built on first use by rom.patch.seed_rom_config, so that the
-    # patch and the spoiler read the same soul shuffle plan.
+    # The seed's rom_config.json. rom.patch.seed_rom_config builds it on first use, so the patch
+    # and the spoiler read the same soul shuffle plan.
     rom_config: dict | None = None
 
     # Universal Tracker rebuilds this world from the seed's slot data, without the player's YAML. It
@@ -233,6 +235,7 @@ class CVAOSWorld(World):
                 "This Aria of Sorrow seed was generated before its slot data recorded every logic "
                 "option, so the tracker assumes the default for: %s.", ", ".join(missing))
         return slot_data
+
     # Set in create_items: the items that item smoothing places in pre_fill, kept out of the
     # multiworld pool (item_smoothing.take_smoothing_items).
     _smoothing_items: Sequence[Item] = ()
@@ -251,13 +254,13 @@ class CVAOSWorld(World):
         self._set_effective_values()
 
     def _set_effective_values(self) -> None:
-        """Set the options that a newer option replaces to the values that run, so the spoiler
-        shows them.
+        """Set each option that another option overrides to the value the seed uses, so the
+        spoiler shows that value.
 
-        Enemy Drop Rate above 100 replaces Multiply Soul Drop Rates, and Soul Shuffle's matched
-        keeps each enemy's own soul drop rate, whatever Keep Soul Drop Rates says. Wide Item
-        Smoothing runs Item Smoothing as strict, in the spheres order. Each option changed logs
-        one line.
+        Wide Item Smoothing sets Item Smoothing to strict and Item Smoothing Order to spheres. An
+        Enemy Drop Rate above 100 replaces Multiply Soul Drop Rates, which is then off. Soul
+        Shuffle's matched keeps each enemy's own soul drop rate, so Keep Soul Drop Rates is off
+        whatever the YAML says. Each option changed here logs one line.
         """
         options = self.options
         if options.wide_item_smoothing:
@@ -279,7 +282,8 @@ class CVAOSWorld(World):
                          "each enemy's own soul drop rate.", self.player_name)
 
     def _cap_fallback_priority_locations(self) -> None:
-        """Keep at most MAX_FALLBACK_PRIORITY defeat checks without a route as priority locations.
+        """Keep at most MAX_FALLBACK_PRIORITY defeat checks without a recorded route as priority
+        locations.
 
         The rest become ordinary locations, and a warning names them.
         """
@@ -399,8 +403,9 @@ class CVAOSWorld(World):
         # the run, keeping only the swaps that leave the multiworld's accessibility intact. It then
         # reorders the placed non-progression items and the ceiling and floor breakers, so weaker
         # items come earlier and stronger ones later. If that order breaks accessibility,
-        # smooth_placed_items puts the breakers back where the main fill placed them. Slots with
-        # Wide Item Smoothing on get its wider order instead.
+        # smooth_placed_items puts the breakers back where the main fill placed them. It leaves
+        # out the slots with Wide Item Smoothing on, and wide_smoothing.run orders their items
+        # instead.
         from .item_smoothing import (refine_ancient_books, refine_soul_positions,
                                      smooth_placed_items)
         from . import wide_smoothing
@@ -413,8 +418,9 @@ class CVAOSWorld(World):
 
     @classmethod
     def stage_post_balancing(cls, multiworld: MultiWorld, *_args) -> None:
-        # Core calls this only once it offers a post-balancing hook. Wide Item Smoothing then orders
-        # here, once, instead of balancing itself in stage_post_fill.
+        # Core calls this only in versions that have a hook after progression balancing. In those,
+        # Wide Item Smoothing orders its players' items here, once, instead of running balancing
+        # itself in stage_post_fill.
         from . import wide_smoothing
         wide_smoothing.order_after_balancing(multiworld, cls.game)
 
@@ -443,7 +449,8 @@ class CVAOSWorld(World):
         patch.write(rom_path)
 
     def write_spoiler(self, spoiler_handle: TextIO) -> None:
-        # Which enemy drops which soul and which item, and how often, when the seed changes them.
+        # Write which enemy drops which soul and which item, and how often. Each table appears only
+        # when the seed changes what it shows.
         from .drop_sources import spoiler_drop_table_lines
         from .soul_sources import spoiler_soul_table_lines
         for title, lines in (("Soul sources", spoiler_soul_table_lines(self)),
@@ -478,8 +485,8 @@ class CVAOSWorld(World):
             # that did neither.
             "starting_inventory_from_server": True,
             # The client asks the server for this player's own items too, because the ROM never
-            # hands out the item at a defeat location. It skips the items the ROM already handed
-            # out: those at these locations.
+            # gives the item at a defeat location. It skips the player's own items at these
+            # locations, because the ROM has already given them.
             "rom_given_locations": sorted(
                 loc.address for loc in self.multiworld.get_locations(self.player)
                 if loc.address in pickup_location_ids and loc.item is not None

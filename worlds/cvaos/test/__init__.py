@@ -1,3 +1,33 @@
+"""
+Tests for Castlevania: Aria of Sorrow, and the helpers they share.
+
+``CVAOSTestBase`` runs Archipelago's standard world tests on this world with its default options.
+
+These helpers find base ROMs. A test that reads a ROM skips when none is found.
+
+* ``find_rom`` returns the path of a USA cart ROM.
+* ``find_collection_rom`` returns the Advance Collection's copy of that ROM, as bytes.
+* ``base_roms`` returns the contents of each ROM that was found, by name.
+
+These helpers build seeds:
+
+* ``early`` returns a world with the given options that has run only ``generate_early``.
+* ``generate`` runs one world through the fill, the way Main does. ``BEFORE_FILL`` lists the
+  steps it runs before ``pre_fill``.
+* ``preset_seed`` generates one seed with the Experimental preset (``PRESET``), writes its patch
+  and applies the patch to each base ROM found. It runs only once, and the tests share its result.
+
+These helpers patch ROMs:
+
+* ``run_apply_rom_features`` runs the patch's ``apply_rom_features`` step on a ROM. Every optional
+  feature is off unless the test turns it on (``FEATURES_OFF``), and the builders in
+  ``STUBBED_BUILDERS`` write nothing.
+* ``apply_patch`` applies a patch file to a base ROM.
+
+``SCRIPTED_BOSSES`` lists the enemy ids of the four bosses whose death scripts give their soul.
+
+Pytest collects this module, so no helper's name may start with ``test``.
+"""
 import functools
 import glob
 import json
@@ -93,7 +123,12 @@ BEFORE_FILL = ("generate_early", "create_regions", "create_items", "set_rules",
 
 
 def generate(seed: int, options: dict) -> MultiWorld:
-    """Generate one world the way Main does, including its location settings and item plando."""
+    """Generate one world through the fill the way Main does, including its location settings and
+    item plando.
+
+    Item smoothing is strict unless ``options`` sets it. Progression balancing and the output step
+    do not run.
+    """
     multiworld = setup_multiworld(CVAOSWorld, BEFORE_FILL[:4], seed=seed,
                                   options={"item_smoothing": "strict", **options})
     world = multiworld.worlds[1]
@@ -114,7 +149,7 @@ def generate(seed: int, options: dict) -> MultiWorld:
 
 
 def early(**options) -> CVAOSWorld:
-    """Return one world with ``options``, after only generate_early."""
+    """Return a one-player world with ``options`` that has run only generate_early."""
     return setup_multiworld(CVAOSWorld, ("generate_early",), seed=1, options=options).worlds[1]
 
 
@@ -148,7 +183,8 @@ def run_apply_rom_features(test: unittest.TestCase, rom: bytes, **config) -> dic
 
 
 PRESET = cvaos_options_presets["Experimental"]
-SCRIPTED_BOSSES = (106, 107, 108, 109)  # Headhunter, Death, Legion, Balore
+# Headhunter, Death, Legion and Balore, whose death scripts give their soul.
+SCRIPTED_BOSSES = (106, 107, 108, 109)
 
 
 def apply_patch(patch_path: str, base: bytes, folder: str) -> tuple[bytes, bytes]:
