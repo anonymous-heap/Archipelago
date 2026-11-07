@@ -1,11 +1,13 @@
 """
 Tests for Wide Item Smoothing (wide_smoothing.py).
 
-The seeds here go through Main.main, so locality, exclusion, plando and core's own progression
-balancing all take effect. The tests assert the mechanisms rather than rates. By default they
-generate a duo of two Aria of Sorrow slots. With CVAOS_WIDE_SCENARIOS=1 they also generate 30 solo
-preset seeds and 10 seeds each of a Hollow Knight duo, a Dark Souls III duo and a duo whose Aria of
-Sorrow slot keeps weapons local and armor non-local.
+Most seeds here go through Main.main, so locality, exclusion, plando and core's own progression
+balancing all take effect. The tests assert the mechanisms rather than rates.
+
+By default, the scenario tests run on one duo of two Aria of Sorrow slots. With
+CVAOS_WIDE_SCENARIOS=1 they also run on 30 solo preset seeds, and on 10 seeds each of a Hollow
+Knight duo, a Dark Souls III duo and a duo whose Aria of Sorrow slot keeps weapons local and armor
+non-local.
 
     python -m pytest worlds/cvaos/test/test_wide_smoothing.py -v
 """
@@ -43,7 +45,8 @@ def generate(seed: int, players: list[tuple[str, dict]],
              skip_balancing: bool = False) -> MultiWorld:
     """Generate a multiworld through Main.main, without output, and return it.
 
-    Each player is a game name and that player's options. Options left out take their defaults.
+    Each entry of ``players`` is a game name with that player's options. Options left out take
+    their defaults.
     """
     args = Namespace(multi=len(players), race=False, outputname=None, outputpath=None, spoiler=0,
                      plando=PlandoOptions.from_set({"items"}), csv_output=False, skip_output=True,
@@ -69,7 +72,8 @@ RUNG_DEPTHS = (0.2, 0.35, 0.35)
 
 
 def rungs_held(multiworld: MultiWorld) -> dict[int, tuple[bool, ...]]:
-    """Return, for each player with Wide on, whether they hold each rung's gear in time.
+    """Return, for each player with Wide on, whether they hold each rung's gear by its depth in
+    RUNG_DEPTHS.
 
     Positions are on the logic clock, and the player's items count wherever they sit.
     """
@@ -126,7 +130,10 @@ class TradeTest(unittest.TestCase):
     """The order's step for a location that accepts no remaining item."""
 
     def deal(self, accepted: list[set[str]]) -> tuple[bool, list[CVAOSLocation], OrderResult]:
-        """Deal a Potion and a High Potion to locations that accept only the named items."""
+        """Deal a Potion and a High Potion to one location per set in ``accepted``.
+
+        Each location accepts only the items that its set names.
+        """
         multiworld = setup_multiworld(CVAOSWorld, (), seed=1)
         locations = []
         for index, names in enumerate(accepted):
@@ -173,7 +180,12 @@ class BridgeTest(unittest.TestCase):
     PLAYERS = [(GAME, {"wide_item_smoothing": True}), (GAME, {"wide_item_smoothing": True})]
 
     def generate_counting(self, players=None, skip_balancing: bool = False, **patches):
-        """Generate a small duo. Return its log lines and how often Wide balanced and walked."""
+        """Generate a duo, and return it with Wide's log lines and how many times Wide balanced
+        and walked.
+
+        Each keyword argument patches the ``wide_smoothing`` attribute it names, and its value
+        holds the keyword arguments for ``mock.patch.object``.
+        """
         balance = mock.Mock(wraps=Fill.balance_multiworld_progression)
         walk = mock.Mock(wraps=wide_smoothing.walk)
         with mock.patch.object(Fill, "balance_multiworld_progression", balance), \
@@ -190,8 +202,8 @@ class BridgeTest(unittest.TestCase):
     def test_a_multiworld_balances_three_times_with_one_walk_per_round_for_every_player(self):
         multiworld, lines, calls, walks = self.generate_counting()
         self.assertEqual(calls, wide_smoothing.ROUNDS)
-        # Each round walks the room clock and logic once, for both players, and the floor walks
-        # logic once more.
+        # Each round walks once on each clock for both players together, and the floor walks the
+        # logic clock once more.
         self.assertEqual(walks, 2 * wide_smoothing.ROUNDS + 1)
         self.assertEqual(len(lines), 1)
         self.assertIn("runs progression balancing 3 times for Castlevania1, Castlevania2", lines[0])
@@ -254,6 +266,8 @@ class PostBalancingHookTest(unittest.TestCase):
             self.assertIsNotNone(world.wide_report.floor)
 
     def test_without_the_hook_wide_runs_in_stage_post_fill(self):
+        # This core has no such hook, so the tests that do not patch one in run Wide from
+        # stage_post_fill.
         self.assertFalse(wide_smoothing.core_has_post_balancing())
 
 

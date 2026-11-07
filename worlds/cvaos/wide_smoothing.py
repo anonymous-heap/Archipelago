@@ -1,46 +1,50 @@
 """
 Wide Item Smoothing: keep gear that is too good for the start of a run out of it, from every source.
 
-The pass runs in ``stage_post_fill`` for every player with the ``wide_item_smoothing`` option on,
-after the passes of ``item_smoothing`` that place the souls and books.
+The pass runs from ``stage_post_fill`` for every player with the ``wide_item_smoothing`` option
+on, after the ``item_smoothing`` passes that move the souls and Ancient Books.
 
-The order reassigns each player's items among the locations that already hold them, earliest
-location first. It covers the player's pickups, their defeat locations and their items in other
-worlds. It moves the items that are not progression, and the weapons whose only progression use is
-breaking floors or ceilings. Locked, excluded and priority locations keep their items, so plando
-and early items stay where they are. A linked item belongs to its group, so it never moves either.
+Its main step, the order, reassigns each player's items among the locations that already hold
+them, earliest location first. It covers the player's pickups, their defeat locations and their
+items in other worlds. It moves the items that are not progression, and the weapons whose only
+progression use is breaking floors or ceilings. Locked, excluded and priority locations keep their
+items, so plando and early items stay where they are. A linked item belongs to its group, so it
+never moves either.
 
-Items are ranked by worth (``data/item_balancing/worth.csv``), with the jitter of strict Item
-Smoothing. An item is too early for a location when its worth exceeds the location's position by
-more than ``BAND``. The order gives a location such an item only when no other remaining item fits
-there.
+A location's position runs from 0 to 1 in the player's own run. It is roughly the share of the
+player's pickup locations that the seed's sphere order reaches before that location (see
+``Clock``). Wide reads positions on two clocks. On the logic clock, a location counts as reached
+when logic reaches it. On the room clock, which the order uses, a defeat location counts as
+reached once one of its enemy's rooms is. Logic reaches most defeat locations much later, because
+an enemy with no recorded route needs all eight fallback souls. Players make most of those checks
+early, though.
+
+The order ranks the items by worth (``data/item_balancing/worth.csv``), with the jitter of strict
+Item Smoothing. An item is above the band for a location, and so too early for it, when its worth
+exceeds the location's position by more than ``BAND``. The order gives a location such an item
+only when no other remaining item fits there.
 
 Every placement passes the location's ``can_fill``, so item rules, Local Items and Non-Local Items
 hold. When no remaining item fits a location, that location takes the item of an earlier location
 instead, and the earlier location takes a remaining item (see ``_trade``). If no such pair exists,
 the order is undone for that player.
 
-Moving a breaker can change what logic reaches, so the order keeps a breaker of each kind where
-logic first finds one (see ``_pin``). Logic then reaches every location no later than before, so
-the breakers never need to go back.
+Moving a breaker can change what logic reaches. So before anything else, the order keeps a breaker
+of each kind at the location where logic first reaches one (see ``_pin``). Logic then reaches every
+location no later than before, so the accessibility check after the order should never have to put
+the breakers back.
 
 After the order, the early floor makes sure each player holds early weapons and armor as good as
-the castle's own (see ``RUNGS`` and ``_floor_player``). The order alone cannot promise that, since
-it gives cheap items to the scarce early locations.
+the castle's own pickups offer at that point (see ``RUNGS`` and ``_floor_player``). The order alone
+cannot promise that, since it gives cheap items to the scarce early locations.
 
-The same band applies to the enemy drop table, through ``band_drop_table``, which
-``drop_shuffle.final_drop_table`` calls whether or not Item Drop Shuffle is on.
+The same band applies to the enemy drop table, through ``band_drop_table``.
+``drop_shuffle.final_drop_table`` calls it whether or not Item Drop Shuffle is on.
 
 Core's progression balancing runs after every world's ``stage_post_fill``, so in a multiworld it
-could undo the order. Until core offers a hook after balancing, Wide runs balancing itself, as a
-bridge under the guards that ``_bridge`` lists. Once core calls ``post_balancing`` on every world,
-Wide orders once from that hook instead, with no calls of its own.
-
-Positions run from 0 to 1 on the player's own clock: the share of their pickup locations that the
-seed's sphere order reaches first. The order reads the room clock, on which a defeat location counts
-as reached once one of its enemy's rooms is. Logic reaches most defeat locations much later, through
-the eight-soul fallback of enemies whose route is not recorded yet, while players make most of those
-checks early.
+can undo part of the order. When core offers no hook after balancing, Wide runs balancing itself,
+as a bridge under the guards that ``_bridge`` lists. When core calls ``post_balancing`` on every
+world, Wide orders once from that hook instead and never runs balancing itself.
 """
 
 from __future__ import annotations
@@ -72,16 +76,17 @@ if TYPE_CHECKING:
 # An item is too early for a location when its worth exceeds the location's position by more than
 # this.
 BAND = 0.25
-# In a multiworld, the bridge balances and orders this many times.
+# In a multiworld, the bridge runs this many rounds, each of which balances and then orders.
 ROUNDS = 3
 SKIP_FLAG = "--skip_prog_balancing"
 
 
 def promote_mid_game_gear(pool: List[Item]) -> None:
-    """Make every filler weapon and armor in ``pool`` worth MID_GAME_WORTH or more useful.
+    """Classify each filler weapon and armor in ``pool`` as useful when its worth is MID_GAME_WORTH
+    or more.
 
-    The order never moves an item at an excluded location, and the main fill may put filler on
-    another player's excluded location. Useful items never land there, so the order can reach this
+    The order never moves an item at an excluded location, in any world, and the main fill may put
+    filler there. A useful item never lands on an excluded location, so the order can move this
     gear wherever the fill puts it.
     """
     for item in pool:
@@ -108,7 +113,10 @@ def _is_defeat(location: Location) -> bool:
 
 
 def _room_regions(location: Location) -> List:
-    """The regions whose entrances lead to a defeat location: the rooms where its enemy appears."""
+    """Return the regions with an entrance into a defeat location's region.
+
+    They are the door regions of the rooms where the location's enemy appears.
+    """
     return [entrance.parent_region for entrance in location.parent_region.entrances
             if entrance.parent_region is not None]
 
@@ -117,18 +125,18 @@ def _room_regions(location: Location) -> List:
 
 @dataclass(frozen=True)
 class Walk:
-    """One sweep of the multiworld's spheres."""
+    """The result of one sweep through the multiworld's spheres."""
 
-    sphere_of: Dict[Location, int]           # each filled location the sweep reaches, by sphere
-    region_first: Dict[int, Dict[str, int]]  # player -> region name -> the sphere that reaches it
+    sphere_of: Dict[Location, int]           # the sphere of each filled location the sweep reaches
+    region_first: Dict[int, Dict[str, int]]  # player -> region name -> the first sphere reaching it
 
 
 def walk(multiworld: MultiWorld, room_clock: bool) -> Walk:
     """Sweep the multiworld's spheres once, collecting each sphere's items before the next.
 
-    On the room clock, a defeat location of this game counts as reached once one of its enemy's
-    rooms is. Otherwise a location counts as reached when logic reaches it. Locations the sweep
-    never reaches are left out.
+    With ``room_clock``, a defeat location of this game counts as reached once one of its enemy's
+    rooms is. Every other location counts as reached when logic reaches it. Locations the sweep
+    never reaches are left out of the result.
     """
     state = CollectionState(multiworld)
     remaining = set(multiworld.get_filled_locations())
@@ -159,12 +167,12 @@ def walk(multiworld: MultiWorld, room_clock: bool) -> Walk:
 
 
 class Clock:
-    """One player's position in the run, from 0 to 1, for the locations of a walk.
+    """Positions in one player's run, from 0 to 1, for the locations that a walk reaches.
 
     The player's pickup locations are ordered by sphere, then map distance, then name, and each one
-    sits in the middle of its share of the run. Any other location sits at the middle of its
-    sphere's pickups. A defeat location of the player takes the sphere where one of its enemy's
-    rooms is first reached.
+    sits at the middle of its share of the run. Any other location sits at the middle of its
+    sphere's pickups. For a defeat location of the player, that sphere is the first one that
+    reaches one of its enemy's rooms.
     """
 
     def __init__(self, multiworld: MultiWorld, player: int, sweep: Walk):
@@ -187,11 +195,15 @@ class Clock:
             before += per_sphere[sphere]
 
     def at_sphere(self, sphere: Optional[int]) -> float:
-        """The middle of ``sphere``'s pickups, or 1.0 for a sphere the walk never reaches."""
+        """The position at the middle of ``sphere``'s pickups.
+
+        It is 1.0 for None and for a sphere the walk never reaches.
+        """
         return self._middles.get(sphere, 1.0)
 
     def defeat_sphere(self, location: Location) -> Optional[int]:
-        """The first sphere that reaches one of the rooms of a defeat location's enemy."""
+        """The first sphere that reaches one of the rooms of a defeat location's enemy, or None
+        when the walk reaches none of them."""
         first = self.walk.region_first[location.player]
         spheres = [first[region.name] for region in _room_regions(location) if region.name in first]
         return min(spheres, default=None)
@@ -214,13 +226,15 @@ class Clock:
 class OrderResult:
     """What one order did for one player."""
 
-    positions: Dict[Location, float]   # each location the order reassigns, at its position
+    positions: Dict[Location, float]   # each reassigned location's position, earliest first
     placed: Dict[Location, Item] = field(default_factory=dict)  # their items when it finished
-    over_band: int = 0                 # items given above the band, because nothing else fit
+    over_band: int = 0                 # placements above the band, where nothing else fit or
+                                       # _pin placed a breaker
     trades: int = 0                    # trades with an earlier location, by _trade
-    undone: bool = False               # some location had no remaining item and no trade
+    undone: bool = False               # some location had no remaining item and no trade, so
+                                       # every item went back
     pinned: List[Location] = field(default_factory=list)  # the locations _pin gave a breaker
-    # Each breaker the order moves, with the location that held it before.
+    # Each breaker among the order's items, with the location that held it before the order.
     breaker_homes: List[Tuple[Item, Location]] = field(default_factory=list)
 
 
@@ -228,17 +242,22 @@ class OrderResult:
 class WideReport:
     """What Wide Item Smoothing did for one player."""
 
-    orders: List[OrderResult] = field(default_factory=list)
-    restores: int = 0                  # times the breakers went back to their homes
+    orders: List[OrderResult] = field(default_factory=list)  # one per round, in order
+    restores: int = 0                  # rounds in which the breakers went back to their homes
     floor: Optional["FloorResult"] = None
 
 
 def _order_locations(multiworld: MultiWorld, player: int, clock: Clock) -> Dict[Location, float]:
     """Return the locations whose items the player's order reassigns, earliest first, with their
-    positions.
+    positions on ``clock``.
 
-    A location in another world sorts after the player's own locations in the same sphere, as Dark
-    Souls III's smoothing orders them.
+    These are the player's pickup and defeat locations, and the locations in other worlds, that
+    hold one of the player's items, when that item is a breaker or is not progression. The walk
+    must reach the location, and locked, excluded and priority locations are left out.
+
+    A location in another world takes the middle of its sphere, just after any of the player's
+    defeat locations in that sphere. Dark Souls III's smoothing also orders a player's items in
+    other worlds by sphere.
     """
     found = []
     for location in multiworld.get_filled_locations():
@@ -267,10 +286,13 @@ def _targets(items: List[Item], params: SmoothingParams, rng) -> List[float]:
     """Return a placement target for each item, in the order of ``items``.
 
     This is ``item_smoothing._assign_targets`` with worth in place of desirability. Gold is spread
-    the same way: one copy of each amount but 100 Gold goes last, and the rest is spread evenly
-    over the run. Every other item is ranked by worth into evenly spaced positions, ties in random
-    order, and then jittered. No consumables are held for the second half, because worth already
-    ranks restoratives by how much they restore.
+    the same way: one copy of each amount except 100 Gold goes after every other item, and the
+    rest is spread evenly over the run. Every other item is ranked by worth into evenly spaced
+    positions, with ties in random order. Every item is then jittered, and the jitter width still
+    grows with the raters' disagreement in ``desirability.csv``.
+
+    Unlike ``_assign_targets``, this holds no consumables back for the second half, because worth
+    already ranks restoratives by how much they restore.
     """
     golds = [index for index, item in enumerate(items) if category(item.name) == "money"]
     rng.shuffle(golds)
@@ -311,11 +333,14 @@ def _take(pool: List[Item], fits: Callable[[Item], bool]) -> Optional[Item]:
 
 def _deal(locations: List[Location], pool: List[Item], positions: Dict[Location, float],
           state: CollectionState, result: OrderResult) -> bool:
-    """Give each location, in order, the first item of ``pool`` that it accepts within the band.
+    """Give each location, in order, the first item in ``pool`` that it accepts within the band.
 
-    A location that accepts no item within the band takes the first one it accepts at all, and the
-    result counts it. A location that accepts no remaining item trades with an earlier one (see
-    ``_trade``). Return False when that fails too.
+    A location accepts an item when its ``can_fill`` passes. A location that accepts no item within
+    the band takes the first one it accepts at all, and ``result.over_band`` counts it. A location
+    that accepts no remaining item trades with an earlier location (see ``_trade``).
+
+    Return whether every location got an item. That is False only when a location accepts no
+    remaining item and no trade exists.
     """
     dealt: List[Location] = []
     for location in locations:
@@ -340,11 +365,12 @@ def _trade(location: Location, dealt: List[Location], pool: List[Item],
            result: OrderResult) -> Optional[Item]:
     """Find an item for a location that accepts no remaining item, and return it.
 
-    The item comes from an earlier location that this one accepts, and the earlier location takes a
-    remaining item that it accepts in exchange. Both checks use ``can_fill``. The latest earlier
-    location is tried first, and a pair that keeps the earlier location within the band comes
-    before any other. The item that moves here arrives no earlier than it would have, so it stays
-    within the band if it was. Return None when no pair exists.
+    The item comes from an earlier location, and this location must accept it. In exchange, the
+    earlier location takes a remaining item that it accepts. Both checks use ``can_fill``.
+
+    Trades that keep the earlier location within the band are tried before any other, and among
+    them the latest earlier location comes first. The item that moves here comes later in the run
+    than before, so it stays within the band if it was. Return None when no trade exists.
     """
     for within_band in (True, False):
         for earlier in reversed(dealt):
@@ -366,15 +392,18 @@ def _trade(location: Location, dealt: List[Location], pool: List[Item],
 
 def _pin(multiworld: MultiWorld, world: "CVAOSWorld", positions: Dict[Location, float],
          pool: List[Item], logic: Walk) -> List[Location]:
-    """Keep a breaker where logic first finds each kind of the player's breakers.
+    """For each kind of breaker, keep one at the location where logic first reaches the player's
+    breaker of that kind.
 
-    Logic asks only whether the player holds some ceiling breaker and some floor breaker. Among the
-    locations holding the player's ceiling breakers, the one that logic reaches first keeps a
-    ceiling breaker: the cheapest in ``pool`` that it accepts. The same goes for floor breakers, and
-    one location may need both kinds. Logic then finds each kind no later than before, so it reaches
-    every location no later than before.
+    Logic only checks whether the player holds some ceiling breaker and some floor breaker. So
+    among the locations holding the player's ceiling breakers, the one that logic reaches first
+    keeps a ceiling breaker: the cheapest in ``pool`` that it accepts. Floor breakers work the same
+    way, and one location may need a breaker of both kinds. Logic then reaches a breaker of each
+    kind no later than before, so it reaches every location no later than before.
 
-    Each breaker placed leaves ``pool``. Return the locations that got one.
+    A location outside the order is skipped, since it keeps its breaker anyway, and so is a
+    location that accepts no breaker in ``pool``. Each breaker placed leaves ``pool``. Return the
+    locations that got one.
     """
     ceiling, floor = breakers(world)
     held = [location for location in multiworld.get_filled_locations()
@@ -407,7 +436,8 @@ def _pin(multiworld: MultiWorld, world: "CVAOSWorld", positions: Dict[Location, 
 
 def _order_player(multiworld: MultiWorld, world: "CVAOSWorld", room: Walk,
                   logic: Walk) -> OrderResult:
-    """Reassign one player's items among the locations that hold them.
+    """Reassign one player's items among the locations that hold them, and return what the order
+    did.
 
     The items are sorted by their targets. ``_pin`` places its breakers first, and ``_deal`` places
     the rest. A pinned breaker above the band counts toward ``over_band``. When the deal fails,
@@ -441,10 +471,10 @@ def _order_player(multiworld: MultiWorld, world: "CVAOSWorld", room: Walk,
 def _order_round(multiworld: MultiWorld, worlds: List["CVAOSWorld"]) -> None:
     """Order every player in ``worlds`` once.
 
-    One walk of the room clock gives every player's positions, and one walk of logic gives every
-    player's pins. The pins keep logic from losing ground, so the check that follows is only a
-    safety net: if the new placement breaks the multiworld's accessibility, the breakers go back to
-    the locations they held before this round.
+    One walk on the room clock gives every player's positions, and one walk on the logic clock
+    decides every player's pins. With the pins, logic reaches every location no later than before,
+    so the accessibility check that follows should always pass. If it fails, the breakers go back
+    to the locations they held before this round, and every player's report counts the restore.
     """
     room = walk(multiworld, room_clock=True)
     logic = walk(multiworld, room_clock=False)
@@ -466,14 +496,14 @@ class Rung:
     """Early gear that the floor makes sure a player holds."""
 
     kind: str          # "weapon" or "armor"
-    class_fit: float   # the least class-fit depth that qualifies
-    bound: float       # the position on the logic clock it must come before
+    class_fit: float   # the lowest class-fit depth that qualifies
+    bound: float       # the position on the logic clock that the gear must come before
 
 
-# A weapon as good for its class as the castle's Rapier, then a weapon as good as its Lance and an
-# armor as good as its Copper Plate. The player should hold the first by a fifth of the run and the
-# other two by about a third. Each bound sits a little earlier than that, so that core's balancing
-# afterward seldom undoes a rung.
+# A weapon as good for its class as the castle's Rapier, then a weapon as good for its class as the
+# castle's Lance, and an armor as good as its Copper Plate. The player should hold the first by a
+# fifth of the run and the other two by about a third. Each bound is a little earlier than that, so
+# that core's balancing afterward seldom undoes a rung.
 RUNGS = (Rung("weapon", 0.15, 0.15), Rung("weapon", 0.24, 0.30), Rung("armor", 0.24, 0.30))
 
 
@@ -482,7 +512,7 @@ class FloorResult:
     """What the floor did for one player."""
 
     met: int = 0                  # rungs that a qualifying item already met
-    trades: List[Tuple[Location, Location]] = field(default_factory=list)  # (target, source)
+    trades: List[Tuple[Location, Location]] = field(default_factory=list)  # each (target, source)
     missed: List[Rung] = field(default_factory=list)  # rungs that no trade could meet
     undone: bool = False          # the trades broke accessibility, so they were undone
 
@@ -501,11 +531,16 @@ def _swap(first: Location, second: Location) -> None:
 
 def _floor_trade_fits(source: Location, target: Location, position: Dict[Location, float],
                       logic: Walk, state: CollectionState) -> bool:
-    """Whether the floor may trade the items at ``source`` and ``target``."""
+    """Whether the floor may trade the items at ``source`` and ``target``.
+
+    The source's item must stay within the band at ``target``, and both items must pass
+    ``can_fill`` at their new locations.
+    """
     item = source.item
     if target is source or _worth(item.name) > position[target] + BAND:
         return False
-    # A breaker moves only to a location that logic reaches no later, so logic only gains.
+    # A breaker moves only to a location that logic reaches no later, so logic still reaches every
+    # location no later than before.
     if _is_breaker(item) and (logic.sphere_of.get(target, UNREACHED_DEPTH)
                               > logic.sphere_of.get(source, UNREACHED_DEPTH)):
         return False
@@ -513,16 +548,19 @@ def _floor_trade_fits(source: Location, target: Location, position: Dict[Locatio
 
 
 def _floor_player(multiworld: MultiWorld, world: "CVAOSWorld", logic: Walk) -> FloorResult:
-    """Meet each rung for one player, among the locations of the player's last order.
+    """Meet each rung for one player, among the locations of the player's last order, and return
+    what the floor did.
 
-    Positions are on the logic clock here. A rung is met when a qualifying item sits before its
-    bound at one of the player's own locations, or anywhere when it is a breaker. Otherwise the
-    cheapest qualifying item worth under MID_GAME_WORTH trades places with one of the player's
-    filler items at the latest location before the bound, the player's own locations first.
-    Breakers come first among those items. Most of them meet both weapon rungs at once, which leaves
-    the player's last early filler location free for the armor rung. A trade keeps the band and
-    passes can_fill both ways. The pinned locations stay as they are, and so does the item
-    that met an earlier rung.
+    Positions here are on the logic clock. A rung is already met when a qualifying item sits before
+    its bound, at one of the player's own locations or, for a breaker, at any location.
+
+    Otherwise a qualifying item worth under MID_GAME_WORTH trades places with one of the player's
+    filler items before the bound. Breakers are tried first, then the cheapest items. The filler
+    location is the latest one before the bound that passes ``_floor_trade_fits``, and the player's
+    own locations come first. Most breakers qualify for both weapon rungs, so one trade usually
+    meets both. The player's last early filler location then stays free for the armor rung.
+
+    The pinned locations keep their items, and so does the location whose item met an earlier rung.
     """
     player = world.player
     order = world.wide_report.orders[-1]
@@ -567,10 +605,11 @@ def _floor_player(multiworld: MultiWorld, world: "CVAOSWorld", logic: Walk) -> F
 
 
 def _floor(multiworld: MultiWorld, worlds: List["CVAOSWorld"]) -> None:
-    """Run the early floor for every player in ``worlds``, on one walk of logic.
+    """Run the early floor for every player in ``worlds`` after the last order, using one walk on
+    the logic clock.
 
-    The floor follows the last order. If its trades break the multiworld's accessibility, they are
-    all undone.
+    A player with no order is skipped. If the trades break the multiworld's accessibility, every
+    player's trades are undone.
     """
     logic = walk(multiworld, room_clock=False)
     results = []
@@ -592,8 +631,8 @@ def _floor(multiworld: MultiWorld, worlds: List["CVAOSWorld"]) -> None:
 class DropBand:
     """A drop table after the band, and what the band changed."""
 
-    table: Mapping[int, Tuple[DropSlot, DropSlot]]  # every enemy id, then slots 1 and 2
-    swaps: int                                      # trades between two slots
+    table: Mapping[int, Tuple[DropSlot, DropSlot]]  # each enemy id's slots 1 and 2
+    swaps: int                                      # how many trades between two slots
     # Each slot whose drop left the table: the slot, that drop, and the supply item in its place.
     replaced: Tuple[Tuple[SlotKey, str, str], ...]
 
@@ -602,17 +641,22 @@ def band_drop_table(table: Mapping[int, Tuple[DropSlot, DropSlot]], depths: Mapp
                     supply: Sequence[str]) -> DropBand:
     """Return ``table`` with no drop worth more than its enemy's seed depth plus ``BAND``.
 
-    ``table`` has the shape of ``drop_shuffle.DropShufflePlan.table``. It is Item Drop Shuffle's
-    dealt table, or ``drop_shuffle.vanilla_drop_table()`` when that option is off. ``depths`` gives
-    each enemy's seed depth by enemy id, and an enemy missing from it counts as unreached, at
-    depth 1.0. ``supply`` is ``drop_shuffle.plan_travel(...).supply``.
+    ``table`` maps each enemy id to its two drop slots, common first. It is the table Item Drop
+    Shuffle dealt, or ``drop_shuffle.vanilla_drop_table()`` when that option is off. ``depths``
+    gives each enemy's seed depth by enemy id, and an enemy missing from it counts as unreached, at
+    depth 1.0. ``supply`` lists the items that may replace a drop, as
+    ``drop_shuffle.TravelPlan.supply`` does.
 
-    The drops above their enemy's line are taken most valuable first. Each one trades places with
-    the drop of the earliest slot whose enemy's line admits it, and the drop that comes back must be
-    under the first slot's line. The partner is looked for among slots of the same kind (common or
-    rare) holding an item of the same kind (equipment or consumable) first, then among slots of the
-    same kind, then among all slots. When no slot admits the drop, the most valuable supply item
-    under the line takes its place, and the drop leaves the table.
+    A slot's line is its enemy's seed depth plus ``BAND``, and a slot admits a drop worth no more
+    than its line. The drops above their slot's line are handled most valuable first. Each one
+    trades places with the drop of a partner slot. The partner slot must admit the moving drop, and
+    the original slot must admit the partner's drop in return. Among the slots that qualify, the
+    one with the lowest seed depth is the partner.
+
+    The partner is looked for among slots of the same kind (common or rare) holding an item of the
+    same kind (equipment or consumable) first, then among slots of the same kind, then among all
+    slots. When no slot qualifies, the drop leaves the table, and the most valuable supply item
+    that the original slot admits takes its place.
 
     A drop keeps its rarity byte when it moves, and a supply item takes the byte of the slot it
     fills. Empty slots stay empty, and the result has the same shape as ``table``.
@@ -622,7 +666,7 @@ def band_drop_table(table: Mapping[int, Tuple[DropSlot, DropSlot]], depths: Mapp
                                          for slot, content in enumerate(row, start=1)}
 
     def line(key: SlotKey) -> float:
-        # A hair above the line, so that a drop worth exactly the depth plus the band stays.
+        # The line sits 1e-9 above the depth plus the band, so that a drop worth exactly that stays.
         return depths.get(key[0], UNREACHED) + BAND + 1e-9
 
     def equipment(name: str) -> bool:
@@ -665,7 +709,7 @@ def run(multiworld: MultiWorld, game: str) -> None:
     """Run Wide Item Smoothing for every world of ``game`` with the option on, from
     ``stage_post_fill``.
 
-    When core calls a hook after progression balancing, this does nothing, and
+    When core offers a ``post_balancing`` hook, this does nothing, because
     ``order_after_balancing`` runs from that hook instead.
     """
     worlds = _wide_worlds(multiworld, game)
@@ -676,8 +720,9 @@ def run(multiworld: MultiWorld, game: str) -> None:
 def order_after_balancing(multiworld: MultiWorld, game: str) -> None:
     """Order every world of ``game`` with the option on once, then run the floor.
 
-    Core calls this through ``stage_post_balancing``, after its own progression balancing, when it
-    offers that hook. Nothing moves items after it, so the bridge's calls are not needed.
+    In a core that offers a ``post_balancing`` hook, ``CVAOSWorld.stage_post_balancing`` calls
+    this after core's own progression balancing. Nothing moves items after that, so Wide does not
+    need to run balancing itself.
     """
     worlds = _wide_worlds(multiworld, game)
     if worlds:
@@ -687,7 +732,8 @@ def order_after_balancing(multiworld: MultiWorld, game: str) -> None:
 
 
 def core_has_post_balancing() -> bool:
-    """Whether core calls a ``post_balancing`` hook on every world, after progression balancing."""
+    """Whether core defines ``World.post_balancing``, the hook it calls on every world after
+    progression balancing."""
     from worlds.AutoWorld import World
     return callable(getattr(World, "post_balancing", None))
 
@@ -701,9 +747,10 @@ def _smooth(multiworld: MultiWorld, worlds: List["CVAOSWorld"],
             balance: Optional[Callable[[MultiWorld], None]]) -> None:
     """Order every player in ``worlds``, then run the floor.
 
-    With ``balance``, each of ROUNDS rounds balances the multiworld and then orders. Without it,
-    the players are ordered once. If a balancing call raises TypeError, as it would if core changed
-    the function's signature, that round still orders and no more rounds follow.
+    Each world starts with a fresh ``wide_report``. With ``balance``, this runs ROUNDS rounds, each
+    of which balances the multiworld and then orders. Without it, the players are ordered once. If
+    a balancing call raises TypeError, as it would if core changed the function's signature, that
+    round still orders and no more rounds follow.
     """
     for world in worlds:
         world.wide_report = WideReport()
@@ -728,13 +775,15 @@ def _bridge(multiworld: MultiWorld, game: str,
     """Return core's progression balancing when Wide should run it itself, or None.
 
     Core balances after every world's ``stage_post_fill``, and it can move a location into an
-    earlier sphere, which brings an item earlier. So in a multiworld Wide balances and orders
-    ROUNDS times itself, and core's balancing afterward finds little left to move. Wide skips the
-    calls when nothing balances afterward: in a solo seed, when no player has progression
-    balancing on, and when the host skips balancing. The host can also turn the calls off.
+    earlier sphere, which brings an item earlier. So in a multiworld Wide runs ROUNDS rounds of
+    balancing and ordering itself, and core's balancing afterward has little left to move.
 
-    In a multiworld, one line in the log names the players and says which way Wide runs, including
-    when core's balancing may still bring their gear early.
+    Wide skips the calls when nothing balances afterward: in a solo seed, when no player has
+    progression balancing on, and when the host skips balancing. Wide also orders only once when
+    the host setting ``wide_smoothing_runs_balancing`` is off or the import fails, and core's
+    balancing may then still bring mid-game gear early.
+
+    In a multiworld, one line in the log names the players and says which of these ways Wide runs.
     """
     if multiworld.players < 2:
         return None
@@ -776,10 +825,11 @@ def _import_balancing() -> Callable[[MultiWorld], None]:
 def host_skips_balancing() -> bool:
     """Whether this generation runs with ``--skip_prog_balancing``.
 
-    Core keeps the flag only in the arguments of ``Main.main``, so this reads them from the call
-    stack, since ``stage_post_fill`` runs inside ``Main.main`` on the same thread. A generation that
-    does not run through ``Main.main``, such as a test's, falls back to the command line, where
-    argparse also accepts an unambiguous prefix of the flag.
+    Core keeps the flag only in the ``args`` of ``Main.main``. ``stage_post_fill`` runs inside
+    ``Main.main`` on the same thread, so this finds that frame on the call stack and reads the
+    flag there. A generation that does not run through ``Main.main``, such as a test's, falls back
+    to the command line. There the check also accepts an unambiguous prefix of the flag, as
+    argparse does.
     """
     frame = sys._getframe(1)
     while frame is not None:
