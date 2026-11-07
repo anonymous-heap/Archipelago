@@ -9,8 +9,9 @@ in data storage, where the map tracker reads them; Universal Tracker's map reads
 
 This module supplies the parts specific to BizHawk: ROM validation over the connector, the
 ``BizHawkBackend``, and the connector's error handling. It also adds the /map command and the
-"Open map" button, which open the map tracker for the connected slot in a browser, and the /souls
-command, which lists which enemy drops each soul.
+"Open map" button, which open the map tracker for the connected slot in a browser, the /souls
+command, which lists which enemy drops each soul, and the /drops command, which lists the items
+each enemy drops.
 """
 from __future__ import annotations
 
@@ -60,6 +61,25 @@ async def log_soul_table(ctx: "BizHawkClientContext") -> None:
     logger.info(report)
 
 
+def cmd_drops(self: "BizHawkClientCommandProcessor") -> None:
+    """List which items each enemy drops, and how often."""
+    Utils.async_start(log_drop_table(self.ctx), name="drops")
+
+
+async def log_drop_table(ctx: "BizHawkClientContext") -> None:
+    """Log the drop table of the ROM that BizHawk is running, which the installed patch wrote."""
+    from CommonClient import logger
+
+    from .drop_sources import read_drop_table_report
+    try:
+        report = await read_drop_table_report(AoSRAM(BizHawkBackend(ctx.bizhawk_ctx)))
+    except (bizhawk.RequestFailedError, bizhawk.NotConnectedError):
+        logger.info("Couldn't read the drops from BizHawk. Check that the game is running, then "
+                    "try /drops again.")
+        return
+    logger.info(report)
+
+
 class CVAOSClient(CVAOSClientLogic, BizHawkClient):
     game = "Castlevania - Aria of Sorrow"
     system = "GBA"
@@ -70,18 +90,20 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
 
     async def validate_rom(self, ctx: "BizHawkClientContext") -> bool:
         valid = await self._validate_rom(ctx)
-        # /map, /souls and the "Open map" button are for Aria of Sorrow only, like other games'
-        # commands in this client. A ROM that passes validation adds both commands, and one that
-        # fails removes all three. A context with no command processor, such as a test's stand-in,
-        # gets no commands.
+        # /map, /souls, /drops and the "Open map" button are for Aria of Sorrow only, like other
+        # games' commands in this client. A ROM that passes validation adds the three commands, and
+        # one that fails removes them and the button. A context with no command processor, such as
+        # a test's stand-in, gets no commands.
         commands = getattr(getattr(ctx, "command_processor", None), "commands", None)
         if commands is not None:
             if valid:
                 commands["map"] = cmd_map
                 commands["souls"] = cmd_souls
+                commands["drops"] = cmd_drops
             else:
                 commands.pop("map", None)
                 commands.pop("souls", None)
+                commands.pop("drops", None)
         if not valid:
             from .tracker_app import remove_map_button
             remove_map_button(ctx)

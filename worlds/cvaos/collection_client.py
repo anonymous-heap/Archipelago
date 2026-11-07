@@ -635,6 +635,10 @@ class CVAOSCollectionCommandProcessor(ClientCommandProcessor):
         """List which enemy drops each soul, and how often."""
         Utils.async_start(log_soul_table(self.ctx), name="souls")
 
+    def _cmd_drops(self) -> None:
+        """List which items each enemy drops, and how often."""
+        Utils.async_start(log_drop_table(self.ctx), name="drops")
+
 
 async def log_soul_table(ctx: "CVAOSCollectionContext") -> None:
     """Log the soul table of the ROM that the collection is running, which the installed patch
@@ -648,6 +652,22 @@ async def log_soul_table(ctx: "CVAOSCollectionContext") -> None:
         report = await read_soul_table_report(AoSRAM(ctx.backend))
     except CollectionError as exc:
         logger.info("Couldn't read the souls from the Advance Collection (%s).", exc)
+        return
+    logger.info(report)
+
+
+async def log_drop_table(ctx: "CVAOSCollectionContext") -> None:
+    """Log the drop table of the ROM that the collection is running, which the installed patch
+    wrote."""
+    from .drop_sources import read_drop_table_report
+    if ctx.backend is None:
+        logger.info("The client isn't attached to the Advance Collection yet. Start Aria of "
+                    "Sorrow, then try /drops again.")
+        return
+    try:
+        report = await read_drop_table_report(AoSRAM(ctx.backend))
+    except CollectionError as exc:
+        logger.info("Couldn't read the drops from the Advance Collection (%s).", exc)
         return
     logger.info(report)
 

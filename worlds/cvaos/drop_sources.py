@@ -5,9 +5,10 @@ Item Drop Shuffle's rules live in ``drop_shuffle.py``. This module applies them 
 :func:`travel_plan` reads the options that decide which drops move into the item pool, and
 :func:`final_drop_table` decides the table that the patch writes (``rom/drop_table.py``).
 
-The spoiler prints the drop table from :func:`drop_table_lines`. Generation has no ROM, so
-:func:`planned_drop_table_lines` runs the patch's own drop edits on a stand-in that holds only the
-vanilla drop fields, as ``soul_sources`` does for souls.
+The spoiler and the clients' /drops command print the same table, from :func:`drop_table_lines`.
+/drops reads the enemy table from the ROM in the game's memory, so it shows what the installed
+patch wrote. Generation has no ROM, so :func:`planned_drop_table_lines` runs the patch's own drop
+edits on a stand-in that holds only the vanilla drop fields, as ``soul_sources`` does for souls.
 """
 from __future__ import annotations
 
@@ -19,15 +20,18 @@ from .drop_shuffle import DropSlot, TravelPlan, plan_drop_shuffle, plan_travel
 from .rom.drop_table import MAX_VALUE, vanilla_bytes
 from .rom.enemy_table import TABLE_OFFSET, TABLE_SIZE, parse_table
 from .seed_depth import enemy_seed_depths
+from .soul_sources import ROM_DOMAIN
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
+    from .ram import AoSRAM
 
 __all__ = [
     "DropTable",
     "drop_table_lines",
     "final_drop_table",
     "planned_drop_table_lines",
+    "read_drop_table_report",
     "rom_drop_table_lines",
     "spoiler_drop_table_lines",
     "travel_plan",
@@ -112,6 +116,12 @@ def drop_table_lines(table: bytes) -> List[str]:
 def rom_drop_table_lines(rom: bytes) -> List[str]:
     """Return the drop table of a whole ROM image."""
     return drop_table_lines(rom[TABLE_OFFSET:TABLE_OFFSET + TABLE_SIZE])
+
+
+async def read_drop_table_report(ram: AoSRAM) -> str:
+    """Return the drop table of the ROM in the game's memory, as /drops prints it."""
+    table = await ram.read(TABLE_OFFSET, TABLE_SIZE, ROM_DOMAIN)
+    return "\n".join(["Item drops:", *(f"    {line}" for line in drop_table_lines(table))])
 
 
 def planned_drop_table_lines(rom_config: Dict[str, object]) -> List[str]:
