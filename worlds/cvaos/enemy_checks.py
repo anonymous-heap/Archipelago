@@ -4,8 +4,8 @@ Enemy checks: one location per kind of enemy, checked the first time that kind i
 The game's Enemy List keeps a saved bit for each enemy type, and the death routine sets a type's
 bit on its first defeat (EWRAM 0x020133A0, bit ``id & 7`` of byte ``id >> 3``). The client
 reads those bits, so detecting a defeat needs no ROM change, and a defeat made offline is sent on
-the next connection. The ROM never hands out the item at an enemy check. The client gets it from
-the server instead, because it asks the server for the player's own items too
+the next connection. The ROM never gives the item at an enemy check. The client gets it from the
+server instead, because it asks the server for the player's own items too
 (``client_logic.items_handling_for``).
 
 Logic treats a type's check as reachable when any of its placements is. A placement with routing
@@ -52,24 +52,25 @@ NEVER_CHECKED = frozenset({"Chaos"})
 BOSS_TYPES: tuple[str, ...] = ("Creaking Skull", "Manticore", "Great Armor", "Big Golem",
                                "Headhunter", "Death", "Legion", "Balore", "Belmont", "Graham")
 
-# What logic expects before the check of an enemy whose placements have no routing yet: these
-# eight mobility souls.
+# The eight mobility souls that logic requires for the check of an enemy without a recorded route
+# (see has_recorded_route).
 FALLBACK_SOULS: tuple[str, ...] = ("Flying Armor", "Skeleton Blaze", "Malphas", "Hippogryph",
                                    "Undine", "Skula", "Black Panther", "Giant Bat")
 
 # The arena placements of the eight bosses that have no routing, by enemy number: Creaking Skull
 # (room 00A), Great Armor (20F), Big Golem (313), Headhunter (40B), Belmont (506), Death (607),
-# Legion (725) and Balore (801). A boss seals its arena until it falls, and logic already treats
-# reaching a boss's room as beating that boss, as the goal and the Chaotic Realm gate do. So such a
-# placement needs only a door of its room.
+# Legion (725) and Balore (801). A boss seals its arena until it is defeated, so logic treats
+# reaching a boss's room as beating that boss. The goal and the Chaotic Realm gate rely on the same
+# rule. Such a placement therefore needs only a door of its room.
 ARENA_PLACEMENTS: frozenset[int] = frozenset({27, 193, 264, 331, 394, 422, 618, 664})
 
 # Types whose checks are excluded locations, which hold only filler. Iron Golem has 9999 HP and
-# DEF 255, and both types resist all nine named elements. Nobody has yet timed these fights with
-# ordinary gear, so no other game's progression should wait on them.
+# DEF 255, and both types resist all nine named elements. How long these fights take with
+# ordinary gear is not yet measured, so no other game's progression should wait on them.
 EXCLUDED_TYPES: frozenset[str] = frozenset({"Iron Golem", "Final Guard"})
 
-# Room ids in the Boss Rush area, whose arenas never count as placements.
+# The area id of the Boss Rush rooms, which is the first character of their room ids. Placements in
+# those rooms never count for a check.
 BOSS_RUSH_AREA = "C"
 
 # Placements that spawn only once a boss elsewhere has been beaten, by enemy number, mapped to that
@@ -125,8 +126,8 @@ def placements_of(enemy_name: str):
 def has_recorded_route(enemy_name: str) -> bool:
     """Whether logic has an exact rule for some placement of ``enemy_name``.
 
-    That placement has routing, or it is a boss in its arena. A type without such a placement
-    needs :data:`FALLBACK_SOULS` for its check.
+    Such a placement either has routing or is a boss in its arena. A type without one needs
+    :data:`FALLBACK_SOULS` for its check.
     """
     return any(placement.enemy_number in by_enemy_number_for_enemy_regions
                or placement.enemy_number in ARENA_PLACEMENTS

@@ -206,8 +206,9 @@ class LogicTest(unittest.TestCase):
                     self.can_reach(state_with_all_items_but(self.multiworld, soul), enemy.name))
 
     def test_a_boss_without_routing_counts_once_its_arena_is_reached(self):
-        # Without Giant Bat, every placement that uses the fallback stays closed, so only the
-        # arena can open these checks. The arenas open one by one as the other items arrive.
+        # Without Giant Bat, logic reaches no placement through the fallback, so only an arena can
+        # make these checks reachable. The arenas become reachable one by one as the other items
+        # are collected.
         world = self.multiworld.worlds[1]
         arenas = {placement.name: placement.room for placement in enemy_placements
                   if placement.enemy_number in ARENA_PLACEMENTS}

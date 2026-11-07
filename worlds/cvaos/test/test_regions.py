@@ -1,5 +1,5 @@
 """
-Test script for validating cvaos regions and locations.
+Tests for the location names and the routing data that the regions are built from.
 
 Run from the Archipelago root directory:
     python -m pytest worlds/cvaos/test/test_regions.py -v

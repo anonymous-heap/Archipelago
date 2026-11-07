@@ -3,7 +3,7 @@ Location tables and location groups for Castlevania: Aria of Sorrow.
 
 The tables name a location for every ground pickup, and for the first defeat of each kind of
 enemy that enemy checks can cover. They hold all of these whatever the options, so location ids
-stay the same in the data package.
+stay the same in the data package. This module also writes the hint text of a defeat location.
 """
 
 from __future__ import annotations
@@ -124,9 +124,10 @@ def defeat_hint_text(enemy_name: str) -> str:
     """
     Return the rooms where ``enemy_name`` appears, as a hint for its defeat location shows them.
 
-    The rooms are grouped by area, as in "Underground Reservoir 710 (after Legion), 737; Forbidden
-    Area A03". Areas and the rooms within each come in identifier order. A room is marked with a
-    boss when the enemy appears there only after that boss is beaten in another room.
+    The rooms are grouped by area. Both the areas and the rooms within each area come in
+    identifier order. A room is marked with a boss when the enemy appears there only after that
+    boss is beaten in another room. For Alura Une, this returns "Underground Reservoir 710 (after
+    Legion); Forbidden Area A03".
     """
     bosses_by_room: dict[str, set[str | None]] = {}
     for placement in placements_of(enemy_name):

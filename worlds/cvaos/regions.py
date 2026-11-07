@@ -397,8 +397,8 @@ def _create_enemy_checks(world: CVAOSWorld, entrance_regions_by_room: dict[str, 
 
     # Each rule names what it needs in ``uses``, as the routing rules do, for Universal Tracker's
     # routes (tracker_route). While UT rebuilds the world, the fallback also passes with
-    # UT_TRICKS_ITEM. UT then shows an unrouted check as reachable with tricks once its room is
-    # reachable, because players usually make these checks long before logic expects them.
+    # UT_TRICKS_ITEM, because players usually make these checks long before logic expects them.
+    # UT then shows an unrouted check as reachable with tricks once its room is reachable.
     tricks_tier = _tracker_shows_tricks(world)
 
     def fallback(state: CollectionState) -> bool:
@@ -508,7 +508,8 @@ _ROOM_TECHNIQUE_BITS: int = 0  # would be int(AbilityCombo.Vert) once it has a r
 # Universal Tracker marks a location as "glitched" when it becomes reachable once UT collects the
 # item named by the world's glitches_item_name. While UT rebuilds the world, a way through whose
 # only out-of-logic requirements are tricks also requires this item, so the locations past it are
-# marked as glitched. A normal generation never builds these ways.
+# marked as glitched. The fallback rule of an unrouted enemy check also passes with this item
+# (see _create_enemy_checks). A normal generation never builds these ways.
 UT_TRICKS_ITEM = "Out-of-Logic Tricks"
 _TRICK_BITS: int = int(functools.reduce(operator.or_, (technique.bit for technique in TECHNIQUES)))
 
@@ -519,7 +520,7 @@ def _tracker_shows_tricks(world: CVAOSWorld) -> bool:
     return bool(passthrough.get(getattr(world, "game", None)))
 
 # Tform (transformation) is satisfied when the player can farm a transformation soul, which means
-# reaching any TFORM_ENEMY_TYPES enemy region
+# reaching any TFORM_ENEMY_TYPES enemy region.
 _TFORM_BIT: int = int(AbilityCombo.Tform)
 
 
