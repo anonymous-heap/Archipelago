@@ -5,9 +5,10 @@ Transport-neutral per-tick client logic for Castlevania: Aria of Sorrow.
 (``client.py``) and the Collection Client (``collection_client.py``). It holds the per-session
 state, and its ``_tick`` runs one private helper per task. Those helpers send location checks,
 grant received items and Progressive Movement souls, relay DeathLink, and report the goal. They
-also keep Soma's position and the explored map in data storage, where the map tracker reads
-them; Universal Tracker's map reads the position too. A save from another seed sends no checks
-and reports no goal.
+also keep Soma's position and the explored map in data storage for the map tracker, and
+Universal Tracker's map reads the position too. Another helper writes the local play-data log
+(play_data.py). A save from another seed sends no checks, reports no goal and records no play
+data.
 
 The logic reaches the game only through ``AoSRAM``, on whichever transport backend the caller
 chose, and reaches Archipelago only through ``CommonContext``. It therefore works the same in
@@ -49,8 +50,8 @@ EXPLORATION_INTERVAL = 2.0
 PLAY_DATA_INTERVAL = 2.0
 
 # The items_handling a client connects with. Both ask for items from other worlds and for the
-# starting inventory. A seed from V0.5 on also asks for the player's own items, because the ROM
-# never hands out the item at a defeat location (see items_handling_for).
+# starting inventory. For a seed from V0.5 on, the client also asks for the player's own items,
+# because the ROM never hands out the item at a defeat location (see items_handling_for).
 ITEMS_FROM_OTHER_WORLDS = 0b101
 ITEMS_INCLUDING_OWN = 0b111
 
@@ -58,9 +59,9 @@ ITEMS_INCLUDING_OWN = 0b111
 def items_handling_for(identifier: bytes) -> int:
     """Return the items_handling for a ROM that carries ``identifier``.
 
-    A released seed (V0.3 or V0.4) asks only for other worlds' items and the starting inventory,
-    because its slot data does not list the pickups whose items the ROM hands out. Every newer
-    identifier asks for the player's own items too.
+    For a released identifier (V0.3 or V0.4), the client asks only for other worlds' items and
+    the starting inventory, because those seeds' slot data does not list the pickups whose items
+    the ROM hands out. For every newer identifier, it asks for the player's own items too.
     """
     if identifier.decode("ascii", "replace") in RELEASED_IDENTIFIERS:
         return ITEMS_FROM_OTHER_WORLDS
@@ -71,8 +72,8 @@ def items_handling_for(identifier: bytes) -> int:
 # (each grant is a few emulator round-trips). Leftovers are picked up on the following ticks.
 MAX_ITEMS_PER_TICK = 10
 
-# The field that marks the client's received-items probe, a Get the server echoes in its
-# Retrieved reply (see _save_from_another_seed).
+# The field that marks the client's received-items probe. The probe is a Get packet, and the
+# server copies this field into its Retrieved reply (see _save_from_another_seed).
 RECEIVED_ITEMS_PROBE = "cvaos_received_items_probe"
 
 FOREIGN_SAVE_WARNING = (
@@ -119,7 +120,8 @@ class CVAOSClientLogic:
         self.time_of_sent_death = None
         # Goal: latched True once we've reported completion, so we report it only once.
         self.goaled = False
-        # Whether the warning about a save from another seed is showing, so it is printed once.
+        # Whether the client has warned that the loaded save is from another seed, so the warning
+        # is printed once for that save.
         self.warned_foreign_save = False
         # The position and the map cell last sent, and when the position was sent, so a new
         # session sends both again.
@@ -201,9 +203,9 @@ class CVAOSClientLogic:
         # the load overwrites the advanced counter, the item is given again next tick. Max HP sits
         # in the same block and is never 0 for a loaded file, so it tells the two apart.
         if in_gameplay and await ram.get_max_hp() > 0:
-            # A save from another seed sends no checks and reports no goal, because either would
-            # count for this seed and could release other players' items for good. Its play data
-            # is not this seed's either.
+            # A save from another seed sends no checks and reports no goal. The server would count
+            # either one for this seed, and neither can be taken back. The save's play data is not
+            # this seed's either, so it is not recorded.
             from_another_seed = await self._save_from_another_seed(ctx, ram)
             if not from_another_seed:
                 await self._send_location_checks(ctx, ram)
@@ -220,15 +222,15 @@ class CVAOSClientLogic:
         Return True while the save's received-item counter is ahead of the items the server sent.
 
         Only this seed's items advance the counter, so a save whose counter is ahead belongs to
-        another seed. New Game+ keeps the counter and the Enemy List, so it carries a finished
-        seed's counter into a fresh-looking file. A brand-new save starts at 0 and is never ahead.
+        another seed. New Game+ keeps the counter, so a file that looks new can still hold a
+        finished seed's counter. A brand-new save starts at 0 and is never ahead.
 
         The counter is also ahead for a moment after connecting, while the server's items are
         still arriving. Holding checks then is harmless, because they are sent once the items
-        arrive. The warning waits until the item list is known to be complete. For that, the
-        client sends a probe that the server answers after the items it has sent (see
-        track_received_items), and it warns only if the counter is still ahead then. As soon as
-        the counter is no longer ahead, checks are sent again.
+        arrive. So the client warns only once the item list is known to be complete. It sends a
+        probe that the server answers after every item it has already sent (see
+        track_received_items), and warns if the counter is still ahead when the answer arrives.
+        As soon as the counter is no longer ahead, checks are sent again.
         """
         from CommonClient import logger
 
@@ -331,8 +333,8 @@ class CVAOSClientLogic:
         if new_checks:
             self.local_checked_locations |= new_checks
             await ctx.send_msgs([{"cmd": "LocationChecks", "locations": sorted(new_checks)}])
-            # The play-data log times each check once, so a check the server already has, which
-            # a new session sends again, is left out.
+            # The play-data log times each check once. A new session resends the checks that the
+            # server already has, so those are left out.
             self.unlogged_checks |= new_checks - ctx.checked_locations
 
         # Collecting another world's pickup grants Soma a junk Skull Key (rom/patch.py
@@ -418,9 +420,10 @@ class CVAOSClientLogic:
         saves count only the items from other worlds. For such a seed this leaves the starting
         inventory out, so the client does not give it.
 
-        A seed from V0.5 on asks the server for the player's own items too. The ones at the slot
-        data's ``rom_given_locations`` were already handed out by the ROM, so they are left out.
-        The rest, such as an own item at a defeat location, are given like any other.
+        For a seed from V0.5 on, the client asks the server for the player's own items too. The
+        ones at the slot data's ``rom_given_locations`` were already handed out by the ROM, so
+        they are left out. The rest, such as an own item at a defeat location, are given like any
+        other.
         """
         items = ctx.items_received
         if ctx.items_handling & 0b010:

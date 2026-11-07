@@ -5,13 +5,13 @@ This client validates the patched ROM, authenticates, and connects. Its per-tick
 lives in the transport-neutral ``client_logic.CVAOSClientLogic`` mixin, which it shares with the
 Collection Client (``collection_client.py``). That logic sends location checks, grants received
 items, relays DeathLink and reports the goal. It also keeps Soma's position and the explored map
-in data storage, where the map tracker reads them; Universal Tracker's map reads the position too.
+in data storage for the map tracker, and Universal Tracker's map reads the position too. It
+writes the local play-data log as well, and it holds back checks from a save of another seed.
 
 This module supplies the parts specific to BizHawk: ROM validation over the connector, the
-``BizHawkBackend``, and the connector's error handling. It also adds the /map command and the
-"Open map" button, which open the map tracker for the connected slot in a browser, the /souls
-command, which lists which enemy drops each soul, and the /drops command, which lists the items
-each enemy drops.
+``BizHawkBackend``, and the connector's error handling. It also adds three commands and a button.
+/map and the "Open map" button open the map tracker for the connected slot in a browser. /souls
+lists which enemy drops each soul, and /drops lists the items that each enemy drops.
 """
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def cmd_souls(self: "BizHawkClientCommandProcessor") -> None:
 
 
 async def log_soul_table(ctx: "BizHawkClientContext") -> None:
-    """Log the soul table of the ROM that BizHawk is running, which the installed patch wrote."""
+    """Log the soul table in the ROM that BizHawk is running, as the patch left it."""
     from CommonClient import logger
 
     from .soul_sources import read_soul_table_report
@@ -68,7 +68,7 @@ def cmd_drops(self: "BizHawkClientCommandProcessor") -> None:
 
 
 async def log_drop_table(ctx: "BizHawkClientContext") -> None:
-    """Log the drop table of the ROM that BizHawk is running, which the installed patch wrote."""
+    """Log the drop table in the ROM that BizHawk is running, as the patch left it."""
     from CommonClient import logger
 
     from .drop_sources import read_drop_table_report
@@ -137,8 +137,8 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
 
         ctx.game = self.game
         # Receive items from other worlds and the starting inventory. Nothing else delivers the
-        # starting inventory to the game, while logic counts it as owned from the start. A seed from
-        # V0.5 on also asks for this player's own items (client_logic.items_handling_for).
+        # starting inventory to the game, while logic counts it as owned from the start. For a seed
+        # from V0.5 on, also ask for this player's own items (client_logic.items_handling_for).
         ctx.items_handling = items_handling_for(identifier)
         ctx.want_slot_data = True
         ctx.watcher_timeout = 0.125

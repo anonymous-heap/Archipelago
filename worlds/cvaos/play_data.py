@@ -1,5 +1,5 @@
 """
-A local log of each run's play data, for checking the soul pace after release.
+A local log of each run's play data, so that the soul pace can be checked against real games.
 
 The client appends one JSON object per line to one file per seed and slot. The file is named
 like the seed's other files, ``AP_<seed>_P<slot>.jsonl``, and sits in the ``cvaos_play_data``
@@ -12,13 +12,14 @@ second. The events are:
 
 - ``session``: the client connected or attached to the game. The line names the ``seed``, the
   ``slot`` and the ``player``, and copies the slot data's numbers and strings as ``options``. The
-  lines after it state the souls, the gear and the drops seen in full.
+  ``souls``, ``gear`` and ``drops_seen`` lines after it list everything again, not only what
+  changed.
 - ``souls``: the souls owned changed. ``owned`` counts the distinct souls of every kind, ability
   souls included, and ``gained`` and ``lost`` name the souls added and removed since the previous
   ``souls`` line.
 - ``gear``: the equipped ``weapon`` or ``armor`` changed. Either is null when nothing is equipped.
-- ``drops_seen``: the enemies whose item drop the Enemy List now shows, under ``slot_1`` and
-  ``slot_2``.
+- ``drops_seen``: the Enemy List shows new drops. ``slot_1`` names the enemies whose common drop
+  it now shows, and ``slot_2`` the enemies whose rare drop it now shows.
 - ``checks``: ``locations`` checked for the first time, as the client sends them.
 - ``time``: a minute of play passed with no other line, or the play timer went back because an
   older save was loaded.

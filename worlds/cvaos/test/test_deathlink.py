@@ -1,10 +1,11 @@
 """
-Tests for the cvaos DeathLink relay (client._relay_deathlink).
+Tests for the cvaos DeathLink relay (client_logic._relay_deathlink).
 
-The relay keys off the engine's death STATE (MENU_STATE==DEATH during the in-game death fade, then
-the GAME_OVER screen) rather than HP==0, because every death clamps HP to 0 and flips MENU_STATE to
-the death sub-state on the same frame -- a state that persists for many frames, unlike the ~1-frame
-(INGAME, NORMAL, hp==0) window the old check relied on and almost always missed.
+The relay detects a death from the engine's death STATE rather than from HP == 0. Every death
+clamps HP to 0 and sets MENU_STATE to the death sub-state on the same frame. MENU_STATE==DEATH
+lasts through the in-game death fade, and the GAME_OVER screen follows it, so a poll sees the
+death reliably. (INGAME, NORMAL, HP == 0) lasts only about one frame, so a poll almost always
+misses it.
 
 These tests drive _relay_deathlink through the relevant transitions with a fake context and a fake
 RAM accessor, so they need no emulator. DeathLinkTickTest runs whole ticks instead, so the ROM hook
@@ -331,7 +332,8 @@ class DeathLinkTickTest(unittest.IsolatedAsyncioTestCase):
     @staticmethod
     def ticking_client() -> CVAOSClient:
         client = _new_client()
-        # Other tests cover the save-block concerns, so here they are stubs that touch no RAM.
+        # Other tests cover the save-block concerns and the save guard, so here they are stubs
+        # that touch no RAM.
         for concern in ("_send_location_checks", "_report_position", "_report_exploration",
                         "_receive_items", "_grant_progressive_movement", "_report_goal",
                         "_record_play_data"):

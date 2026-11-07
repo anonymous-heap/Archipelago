@@ -17,9 +17,9 @@ below rely on layouts observed on the live process.
   the collection's other eight GBA ROMs by their game codes, so the error message can name the
   game or region that is loaded instead.
 
-  We then read ARCHIPELAGO_IDENTIFIER at ROM+0x670000 to confirm that the ROM is patched by a
-  compatible version. Without the identifier the ROM is unpatched, and the error points at the
-  ROM installer. A different version suffix means a seed from another apworld version.
+  We then read the identifier at ROM+0x670000 to confirm that a compatible version patched the
+  ROM. Without an identifier the ROM is unpatched, and the error points at the ROM installer. An
+  identifier this client does not accept means a seed from another apworld version.
 * EWRAM: M2 heap-allocates the emulated GBA memory, and no static pointer to it exists in
   game.exe. The emulator's allocator prefixes every block with a header whose ``next`` and
   ``prev`` words link the blocks. The GBA-memory object is allocated right before the ROM
@@ -76,9 +76,9 @@ ROM_SIZE = 0x800000
 ROM_TITLE_OFFSET = 0xA0
 ROM_TITLE = b"CASTLEVANIA2"
 
-# The patched ROM carries ARCHIPELAGO_IDENTIFIER at ROM+ARCHIPELAGO_IDENTIFIER_START. The
-# collection client requires a patched ROM, so once the ROM image is located by its header
-# we read the marker there to confirm that the ROM is patched, and by which version.
+# A patched ROM carries its identifier at ROM+ARCHIPELAGO_IDENTIFIER_START. The collection client
+# plays only a patched ROM, so once the ROM image is located by its header, we read the identifier
+# there to confirm that the ROM is patched, and by which version.
 _IDENTIFIER_BYTES = ARCHIPELAGO_IDENTIFIER.encode("ascii")
 _IDENTIFIER_PREFIX = _IDENTIFIER_BYTES[:9]  # b"CVAOS_AP_", shared across patch versions
 _COMPATIBLE_BYTES = frozenset(ident.encode("ascii") for ident in COMPATIBLE_IDENTIFIERS)
@@ -640,8 +640,7 @@ class CVAOSCollectionCommandProcessor(ClientCommandProcessor):
 
 
 async def log_soul_table(ctx: "CVAOSCollectionContext") -> None:
-    """Log the soul table of the ROM that the collection is running, which the installed patch
-    wrote."""
+    """Log the soul table in the ROM that the collection is running, as the patch left it."""
     from .soul_sources import read_soul_table_report
     if ctx.backend is None:
         logger.info("The client isn't attached to the Advance Collection yet. Start Aria of "
@@ -656,8 +655,7 @@ async def log_soul_table(ctx: "CVAOSCollectionContext") -> None:
 
 
 async def log_drop_table(ctx: "CVAOSCollectionContext") -> None:
-    """Log the drop table of the ROM that the collection is running, which the installed patch
-    wrote."""
+    """Log the drop table in the ROM that the collection is running, as the patch left it."""
     from .drop_sources import read_drop_table_report
     if ctx.backend is None:
         logger.info("The client isn't attached to the Advance Collection yet. Start Aria of "
@@ -673,7 +671,8 @@ async def log_drop_table(ctx: "CVAOSCollectionContext") -> None:
 
 class CVAOSCollectionContext(CommonContext):
     game = "Castlevania - Aria of Sorrow"
-    # Items from other worlds plus the starting inventory, as in the BizHawk Client.
+    # Items from other worlds plus the starting inventory, as in the BizHawk Client. server_auth
+    # replaces it with the value for the installed ROM's identifier.
     items_handling = 0b101
     want_slot_data = True
     command_processor = CVAOSCollectionCommandProcessor
@@ -708,7 +707,7 @@ class CVAOSCollectionContext(CommonContext):
             # ROM free space. The world registers the same value under connect_names.
             auth_raw = self.backend.proc.read(self.backend.rom_base + AUTH_NUMBER_START, 16)
             self.auth = base64.b64encode(auth_raw).decode("ascii")
-        # A seed from V0.5 on also asks for this player's own items, as the BizHawk Client does.
+        # For a seed from V0.5 on, also ask for this player's own items, as the BizHawk Client does.
         self.items_handling = items_handling_for(self.backend.proc.read(
             self.backend.rom_base + ARCHIPELAGO_IDENTIFIER_START, len(ARCHIPELAGO_IDENTIFIER)))
         if password_requested and not self.password:

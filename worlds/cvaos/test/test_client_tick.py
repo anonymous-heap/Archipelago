@@ -1,13 +1,14 @@
 """_tick touches the save-data block only once a file is really loaded (client_logic._tick).
 
-GAME_STATE and MENU_STATE report normal gameplay before the save block is populated: seen live as
-an all-zero inventory and souls-collected count with both bytes already in their in-gameplay
-values. The pickup flags, the inventory and the received-counter all live in that block, so a
-grant made then goes into memory the load is about to overwrite, and if the load wins the
-counter write the item is handed out again next tick. Max HP is in the same block and is never 0
-for a loaded file, so _tick requires it to be non-zero before reading or writing any of the three.
+GAME_STATE and MENU_STATE report normal gameplay before the save block is populated. This was seen
+live as an all-zero inventory and souls-collected count, with both bytes already in their
+in-gameplay values. The pickup flags, the inventory and the received-counter all live in that
+block, so a grant made then goes into memory the load is about to overwrite. If the load then
+overwrites the advanced counter, the item is handed out again next tick. Max HP is in the same
+block and is never 0 for a loaded file, so _tick requires it to be non-zero before reading or
+writing any of the three.
 
-These tests drive _tick with a fake context and RAM, recording which save-block concerns ran.
+These tests drive _tick with a fake context and RAM, and record which of its save-block steps ran.
 """
 from __future__ import annotations
 

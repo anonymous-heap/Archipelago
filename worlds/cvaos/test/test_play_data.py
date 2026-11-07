@@ -1,8 +1,8 @@
 """The client's local play-data log (play_data.py, client_logic._record_play_data).
 
-Each session's lines start with everything in full, and after that a line is written only when a
-recorded value changes. These tests drive the shared logic over the dict-backed FakeBackend and
-write the log into a temporary folder.
+Each session's first lines state every recorded value, and after that a line is written only when
+a value changes. These tests drive the shared logic over the dict-backed FakeBackend and write the
+log into a temporary folder.
 """
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ class PlayDataTest(unittest.IsolatedAsyncioTestCase):
         self.ewram[offset(addr.EQUIPPED_WEAPON)] = 2                      # Combat Knife
         self.ewram[offset(addr.EQUIPPED_ARMOR)] = 1                       # Cloth Tunic
         self.ewram[offset(addr.INVENTORY["red_soul"].entry)] = 0x10       # Bat, soul 1
-        self.ewram[offset(addr.INVENTORY["blue_soul"].second)] = 0x01     # Flying Armor, copied
+        self.ewram[offset(addr.INVENTORY["blue_soul"].second)] = 0x01     # Flying Armor, 2nd list
         self.ewram[offset(addr.DROP_1_SEEN)] = 0x02                       # Zombie, enemy 1
         lines = await self.record()
         self.assertEqual(len(self.backend.read_batches), 1, "the values come in one read")
