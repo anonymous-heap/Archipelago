@@ -45,6 +45,9 @@ MIN_SEED_IDENTIFIER = "CVAOS_AP_V0.5"
 # newer one. A V0.3 ROM already has its hooks and metadata at 0x670000, and it holds nothing that
 # the current client cannot handle.
 COMPATIBLE_IDENTIFIERS = frozenset(IDENTIFIERS[IDENTIFIERS.index("CVAOS_AP_V0.3"):])
+# The compatible identifiers as a range, oldest first, for messages that name them.
+COMPATIBLE_RANGE = (f"{min(COMPATIBLE_IDENTIFIERS, key=IDENTIFIERS.index)} to "
+                    f"{max(COMPATIBLE_IDENTIFIERS, key=IDENTIFIERS.index)}")
 # The slot's auth, which the client reads to connect.
 AUTH_NUMBER_START = 0x670010              # 16 bytes
 

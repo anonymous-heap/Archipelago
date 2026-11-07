@@ -61,7 +61,8 @@ from . import cac_archive, steam
 from .._bytemaker_compat import Entry
 from ..constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5
 from ..rom.address_space import M2_AUDIO_BRIDGE, M2_GRAPHIC, gba_space
-from ..rom import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, COMPATIBLE_IDENTIFIERS
+from ..rom import (ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, COMPATIBLE_IDENTIFIERS,
+                   COMPATIBLE_RANGE)
 
 AOS_MEMBER = "system/roms/03_Akatsuki_US.patch_210623m.bin"
 ROM_SIZE = 0x800000
@@ -188,7 +189,7 @@ def validate_patched_rom(rom_bytes: bytes) -> None:
         if ident.startswith(_AP_MARKER_PREFIX):
             raise InstallError(
                 f"ROM was patched by a different world version ({ident.decode('ascii', 'replace')}, "
-                f"this world writes {ARCHIPELAGO_IDENTIFIER}). Re-patch with the matching version.")
+                f"this world accepts {COMPATIBLE_RANGE}). Re-patch with the matching version.")
         raise InstallError(
             "ROM is not Archipelago-patched (no CVAOS_AP marker). Select your .apcvaos patch "
             "file instead, and the installer patches the collection's own ROM.")

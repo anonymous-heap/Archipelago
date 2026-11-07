@@ -63,7 +63,7 @@ from .ram import AoSRAM, addresses as addr
 from .ram.addresses import EWRAM, ROM
 from .ram.backend import GuardedWrite
 from .rom import (ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUMBER_START,
-                  COMPATIBLE_IDENTIFIERS)
+                  COMPATIBLE_IDENTIFIERS, COMPATIBLE_RANGE)
 
 if TYPE_CHECKING:
     import pymem
@@ -381,7 +381,7 @@ def find_rom_image(proc: GameProcess) -> RomImage:
             ver = marker.split(b"\x00", 1)[0].decode("ascii", "replace")
             raise CollectionError(
                 f"The installed seed uses patch format {ver}, but this client reads "
-                f"{ARCHIPELAGO_IDENTIFIER}. Install a seed generated with this apworld, or "
+                f"{COMPATIBLE_RANGE}. Install a seed generated with this apworld, or "
                 f"switch to the apworld that generated the seed.")
         raise CollectionError(
             "Aria of Sorrow (US) is running, but its ROM is not patched for Archipelago. Close "
