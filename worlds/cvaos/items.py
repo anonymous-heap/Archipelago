@@ -5,6 +5,7 @@ The item table, item groups and item pool for Castlevania: Aria of Sorrow.
 from __future__ import annotations
 
 from collections import Counter
+from random import Random
 from types import MappingProxyType
 from typing import Dict, Iterable, List, Mapping, NamedTuple, Sequence, TYPE_CHECKING
 
@@ -201,8 +202,8 @@ def _cheap_consumable_or_gold(name: str) -> bool:
 # Plain filler that every seed can hold: the consumables and gold of the pickups that exist outside
 # Hard Mode, each worth no more than worth.CHEAP_WORTH. Core pads item links with filler drawn from
 # here, so the list holds nothing better than what the castle's own pickups offer a quarter of the
-# way in. An item appears once for each such pickup, so CVAOSWorld.get_filler_item_name picks an
-# item as often as the castle holds it.
+# way in. An item appears once for each such pickup, so draw_filler_name picks an item as often as
+# the castle holds it.
 FILLER_ITEM_NAMES: tuple[str, ...] = tuple(sorted(
     p.item_name for p in pickup_infos
     if not p.is_hard_mode_only and item_table[p.item_name].classification == ItemClassification.filler
@@ -217,6 +218,20 @@ def create_item(world: "CVAOSWorld", name: str) -> CVAOSItem:
 def _at_cap(name: str, held: Counter) -> bool:
     info = _item_info_by_name.get(name)
     return info is not None and info.item_category == "consumable" and held[name] >= CONSUMABLE_CAP
+
+
+def draw_filler_name(random: Random, held: Counter) -> str:
+    """Draw a filler item name from FILLER_ITEM_NAMES, and count it in ``held``.
+
+    ``held`` counts the copies of each item in the player's pool, by name. A consumable that the
+    pool already holds CONSUMABLE_CAP copies of gives way to ENEMY_GOLD gold, as it does for an
+    enemy check. Each draw makes one ``random.choice``, whatever it returns.
+    """
+    name = random.choice(FILLER_ITEM_NAMES)
+    if _at_cap(name, held):
+        name = ENEMY_GOLD_NAME
+    held[name] += 1
+    return name
 
 
 def check_item_names(types: Sequence[EnemyType], pool: Iterable[Item],

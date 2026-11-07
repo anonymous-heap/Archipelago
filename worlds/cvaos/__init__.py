@@ -1,6 +1,7 @@
 import base64
 import logging
 import os
+from collections import Counter
 from typing import ClassVar, Sequence, TextIO, Union
 
 from BaseClasses import CollectionState, Item, ItemClassification, MultiWorld, Tutorial
@@ -9,7 +10,7 @@ from worlds.LauncherComponents import Component, Type, components, launch as lau
 import settings
 
 from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA_ROM_MD5
-from .items import (FILLER_ITEM_NAMES, PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, CVAOSItem,
+from .items import (PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, CVAOSItem, draw_filler_name,
                     item_name_groups, item_name_to_id, create_item, create_itempool)
 from .enemy_checks import defeat_location_name, enemy_check_types, has_recorded_route
 from .locations import (defeat_hint_text, location_name_groups, location_name_to_id,
@@ -240,6 +241,10 @@ class CVAOSWorld(World):
     # multiworld pool (item_smoothing.take_smoothing_items).
     _smoothing_items: Sequence[Item] = ()
 
+    # Set in create_items: the copies of each item in this player's pool, by name, smoothing items
+    # included. Each filler draw adds its item, so filler never takes a consumable past the cap.
+    _pool_copies: Counter | None = None
+
     # At most this many defeat checks without a recorded route may be priority locations. Such a
     # check requires all eight fallback souls, and the fill places progression on priority
     # locations first. The souls must then go where none of the progression on those checks is
@@ -342,6 +347,7 @@ class CVAOSWorld(World):
         if self.options.wide_item_smoothing:
             from .wide_smoothing import promote_mid_game_gear
             promote_mid_game_gear(itempool)
+        self._pool_copies = Counter(item.name for item in itempool)
         # Hold back the items smoothing places in pre_fill, because the pool must not change after
         # create_items.
         self._smoothing_items = take_smoothing_items(self, itempool)
@@ -393,8 +399,11 @@ class CVAOSWorld(World):
 
     def get_filler_item_name(self) -> str:
         # Item links and fill fallbacks create filler through this. The default picks any item
-        # name, which here includes progression souls and items that exist only in Hard Mode.
-        return self.random.choice(FILLER_ITEM_NAMES)
+        # name, which here includes progression souls and items that exist only in Hard Mode. An
+        # item link's group never runs create_items, so its draws start from an empty count.
+        if self._pool_copies is None:
+            self._pool_copies = Counter()
+        return draw_filler_name(self.random, self._pool_copies)
 
     @classmethod
     def stage_post_fill(cls, multiworld: MultiWorld) -> None:
