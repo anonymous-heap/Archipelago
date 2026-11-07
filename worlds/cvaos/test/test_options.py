@@ -1,15 +1,17 @@
 """
 Tests for the options.
 
-The technique-logic tests cover the resolution precedence chain (per-technique override >
-difficulty tier > built-in default), the QSave-is-manual-only rule, and technique gating through
-the routing access-rule factory. Also, how the options page names the "Target Platform" values.
+The technique-logic tests check that each Logic Difficulty Preset adds its tier's technique, that
+a technique's own option overrides the preset, and that no preset puts a manual-only technique in
+logic. They also check how the routing access-rule factory applies techniques, floor and ceiling
+breakers, and transformation sources. One test checks how the options page names the Target
+Platform values.
 
-The other tests cover the Experimental options group, its preset, and the options that newer
-options replace. Soul Shuffle's matched value is new, so "random" draws only the released
-values, and a released YAML rolls as it always has. Enemy Drop Rate above 100 turns off Multiply
-Soul Drop Rates, matched turns off Keep Soul Drop Rates, and Wide Item Smoothing sets Item
-Smoothing to strict in the spheres order, so the spoiler shows what runs.
+The other tests cover the Experimental options group, its preset, and the options that other
+options override. Soul Shuffle's "random" draws only the values released before matched, so a
+released YAML rolls as it always has. Enemy Drop Rate above 100 turns off Multiply Soul Drop
+Rates, matched turns off Keep Soul Drop Rates, and Wide Item Smoothing sets Item Smoothing to
+strict in the spheres order, so the spoiler shows the values that run.
 
 Run from the Archipelago root directory:
     python -m pytest worlds/cvaos/test/test_options.py -v
@@ -132,7 +134,8 @@ def test_override_in_logic_beats_tier_silence_and_default():
 
 
 def test_manual_only_techniques_ignore_every_tier():
-    """A Tier.MANUAL technique (QSave) is out of logic at every difficulty unless forced in."""
+    """A Tier.MANUAL technique (QSave or InZip) is out of logic at every difficulty unless forced
+    in."""
     manual = [t for t in TECHNIQUES if t.tier is Tier.MANUAL]
     assert manual, "expected at least one manual-only technique (QSave)"
     for technique in manual:
@@ -161,7 +164,8 @@ def test_registry_bits_are_unique_single_techniques():
 # --- access-rule factory: technique gating -----------------------------------------------
 
 def test_rule_prunes_out_of_logic_technique():
-    """DJump+PixPer at canonical: the only way through is out of logic -> never accessible."""
+    """DJump+PixPer at canonical: the only way through is out of logic, so it is never
+    accessible."""
     rule = _rule((int(AbilityCombo.DJump | AbilityCombo.PixPer),))
     assert rule is not None
     assert not rule(_State("Malphas"))
@@ -177,14 +181,16 @@ def test_rule_passes_in_logic_technique_on_souls():
 
 
 def test_rule_soulless_in_logic_way_is_always_open():
-    """A QSave-only mask with QSave forced in needs nothing else -> no rule at all."""
+    """A QSave-only mask with QSave forced in needs nothing else, so there is no rule at all."""
     assert _rule((int(AbilityCombo.QSave),), quick_save_reset_logic="in_logic") is None
 
 
 def test_rule_world_fact_bits_are_out_of_logic():
-    """Vert has no implemented requirement yet, so an option requiring it is pruned as out of logic:
-    a Vert+DJump-only way is unreachable, not satisfied by Malphas alone. (Floor/Ceil, by contrast,
-    now resolve to breaker items.) TODO: revisit once Vert is coded (see regions._ROOM_TECHNIQUE_BITS)."""
+    """Vert has no requirement yet, so a way that needs it is pruned as out of logic.
+
+    A Vert+DJump-only way is unreachable, even with Malphas. Floor and Ceil, by contrast, resolve
+    to breaker items. TODO: revisit once Vert has a requirement (see regions._ROOM_TECHNIQUE_BITS).
+    """
     rule = _rule((int(AbilityCombo.Vert | AbilityCombo.DJump),))
     assert rule is not None
     assert not rule(_State("Malphas"))

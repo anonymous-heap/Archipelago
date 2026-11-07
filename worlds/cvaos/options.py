@@ -35,7 +35,7 @@ class TargetPlatform(Choice):
     """
     Where you intend to play this seed. The generated patch is the same either way. This only
     decides where the base ROM comes from when the patch is applied, and lets the client warn you
-    if you connect the other one.
+    if you connect from the other platform.
 
     - gba: play the patched ROM in BizHawk, with the BizHawk Client. Applying the patch asks for
       the base ROM, so select your US ROM. The Advance Collection's game.exe is also accepted, but
@@ -147,9 +147,9 @@ class SoulShuffle(Choice):
 
     @classmethod
     def from_text(cls, text: str) -> "SoulShuffle":
-        # "random" draws only the released values, so a released YAML that says random rolls
-        # the same value, and leaves the same random state for the options after it. celeste64
-        # and kdl3 limit "random" the same way.
+        # "random" draws only the released values, so a YAML that says random rolls the value it
+        # rolled before matched existed, and leaves the same random state for the options after
+        # it. celeste64 and kdl3 limit "random" the same way.
         if text.lower() == "random":
             return cls(random.choice(cls.RANDOM_VALUES))
         return super().from_text(text)
@@ -180,7 +180,7 @@ class ShuffleStartingSoul(DefaultOnToggle):
     """
     No effect when Soul Shuffle is off.
 
-    The intro hands Soma a free Winged Skeleton soul. That is hardcoded in the intro,
+    The intro gives Soma a free Winged Skeleton soul. That is hardcoded in the intro,
        not an enemy drop, so Soul Shuffle does not touch it on its own. This
        option makes the starting soul follow the shuffle.
 
@@ -212,8 +212,8 @@ class SoulDropRateMultiplier(NamedRange):
     How much more often souls drop, in percent: 100 is vanilla, 120 means a soul appears 1.2x
        as often, 400 means four times as often.
 
-    There is a hard limit to how common souls can be currently, so higher multipliers will
-       mostly affect rarer drops.
+    There is currently a hard limit to how common souls can be, so higher multipliers mostly
+       affect rarer drops.
     """
     display_name = "Soul Drop Rate Multiplier"
     range_start = 100
@@ -234,9 +234,9 @@ class EnemyDropRate(NamedRange):
     How often enemies drop their soul and their common item, in percent of the usual chance.
        100 changes nothing.
 
-    Kinds of enemy that your seed reaches in its first quarter get only a sixth of the boost, for
-       the whole run, because you meet them early anyway: about 142% at 350. Every other kind gets
-       the full value.
+    Kinds of enemy that your seed reaches in the first quarter of the run get only a sixth of the
+       boost, for the whole run, because you meet them early anyway. At 350, that is about 142%.
+       Every other kind gets the full value.
 
     Three kinds of drop always keep their usual chance: a strong soul whose enemy your seed
        reaches in the first third of the run, every rare item drop, and the better items (Iron
@@ -285,13 +285,15 @@ class WideItemSmoothing(Toggle):
        trades places with a weaker one.
 
     It keeps Local Items, Non-Local Items and every other placement rule. When those rules leave no
-       other choice, a few items arrive earlier than the limit above.
+       other choice, a few items arrive earlier than the limit above. A weapon that breaks floors
+       or ceilings may also come early, where logic first needs one.
 
     In a multiworld it runs Archipelago's progression balancing itself, so that the host's own
-       balancing seldom undoes the order. When the host skips balancing, nothing runs after the
-       order, so it skips this step too. A host can also turn the step off in the host settings.
-       About a quarter of players in a multiworld then hold mid-game gear by a fifth of the run.
-       Another player's release, item links and plando still bypass the order.
+       balancing seldom undoes its ordering. When the host skips balancing, nothing runs
+       afterward that could undo the ordering, so it skips this step too. A host can also turn
+       the step off in the host settings, and then about a quarter of players in a multiworld hold
+       mid-game gear by a fifth of the run. Another player's release, item links and plando still
+       bypass the ordering.
 
     Experimental: its balance is measured but not play-tested, and it may change between versions.
     """
@@ -360,16 +362,16 @@ class EnemyChecks(Choice):
     A hint for one of these checks names the rooms where the enemy appears. With all, hints cost
        more: 22 checks each at the default hint cost of 10%, against 11 without enemy checks.
 
-    Iron Golem's and Final Guard's checks hold only filler for now. Nobody has yet measured how
-       long these fights take with ordinary gear.
+    Iron Golem's and Final Guard's checks hold only filler for now, because how long these fights
+       take with ordinary gear is not yet known.
 
     Logic counts an enemy as defeatable once you can reach a room where it appears. For most
        rooms, the logic spreadsheet doesn't record the route to their enemies yet. Until it does,
        logic also expects Flying Armor, Skeleton Blaze, Malphas, Hippogryph, Undine, Skula, Black
-       Panther and Giant Bat before those enemies' checks. So many of these checks come late in
-       logic although you usually make them early, and another game's item placed on one may
-       arrive sooner than that game expects. Universal Tracker shows them in its "reachable with
-       tricks" colour. The location group "Unrouted Enemy Defeats" holds them, and "Boss Defeats"
+       Panther and Giant Bat before those enemies' checks. As a result, many of these checks come
+       late in logic although you usually make them early, and another game's item placed on one
+       may arrive sooner than that game expects. Universal Tracker shows them in its "reachable
+       with tricks" colour. The location group "Unrouted Enemy Defeats" holds them, and "Boss Defeats"
        holds the bosses.
 
     Experimental: its balance is measured but not play-tested, and it may change between versions.
@@ -392,8 +394,8 @@ class ItemDropShuffle(Toggle):
        armor or accessory then drops from no enemy unless Hammer's shop sells it, while food,
        potions and cures may still drop elsewhere.
 
-    Then every drop is dealt again by how late your seed reaches each enemy and, to a small
-       degree, by its HP. So early enemies drop cheap items and the castle's last enemies drop the
+    Then every drop is dealt out again by how late your seed reaches each enemy and, to a small
+       degree, by its HP, so early enemies drop cheap items and the castle's last enemies drop the
        best ones. Each item keeps its usual rarity.
 
     Each moved drop takes the place of a cheap item in your pool, so how many drops move depends
