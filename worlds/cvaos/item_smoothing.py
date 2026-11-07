@@ -16,6 +16,10 @@ Every pass here runs only when the ``item_smoothing`` option is on:
   so that a lucky early find stays possible. The ``item_smoothing_order`` option decides whether
   "earlier" means nearer the start of the map (the default) or in an earlier logical sphere.
 
+A world with Wide Item Smoothing on skips ``smooth_placed_items``, because ``wide_smoothing``
+reorders its items instead. That module also uses several helpers from this one, such as
+``region_depth``, ``jittered`` and ``restore_breakers``.
+
 ``take_smoothing_items`` holds the souls and books out of the multiworld pool in create_items.
 The pre_fill passes place them, and any they cannot place go into the pool for the main fill.
 
@@ -113,7 +117,7 @@ MOVEMENT_SOULS = frozenset({
 })
 
 ORIGIN_REGION = "Menu"
-UNREACHED_DEPTH = 10 ** 9  # sort graph-disconnected regions last
+UNREACHED_DEPTH = 10 ** 9  # past every real depth or sphere, so unreached ones sort last
 
 _GOLD = re.compile(r"^\d+ Gold$")
 
@@ -122,7 +126,10 @@ _GOLD = re.compile(r"^\d+ Gold$")
 
 def category(name: str) -> str:
     """
-    Get the category of an item from its name.
+    Return the category of the item named ``name``.
+
+    It is the item's ``item_info`` category, ``"money"`` for a gold amount, or ``"unknown"`` for
+    any other name.
     """
     info = item_info.by_name.get(name)
     if info is not None:
@@ -149,8 +156,10 @@ def _student_t(nu: float, rng) -> float:
 
 def jittered(base: float, scale: float, params: SmoothingParams, rng) -> float:
     """
-    Return ``base`` plus long-tailed jitter of width ``scale``, or, with probability ``eps``, a
-    uniform random wildcard in [0, 1].
+    Return ``base`` plus long-tailed jitter of width ``scale``.
+
+    The jitter is a Student-t draw with ``params.nu`` degrees of freedom. With probability
+    ``params.eps``, the result is instead a uniform random wildcard in [0, 1].
     """
     if rng.random() < params.eps:
         return rng.random()
@@ -277,7 +286,8 @@ def _assign_targets(items: List[Item], params: SmoothingParams, rng) -> List[flo
 
 def region_depth(multiworld: MultiWorld, player: int) -> Dict[str, int]:
     """
-    Return each region's breadth-first distance from the origin region, ignoring access rules.
+    Return the breadth-first distance of each of the player's regions from ``ORIGIN_REGION``, by
+    region name, ignoring access rules.
 
     A region that no path of exits from the origin reaches is left out.
     """
@@ -943,12 +953,13 @@ def _place_in_band(book: Item, bands: List[List[Location]], index: int,
 def smooth_placed_items(multiworld: MultiWorld, game: str) -> None:
     """
     Reorder the placed items of every ``game`` world with smoothing on, after the main fill.
-    Worlds with Wide Item Smoothing on are left to ``wide_smoothing``.
 
-    For each world, ``smoothable_locations_in_order`` gives the locations whose items may move,
-    earliest first, and ``_assign_targets`` gives each of their items a target. The items are then
-    sorted by target and reassigned in that order, so the earliest location gets the lowest-target
-    item that it accepts. The spheres are computed once and shared by every world.
+    A world with Wide Item Smoothing on is skipped, because ``wide_smoothing`` reorders its items
+    instead. For each other world, ``smoothable_locations_in_order`` gives the locations whose
+    items may move, earliest first, and ``_assign_targets`` gives each of their items a target.
+    The items are then sorted by target and reassigned in that order, so the earliest location
+    gets the lowest-target item that it accepts. The spheres are computed once and shared by every
+    world.
 
     The moved items are non-progression except for the floor and ceiling breakers. If the new
     arrangement fails the accessibility check, the breakers go back to the locations the main fill
@@ -988,7 +999,11 @@ def smooth_placed_items(multiworld: MultiWorld, game: str) -> None:
 
 
 def restore_breakers(breaker_homes: List[Tuple[Item, Location]]) -> None:
-    """Swap each breaker back to its pre-smoothing (fill) location, undoing only the breaker moves."""
+    """Swap each breaker in ``breaker_homes`` back to the location paired with it.
+
+    Only the breakers go back. The item now at each home moves to where its breaker was, and every
+    other item keeps its location.
+    """
     for breaker, home in breaker_homes:
         current = breaker.location
         if current is home:
