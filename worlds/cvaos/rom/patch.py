@@ -23,10 +23,10 @@ from .. import item_granting
 from ..data import item_info_collection, pickup_info_collection as pickup_infos
 from ..constants import AC_USA_ROM_MD5, USA_ROM_MD5
 from ..items import CHECK_ITEM_CHOICES, FORBIDDEN_AREA_SWITCH, item_table
-from . import (classicvania_movement, custom_pickups, deathlink_hook, forbidden_area_button,
-               inventory_menu, oops_all_whips, received_item_box, single_jump_divekick,
-               skull_key_pickup, skull_key_warp, soul_drop_rates, soul_guarantee_hook,
-               soul_shuffle)
+from . import (classicvania_movement, custom_pickups, deathlink_hook, enemy_drop_rates,
+               forbidden_area_button, inventory_menu, oops_all_whips, received_item_box,
+               single_jump_divekick, skull_key_pickup, skull_key_warp, soul_drop_rates,
+               soul_guarantee_hook, soul_shuffle)
 from .entity import GBA_ROM_BASE, PICKUP, AoSPickupEntity
 from .._bytemaker_compat import offset_of
 from ..options import (ForbiddenAreaButton, SoulShuffle, TARGET_ADVANCE_COLLECTION,
@@ -83,6 +83,7 @@ ROM_CONFIG_KEY_IDENTIFIERS: dict[str, str] = {
     "soul_drop_rate_multiplier": "CVAOS_AP_V0.2",
     "target_platform": "CVAOS_AP_V0.3",
     "ancient_book_soul_drops": "CVAOS_AP_V0.3",
+    "enemy_drop_rates": "CVAOS_AP_V0.5",
 }
 assert set(ROM_CONFIG_KEY_IDENTIFIERS.values()) <= set(IDENTIFIERS)
 
@@ -368,9 +369,10 @@ class CVAOSPatchExtension(APPatchExtension):
         # Adjust selected enemy soul-drop rates (rom/soul_drop_rates.py).
         apply(soul_drop_rates.build_writes(bytes(working)))
 
-        # Global soul-drop-rate multiplier. Last of the rate edits on purpose: it reads the
-        # rates as they now stand, so it composes with both the overrides above and a shuffle
-        # that moved rates around.
+        # Global soul-drop-rate multiplier. Last of the rate edits in this step on purpose: it
+        # reads the rates as they now stand, so it composes with both the overrides above and a
+        # shuffle that moved rates around. Enemy Drop Rate replaces it, and apply_enemy_table
+        # applies that option after this whole step.
         if config["multiply_soul_drop_rates"]:
             apply(soul_drop_rates.build_multiplier_writes(
                 bytes(working), config["soul_drop_rate_multiplier"]))
@@ -412,15 +414,22 @@ class CVAOSPatchExtension(APPatchExtension):
         """
         Apply the enemy-table edits that must come after every other feature.
 
-        A rate edit that scales the rates every earlier feature left, such as Enemy Drop Rate's,
-        belongs here. No ``rom_config.json`` key uses this step yet, so it returns ``rom``
-        unchanged.
+        Enemy Drop Rate's percents (``enemy_drop_rates``) scale the soul rates and common-drop
+        rarities that every earlier feature left (rom/enemy_drop_rates.py). A seed without the
+        key gets ``rom`` back unchanged.
 
         Every seed from V0.5 on lists this step, while a released patch lists only the two before
         it. An apworld from before V0.5 therefore refuses a newer patch with "Unknown procedure"
         instead of building a ROM without these edits.
         """
-        return rom
+        config = json.loads(caller.get_file(config_file_name).decode("utf-8"))
+        percents = config.get("enemy_drop_rates")
+        if not percents:
+            return rom
+        working = bytearray(rom)
+        for offset, data in enemy_drop_rates.build_writes(rom, percents).items():
+            working[offset:offset + len(data)] = data
+        return bytes(working)
 
 
 def _check_known_keys(config: Dict[str, object], rom: bytes) -> None:
@@ -543,8 +552,11 @@ def build_rom_config(world: CVAOSWorld) -> Dict[str, object]:
     steps look up, and each key needs an entry in ROM_CONFIG_KEY_IDENTIFIERS. target_platform
     also drives base-ROM source selection at apply time (get_source_data_with_cache), and
     apply_rom_features ignores it.
+
+    With Enemy Drop Rate above 100, this reads the seed depths, so call it only after
+    progression balancing.
     """
-    return {
+    config: Dict[str, object] = {
         "target_platform": world.options.target_platform.value,
         "skull_key_warp": bool(world.options.skull_key_warp),
         "ancient_book_soul_drops": bool(world.options.ancient_book_soul_drops),
@@ -562,3 +574,10 @@ def build_rom_config(world: CVAOSWorld) -> Dict[str, object]:
         "multiply_soul_drop_rates": bool(world.options.multiply_soul_drop_rates),
         "soul_drop_rate_multiplier": int(world.options.soul_drop_rate_multiplier.value),
     }
+    # Enemy Drop Rate's percent for each row's soul and common drop. They are percents rather
+    # than final bytes, because apply_enemy_table scales the bytes that the shuffle and the
+    # overrides leave. At 100 the option changes nothing, so the key is left out.
+    if world.options.enemy_drop_rate.value != 100:
+        from ..enemy_drop_rate import drop_rate_percents
+        config["enemy_drop_rates"] = drop_rate_percents(world, config["soul_shuffle_plan"])
+    return config
