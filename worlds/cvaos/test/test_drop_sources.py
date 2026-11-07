@@ -4,7 +4,7 @@ Tests for the drop table (drop_sources.py) that the spoiler and the /drops comma
 Generation has no base ROM, so the spoiler runs the patch's own drop edits on a stand-in that holds
 the vanilla drop fields. Its table must equal the one read back from the patched ROM, on each base
 ROM. /drops reads the table from the ROM in the game's memory, on BizHawk and on the Advance
-Collection, so it prints the spoiler's table too.
+Collection, and must print the spoiler's table too.
 
     python -m pytest worlds/cvaos/test/test_drop_sources.py -v
 """
@@ -35,7 +35,7 @@ class SpoilerTest(unittest.TestCase):
 
     def test_each_line_names_both_drops_and_their_chances(self):
         # Zombie's vanilla rarities are 20 and 30. The roll picks the common slot three times in
-        # four, and then drops it with chance 4 / (20*4 + 16).
+        # four, and then drops its item with chance 4 / (20*4 + 16).
         lines = planned_drop_table_lines({})
         self.assertIn(
             "Zombie: Cloth Tunic (common, 1 in 32 kills), Baselard (rare, 1 in 136 kills)", lines)

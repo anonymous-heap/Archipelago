@@ -8,13 +8,16 @@ rare drop's, which are EnemyDNA's ``drop_1``, ``drop_1_rarity``, ``drop_2`` and 
 
 The spawn routine (``sub_08044054``) subtracts the 1 and reads the result by ranges: up to 0x1F a
 consumable, up to 0x5A a weapon, and up to 0x87 an armor or an accessory. Above that, it reads an
-item record at address 0. An off-by-one therefore does more than rename an item. A missing 1 turns
-Casual Clothes into Valmanway and empties a Potion slot, and an extra 1 turns Gold Ring into Chaos
-Ring. So :func:`encode_table` and :func:`build_writes` both refuse a filled slot whose stored value
-is outside 1 to MAX_VALUE.
+item record at address 0, so :func:`encode_table` and :func:`build_writes` both raise ValueError
+for a filled slot whose stored value is outside 1 to MAX_VALUE.
+
+An off-by-one inside that range gives a wrong item or an empty slot rather than an error, and the
+wrong item can be one that must never drop. A missing 1 turns Casual Clothes into Valmanway and
+empties a Potion slot, and an extra 1 turns Gold Ring into Chaos Ring.
 
 The patch writes the table before Enemy Drop Rate scales each common rarity
-(``rom/enemy_drop_rates.py``), so that option scales the byte that each slot's new item brings.
+(``rom/enemy_drop_rates.py``), so that option scales the rarity byte that each slot's new item
+carries.
 """
 from __future__ import annotations
 

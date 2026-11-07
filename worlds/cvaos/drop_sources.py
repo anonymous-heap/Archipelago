@@ -1,10 +1,11 @@
 """
 Which enemy drops which item in one player's seed, and how often.
 
-``drop_shuffle.final_drop_table`` decides the table that the patch writes
-(``rom/drop_table.py``), and this module prints it.
+``drop_shuffle.final_drop_table`` decides which item each drop slot holds, and Enemy Drop Rate
+scales how often the common slots drop. The patch writes both into the enemy table
+(``rom/drop_table.py``, then ``rom/enemy_drop_rates.py``), and this module prints the result.
 
-The spoiler and the clients' /drops command print the same table, from :func:`drop_table_lines`.
+The spoiler and the clients' /drops command print the same table, using :func:`drop_table_lines`.
 /drops reads the enemy table from the ROM in the game's memory, so it shows what the installed
 patch wrote. Generation has no ROM, so :func:`planned_drop_table_lines` runs the patch's own drop
 edits on a stand-in that holds only the vanilla drop fields, as ``soul_sources`` does for souls.
@@ -31,9 +32,9 @@ __all__ = [
     "spoiler_drop_table_lines",
 ]
 
-# The item roll runs on a kill that drops no soul. It picks the common slot three times in four
-# and the rare slot otherwise, then drops the slot's item with chance
-# 4 / max(16, rarity*4 + 16 - LCK/16) (rom/enemy_table.py).
+# The item roll, which rom/enemy_table.py describes, runs on a kill that drops no soul. It picks
+# the common slot three times in four and the rare slot otherwise, then drops the slot's item with
+# chance 4 / max(16, rarity*4 + 16 - LCK/16).
 _SLOT_SHARES = (3 / 4, 1 / 4)
 _ITEM_NUMERATOR = 4
 
@@ -56,8 +57,9 @@ def _chance(rarity: int, share: float) -> str:
 def drop_table_lines(table: bytes) -> List[str]:
     """Return the drop table as lines of text.
 
-    ``table`` is the enemy table's TABLE_SIZE bytes. Each enemy that drops an item gets one line, in
-    enemy id order, which is the order of the game's Enemy List.
+    ``table`` is the enemy table's TABLE_SIZE bytes. The first line is TABLE_NOTE, and then each
+    enemy that drops an item gets one line, in enemy id order, which is the order of the game's
+    Enemy List.
     """
     lines = [TABLE_NOTE]
     for enemy, row in zip(enemy_type_collection, parse_table(table)):

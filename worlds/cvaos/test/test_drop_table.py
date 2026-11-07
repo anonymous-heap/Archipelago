@@ -1,7 +1,7 @@
 """
 Tests for the drop table that the patch writes (rom/drop_table.py).
 
-Each drop slot stores its item's number plus 1. The decode test reads a patched table back with the
+Each drop slot stores its item's number plus 1. DecodeTest reads each patched table back with the
 spawn routine's own ranges, so an off-by-one in the writer shows up as a wrong item.
 
     python -m pytest worlds/cvaos/test/test_drop_table.py -v
@@ -41,7 +41,8 @@ def stand_in() -> bytes:
 
 
 def game_decode(value: int) -> str | None:
-    """Name the item that a drop slot's stored value spawns, by the spawn routine's ranges.
+    """Return the name of the item that a drop slot's stored value spawns, or None for an empty
+    slot, using the spawn routine's ranges.
 
     sub_08044054 subtracts 1, then reads up to 0x1F as a consumable, up to 0x5A as a weapon, and
     up to 0x87 as a record of the armor table, which holds the armors and then the accessories.
@@ -77,7 +78,8 @@ def patched(base: bytes, table) -> bytes:
 
 class WriterTest(unittest.TestCase):
     def test_each_slot_stores_the_item_number_plus_1(self):
-        # The live test's range boundaries, and both ends of the range.
+        # The four items at the supply's range boundaries that the live test drops, and Potion
+        # and Chaos Ring at the two ends of the range that the game reads.
         expected = {"Potion": 1, "Knife": 0x21, "Silver Gun": 0x59, "Casual Clothes": 0x5C,
                     "Gold Ring": 0x87, "Chaos Ring": 0x88}
         self.assertEqual({name: stored_value(name) for name in expected}, expected)
