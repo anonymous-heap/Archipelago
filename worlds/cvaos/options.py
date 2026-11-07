@@ -693,6 +693,7 @@ LOGIC_OPTION_NAMES: tuple[str, ...] = (
     "forbidden_area_button",
     "oops_all_whips",
     "enemy_checks",
+    "item_drop_shuffle",
     "logic_difficulty_preset",
     *(technique.option for technique in TECHNIQUES),
 )

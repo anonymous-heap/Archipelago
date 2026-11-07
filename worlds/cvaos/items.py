@@ -5,11 +5,13 @@ The item table, item groups and item pool for Castlevania: Aria of Sorrow.
 from __future__ import annotations
 
 from collections import Counter
-from typing import Dict, Iterable, List, NamedTuple, Sequence, TYPE_CHECKING
+from types import MappingProxyType
+from typing import Dict, Iterable, List, Mapping, NamedTuple, Sequence, TYPE_CHECKING
 
 from BaseClasses import Item, ItemClassification
 
-from .data import EnemyType, item_info_collection, pickup_info_collection as pickup_infos
+from .data import (EnemyType, enemy_type_collection, item_info_collection,
+                   pickup_info_collection as pickup_infos)
 from .data.item_balancing import worth
 from .enemy_checks import checkable_types, enemy_check_types
 from .item_granting import ID_MAX, TransferCategory, pack
@@ -17,6 +19,7 @@ from .options import ForbiddenAreaButton, hard_mode_pickups_included
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
+    from .drop_shuffle import TravelPlan
 
 
 class CVAOSItem(Item):
@@ -140,10 +143,14 @@ HP_RESTORATIVES: tuple[str, ...] = tuple(
     row.name for row in sorted(worth.rows, key=lambda row: (row.worth, row.name))
     if row.item_class == "hp" and row.worth <= worth.CHEAP_WORTH)
 
-# Every item an enemy check can add under some options. Every enemy drop is here too, so the drops'
-# ids stay the same in the data package whichever items the rule picks.
-CHECK_ITEM_CHOICES: frozenset[str] = frozenset(
-    {ENEMY_GOLD_NAME, *HP_RESTORATIVES, *(drop for drop in ENEMY_DROP.values() if drop)})
+# Every item that either drop slot of some enemy holds. Item Drop Shuffle can move any of them into
+# the pool.
+DROP_ITEMS: frozenset[str] = frozenset(
+    item for enemy in enemy_type_collection for item in enemy.drops if item)
+
+# Every item that an enemy check or Item Drop Shuffle can add under some options. Every enemy drop
+# is here, so the drops' ids stay the same in the data package whichever items the options pick.
+CHECK_ITEM_CHOICES: frozenset[str] = frozenset({ENEMY_GOLD_NAME, *HP_RESTORATIVES, *DROP_ITEMS})
 if ENEMY_GOLD_NAME not in item_table:
     raise ValueError(f"no gold pickup holds {ENEMY_GOLD} gold, so the ROM can't show it")
 for _name in sorted(CHECK_ITEM_CHOICES):
@@ -212,44 +219,56 @@ def _at_cap(name: str, held: Counter) -> bool:
     return info is not None and info.item_category == "consumable" and held[name] >= CONSUMABLE_CAP
 
 
-def check_item_names(types: Sequence[EnemyType], pool: Iterable[Item]) -> List[str]:
+def check_item_names(types: Sequence[EnemyType], pool: Iterable[Item],
+                     moved_drops: Mapping[str, str] = MappingProxyType({})) -> List[str]:
     """Return the item that each check of ``types`` adds to ``pool``, in the order of ``types``.
 
-    A check adds its enemy's common drop (ENEMY_DROP) when that drop is worth worth.CHEAP_WORTH or
-    less. A dearer drop could put mid-game gear early in the run, so its check adds an HP
-    restorative instead: the one of HP_RESTORATIVES that the pool holds fewest copies of, counting
-    what earlier checks add, and the cheaper one on a tie. A check whose enemy drops nothing adds
-    ENEMY_GOLD gold.
+    ``moved_drops`` names, by enemy, the drop that Item Drop Shuffle moves to that enemy's check
+    (``TravelPlan.check_items``). Such a check adds that drop. These drops count as held before any
+    other check's item is chosen, so they are part of every copy count below.
 
-    No check adds a consumable that the pool already holds CONSUMABLE_CAP copies of. A cheap drop
-    at the cap gives way to an HP restorative, and an HP restorative at the cap gives way to gold.
+    Any other check adds its enemy's common drop (ENEMY_DROP) when that drop is worth
+    worth.CHEAP_WORTH or less. A dearer drop could put mid-game gear early in the run, so its check
+    adds an HP restorative instead: the one of HP_RESTORATIVES that the pool holds fewest copies
+    of, counting what earlier checks add, and the cheaper one on a tie. A check whose enemy drops
+    nothing adds ENEMY_GOLD gold.
 
-    The choice depends only on ``types`` and ``pool``, which the options decide. So Universal
-    Tracker, which rebuilds the pool from the slot data, arrives at the same items.
+    No such check adds a consumable that the pool already holds CONSUMABLE_CAP copies of. A cheap
+    drop at the cap gives way to an HP restorative, and an HP restorative at the cap gives way to
+    gold.
+
+    The choice depends only on its arguments, which the options decide. So Universal Tracker,
+    which rebuilds the pool from the slot data, arrives at the same items.
     """
     held = Counter(item.name for item in pool)
+    held.update(moved_drops.values())
     names = []
     for enemy in types:
-        drop = ENEMY_DROP[enemy.name]
-        if not drop:
-            name = ENEMY_GOLD_NAME
-        elif worth.item_worth(drop) <= worth.CHEAP_WORTH and not _at_cap(drop, held):
-            name = drop
-        else:
-            name = min(HP_RESTORATIVES, key=lambda rung: (held[rung], worth.item_worth(rung), rung))
-            if _at_cap(name, held):
-                name = ENEMY_GOLD_NAME
-        held[name] += 1
+        name = moved_drops.get(enemy.name)
+        if name is None:
+            name = _check_item_name(enemy, held)
+            held[name] += 1
         names.append(name)
     return names
 
 
-def create_enemy_item(world: "CVAOSWorld", name: str) -> CVAOSItem:
-    """Create the item named ``name`` for a defeat location to add to the pool.
+def _check_item_name(enemy: EnemyType, held: Counter) -> str:
+    """Return the item that ``enemy``'s check adds when no moved drop goes there."""
+    drop = ENEMY_DROP[enemy.name]
+    if not drop:
+        return ENEMY_GOLD_NAME
+    if worth.item_worth(drop) <= worth.CHEAP_WORTH and not _at_cap(drop, held):
+        return drop
+    name = min(HP_RESTORATIVES, key=lambda rung: (held[rung], worth.item_worth(rung), rung))
+    return ENEMY_GOLD_NAME if _at_cap(name, held) else name
 
-    A drop that is normally progression is created as useful, so enemy checks never add
-    progression. Another copy of the same item, such as one a pickup holds, keeps its own
-    classification.
+
+def create_enemy_item(world: "CVAOSWorld", name: str) -> CVAOSItem:
+    """Create the item named ``name`` for a defeat location or a moved drop to add to the pool.
+
+    A drop that is normally progression is created as useful, so enemy checks and Item Drop
+    Shuffle never add progression. Another copy of the same item, such as one a pickup holds,
+    keeps its own classification.
     """
     item = create_item(world, name)
     if item.classification & ItemClassification.progression:
@@ -273,7 +292,32 @@ def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
     if world.options.progressive_movement.value:
         pool = [create_item(world, PROGRESSIVE_MOVEMENT) if item.name in PROGRESSIVE_MOVEMENT_STAGES
                 else item for item in pool]
+    # Imported here, because drop_sources imports this module through seed_depth and item_smoothing.
+    from .drop_sources import travel_plan
+    travel = travel_plan(world)
+    if travel is not None:
+        pool = _with_moved_drops(world, pool, travel)
     # One item per defeat location, so the pool still matches the location count.
+    moved_to_checks = travel.check_items if travel is not None else MappingProxyType({})
     pool += [create_enemy_item(world, name)
-             for name in check_item_names(enemy_check_types(world.options), pool)]
+             for name in check_item_names(enemy_check_types(world.options), pool, moved_to_checks)]
     return pool
+
+
+def _with_moved_drops(world: "CVAOSWorld", pool: List[CVAOSItem],
+                      travel: "TravelPlan") -> List[CVAOSItem]:
+    """Return ``pool`` with a base restorative swapped out for each moved drop that replaces one.
+
+    The pool size is unchanged. The moved drops that checks add come later, from check_item_names.
+    """
+    leaving = Counter(travel.base_items_replaced)
+    kept = []
+    for item in pool:
+        if leaving[item.name]:
+            leaving[item.name] -= 1
+        else:
+            kept.append(item)
+    if +leaving:
+        raise ValueError(f"the pool lacks the base restoratives that drops replace: {+leaving}")
+    return kept + [create_enemy_item(world, drop.item)
+                   for drop in travel.travelling if drop.base_item is not None]
