@@ -5,13 +5,14 @@ from collections import Counter
 from typing import ClassVar, Sequence, TextIO, Union
 
 from BaseClasses import CollectionState, Item, ItemClassification, MultiWorld, Tutorial
-from worlds.AutoWorld import WebWorld, World
+from worlds.AutoWorld import WebWorld, World, data_package_checksum
 from worlds.LauncherComponents import Component, Type, components, launch as launch_component
 import settings
 
 from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA_ROM_MD5
-from .items import (PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, CVAOSItem, draw_filler_name,
-                    item_name_groups, item_name_to_id, create_item, create_itempool)
+from .items import (PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, RETIRED_COPY_NAMES,
+                    CVAOSItem, draw_filler_name, item_name_groups, item_name_to_id, create_item,
+                    create_itempool)
 from .enemy_checks import defeat_location_name, enemy_check_types, has_recorded_route
 from .locations import (defeat_hint_text, location_name_groups, location_name_to_id,
                         pickup_location_ids)
@@ -212,6 +213,23 @@ class CVAOSWorld(World):
         "location_setting_key": tracker_map.MAP_CELL_KEY,
         "location_icon_coords": tracker_map.position_icon,
     }
+
+    @classmethod
+    def get_data_package_data(cls):
+        """Return the data package without the groups named after retired copy names.
+
+        Those groups exist only so that an older YAML verifies (items.RETIRED_COPY_NAMES).
+        Generation reads the class's own groups, so it still accepts them. The server and the
+        clients read the data package instead, so a hint never matches these names and
+        /item_groups never lists them.
+        """
+        package = super().get_data_package_data()
+        del package["checksum"]
+        package["item_name_groups"] = {name: items
+                                       for name, items in package["item_name_groups"].items()
+                                       if name not in RETIRED_COPY_NAMES}
+        package["checksum"] = data_package_checksum(package)
+        return package
 
     def get_logical_path(self, dest_name: str, state: CollectionState):
         """Return a Universal Tracker route to the location named ``dest_name``, or None.

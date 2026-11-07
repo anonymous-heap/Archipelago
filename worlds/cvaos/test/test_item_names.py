@@ -1,6 +1,7 @@
 """
 Item names: every copy of an item shares its name and code, and a location name says where a copy
-is. Ids that older versions gave to each copy still name the same items.
+is. Ids that older versions gave to each copy still name the same items, and a YAML that names a
+copy the way older versions did still generates.
 
     python -m pytest worlds/cvaos/test/test_item_names.py -v
 """
@@ -10,17 +11,22 @@ import json
 import os
 import re
 import unittest
+from argparse import Namespace
 from collections import Counter
 
-from BaseClasses import ItemClassification
+import Main
+from BaseClasses import ItemClassification, MultiWorld, PlandoOptions
+from Generate import roll_settings
 from test.general import setup_multiworld
+from worlds import network_data_package
+from worlds.AutoWorld import data_package_checksum
 
 from .. import CVAOSWorld
 from ..data import pickup_info_collection
 from ..item_granting import canonical_code
 from ..item_smoothing import PARAMS_BY_KEY, _assign_targets
-from ..items import (CHECK_ITEM_CHOICES, ENEMY_DROP, CVAOSItem, create_enemy_item,
-                     item_name_groups, item_table)
+from ..items import (CHECK_ITEM_CHOICES, ENEMY_DROP, RETIRED_COPY_NAMES, CVAOSItem,
+                     create_enemy_item, item_name_groups, item_table)
 
 # The item ids of the last version that named each copy of an item, such as "Potion (A)".
 with open(os.path.join(os.path.dirname(__file__), "item_ids_with_copy_names.json")) as _file:
@@ -72,6 +78,71 @@ class NameTest(unittest.TestCase):
         for query in ("High Mind Up", "Potion", "100 Gold", "Death's Sickle", "Gold"):
             with self.subTest(query=query):
                 self.assertIn(query, names)
+
+
+def generate_from_yamls(yamls: list[dict], seed: int) -> MultiWorld:
+    """Roll each YAML through Generate's option verification, then generate the multiworld with
+    Main.main, without balancing or output, and return it."""
+    plando = PlandoOptions.from_set({"items"})
+    args = Namespace(multi=len(yamls), race=False, outputname=None, outputpath=None, spoiler=0,
+                     plando=plando, csv_output=False, skip_output=True, spoiler_only=False,
+                     skip_prog_balancing=True, sprite={}, sprite_pool={})
+    for player, yaml in enumerate(yamls, 1):
+        for key, value in vars(roll_settings(yaml, plando)).items():
+            if not hasattr(args, key):
+                setattr(args, key, {})
+            getattr(args, key)[player] = value
+        args.sprite[player] = None
+        args.sprite_pool[player] = []
+    return Main.main(args, seed)
+
+
+def retired_name_yaml(name: str, **options) -> dict:
+    """Return a YAML with ``options`` and an item link of 100 Gold, which it names the way older
+    versions did."""
+    link = {"name": "Gold Link", "item_pool": ["100 Gold (A)", "500 Gold (B)"],
+            "exclude": ["500 Gold (C)"], "replacement_item": None}
+    return {"name": name, "game": CVAOSWorld.game,
+            CVAOSWorld.game: {"item_links": [link], **options}}
+
+
+class RetiredNameTest(unittest.TestCase):
+    def test_each_retired_copy_name_is_a_group_holding_its_item(self):
+        retired = {name for name in OLD_IDS if COPY_SUFFIX.search(name)}
+        self.assertEqual(set(RETIRED_COPY_NAMES), retired)
+        for name in retired:
+            with self.subTest(name=name):
+                self.assertEqual(CVAOSWorld.item_name_groups[name], {COPY_SUFFIX.sub("", name)})
+
+    def test_the_data_package_leaves_out_the_retired_names(self):
+        package = dict(network_data_package["games"][CVAOSWorld.game])
+        self.assertEqual(set(package["item_name_groups"]) & set(RETIRED_COPY_NAMES), set())
+        self.assertIn("Gold", package["item_name_groups"])
+        checksum = package.pop("checksum")
+        self.assertEqual(data_package_checksum(package), checksum)
+
+    def test_a_yaml_that_names_retired_copies_generates(self):
+        first = "White Dragon Hallway [00D Potion (A)]"
+        second = "Secret Room behind Peeping Eye [00B Mind Up (A)]"
+        plando = [{"items": ["Super Potion (A)"], "location": first},
+                  {"items": {"Mind Up (B)": 1}, "location": second}]
+        yamls = [retired_name_yaml("Old", local_items=["Potion (A)"],
+                                   non_local_items=["High Potion (B)"],
+                                   start_hints=["Mana Prism (C)"], plando_items=plando),
+                 retired_name_yaml("New")]
+        multiworld = generate_from_yamls(yamls, seed=5)
+        self.assertEqual(multiworld.worlds[1].options.start_hints.value, {"Mana Prism"})
+        (group,) = multiworld.groups.values()
+        self.assertEqual(set(group["item_pool"]), {"100 Gold"})
+
+        def worlds_holding(name: str) -> set[int]:
+            return {location.player for location in multiworld.get_filled_locations()
+                    if location.item.player == 1 and location.item.name == name}
+
+        self.assertEqual(worlds_holding("Potion"), {1})
+        self.assertEqual(worlds_holding("High Potion"), {2})
+        self.assertEqual(multiworld.get_location(first, 1).item.name, "Super Potion")
+        self.assertEqual(multiworld.get_location(second, 1).item.name, "Mind Up")
 
 
 class PoolTest(unittest.TestCase):

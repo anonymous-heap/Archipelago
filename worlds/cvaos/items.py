@@ -184,6 +184,17 @@ for _name in item_table:
     elif _name.endswith(" Gold"):
         item_name_groups.setdefault("Gold", set()).add(_name)
 
+# A YAML written for an earlier version of this world can name one copy of an item, as in
+# "Potion (A)". Each such name is a group holding its item, so the YAML still verifies in every
+# option that accepts a group: local_items, non_local_items, start_hints, plando_items, and the item
+# lists of item_links. The name then stands for every copy of the item. start_inventory accepts no
+# groups, so it still rejects these names. CVAOSWorld.get_data_package_data leaves these groups
+# out, so the server and the clients never list them.
+RETIRED_COPY_NAMES: Dict[str, str] = {
+    p.display_name: p.item_name for p in pickup_infos if p.display_name != p.item_name}
+for _retired, _name in RETIRED_COPY_NAMES.items():
+    item_name_groups[_retired] = {_name}
+
 
 # The item the Study Sealswitch displaces when it is shuffled in: the smallest gold pickup. The
 # displaced item leaves the game. Gold pickups differ only in amount, so losing the smallest one
