@@ -31,8 +31,8 @@ from .data import (
     AbilityCombo,
     transdoor_connection_collection,
 )
-from .enemy_checks import (FALLBACK_SOULS, SPAWNS_AFTER_BOSS_IN, defeat_location_name,
-                           enemy_check_types, placements_of)
+from .enemy_checks import (ARENA_PLACEMENTS, FALLBACK_SOULS, SPAWNS_AFTER_BOSS_IN,
+                           defeat_location_name, enemy_check_types, placements_of)
 from .locations import CVAOSLocation, location_name_to_id
 from .options import (TECHNIQUES, ForbiddenAreaButton, hard_mode_pickups_included,
                       resolve_allowed_techniques)
@@ -386,7 +386,8 @@ def _create_enemy_checks(world: CVAOSWorld, entrance_regions_by_room: dict[str, 
 
     Each region holds its type's defeat location, and every placement of the type connects to it.
     A placement with routing connects from each entrance its routing names, under that routing's
-    rule. A placement without routing is not annotated yet, so it connects from every door of its
+    rule. A boss in its arena (ARENA_PLACEMENTS) connects from every door of its room with no rule.
+    Any other placement without routing is not annotated yet, so it connects from every door of its
     room and requires FALLBACK_SOULS. A placement that spawns only after a boss elsewhere also
     requires reaching that boss's room.
     """
@@ -423,7 +424,10 @@ def _create_enemy_checks(world: CVAOSWorld, entrance_regions_by_room: dict[str, 
         for placement in placements_of(enemy.name):
             boss_room = SPAWNS_AFTER_BOSS_IN.get(placement.room)
             routing = by_enemy_number_for_enemy_regions.get(placement.enemy_number)
-            if routing:
+            if placement.enemy_number in ARENA_PLACEMENTS:
+                ways = [(door, door.name, None, False)
+                        for door in entrance_regions_by_room.get(placement.room, ())]
+            elif routing:
                 ways = [(door_region(row.entrance_identifier), row.entrance_identifier,
                          _create_access_rule_from_routing(row, world), _requires_tform(row))
                         for row in routing]

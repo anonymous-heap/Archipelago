@@ -17,12 +17,13 @@ from .. import CVAOSWorld, item_smoothing
 from ..client_logic import ITEMS_FROM_OTHER_WORLDS, ITEMS_INCLUDING_OWN, CVAOSClientLogic
 from ..data import (enemy_placements, enemy_type_by_name, enemy_type_collection,
                     item_info_collection, pickup_info_collection)
-from ..enemy_checks import (BOSS_TYPES, FALLBACK_SOULS, SPAWNS_AFTER_BOSS_IN, defeat_location_id,
-                            defeat_location_name, enemy_check_types, enemy_id_for_location,
-                            has_recorded_route, placements_of)
+from ..enemy_checks import (ARENA_PLACEMENTS, BOSS_TYPES, FALLBACK_SOULS, SPAWNS_AFTER_BOSS_IN,
+                            defeat_location_id, defeat_location_name, enemy_check_types,
+                            enemy_id_for_location, has_recorded_route, placements_of)
 from ..items import ENEMY_ITEM, item_table
 from ..locations import defeat_location_names, location_name_to_id, pickup_location_ids
 from ..options import EnemyChecks, Goal
+from ..regions import can_reach_room
 from ..rom.entity import GBA_ROM_BASE, PICKUP
 from ..rom.patch import _ITEM_OFF, _TYPE_OFF, get_location_data, rom_gives_item
 from .test_smoothing_location_settings import generate
@@ -151,6 +152,30 @@ class LogicTest(unittest.TestCase):
             with self.subTest(enemy=enemy.name, without=soul):
                 self.assertFalse(
                     self.can_reach(state_with_all_items_but(self.multiworld, soul), enemy.name))
+
+    def test_a_boss_without_routing_counts_once_its_arena_is_reached(self):
+        # Without Giant Bat, every placement that uses the fallback stays closed, so only the
+        # arena can open these checks. The arenas open one by one as the other items arrive.
+        world = self.multiworld.worlds[1]
+        arenas = {placement.name: placement.room for placement in enemy_placements
+                  if placement.enemy_number in ARENA_PLACEMENTS}
+        self.assertEqual(len(arenas), 8)
+        self.assertTrue(all(has_recorded_route(boss) for boss in arenas))
+        pool = [*self.multiworld.itempool, *world.get_pre_fill_items()]
+        items = sorted((item for item in pool if item.advancement and item.name != "Giant Bat"),
+                       key=lambda item: item.name)
+        state = CollectionState(self.multiworld)
+        seen = set()
+        for item in [None, *items]:
+            if item is not None:
+                state.collect(item, prevent_sweep=True)
+            for boss, room in arenas.items():
+                reached = can_reach_room(state, world, room)
+                seen.add((boss, reached))
+                with self.subTest(boss=boss, after=item and item.name):
+                    self.assertEqual(self.can_reach(state, boss), reached)
+        self.assertIn(("Death", False), seen)
+        self.assertIn(("Death", True), seen)
 
     def test_a_routed_placement_uses_its_routing_instead(self):
         # Room 003's Zombie can be reached from the start with nothing.

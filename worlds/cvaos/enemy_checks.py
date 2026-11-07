@@ -9,9 +9,10 @@ the server instead, because it asks the server for the player's own items too
 (``client_logic.items_handling_for``).
 
 Logic treats a type's check as reachable when any of its placements is. A placement with routing
-in the enemy routing CSV uses that routing. One without routing has not been annotated yet, so
-logic expects :data:`FALLBACK_SOULS` once its room is reachable. Boss Rush arenas never count as
-placements.
+in the enemy routing CSV uses that routing. A boss in its own arena (:data:`ARENA_PLACEMENTS`)
+needs only a door of that room. Any other placement without routing has not been annotated yet,
+so logic expects :data:`FALLBACK_SOULS` once its room is reachable. Boss Rush arenas never count
+as placements.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
     from .options import CVAOSOptions
 
 __all__ = [
+    "ARENA_PLACEMENTS",
     "BOSS_TYPES",
     "FALLBACK_SOULS",
     "DEFEAT_ID_BASE",
@@ -54,6 +56,13 @@ BOSS_TYPES: tuple[str, ...] = ("Creaking Skull", "Manticore", "Great Armor", "Bi
 # eight mobility souls.
 FALLBACK_SOULS: tuple[str, ...] = ("Flying Armor", "Skeleton Blaze", "Malphas", "Hippogryph",
                                    "Undine", "Skula", "Black Panther", "Giant Bat")
+
+# The arena placements of the eight bosses that have no routing, by enemy number: Creaking Skull
+# (room 00A), Great Armor (20F), Big Golem (313), Headhunter (40B), Belmont (506), Death (607),
+# Legion (725) and Balore (801). A boss seals its arena until it falls, and logic already treats
+# reaching a boss's room as beating that boss, as the goal and the Chaotic Realm gate do. So such a
+# placement needs only a door of its room.
+ARENA_PLACEMENTS: frozenset[int] = frozenset({27, 193, 264, 331, 394, 422, 618, 664})
 
 # Room ids in the Boss Rush area, whose arenas never count as placements.
 BOSS_RUSH_AREA = "C"
@@ -113,8 +122,13 @@ def placements_of(enemy_name: str):
 
 
 def has_recorded_route(enemy_name: str) -> bool:
-    """Whether some placement of ``enemy_name`` has routing, so logic needs no fallback for it."""
+    """Whether logic has an exact rule for some placement of ``enemy_name``.
+
+    That placement has routing, or it is a boss in its arena. A type without such a placement
+    needs :data:`FALLBACK_SOULS` for its check.
+    """
     return any(placement.enemy_number in by_enemy_number_for_enemy_regions
+               or placement.enemy_number in ARENA_PLACEMENTS
                for placement in placements_of(enemy_name))
 
 
