@@ -24,10 +24,11 @@ from ..items import ENEMY_ITEM, item_table
 from ..locations import (defeat_hint_text, defeat_location_names, location_name_to_id,
                          pickup_location_ids)
 from ..options import EnemyChecks, Goal
-from ..regions import can_reach_room
+from ..regions import UT_TRICKS_ITEM, can_reach_room
 from ..rom.entity import GBA_ROM_BASE, PICKUP
 from ..rom.patch import _ITEM_OFF, _TYPE_OFF, get_location_data, rom_gives_item
 from .test_smoothing_location_settings import generate
+from .test_universal_tracker import generate as generate_for_tracker, regenerate_from, state_with
 
 BUILD_STEPS = ("generate_early", "create_regions", "create_items", "set_rules")
 POOL_STEPS = ("generate_early", "create_regions", "create_items")
@@ -239,6 +240,46 @@ class LogicTest(unittest.TestCase):
         self.assertEqual(tuple(entrance.access_rule.uses(state)), FALLBACK_SOULS)
         alura_une_in_710 = self.placement_entrances(555)[0]
         self.assertIn("beating the boss in room 725", alura_une_in_710.access_rule.uses(state))
+
+
+class UniversalTrackerTest(unittest.TestCase):
+    """How Universal Tracker shows the checks, in the world it rebuilds from the slot data."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.generated = generate_for_tracker({"enemy_checks": "all"})
+        cls.rebuilt = regenerate_from(cls.generated.worlds[1].fill_slot_data())
+
+    def test_an_unrouted_check_shows_with_tricks_once_its_room_is_reachable(self):
+        world = self.rebuilt.worlds[1]
+        unrouted = [enemy.name for enemy in enemy_check_types(world.options)
+                    if not has_recorded_route(enemy.name)]
+        for items in ([], ["Malphas"], ["Malphas", "Hippogryph"]):
+            without = state_with(self.rebuilt, items)
+            with_tricks = state_with(self.rebuilt, items + [UT_TRICKS_ITEM])
+
+            def room_open(placement) -> bool:
+                boss_room = SPAWNS_AFTER_BOSS_IN.get(placement.enemy_number)
+                return (can_reach_room(with_tricks, world, placement.room)
+                        and (boss_room is None or can_reach_room(with_tricks, world, boss_room)))
+
+            for name in unrouted:
+                location = defeat_location_name(name)
+                with self.subTest(items=items, enemy=name):
+                    self.assertFalse(without.can_reach(location, "Location", 1))
+                    self.assertEqual(with_tricks.can_reach(location, "Location", 1),
+                                     any(map(room_open, placements_of(name))))
+        # The route there says why it needs tricks.
+        state = state_with(self.rebuilt, [UT_TRICKS_ITEM])
+        entrance = next(entrance for entrance in self.rebuilt.get_entrances(1)
+                        if entrance.connected_region.name == "Defeat: Bat"
+                        and entrance.can_reach(state))
+        self.assertEqual(entrance.access_rule.uses(state),
+                         ("the route to this enemy isn't recorded",))
+
+    def test_a_real_generation_still_needs_the_fallback_souls(self):
+        state = state_with(self.generated, [UT_TRICKS_ITEM])
+        self.assertFalse(state.can_reach(defeat_location_name("Bat"), "Location", 1))
 
 
 class LocationGroupTest(unittest.TestCase):

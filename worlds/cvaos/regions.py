@@ -397,11 +397,22 @@ def _create_enemy_checks(world: CVAOSWorld, entrance_regions_by_room: dict[str, 
     multiworld, player = world.multiworld, world.player
 
     # Each rule names what it needs in ``uses``, as the routing rules do, for Universal Tracker's
-    # routes (tracker_route).
-    def fallback(state: CollectionState) -> bool:
-        return state.has_all(FALLBACK_SOULS, player)
+    # routes (tracker_route). While UT rebuilds the world, the fallback also passes with
+    # UT_TRICKS_ITEM. UT then shows an unrouted check as reachable with tricks once its room is
+    # reachable, because players usually make these checks long before logic expects them.
+    tricks_tier = _tracker_shows_tricks(world)
 
-    fallback.uses = lambda state: FALLBACK_SOULS
+    def fallback(state: CollectionState) -> bool:
+        return (state.has_all(FALLBACK_SOULS, player)
+                or (tricks_tier and state.has(UT_TRICKS_ITEM, player)))
+
+    def fallback_uses(state: CollectionState) -> tuple[str, ...]:
+        if (tricks_tier and state.has(UT_TRICKS_ITEM, player)
+                and not state.has_all(FALLBACK_SOULS, player)):
+            return ("the route to this enemy isn't recorded",)
+        return FALLBACK_SOULS
+
+    fallback.uses = fallback_uses
 
     def after_boss(rule: Callable[[CollectionState], bool] | None,
                    boss_room: str | None) -> Callable[[CollectionState], bool] | None:
