@@ -307,9 +307,13 @@ class CVAOSPatchExtension(APPatchExtension):
 
         ``config_file_name`` names the JSON file in the patch that records which features the seed
         enabled. Most features read the ROM as patched so far, so the order below matters.
+
+        Raises ValueError when the config holds a key that this version does not know, because
+        the seed then needs a feature that this version can't apply.
         """
 
         config = json.loads(caller.get_file(config_file_name).decode("utf-8"))
+        _check_known_keys(config, rom)
         working = bytearray(rom)
 
         def apply(writes: Dict[int, bytes]) -> None:
@@ -386,6 +390,40 @@ class CVAOSPatchExtension(APPatchExtension):
 
         return bytes(working)
 
+    @staticmethod
+    def apply_enemy_table(caller: APProcedurePatch, rom: bytes, config_file_name: str) -> bytes:
+        """
+        Apply the enemy-table edits that must come after every other feature.
+
+        A rate edit that scales the rates every earlier feature left, such as Enemy Drop Rate's,
+        belongs here. No ``rom_config.json`` key uses this step yet, so it returns ``rom``
+        unchanged.
+
+        Every seed from V0.5 on lists this step, while a released patch lists only the two before
+        it. An apworld from before V0.5 therefore refuses a newer patch with "Unknown procedure"
+        instead of building a ROM without these edits.
+        """
+        return rom
+
+
+def _check_known_keys(config: Dict[str, object], rom: bytes) -> None:
+    """Raise ValueError when ``config`` holds a key that ROM_CONFIG_KEY_IDENTIFIERS lacks.
+
+    The message names the identifier that the patch's tokens wrote into ``rom``, when there is
+    one, because that is the version the seed needs.
+    """
+    unknown = sorted(set(config) - set(ROM_CONFIG_KEY_IDENTIFIERS))
+    if not unknown:
+        return
+    start = ARCHIPELAGO_IDENTIFIER_START
+    identifier = rom[start:start + len(ARCHIPELAGO_IDENTIFIER)].decode("ascii", "replace")
+    needed = (f" The seed carries {identifier}, so it needs an apworld of that version or later."
+              if identifier.startswith("CVAOS_AP_V") else "")
+    raise ValueError(
+        f"This Aria of Sorrow patch needs a newer apworld. Its rom_config.json has "
+        f"{', '.join(unknown)}, which this apworld can't apply.{needed} Install the apworld that "
+        f"generated the seed, then apply the patch again.")
+
 
 class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
     # Two accepted bases on purpose: the cart dump and the collection's own copy of the ROM,
@@ -395,9 +433,12 @@ class CVAOSProcedurePatch(APProcedurePatch, APTokenMixin):
     result_file_ending: str = ".gba"
     game = "Castlevania - Aria of Sorrow"
 
+    # A seed's manifest stores this list, and patching follows the manifest. A released patch
+    # therefore still applies without the last step.
     procedure = [
         ("apply_tokens", ["token_data.bin"]),
         ("apply_rom_features", ["rom_config.json"]),
+        ("apply_enemy_table", ["rom_config.json"]),
     ]
 
     @classmethod

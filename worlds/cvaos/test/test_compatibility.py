@@ -6,20 +6,41 @@ and never older than V0.5, which released clients refuse. The client asks the se
 player's own items under every identifier after the released V0.3 and V0.4, and slot data always
 lists the pickups whose items the ROM hands out.
 
+Every seed's patch lists the apply_enemy_table step, which an apworld from before V0.5 does not
+know, and the patcher refuses a rom_config.json key it does not know. A released patch, which
+lacks the step, still applies.
+
     python -m pytest worlds/cvaos/test/test_compatibility.py -v
 """
 from __future__ import annotations
 
+import json
+import os
+import tempfile
 import unittest
 from unittest import mock
 
 from test.general import setup_multiworld
+from worlds.Files import APTokenTypes
 
 from .. import CVAOSWorld
 from ..client_logic import ITEMS_FROM_OTHER_WORLDS, ITEMS_INCLUDING_OWN, items_handling_for
 from ..locations import pickup_location_ids
 from ..rom import patch
+from . import find_rom
 from .test_smoothing_location_settings import generate
+from .test_soul_guarantee_hook import run_apply_rom_features
+
+# The procedure and rom_config.json of a patch from the released V0.4 world, with its defaults.
+RELEASED_PROCEDURE = [("apply_tokens", ["token_data.bin"]),
+                      ("apply_rom_features", ["rom_config.json"])]
+RELEASED_CONFIG = {
+    "target_platform": 0, "skull_key_warp": True, "ancient_book_soul_drops": True,
+    "forbidden_area_pickup": True, "single_jump_divekick": True, "classicvania_movement": False,
+    "oops_all_whips": False, "soul_shuffle_plan": {}, "keep_soul_drop_rates": True,
+    "shuffle_starting_soul": True, "multiply_soul_drop_rates": False,
+    "soul_drop_rate_multiplier": 120,
+}
 
 
 class IdentifierTest(unittest.TestCase):
@@ -55,6 +76,57 @@ class SlotDataTest(unittest.TestCase):
                     and patch.rom_gives_item(world, location)}
         self.assertTrue(listed)
         self.assertEqual(listed, expected)
+
+
+
+class PatchProcedureTest(unittest.TestCase):
+    def test_every_seed_lists_the_enemy_table_step_after_the_released_steps(self):
+        manifest = patch.CVAOSProcedurePatch(player=1, player_name="Soma").get_manifest()
+        self.assertEqual(manifest["procedure"],
+                         [*RELEASED_PROCEDURE, ("apply_enemy_table", ["rom_config.json"])])
+
+    def test_an_unknown_key_raises_and_names_the_seeds_identifier(self):
+        rom = bytearray(0x800000)
+        start = patch.ARCHIPELAGO_IDENTIFIER_START
+        rom[start:start + 13] = b"CVAOS_AP_V0.9"
+        with self.assertRaisesRegex(ValueError, "drop_table.*CVAOS_AP_V0.9"):
+            run_apply_rom_features(self, bytes(rom), drop_table=[])
+        # Without an identifier in the ROM, the message still names the key.
+        with self.assertRaisesRegex(ValueError, "drop_table"):
+            run_apply_rom_features(self, bytes(0x800000), drop_table=[])
+
+    def test_every_key_a_seed_writes_is_known(self):
+        world = setup_multiworld(CVAOSWorld, ("generate_early",), seed=1).worlds[1]
+        self.assertLessEqual(set(patch.build_rom_config(world)),
+                             set(patch.ROM_CONFIG_KEY_IDENTIFIERS))
+        self.assertLessEqual(set(RELEASED_CONFIG), set(patch.ROM_CONFIG_KEY_IDENTIFIERS))
+
+    def test_a_released_patch_without_the_step_still_applies(self):
+        rom_path = find_rom()
+        if rom_path is None:
+            self.skipTest("needs a USA Aria of Sorrow ROM")
+        with open(rom_path, "rb") as fh:
+            base = fh.read()
+        released = patch.CVAOSProcedurePatch(player=1, player_name="Soma")
+        released.procedure = RELEASED_PROCEDURE
+        released.write_token(APTokenTypes.WRITE, patch.ARCHIPELAGO_IDENTIFIER_START,
+                             b"CVAOS_AP_V0.4")
+        released.write_file("rom_config.json", json.dumps(RELEASED_CONFIG).encode("utf-8"))
+        released.write_file("token_data.bin", released.get_token_binary())
+        with tempfile.TemporaryDirectory() as folder:
+            patch_path = os.path.join(folder, "released.apcvaos")
+            out_path = os.path.join(folder, "released.gba")
+            released.write(patch_path)
+            reread = patch.CVAOSProcedurePatch(patch_path)
+            with patch.base_rom_override(base), mock.patch.object(
+                    patch.CVAOSPatchExtension, "apply_enemy_table") as step:
+                reread.patch(out_path)
+            with open(out_path, "rb") as fh:
+                result = fh.read()
+        step.assert_not_called()
+        start = patch.ARCHIPELAGO_IDENTIFIER_START
+        self.assertEqual(result[start:start + 13], b"CVAOS_AP_V0.4")
+        self.assertNotEqual(result, base)
 
 
 if __name__ == "__main__":
