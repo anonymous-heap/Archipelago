@@ -102,7 +102,7 @@ class AoSRAM:
 
     async def read_group(self, *entries: Entry, domain: str = EWRAM) -> list[Any]:
         """
-        Several entries in ONE round-trip, each decoded by its own codec.
+        Read several entries in ONE round-trip, and decode each with its own codec.
         """
         requests = [entry.request() for entry in entries]
         raw = await self.backend.read_many([(offset, size, domain) for offset, size in requests])

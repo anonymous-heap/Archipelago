@@ -1,13 +1,14 @@
 """
-Pins for the EWRAM map (``ram/addresses.py``) and the entry-driven accessors (``ram/accessors.py``).
+Tests for the EWRAM map (``ram/addresses.py``) and the entry-driven accessors
+(``ram/accessors.py``).
 
-The offsets below are the EWRAM-domain numbers the map used to carry as hand-kept constants,
-written out here on purpose: the production code now derives them from the declarations, so a
-drift in a declaration fails here instead of as a mis-read byte on a live game.
+The EWRAM-domain offsets below are written out by hand on purpose. The map derives each offset
+from its declaration, so a wrong declaration fails here rather than as a misread byte in a live
+game.
 
-The behaviour tests drive ``AoSRAM`` over a fake backend with dict-of-bytearray memory, so
-they need no emulator; the BizHawk backend itself is checked against a recording stand-in for
-the connector module.
+The behaviour tests drive ``AoSRAM`` over a fake backend with dict-of-bytearray memory, so they
+need no emulator. The BizHawk backend itself is checked against a recording stand-in for the
+connector module.
 """
 from __future__ import annotations
 

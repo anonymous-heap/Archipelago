@@ -10,6 +10,8 @@ entries below cannot drift from the structs.
 
 Values (state codes, bit masks, indices) stay plain ints. Every address was verified against
 the USA ROM.
+
+``ROM`` names the other memory domain the clients read, whose offsets are ROM file offsets.
 """
 from __future__ import annotations
 
@@ -219,5 +221,5 @@ ABILITY_ENABLED = ewram.entry(0x02013396, u8, count(2), name="ability_enabled")
 # world gives Soma a Skull Key as a placeholder (rom/patch.py ``_AP_PLACEHOLDER``). Its owned-count
 # means nothing to AP, because the location check comes from the pickup's save flag rather than the
 # grant. rom/skull_key_pickup.py lets a Skull Key pickup be collected at the cap of 9, and the
-# client keeps the count low as well.
+# client also keeps the count low (AoSRAM.cap_skull_keys).
 SKULL_KEY_CONSUMABLE_INDEX = 25
