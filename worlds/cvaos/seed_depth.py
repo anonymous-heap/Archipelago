@@ -1,11 +1,11 @@
 """
 Seed depth: how far into one cvaos player's seed a location, a room or an enemy comes.
 
-Seed depth runs from 0 to 1. A thing's seed depth is the share of this world's pickup locations
-that the seed's sphere order reaches before it. The order is the one ``item_smoothing`` uses for
-the run: by multiworld sphere, then by map distance from the start. Within one sphere, a pickup
-or room at the same map distance as another counts as reached at the same time, so neither is
-before the other.
+Seed depth runs from 0 to 1. The seed depth of a location, a room or an enemy is the share of this
+world's pickup locations that the seed's sphere order reaches before it. The order is the one
+``item_smoothing`` uses for the run: by multiworld sphere, then by map distance from the start.
+Within one sphere, a pickup or room at the same map distance as another counts as reached at the
+same time, so neither is before the other.
 
 * A pickup location's depth counts the pickups that come strictly before it.
 * A room's place in the order is the sphere where logic first reaches it, then the map distance
@@ -16,10 +16,10 @@ before the other.
   every location and enemy that logic can't reach.
 
 The depths describe the final placement, so read them only once core's progression balancing has
-run, which is after every world's ``stage_post_fill``. No stage hook runs after balancing on the
-main thread: ``stage_generate_output`` runs in the same thread pool as each player's
+run, which is after every world's ``stage_post_fill``. Core runs no stage hook on the main thread
+after balancing. ``stage_generate_output`` runs in the same thread pool as each player's
 ``generate_output`` and ``fill_slot_data``, all at once. So ``seed_depths`` sweeps each world the
-first time any of them asks, under a lock of that world's own, and keeps the result for later
+first time any of them calls it, under a lock of that world's own, and keeps the result for later
 calls.
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 __all__ = ["SeedDepths", "enemy_seed_depths", "seed_depths"]
 
-UNREACHED = 1.0
+UNREACHED = 1.0  # the seed depth of anything the sweep never reaches
 
 # Each world's lock and its swept depths. _locks_guard guards both dicts, and each world's own
 # lock keeps a second thread from sweeping that world while the first one does.
@@ -57,7 +57,7 @@ class SeedDepths:
     """One player's seed depths, each from 0 to 1."""
 
     locations: Dict[str, float]  # each pickup and defeat location of the player, by name
-    rooms: Dict[str, float]      # each room where an enemy appears, by room id
+    rooms: Dict[str, float]      # each reached room where an enemy appears, by room id
     enemies: Dict[int, float]    # each enemy type, by enemy id
 
 
