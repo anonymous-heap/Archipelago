@@ -60,7 +60,7 @@ from ._bytemaker_compat import Entry
 from .client_logic import CVAOSClientLogic, items_handling_for
 from .options import TARGET_ADVANCE_COLLECTION
 from .ram import AoSRAM, addresses as addr
-from .ram.addresses import EWRAM
+from .ram.addresses import EWRAM, ROM
 from .ram.backend import GuardedWrite
 from .rom import (ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUMBER_START,
                   COMPATIBLE_IDENTIFIERS)
@@ -71,7 +71,6 @@ if TYPE_CHECKING:
 PROCESS_NAME = "game.exe"  # all four collection titles run under this one exe
 INSTALL_DIR_FRAGMENT = "castlevania advance collection"  # main-module path must contain this
 
-ROM_DOMAIN = "ROM"
 EWRAM_SIZE = 0x40000
 ROM_SIZE = 0x800000
 ROM_TITLE_OFFSET = 0xA0
@@ -580,7 +579,7 @@ class CollectionBackend:
     def _host(self, offset: int, size: int, domain: str) -> int:
         if domain == EWRAM:
             base, limit = self.ewram_base, EWRAM_SIZE
-        elif domain == ROM_DOMAIN:
+        elif domain == ROM:
             base, limit = self.rom_base, ROM_SIZE
         else:
             raise CollectionError(f"unsupported memory domain {domain!r}")

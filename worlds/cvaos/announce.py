@@ -38,6 +38,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from .data.item_info import by_item_number as _by_item_number
+from .ram.addresses import ROM
 from .rom import custom_pickups as _custom
 from .rom import received_item_box as _box
 
@@ -54,7 +55,6 @@ MAILBOX_OFFSET = _box.MAILBOX_GBA - EWRAM_BASE
 NAME_TABLE_OFFSET = _box.ITEM_NAME_TEXT_IDS_GBA - GBA_ROM_BASE
 #: ROM-domain offset of the gold pickups' table.
 GOLD_TABLE_OFFSET = _box.GOLD_TABLE_GBA - GBA_ROM_BASE
-ROM_DOMAIN = "ROM"
 
 #: The soulType each soul category maps to, as SoulInventory_* and the soul banner number them.
 SOUL_TYPE_BY_CATEGORY = {
@@ -84,7 +84,7 @@ async def _name_text_id(ram: "AoSRAM", global_id: int) -> Optional[int]:
     cached = _text_id_cache.get(global_id)
     if cached is not None:
         return cached
-    raw = await ram.read(NAME_TABLE_OFFSET + global_id * 2, 2, ROM_DOMAIN)
+    raw = await ram.read(NAME_TABLE_OFFSET + global_id * 2, 2, ROM)
     text_id = int.from_bytes(raw, "little")
     if text_id == 0:
         return None
@@ -98,7 +98,7 @@ async def _gold_text_id(ram: "AoSRAM", amount: int) -> Optional[int]:
     The whole gold table is read once and cached.
     """
     if not _gold_text_ids:
-        raw = await ram.read(GOLD_TABLE_OFFSET, _box.GOLD_ROW_SIZE * _box.GOLD_ROWS, ROM_DOMAIN)
+        raw = await ram.read(GOLD_TABLE_OFFSET, _box.GOLD_ROW_SIZE * _box.GOLD_ROWS, ROM)
         for row in range(0, len(raw), _box.GOLD_ROW_SIZE):
             row_amount = int.from_bytes(raw[row:row + 2], "little")
             text_id = int.from_bytes(raw[row + 4:row + 8], "little")

@@ -21,6 +21,7 @@ from .structures import EquippedGear, PlayerVitals, SoulPair
 
 # --- Memory/BizHawk address-section names ---
 EWRAM = "EWRAM"
+ROM = "ROM"  # offsets in this domain are ROM file offsets
 
 EWRAM_BASE = 0x02000000
 EWRAM_SIZE = 0x40000

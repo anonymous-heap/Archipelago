@@ -20,8 +20,8 @@ from .drop_shuffle import (DropSlot, TravelPlan, _supply, plan_drop_shuffle, pla
                            vanilla_drop_table)
 from .rom.drop_table import MAX_VALUE, vanilla_bytes
 from .rom.enemy_table import TABLE_OFFSET, TABLE_SIZE, parse_table
+from .ram.addresses import ROM
 from .seed_depth import enemy_seed_depths
-from .soul_sources import ROM_DOMAIN
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -133,7 +133,7 @@ def rom_drop_table_lines(rom: bytes) -> List[str]:
 
 async def read_drop_table_report(ram: AoSRAM) -> str:
     """Return the drop table of the ROM in the game's memory, as /drops prints it."""
-    table = await ram.read(TABLE_OFFSET, TABLE_SIZE, ROM_DOMAIN)
+    table = await ram.read(TABLE_OFFSET, TABLE_SIZE, ROM)
     return "\n".join(["Item drops:", *(f"    {line}" for line in drop_table_lines(table))])
 
 

@@ -12,7 +12,7 @@ from worlds.cvaos import announce, item_granting
 from worlds.cvaos.data.item_info import by_item_number
 from worlds.cvaos.items import FORBIDDEN_AREA_SWITCH, item_table
 from worlds.cvaos.ram import AoSRAM
-from worlds.cvaos.ram.addresses import EWRAM
+from worlds.cvaos.ram.addresses import EWRAM, ROM
 from worlds.cvaos.rom import custom_pickups as cp
 from worlds.cvaos.rom import received_item_box as box
 from worlds.cvaos.rom.custom_pickup_content import STUDY_SEALSWITCH
@@ -20,7 +20,6 @@ from worlds.cvaos.rom.custom_pickup_content import STUDY_SEALSWITCH
 from .test_ram_map import FakeBackend
 from . import find_rom
 
-ROM = announce.ROM_DOMAIN
 MB = announce.MAILBOX_OFFSET
 
 

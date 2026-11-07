@@ -25,6 +25,7 @@ from worlds._bizhawk.client import BizHawkClient
 from .client_logic import CVAOSClientLogic, items_handling_for
 from .options import TARGET_ADVANCE_COLLECTION
 from .ram import AoSRAM, BizHawkBackend
+from .ram.addresses import ROM
 from .rom import (ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, AUTH_NUMBER_START,
                   COMPATIBLE_IDENTIFIERS)
 
@@ -114,8 +115,8 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
 
         try:
             rom_name, identifier = await bizhawk.read(ctx.bizhawk_ctx, [
-                (ROM_NAME_START, len(ROM_NAME), "ROM"),
-                (ARCHIPELAGO_IDENTIFIER_START, len(ARCHIPELAGO_IDENTIFIER), "ROM"),
+                (ROM_NAME_START, len(ROM_NAME), ROM),
+                (ARCHIPELAGO_IDENTIFIER_START, len(ARCHIPELAGO_IDENTIFIER), ROM),
             ])
             # Reject anything that isn't Aria of Sorrow.
             if rom_name.decode("ascii", "ignore") != ROM_NAME:
@@ -144,7 +145,7 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
         return True
 
     async def set_auth(self, ctx: "BizHawkClientContext") -> None:
-        auth_raw = (await bizhawk.read(ctx.bizhawk_ctx, [(AUTH_NUMBER_START, 16, "ROM")]))[0]
+        auth_raw = (await bizhawk.read(ctx.bizhawk_ctx, [(AUTH_NUMBER_START, 16, ROM)]))[0]
         ctx.auth = base64.b64encode(auth_raw).decode("ascii")
         # This runs on every connect to the server, including an automatic reconnect.
         self._reset_session_state(same_seed=ctx.auth == self._session_auth)

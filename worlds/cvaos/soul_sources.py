@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Dict, List
 
 from .data import enemy_type_collection
 from .data.item_info import by_category_id
+from .ram.addresses import ROM
 from .rom.enemy_table import TABLE_OFFSET, TABLE_SIZE, field_offset, parse_table
 from .rom.soul_shuffle import (SOUL_TYPE_ABILITY, SOUL_TYPE_BLUE, SOUL_TYPE_RED, SOUL_TYPE_YELLOW,
                                STARTING_GRANT_INDEX_OFF, STARTING_GRANT_TYPE_OFF,
@@ -44,8 +45,6 @@ SOUL_CATEGORIES = {
     SOUL_TYPE_YELLOW: "yellow_soul",
     SOUL_TYPE_ABILITY: "ability_soul",
 }
-
-ROM_DOMAIN = "ROM"  # the memory domain whose offsets are ROM file offsets (ram/backend.py)
 
 # The intro's starting-soul grant: the immediates of ``movs r0, #type`` and ``movs r1, #index``,
 # with the index 0-based (rom/soul_shuffle.py).
@@ -115,8 +114,8 @@ def rom_soul_table_lines(rom: bytes) -> List[str]:
 
 async def read_soul_table_report(ram: AoSRAM) -> str:
     """Return the soul table of the ROM in the game's memory, as /souls prints it."""
-    table = await ram.read(TABLE_OFFSET, TABLE_SIZE, ROM_DOMAIN)
-    grant = await ram.read(GRANT_OFFSET, GRANT_SIZE, ROM_DOMAIN)
+    table = await ram.read(TABLE_OFFSET, TABLE_SIZE, ROM)
+    grant = await ram.read(GRANT_OFFSET, GRANT_SIZE, ROM)
     return "\n".join(["Soul sources:", *(f"    {line}" for line in soul_table_lines(table, grant))])
 
 
