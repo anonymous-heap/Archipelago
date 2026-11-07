@@ -9,7 +9,7 @@ Tracker rebuilds it from the slot data (test_universal_tracker covers the round 
 Each drop slot stores its item's number plus 1. The decode test reads a patched table back with the
 spawn routine's own ranges, so an off-by-one in the writer shows up as a wrong item.
 
-    python -m pytest worlds/cvaos/test/test_item_drop_shuffle.py -v
+    python -m pytest worlds/cvaos/test/test_drop_table.py -v
 """
 from __future__ import annotations
 
