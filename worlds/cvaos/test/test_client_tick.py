@@ -59,12 +59,12 @@ class TickSaveBlockGateTest(unittest.IsolatedAsyncioTestCase):
             return run
 
         self.client._send_location_checks = recorder("checks")
-        self.from_another_seed = False
+        self.held = False
 
         async def save_check(ctx, ram) -> bool:
-            return self.from_another_seed
+            return self.held
 
-        self.client._save_from_another_seed = save_check  # tested in test_save_guard
+        self.client._checks_held = save_check  # tested in test_save_guard
 
         async def ignore(ctx, ram) -> None:
             pass
@@ -85,8 +85,8 @@ class TickSaveBlockGateTest(unittest.IsolatedAsyncioTestCase):
         await self.tick(INGAME, NORMAL, max_hp=250)
         self.assertEqual(self.ran, ["checks", "items", "progressive", "goal", "play data"])
 
-    async def test_a_save_from_another_seed_skips_checks_goal_and_play_data(self) -> None:
-        self.from_another_seed = True
+    async def test_a_held_save_skips_checks_goal_and_play_data(self) -> None:
+        self.held = True
         await self.tick(INGAME, NORMAL, max_hp=250)
         self.assertEqual(self.ran, ["items", "progressive"])
 

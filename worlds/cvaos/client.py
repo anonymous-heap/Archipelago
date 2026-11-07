@@ -6,12 +6,14 @@ lives in the transport-neutral ``client_logic.CVAOSClientLogic`` mixin, which it
 Collection Client (``collection_client.py``). That logic sends location checks, grants received
 items, relays DeathLink and reports the goal. It also keeps Soma's position and the explored map
 in data storage for the map tracker, and Universal Tracker's map reads the position too. It
-writes the local play-data log as well, and it holds back checks from a save of another seed.
+writes the local play-data log as well, and it holds back the checks of a save that has received
+more items than the server has sent.
 
 This module supplies the parts specific to BizHawk: ROM validation over the connector, the
-``BizHawkBackend``, and the connector's error handling. It also adds three commands and a button.
+``BizHawkBackend``, and the connector's error handling. It also adds four commands and a button.
 /map and the "Open map" button open the map tracker for the connected slot in a browser. /souls
-lists which enemy drops each soul, and /drops lists the items that each enemy drops.
+lists which enemy drops each soul, and /drops lists the items that each enemy drops. /trust_save
+sends the checks held back from a save that the player confirms is their own.
 """
 from __future__ import annotations
 
@@ -81,6 +83,13 @@ async def log_drop_table(ctx: "BizHawkClientContext") -> None:
     logger.info(report)
 
 
+def cmd_trust_save(self: "BizHawkClientCommandProcessor") -> None:
+    """Send the checks and goal held back from your own save for this seed."""
+    client = self.ctx.client_handler
+    if isinstance(client, CVAOSClient):
+        client.trust_save()
+
+
 class CVAOSClient(CVAOSClientLogic, BizHawkClient):
     game = "Castlevania - Aria of Sorrow"
     system = "GBA"
@@ -91,20 +100,22 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
 
     async def validate_rom(self, ctx: "BizHawkClientContext") -> bool:
         valid = await self._validate_rom(ctx)
-        # /map, /souls, /drops and the "Open map" button are for Aria of Sorrow only, like other
-        # games' commands in this client. A ROM that passes validation adds the three commands, and
-        # one that fails removes them and the button. A context with no command processor, such as
-        # a test's stand-in, gets no commands.
+        # /map, /souls, /drops, /trust_save and the "Open map" button are for Aria of Sorrow only,
+        # like other games' commands in this client. A ROM that passes validation adds the four
+        # commands, and one that fails removes them and the button. A context with no command
+        # processor, such as a test's stand-in, gets no commands.
         commands = getattr(getattr(ctx, "command_processor", None), "commands", None)
         if commands is not None:
             if valid:
                 commands["map"] = cmd_map
                 commands["souls"] = cmd_souls
                 commands["drops"] = cmd_drops
+                commands["trust_save"] = cmd_trust_save
             else:
                 commands.pop("map", None)
                 commands.pop("souls", None)
                 commands.pop("drops", None)
+                commands.pop("trust_save", None)
         if not valid:
             from .tracker_app import remove_map_button
             remove_map_button(ctx)

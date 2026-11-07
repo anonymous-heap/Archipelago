@@ -7,8 +7,9 @@ state, and its ``_tick`` runs one private helper per task. Those helpers send lo
 grant received items and Progressive Movement souls, relay DeathLink, and report the goal. They
 also keep Soma's position and the explored map in data storage for the map tracker, and
 Universal Tracker's map reads the position too. Another helper writes the local play-data log
-(play_data.py). A save from another seed sends no checks, reports no goal and records no play
-data.
+(play_data.py). The client sends no checks, reports no goal and records no play data from a save
+that has received more items than the server has sent, until the save catches up or the player
+types /trust_save.
 
 The logic reaches the game only through ``AoSRAM``, on whichever transport backend the caller
 chose, and reaches Archipelago only through ``CommonContext``. It therefore works the same in
@@ -73,13 +74,15 @@ def items_handling_for(identifier: bytes) -> int:
 MAX_ITEMS_PER_TICK = 10
 
 # The field that marks the client's received-items probe. The probe is a Get packet, and the
-# server copies this field into its Retrieved reply (see _save_from_another_seed).
+# server copies this field into its Retrieved reply (see _checks_held).
 RECEIVED_ITEMS_PROBE = "cvaos_received_items_probe"
 
-FOREIGN_SAVE_WARNING = (
-    "This save belongs to another seed, or is New Game+ started from one: it has received more "
-    "items than this seed has sent. The client sends no checks from this save, so load this "
-    "seed's save or start a new game.")
+SAVE_AHEAD_WARNING = (
+    "This save has received more items than the server has sent for this seed, so the client is "
+    "holding back its checks and goal. The save may belong to another seed, or be New Game+ "
+    "started from one. The server may also have lost its most recent checks, in a crash or a "
+    "restart from the seed file. If this is your own save for this seed, type /trust_save to "
+    "send its checks and goal. Otherwise, load this seed's save or start a new game.")
 
 
 class CVAOSClientLogic:
@@ -91,7 +94,10 @@ class CVAOSClientLogic:
     currently_dead: bool | None
     time_of_sent_death: float | None
     goaled: bool
-    warned_foreign_save: bool
+    # The save guard's state (see _checks_held). They have defaults because /trust_save can be
+    # typed before the first connect resets them.
+    warned_save_ahead: bool = False
+    save_trusted: bool = False
 
     # The server connections (``ctx.server``) that the received-items probe was sent on and
     # answered on. A new connection is a new object, so neither carries over to it.
@@ -120,9 +126,12 @@ class CVAOSClientLogic:
         self.time_of_sent_death = None
         # Goal: latched True once we've reported completion, so we report it only once.
         self.goaled = False
-        # Whether the client has warned that the loaded save is from another seed, so the warning
+        # Whether the client has warned that the loaded save is ahead of the server, so the warning
         # is printed once for that save.
-        self.warned_foreign_save = False
+        self.warned_save_ahead = False
+        # Whether the player released the hold with /trust_save. Every reset ends the release,
+        # even for a reconnect to the same seed (see trust_save).
+        self.save_trusted = False
         # The position and the map cell last sent, and when the position was sent, so a new
         # session sends both again.
         self.last_position = None
@@ -156,7 +165,7 @@ class CVAOSClientLogic:
 
     def track_received_items(self, ctx: "CommonContext", cmd: str, args: dict) -> None:
         """
-        Note when the client holds every item the server has sent, for _save_from_another_seed.
+        Note when the client holds every item the server has sent, for _checks_held.
 
         The server answers the received-items probe only after the items it sent before, so the
         answer marks the list as complete on this connection. A ReceivedItems packet whose index
@@ -203,42 +212,61 @@ class CVAOSClientLogic:
         # the load overwrites the advanced counter, the item is given again next tick. Max HP sits
         # in the same block and is never 0 for a loaded file, so it tells the two apart.
         if in_gameplay and await ram.get_max_hp() > 0:
-            # A save from another seed sends no checks and reports no goal. The server would count
-            # either one for this seed, and neither can be taken back. The save's play data is not
-            # this seed's either, so it is not recorded.
-            from_another_seed = await self._save_from_another_seed(ctx, ram)
-            if not from_another_seed:
+            # While the save guard holds the save's checks, the client sends no checks, reports no
+            # goal and records no play data. The save may be another seed's, and the server would
+            # count its checks and goal for this seed, which cannot be taken back.
+            held = await self._checks_held(ctx, ram)
+            if not held:
                 await self._send_location_checks(ctx, ram)
             await self._report_position(ctx, ram)
             await self._report_exploration(ctx, ram)
             await self._receive_items(ctx, ram)
             await self._grant_progressive_movement(ctx, ram)
-            if not from_another_seed:
+            if not held:
                 await self._report_goal(ctx, ram)
                 await self._record_play_data(ctx, ram)
 
-    async def _save_from_another_seed(self, ctx: "CommonContext", ram: AoSRAM) -> bool:
+    async def _checks_held(self, ctx: "CommonContext", ram: AoSRAM) -> bool:
         """
-        Return True while the save's received-item counter is ahead of the items the server sent.
+        Return True while the loaded save's checks and goal are held back.
 
-        Only this seed's items advance the counter, so a save whose counter is ahead belongs to
-        another seed. New Game+ keeps the counter, so a file that looks new can still hold a
-        finished seed's counter. A brand-new save starts at 0 and is never ahead.
+        They are held while the save's received-item counter is ahead of the items the server
+        has sent, unless the player has typed /trust_save. Two things put the counter ahead:
+
+        * A save from another seed counts that seed's items. New Game+ keeps the counter, so a
+          file that looks new can still hold a finished seed's count.
+        * The server can lose its most recent checks, in a crash between its autosaves or when a
+          room restarts from the seed file. From V0.5 on, the counter also counts the player's
+          own items that the server sends, such as an own item at a defeat location. Those items
+          are lost with the checks, so the player's own save is then ahead too.
+
+        The client cannot tell these cases apart, so the warning names both, and /trust_save
+        lets the player release the hold for their own save (see trust_save). In the second
+        case, the held checks are the ones that make the server send the lost items again.
+
+        The guard catches a save from another seed only when that save has received more items
+        than this seed has sent. A save whose counter is not ahead passes, and its pickups and
+        defeats are sent as this seed's checks. A brand-new save starts at 0 and is never ahead.
 
         The counter is also ahead for a moment after connecting, while the server's items are
         still arriving. Holding checks then is harmless, because they are sent once the items
         arrive. So the client warns only once the item list is known to be complete. It sends a
         probe that the server answers after every item it has already sent (see
         track_received_items), and warns if the counter is still ahead when the answer arrives.
-        As soon as the counter is no longer ahead, checks are sent again.
+
+        The hold lifts by itself as soon as the counter is no longer ahead. That also ends a
+        release, so a different save loaded later in the session is held if it is ahead.
         """
         from CommonClient import logger
 
         if await ram.get_received_count() <= len(self._grantable_items(ctx)):
-            if self.warned_foreign_save:
-                self.warned_foreign_save = False
-                logger.info("The loaded save matches this seed, so the client sends its checks "
-                            "again.")
+            self.save_trusted = False
+            if self.warned_save_ahead:
+                self.warned_save_ahead = False
+                logger.info("The loaded save no longer has more items than the server has sent, "
+                            "so the client sends its checks and goal again.")
+            return False
+        if self.save_trusted:
             return False
         # Ask once per connection whether the item list is complete, and warn once it is.
         complete = self.items_complete_on is not None and self.items_complete_on is ctx.server
@@ -246,10 +274,33 @@ class CVAOSClientLogic:
             if self.items_probe_sent_on is not ctx.server:
                 self.items_probe_sent_on = ctx.server
                 await ctx.send_msgs([{"cmd": "Get", "keys": [], RECEIVED_ITEMS_PROBE: True}])
-        elif not self.warned_foreign_save:
-            self.warned_foreign_save = True
-            logger.warning(FOREIGN_SAVE_WARNING)
+        elif not self.warned_save_ahead:
+            self.warned_save_ahead = True
+            logger.warning(SAVE_AHEAD_WARNING)
         return True
+
+    def trust_save(self) -> None:
+        """
+        Release the hold on the loaded save's checks and goal, for the /trust_save command.
+
+        The command works only after the warning, because before it nothing is known to be held.
+
+        The release lasts until the client next resets its session state, which happens on every
+        connect. The Collection Client also resets it when it attaches to the game again. Loading
+        another save does not end the release, because the client cannot see a load happen. A
+        savestate, for example, replaces the save data in memory without passing through the
+        game's file select. A reconnect is a point the client can see, and the new connection
+        checks the counter against the server's items again anyway. The release also ends once
+        the save is no longer ahead (see _checks_held).
+        """
+        from CommonClient import logger
+
+        if not self.warned_save_ahead:
+            logger.info("The client isn't holding back this save's checks.")
+            return
+        self.warned_save_ahead = False
+        self.save_trusted = True
+        logger.info("The client now sends this save's checks and goal, until it reconnects.")
 
     async def _report_position(self, ctx: "CommonContext", ram: AoSRAM) -> None:
         # Keep Soma's room and position in data storage for the trackers' maps. The tracker's map
@@ -356,8 +407,8 @@ class CVAOSClientLogic:
 
         items = self._grantable_items(ctx)
         received = await ram.get_received_count()
-        # A counter ahead of everything the server has sent marks a save from another seed
-        # (_save_from_another_seed). Clamp it so we never index past the items.
+        # The counter can be ahead of everything the server has sent (see _checks_held). Clamp it
+        # so we never index past the items.
         received = min(received, len(items))
         granted_this_tick = 0
         while received < len(items) and granted_this_tick < MAX_ITEMS_PER_TICK:

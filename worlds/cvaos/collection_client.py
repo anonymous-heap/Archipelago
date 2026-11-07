@@ -638,6 +638,10 @@ class CVAOSCollectionCommandProcessor(ClientCommandProcessor):
         """List which items each enemy drops, and how often."""
         Utils.async_start(log_drop_table(self.ctx), name="drops")
 
+    def _cmd_trust_save(self) -> None:
+        """Send the checks and goal held back from your own save for this seed."""
+        self.ctx.brain.trust_save()
+
 
 async def log_soul_table(ctx: "CVAOSCollectionContext") -> None:
     """Log the soul table in the ROM that the collection is running, as the patch left it."""

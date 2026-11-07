@@ -338,7 +338,7 @@ class DeathLinkTickTest(unittest.IsolatedAsyncioTestCase):
                         "_receive_items", "_grant_progressive_movement", "_report_goal",
                         "_record_play_data"):
             setattr(client, concern, mock.AsyncMock())
-        client._save_from_another_seed = mock.AsyncMock(return_value=False)
+        client._checks_held = mock.AsyncMock(return_value=False)
         return client
 
     def setUp(self) -> None:
