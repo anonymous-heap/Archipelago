@@ -9,6 +9,9 @@ resulting desirability table. The placement code is in
 [`../../item_smoothing.py`](../../item_smoothing.py), and it runs only when the `item_smoothing`
 option is `loose` or `strict`.
 
+The directory also holds a table that the Experimental options read: each item's worth
+(see [Worth](#worth)).
+
 **Orientation:** higher desirability means a later placement. Desirability runs from `0.0` (junk,
 placed earliest) to `1.0` (the best items, placed latest). Positions in the run go from `0` (the
 start) to `1` (the end). A placement target is a position plus random jitter, so it can fall
@@ -313,3 +316,55 @@ places, each through the passes described above.
   each item at the free location whose `q` is nearest its `t`.
 - **Adding a rater** takes a new `tier_jsons/*.json` file and a rerun of
   [`aggregate_tiers.py`](aggregate_tiers.py).
+
+---
+
+## Worth
+
+[`worth.csv`](worth.csv) gives every item except the souls a worth from 0 to 1, on the scale of a
+vanilla run. An item is worth the point in the run where the castle's own pickups first offer as
+much, so an item worth 0.25 is no better than what the pickups offer a quarter of the way in. The
+Experimental options read it through `item_worth` in [`worth.py`](worth.py). Item smoothing does
+not read it.
+
+[`build_worth.py`](build_worth.py) writes the table, and is run by hand. It gives each item one of
+these worths:
+
+| Item | Worth |
+|---|---|
+| Weapon | its depth on its class's ladder, ranked by ATK, or its desirability when that is higher |
+| Armor | its depth on the armor ladder, ranked by DEF, or its desirability when that is higher |
+| HP or MP restorative | its depth on the HP or MP ladder, ranked by the logarithm of the amount restored |
+| Accessory, cure, or other consumable | its desirability, or 0.2 for an unrated accessory and 0.1 for any other unrated item |
+| Gold | 0.02 |
+| Valmanway, Chaos Ring, Soul Eater Ring | 1.0 |
+
+A ladder holds the pickups of one class, ordered by the depth where the vanilla route first reaches
+them. A pickup is a rung only when it beats every earlier pickup of its class, and an item between
+two rungs gets a depth interpolated between them. A weapon outside its class's ladder, or in a
+class with no pickup (daggers, for example), uses the ladder of all weapons instead. Desirability
+lets a weapon or armor count effects that ATK and DEF miss.
+
+The table's columns are `name`, `category`, `item_class`, `class_fit_depth` (the ladder depth),
+`desirability`, `worth`, and `basis`, which says where the worth came from: `class ladder`,
+`desirability`, `default` or `fixed`.
+
+The `worth` values keep six decimals, and the build fails if rounding to them moves an item across
+0.25, 0.45 or 0.6, or changes whether two items are within 0.05 of each other. Cutall and Estoc
+sit at 0.4478, so they are just under the 0.45 line.
+
+**Where the inputs come from.** [`worth_inputs.csv`](worth_inputs.csv) holds the facts that no
+other table in the repository records. It was taken from the Experimental options design
+workspace (`local_docs/experimental_options_design/foundation/items.csv`, which is not in the
+repository).
+
+- `item_class` and `utility` were read from the US ROM's item records. A weapon's class comes from
+  its record's family byte (+0x08) and animation byte (+0x12), at GBA 0x08505D3C with 28 bytes per
+  weapon, and its utility is its ATK (+0x0A). Armor's utility is its DEF (+0x0B of its record at
+  GBA 0x085063B0). A consumable's class comes from its kind byte (+0x08 at GBA 0x08505B3C), and a
+  restorative's utility is the amount it restores (+0x0A).
+- `earliest_pickup_depth` is the vanilla depth of the earliest normal pickup that holds the item:
+  the share of the 115 normal pickups that the vanilla route reaches before it, counting half of
+  those it reaches at the same point. The route gains abilities one at a time, in the order a
+  vanilla run first gains them, and orders the pickups of one step by how many rooms away they
+  are.

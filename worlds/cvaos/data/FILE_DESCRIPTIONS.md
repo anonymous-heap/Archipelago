@@ -67,7 +67,7 @@ Merges the three CSVs by `name` into `ItemInfo` Pydantic models at module init, 
 
 ## `item_balancing/`
 
-Community desirability ratings for items, in `desirability.csv`, loaded into `DesirabilityInfo` rows. See its [README.md](item_balancing/README.md).
+Community desirability ratings for items, in `desirability.csv`, loaded into `DesirabilityInfo` rows. Each item's worth on the scale of a vanilla run, in `worth.csv`, which `build_worth.py` writes and `worth.py` loads. See its [README.md](item_balancing/README.md).
 
 ---
 
