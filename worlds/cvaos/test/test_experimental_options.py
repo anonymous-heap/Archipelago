@@ -1,24 +1,32 @@
 """
-Tests for the Experimental options group, its preset, and Soul Shuffle's matched value.
+Tests for the Experimental options group, its preset, and the options that newer options replace.
 
 Soul Shuffle's matched value is new, so "random" draws only the released values, and a released
-YAML rolls as it always has.
+YAML rolls as it always has. Enemy Drop Rate above 100 turns off Multiply Soul Drop Rates, and
+matched turns off Keep Soul Drop Rates, so the spoiler shows what runs.
 
     python -m pytest worlds/cvaos/test/test_experimental_options.py -v
 """
 from __future__ import annotations
 
+import glob
+import json
+import os
 import random
+import tempfile
 import unittest
+import zipfile
 from unittest import mock
 
 import Generate
 from Options import Choice
+from test.general import setup_multiworld
 
 from .. import CVAOSWorld
 from ..options import (CVAOSOptions, EnemyChecks, EnemyDropRate, KeepSoulDropRates,
                        ShuffleStartingSoul, SoulShuffle, cvaos_option_groups,
                        cvaos_options_presets)
+from .test_smoothing_location_settings import generate
 
 
 class ReleasedSoulShuffle(Choice):
@@ -27,6 +35,10 @@ class ReleasedSoulShuffle(Choice):
     option_within_type = 1
     option_any_type = 2
     default = option_off
+
+
+def early(**options) -> CVAOSWorld:
+    return setup_multiworld(CVAOSWorld, ("generate_early",), seed=1, options=options).worlds[1]
 
 
 class GroupAndPresetTest(unittest.TestCase):
@@ -75,6 +87,33 @@ class RandomRollTest(unittest.TestCase):
         values = {SoulShuffle.from_text("random").value for _ in range(300)}
         self.assertEqual(values, {SoulShuffle.option_off, SoulShuffle.option_within_type,
                                   SoulShuffle.option_any_type})
+
+
+class EffectiveValuesTest(unittest.TestCase):
+    def test_enemy_drop_rate_above_100_turns_off_multiply_soul_drop_rates(self):
+        with self.assertLogs(level="INFO") as logs:
+            world = early(enemy_drop_rate=350, multiply_soul_drop_rates=True)
+        self.assertFalse(world.options.multiply_soul_drop_rates)
+        self.assertEqual(sum("Multiply Soul Drop Rates is off" in line for line in logs.output), 1)
+        self.assertTrue(early(enemy_drop_rate=100, multiply_soul_drop_rates=True)
+                        .options.multiply_soul_drop_rates)
+
+    def test_matched_turns_off_keep_soul_drop_rates(self):
+        with self.assertLogs(level="INFO") as logs:
+            world = early(soul_shuffle="matched", keep_soul_drop_rates=True)
+        self.assertFalse(world.options.keep_soul_drop_rates)
+        self.assertEqual(sum("Keep Soul Drop Rates is off" in line for line in logs.output), 1)
+        self.assertTrue(early(soul_shuffle="within_type", keep_soul_drop_rates=True)
+                        .options.keep_soul_drop_rates)
+
+    def test_a_seed_with_enemy_drop_rate_generates_and_patches_the_value_that_runs(self):
+        multiworld = generate(5, {"enemy_drop_rate": 350, "multiply_soul_drop_rates": True})
+        with tempfile.TemporaryDirectory() as folder:
+            multiworld.worlds[1].generate_output(folder)
+            (patch_path,) = glob.glob(os.path.join(folder, "*.apcvaos"))
+            with zipfile.ZipFile(patch_path) as patch_file:
+                rom_config = json.loads(patch_file.read("rom_config.json"))
+        self.assertIs(rom_config["multiply_soul_drop_rates"], False)
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ from .items import (FILLER_ITEM_NAMES, PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMEN
                     item_name_groups, item_name_to_id, create_item, create_itempool)
 from .enemy_checks import defeat_location_name, enemy_check_types, has_recorded_route
 from .locations import defeat_location_names, location_name_to_id, pickup_location_ids
-from .options import (LOGIC_OPTION_NAMES, CVAOSOptions, Goal, cvaos_option_groups,
+from .options import (LOGIC_OPTION_NAMES, CVAOSOptions, Goal, SoulShuffle, cvaos_option_groups,
                       cvaos_options_presets)
 from .regions import UT_TRICKS_ITEM, create_regions, can_reach_room
 from . import tracker_map, tracker_route
@@ -235,6 +235,24 @@ class CVAOSWorld(World):
         self._restore_logic_options_for_tracker()
         self.auth = bytearray(self.random.getrandbits(8) for _ in range(16))
         self._cap_fallback_priority_locations()
+        self._set_effective_values()
+
+    def _set_effective_values(self) -> None:
+        """Turn off the options that a newer option replaces, so the spoiler shows what runs.
+
+        Enemy Drop Rate above 100 replaces Multiply Soul Drop Rates, and Soul Shuffle's matched
+        keeps each enemy's own soul drop rate, whatever Keep Soul Drop Rates says. Each option
+        turned off logs one line.
+        """
+        options = self.options
+        if options.enemy_drop_rate.value > 100 and options.multiply_soul_drop_rates:
+            options.multiply_soul_drop_rates.value = 0
+            logging.info("%s: Multiply Soul Drop Rates is off, because Enemy Drop Rate %d replaces "
+                         "it.", self.player_name, options.enemy_drop_rate.value)
+        if options.soul_shuffle == SoulShuffle.option_matched and options.keep_soul_drop_rates:
+            options.keep_soul_drop_rates.value = 0
+            logging.info("%s: Keep Soul Drop Rates is off, because Soul Shuffle's matched keeps "
+                         "each enemy's own soul drop rate.", self.player_name)
 
     def _cap_fallback_priority_locations(self) -> None:
         """Keep at most MAX_FALLBACK_PRIORITY defeat checks without a route as priority locations.
