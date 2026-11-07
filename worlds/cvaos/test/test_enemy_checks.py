@@ -21,7 +21,8 @@ from ..enemy_checks import (ARENA_PLACEMENTS, BOSS_TYPES, FALLBACK_SOULS, SPAWNS
                             defeat_location_id, defeat_location_name, enemy_check_types,
                             enemy_id_for_location, has_recorded_route, placements_of)
 from ..items import ENEMY_ITEM, item_table
-from ..locations import defeat_location_names, location_name_to_id, pickup_location_ids
+from ..locations import (defeat_hint_text, defeat_location_names, location_name_to_id,
+                         pickup_location_ids)
 from ..options import EnemyChecks, Goal
 from ..regions import can_reach_room
 from ..rom.entity import GBA_ROM_BASE, PICKUP
@@ -262,6 +263,29 @@ class LocationGroupTest(unittest.TestCase):
         self.assertEqual(set().union(*(self.groups[area] for area in areas)), defeat_location_names)
         self.assertEqual({area for area in areas if "Defeat Creaking Skull" in self.groups[area]},
                          {"Castle Corridor Defeats", "Dance Hall Defeats"})
+
+
+class HintTest(unittest.TestCase):
+    def test_a_hint_names_the_enemy_s_rooms_by_area(self):
+        self.assertEqual(defeat_hint_text("Kyoma Demon"), "Inner Quarters 40C, 40D")
+        self.assertEqual(defeat_hint_text("Final Guard"),
+                         "Top Floor 903, 908, 90F; Chaotic Realm B18")
+
+    def test_a_room_where_the_enemy_waits_for_a_boss_elsewhere_names_the_boss(self):
+        self.assertEqual(defeat_hint_text("Alura Une"),
+                         "Underground Reservoir 710 (after Legion); Forbidden Area A03")
+        self.assertEqual(defeat_hint_text("Biphron"), "Underground Reservoir 70D, 710")
+
+    def test_each_defeat_location_in_the_seed_gets_its_hint(self):
+        for setting in ("off", "all"):
+            world = build(setting, steps=("generate_early",)).worlds[1]
+            hint_data: dict[int, dict[int, str]] = {}
+            world.extend_hint_information(hint_data)
+            expected = {location_name_to_id[defeat_location_name(enemy.name)]:
+                        defeat_hint_text(enemy.name) for enemy in enemy_check_types(world.options)}
+            with self.subTest(setting=setting):
+                self.assertEqual(hint_data.get(1, {}), expected)
+                self.assertTrue(all(hint_data.get(1, {}).values()))
 
 
 class PriorityCapTest(unittest.TestCase):

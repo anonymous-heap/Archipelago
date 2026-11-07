@@ -12,9 +12,10 @@ from typing import TYPE_CHECKING
 
 from BaseClasses import Location
 
-from .data import pickup_info_collection
-from .enemy_checks import (BOSS_TYPES, checkable_types, defeat_location_id, defeat_location_name,
-                           has_recorded_route, placements_of)
+from .data import enemy_placements, pickup_info_collection
+from .enemy_checks import (ARENA_PLACEMENTS, BOSS_TYPES, SPAWNS_AFTER_BOSS_IN, checkable_types,
+                           defeat_location_id, defeat_location_name, has_recorded_route,
+                           placements_of)
 from .tracker_map import AREA_NAMES
 
 if TYPE_CHECKING:
@@ -28,6 +29,7 @@ __all__ = [
     "pickup_location_ids",
     "defeat_location_names",
     "location_name_groups",
+    "defeat_hint_text",
 ]
 
 
@@ -113,6 +115,31 @@ def _build_location_name_groups() -> dict[str, set[str]]:
 
 
 location_name_groups: dict[str, set[str]] = _build_location_name_groups()
+
+# The boss in each arena room, such as Legion in room 725.
+_ARENA_BOSS: dict[str, str] = {placement.room: placement.name for placement in enemy_placements
+                               if placement.enemy_number in ARENA_PLACEMENTS}
+
+
+def defeat_hint_text(enemy_name: str) -> str:
+    """
+    Return the rooms where ``enemy_name`` appears, as a hint for its defeat location shows them.
+
+    The rooms are grouped by area, as in "Underground Reservoir 710 (after Legion), 737; Forbidden
+    Area A03". Areas and the rooms within each come in identifier order. A room is marked with a
+    boss when the enemy appears there only after that boss is beaten in another room.
+    """
+    bosses_by_room: dict[str, set[str | None]] = {}
+    for placement in placements_of(enemy_name):
+        boss_room = SPAWNS_AFTER_BOSS_IN.get(placement.enemy_number)
+        boss = _ARENA_BOSS[boss_room] if boss_room is not None else None
+        bosses_by_room.setdefault(placement.room, set()).add(boss)
+    rooms_by_area: dict[str, list[str]] = {}
+    for room in sorted(bosses_by_room):
+        bosses = bosses_by_room[room]
+        text = room if None in bosses else f"{room} (after {' or '.join(sorted(bosses))})"
+        rooms_by_area.setdefault(AREA_NAMES[room[0]], []).append(text)
+    return "; ".join(f"{area} {', '.join(rooms)}" for area, rooms in rooms_by_area.items())
 
 
 def _build_flag_offset_map() -> dict[int, int]:

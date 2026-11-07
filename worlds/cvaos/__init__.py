@@ -12,7 +12,8 @@ from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA
 from .items import (FILLER_ITEM_NAMES, PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, CVAOSItem,
                     item_name_groups, item_name_to_id, create_item, create_itempool)
 from .enemy_checks import defeat_location_name, enemy_check_types, has_recorded_route
-from .locations import location_name_groups, location_name_to_id, pickup_location_ids
+from .locations import (defeat_hint_text, location_name_groups, location_name_to_id,
+                        pickup_location_ids)
 from .options import (LOGIC_OPTION_NAMES, CVAOSOptions, Goal, SoulShuffle, cvaos_option_groups,
                       cvaos_options_presets)
 from .regions import UT_TRICKS_ITEM, create_regions, can_reach_room
@@ -380,6 +381,14 @@ class CVAOSWorld(World):
                 refine_soul_positions(world)
                 refine_ancient_books(world)
         smooth_placed_items(multiworld, cls.game)
+
+    def extend_hint_information(self, hint_data: dict[int, dict[int, str]]) -> None:
+        # A hint for a defeat location names the rooms where its enemy appears. The text depends
+        # only on the enemy, never on where items were placed.
+        hints = {location_name_to_id[defeat_location_name(enemy.name)]: defeat_hint_text(enemy.name)
+                 for enemy in enemy_check_types(self.options)}
+        if hints:
+            hint_data.setdefault(self.player, {}).update(hints)
 
     def generate_output(self, output_directory: str) -> None:
         from .rom import CVAOSProcedurePatch, get_location_data, patch_rom
