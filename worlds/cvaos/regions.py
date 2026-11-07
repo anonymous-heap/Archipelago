@@ -16,7 +16,7 @@ import functools
 import operator
 from typing import TYPE_CHECKING, Callable
 
-from BaseClasses import Entrance, Region
+from BaseClasses import Entrance, LocationProgressType, Region
 
 from .data import (
     entrance_info_collection,
@@ -31,7 +31,7 @@ from .data import (
     AbilityCombo,
     transdoor_connection_collection,
 )
-from .enemy_checks import (ARENA_PLACEMENTS, FALLBACK_SOULS, SPAWNS_AFTER_BOSS_IN,
+from .enemy_checks import (ARENA_PLACEMENTS, EXCLUDED_TYPES, FALLBACK_SOULS, SPAWNS_AFTER_BOSS_IN,
                            defeat_location_name, enemy_check_types, placements_of)
 from .locations import CVAOSLocation, location_name_to_id
 from .options import (TECHNIQUES, ForbiddenAreaButton, hard_mode_pickups_included,
@@ -389,7 +389,7 @@ def _create_enemy_checks(world: CVAOSWorld, entrance_regions_by_room: dict[str, 
     rule. A boss in its arena (ARENA_PLACEMENTS) connects from every door of its room with no rule.
     Any other placement without routing is not annotated yet, so it connects from every door of its
     room and requires FALLBACK_SOULS. A placement that spawns only after a boss elsewhere also
-    requires reaching that boss's room.
+    requires reaching that boss's room. The checks of EXCLUDED_TYPES are excluded locations.
     """
     types = enemy_check_types(world.options)
     if not types:
@@ -430,8 +430,10 @@ def _create_enemy_checks(world: CVAOSWorld, entrance_regions_by_room: dict[str, 
         region = Region(f"Defeat: {enemy.name}", player, multiworld)
         multiworld.regions.append(region)
         location_name = defeat_location_name(enemy.name)
-        region.locations.append(
-            CVAOSLocation(player, location_name, location_name_to_id[location_name], region))
+        location = CVAOSLocation(player, location_name, location_name_to_id[location_name], region)
+        if enemy.name in EXCLUDED_TYPES:
+            location.progress_type = LocationProgressType.EXCLUDED
+        region.locations.append(location)
         for placement in placements_of(enemy.name):
             boss_room = SPAWNS_AFTER_BOSS_IN.get(placement.enemy_number)
             routing = by_enemy_number_for_enemy_regions.get(placement.enemy_number)

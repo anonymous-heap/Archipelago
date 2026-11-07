@@ -30,6 +30,7 @@ __all__ = [
     "BOSS_TYPES",
     "FALLBACK_SOULS",
     "DEFEAT_ID_BASE",
+    "EXCLUDED_TYPES",
     "defeat_location_name",
     "defeat_location_id",
     "enemy_check_types",
@@ -63,6 +64,11 @@ FALLBACK_SOULS: tuple[str, ...] = ("Flying Armor", "Skeleton Blaze", "Malphas", 
 # reaching a boss's room as beating that boss, as the goal and the Chaotic Realm gate do. So such a
 # placement needs only a door of its room.
 ARENA_PLACEMENTS: frozenset[int] = frozenset({27, 193, 264, 331, 394, 422, 618, 664})
+
+# Types whose checks are excluded locations, which hold only filler. Iron Golem has 9999 HP and
+# DEF 255, and both types resist all nine named elements. Nobody has yet timed these fights with
+# ordinary gear, so no other game's progression should wait on them.
+EXCLUDED_TYPES: frozenset[str] = frozenset({"Iron Golem", "Final Guard"})
 
 # Room ids in the Boss Rush area, whose arenas never count as placements.
 BOSS_RUSH_AREA = "C"

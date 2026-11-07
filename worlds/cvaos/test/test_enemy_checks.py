@@ -10,7 +10,7 @@ from collections import Counter
 from types import SimpleNamespace
 from unittest import mock
 
-from BaseClasses import CollectionState, Entrance, MultiWorld
+from BaseClasses import CollectionState, Entrance, LocationProgressType, MultiWorld
 from test.general import setup_multiworld
 
 from .. import CVAOSWorld, item_smoothing, regions
@@ -122,6 +122,17 @@ class GenerationTest(unittest.TestCase):
                 defeats = [location for location in multiworld.get_locations(1)
                            if location.name in defeat_location_names]
                 self.assertEqual(len(defeats), len(types))
+
+    def test_iron_golem_and_final_guard_hold_only_filler(self):
+        # Every other check is an ordinary location, Kyoma Demon's included.
+        multiworld = generate(0, {"enemy_checks": "all"})
+        excluded = {location.name: location.item for location in multiworld.get_locations(1)
+                    if location.name in defeat_location_names
+                    and location.progress_type == LocationProgressType.EXCLUDED}
+        self.assertEqual(set(excluded), {"Defeat Iron Golem", "Defeat Final Guard"})
+        for name, item in excluded.items():
+            with self.subTest(location=name, item=item.name):
+                self.assertFalse(item.advancement or item.useful)
 
     def test_each_checked_type_adds_one_copy_of_its_item_to_the_pool(self):
         without_checks = item_pool(build("off", steps=POOL_STEPS))
