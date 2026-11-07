@@ -430,7 +430,7 @@ class RomValidationTest(_InstallerCase):
         with self.assertRaisesRegex(InstallError, "different world version"):
             validate_patched_rom(_make_patched_rom(marker="CVAOS_AP_V9.9"))
 
-    def test_accepts_a_rom_from_the_previous_compatible_version(self) -> None:
+    def test_accepts_a_rom_from_the_oldest_compatible_version(self) -> None:
         validate_patched_rom(_make_patched_rom(marker="CVAOS_AP_V0.3"))
 
     def test_rejects_cart_based_patch(self) -> None:

@@ -101,7 +101,8 @@ class InstallError(Exception):
 # ---------------------------------------------------------------------------
 
 def windata_dir_from_exe(exe_path: str) -> str:
-    """The windata/ directory next to game.exe, with both archive files present."""
+    """Return the windata/ directory next to game.exe, raising InstallError unless both archive
+    files are in it."""
     windata = os.path.join(os.path.dirname(os.path.abspath(exe_path)), "windata")
     if not os.path.isdir(windata):
         raise InstallError(
