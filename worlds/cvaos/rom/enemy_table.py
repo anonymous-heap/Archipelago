@@ -1,11 +1,18 @@
 """
 The enemy stat table, declared once for the features that edit it.
 
-The table is a flat array at GBA 0x080E9644 of 113 rows (Bat..Chaos), 0x24 bytes each.
-``soul_drop_rates`` edits the +0x12 rate byte, ``soul_shuffle`` edits the +0x17 soul type, the
-+0x18 soul index and the rate, and ``enemy_drop_rates`` edits the rate and the +0x15 rarity of the
-common drop. They take the table's address, row size and field offsets from this declaration:
-``EnemyDNA`` is the row layout, and ``ENEMY_TABLE`` places the rows in the ROM.
+The table is a flat array at GBA 0x080E9644 of 113 rows (Bat..Chaos), 0x24 bytes each. These
+features edit it:
+
+* ``soul_drop_rates`` edits the +0x12 soul rate byte.
+* ``soul_shuffle`` edits the +0x17 soul type, the +0x18 soul index and the soul rate.
+* ``drop_table`` edits both drop slots: the items at +0x08 and +0x0A, and their rarities at +0x15
+  and +0x16.
+* ``enemy_drop_rates`` edits the soul rate and the common drop's rarity at +0x15.
+
+They take the table's address, row size and field offsets from this declaration. ``EnemyDNA`` is
+the row layout, and ``ENEMY_TABLE`` places the rows in the ROM. ``soul_sources`` and
+``drop_sources`` also parse the whole table, to print what a ROM holds.
 """
 from __future__ import annotations
 
@@ -35,7 +42,7 @@ class EnemyDNA(Struct, endian="little"):
                                                     # or 0 for none
     drop_2: u16                                     # +0x0A: the rare drop, encoded the same way
     unk_0C: list[int] = array(UInt8, 6)             # not yet mapped
-    soul_rate: u8                                   # +0x12: drop rarity, where
+    soul_rate: u8                                   # +0x12: the soul's rarity, where
                                                     # chance ~ n/(rate*8 + 32 - LCK/16)
     unk_13: list[int] = array(UInt8, 2)             # not yet mapped
     drop_1_rarity: u8                               # +0x15: the common drop's rarity
@@ -48,7 +55,8 @@ class EnemyDNA(Struct, endian="little"):
 
 ENEMY_TABLE = Entry(0x080E9644, EnemyDNA, count(ENEMY_COUNT), name="enemy table")
 
-# Address math only: the table bound to the cart's geometry, no image behind it.
+# The table bound to the cart's address space without a ROM image, for address math and for
+# parsing bytes read elsewhere.
 _TABLE_GEOMETRY = ENEMY_TABLE.bind(gba_space())
 
 # The whole table's file offset and size in bytes, for reading it from a running game.

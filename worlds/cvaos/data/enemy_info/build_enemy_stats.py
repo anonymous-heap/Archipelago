@@ -1,7 +1,7 @@
 """
 Builds ``enemy_stats.csv``: each enemy type's HP and the rarity byte of each of its drop slots.
 
-Generation never has the ROM, so the item drop shuffle reads these values from the CSV. This script
+Generation has no ROM, so Item Drop Shuffle reads these values from the CSV instead. This script
 reads them from the USA ROM's enemy stat table (GBA 0x080E9644, 113 rows of 0x24 bytes):
 
 * ``hp`` is the u16 at +0x0C. Spawning an enemy copies it into the entity's HP field at +0x34
@@ -9,12 +9,12 @@ reads them from the USA ROM's enemy stat table (GBA 0x080E9644, 113 rows of 0x24
   field and reports the enemy dead once it falls to 0 or below.
 * ``drop_1_rarity`` and ``drop_2_rarity`` are the bytes at +0x15 and +0x16. The death routine's
   item roll (0x08068558) loads slot 1's item from +0x08 with its rarity from +0x15, and slot 2's
-  item from +0x0A with its rarity from +0x16. The slot then drops with chance
+  item from +0x0A with its rarity from +0x16. The slot's item then drops with chance
   4 / max(16, rarity * 4 + 16 - LCK / 16).
 
 The script checks that the ROM is Aria of Sorrow (USA), and that the item each slot holds matches
-``enemy_types.csv``, so a misplaced table or row fails loudly. Run from anywhere:
-``python build_enemy_stats.py <path to the USA ROM>``.
+``enemy_types.csv``. A wrong table address or row size therefore raises an error instead of writing
+wrong values. Run from anywhere: ``python build_enemy_stats.py <path to the USA ROM>``.
 """
 
 from __future__ import annotations
