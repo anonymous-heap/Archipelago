@@ -22,6 +22,10 @@ hold. When no remaining item fits a location, it trades with an earlier location
 Moving a breaker can change what logic reaches, so the order pins one of each kind (see ``_pin``).
 Logic then reaches every location no later than before, and the breakers never need to go back.
 
+After the order, the early floor makes sure each player holds early weapons and armor as good as
+the castle's own (see ``RUNGS`` and ``_floor_player``). The order alone cannot promise that, since
+it gives cheap items to the scarce early locations.
+
 Positions run from 0 to 1 on the player's own clock: the share of their pickup locations that the
 seed's sphere order reaches first. The order reads the room clock, on which a defeat location counts
 as reached once one of its enemy's rooms is. Logic reaches most defeat locations much later, through
@@ -207,6 +211,7 @@ class WideReport:
 
     orders: List[OrderResult] = field(default_factory=list)
     restores: int = 0                  # times the breakers went back to their homes
+    floor: Optional["FloorResult"] = None
 
 
 def _dealt_locations(multiworld: MultiWorld, player: int, clock: Clock) -> Dict[Location, float]:
@@ -432,6 +437,133 @@ def _order_round(multiworld: MultiWorld, worlds: List["CVAOSWorld"]) -> None:
             world.wide_report.restores += 1
 
 
+# --- the early floor --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Rung:
+    """Early gear that the floor makes sure a player holds."""
+
+    kind: str          # "weapon" or "armor"
+    class_fit: float   # the least class-fit depth that qualifies
+    bound: float       # the position on the logic clock it must come before
+
+
+# A weapon as good for its class as the castle's Rapier, then a weapon as good as its Lance and an
+# armor as good as its Copper Plate. The player should hold the first by a fifth of the run and the
+# other two by about a third. Each bound sits 0.05 earlier than that, so that core's balancing
+# afterward seldom undoes it.
+RUNGS = (Rung("weapon", 0.15, 0.15), Rung("weapon", 0.24, 0.30), Rung("armor", 0.24, 0.30))
+
+
+@dataclass
+class FloorResult:
+    """What the floor did for one player."""
+
+    met: int = 0                  # rungs that a qualifying item already met
+    trades: List[Tuple[Location, Location]] = field(default_factory=list)  # (target, source)
+    missed: List[Rung] = field(default_factory=list)  # rungs that no trade could meet
+    undone: bool = False          # the trades broke accessibility, so they were undone
+
+
+def qualifies(item: Item, rung: Rung) -> bool:
+    """Whether ``item`` is gear of ``rung``'s kind with at least its class-fit depth."""
+    row = worth.by_name.get(item.name)
+    return (row is not None and _category(item.name) == rung.kind
+            and (row.class_fit_depth or 0.0) >= rung.class_fit - 1e-9)
+
+
+def _swap(first: Location, second: Location) -> None:
+    first.item, second.item = second.item, first.item
+    first.item.location, second.item.location = first, second
+
+
+def _floor_trade_fits(source: Location, target: Location, position: Dict[Location, float],
+                      logic: Walk, state: CollectionState) -> bool:
+    """Whether the floor may move the item at ``source`` to ``target``, and ``target``'s item back."""
+    item = source.item
+    if target is source or _worth(item.name) > position[target] + BAND:
+        return False
+    # A breaker moves only to a location that logic reaches no later, so logic only gains.
+    if _is_breaker(item) and (logic.sphere_of.get(target, _UNREACHED_DEPTH)
+                              > logic.sphere_of.get(source, _UNREACHED_DEPTH)):
+        return False
+    return target.can_fill(state, item, False) and source.can_fill(state, target.item, False)
+
+
+def _floor_player(multiworld: MultiWorld, world: "CVAOSWorld", logic: Walk) -> FloorResult:
+    """Meet each rung for one player, among the locations of the player's last order.
+
+    Positions are on the logic clock here. A rung is met when a qualifying item sits before its
+    bound at one of the player's own locations, or anywhere when it is a breaker. Otherwise the
+    cheapest qualifying item worth under MID_GAME_WORTH trades places with one of the player's
+    filler items at the latest location before the bound, the player's own locations first.
+    Breakers come first among those items, because most of them meet both weapon rungs at once,
+    which leaves the player's last early filler location free for the armor rung. A trade keeps the
+    band and passes can_fill both ways. The pinned locations stay as they are, and so does the item
+    that met an earlier rung.
+    """
+    player = world.player
+    order = world.wide_report.orders[-1]
+    locations = list(order.positions)
+    pinned = set(order.pinned)
+    clock = Clock(multiworld, player, logic)
+    position = {location: clock.position(location) for location in locations}
+    position = {location: 1.0 if value is None else value for location, value in position.items()}
+    result = FloorResult()
+    used: set = set()
+    for rung in RUNGS:
+        held = [location for location in locations
+                if position[location] < rung.bound and qualifies(location.item, rung)
+                and (_is_breaker(location.item) or location.player == player)]
+        if held:
+            result.met += 1
+            used.add(min(held, key=lambda location: (not _is_breaker(location.item),
+                                                     position[location])))
+            continue
+        sources = sorted((location for location in locations
+                          if location not in pinned and location not in used
+                          and qualifies(location.item, rung)
+                          and _worth(location.item.name) < worth.MID_GAME_WORTH),
+                         key=lambda location: (not _is_breaker(location.item),
+                                               _worth(location.item.name), -position[location],
+                                               location.name))
+        targets = sorted((location for location in locations
+                          if position[location] < rung.bound and location not in pinned
+                          and location not in used and not location.locked
+                          and not (location.item.advancement or location.item.useful)),
+                         key=lambda location: (location.player != player, -position[location]))
+        trade = next(((target, source) for source in sources for target in targets
+                      if _floor_trade_fits(source, target, position, logic, multiworld.state)),
+                     None)
+        if trade is None:
+            result.missed.append(rung)
+            continue
+        _swap(*trade)
+        result.trades.append(trade)
+        used.add(trade[0])
+    return result
+
+
+def _floor(multiworld: MultiWorld, worlds: List["CVAOSWorld"]) -> None:
+    """Run the early floor for every player in ``worlds``, on one walk of logic.
+
+    The floor follows the last order. If its trades break the multiworld's accessibility, they are
+    all undone.
+    """
+    logic = walk(multiworld, room_clock=False)
+    results = []
+    for world in worlds:
+        if world.wide_report.orders:
+            world.wide_report.floor = _floor_player(multiworld, world, logic)
+            results.append(world.wide_report.floor)
+    trades = [trade for result in results for trade in result.trades]
+    if trades and not _accessible(multiworld):
+        for target, source in reversed(trades):
+            _swap(target, source)
+        for result in results:
+            result.undone = True
+
+
 # --- entry point ------------------------------------------------------------------------------
 
 def run(multiworld: MultiWorld, game: str) -> None:
@@ -443,3 +575,4 @@ def run(multiworld: MultiWorld, game: str) -> None:
     for world in worlds:
         world.wide_report = WideReport()
     _order_round(multiworld, worlds)
+    _floor(multiworld, worlds)

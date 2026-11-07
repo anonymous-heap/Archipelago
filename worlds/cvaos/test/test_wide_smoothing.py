@@ -26,7 +26,8 @@ from .. import CVAOSWorld, wide_smoothing
 from ..data.item_balancing import worth
 from ..items import logic_only_progression_names
 from ..locations import CVAOSLocation
-from ..wide_smoothing import BAND, OrderResult, _is_defeat, promote_mid_game_gear
+from ..wide_smoothing import (BAND, RUNGS, OrderResult, _is_defeat, promote_mid_game_gear,
+                              qualifies)
 
 GAME = CVAOSWorld.game
 PRESET = {"enemy_checks": "all", "soul_shuffle": "matched", "enemy_drop_rate": 350,
@@ -56,6 +57,30 @@ def generate(seed: int, players: list[tuple[str, dict]],
             value.verify(AutoWorldRegister.world_types[game], args.name[player], args.plando)
             getattr(args, key)[player] = value
     return Main.main(args, seed)
+
+
+# Where the design measures each rung: a fifth of the run for the first, and 0.35 for the others.
+RUNG_DEPTHS = (0.2, 0.35, 0.35)
+
+
+def rungs_held(multiworld: MultiWorld) -> dict[int, tuple[bool, ...]]:
+    """Return, for each player with Wide on, whether they hold each rung's gear in time.
+
+    Positions are on the logic clock, and the player's items count wherever they sit.
+    """
+    sweep = wide_smoothing.walk(multiworld, room_clock=False)
+    held = {}
+    for world in multiworld.get_game_worlds(GAME):
+        if world.options.wide_item_smoothing:
+            clock = wide_smoothing.Clock(multiworld, world.player, sweep)
+            items = [(location.item, clock.position(location))
+                     for location in multiworld.get_filled_locations()
+                     if location.item.player == world.player]
+            held[world.player] = tuple(
+                any(position is not None and position <= depth and qualifies(item, rung)
+                    for item, position in items)
+                for rung, depth in zip(RUNGS, RUNG_DEPTHS))
+    return held
 
 
 def placement_hash(multiworld: MultiWorld) -> str:
@@ -144,9 +169,25 @@ class WideScenario:
     SEEDS: tuple[int, ...] = ()
     runs: list[MultiWorld]
 
+    rungs_before_core: list[dict[int, tuple[bool, ...]]]
+
     @classmethod
     def setUpClass(cls) -> None:
-        cls.runs = [generate(seed, cls.PLAYERS) for seed in cls.SEEDS]
+        cls.runs, cls.rungs_before_core = [], []
+        balance = Main.balance_multiworld_progression
+        for seed in cls.SEEDS:
+            held = {}
+
+            def note_rungs_then_balance(multiworld):
+                held.update(rungs_held(multiworld))
+                balance(multiworld)
+
+            with mock.patch.object(Main, "balance_multiworld_progression",
+                                   side_effect=note_rungs_then_balance):
+                multiworld = generate(seed, cls.PLAYERS)
+            cls.runs.append(multiworld)
+            # A solo seed has no core balancing, so its rungs are read at the end.
+            cls.rungs_before_core.append(held or rungs_held(multiworld))
 
     def wide_worlds(self):
         for multiworld in self.runs:
@@ -169,6 +210,20 @@ class WideScenario:
     def test_equal_seeds_give_equal_placements(self):
         self.assertEqual(placement_hash(generate(self.SEEDS[0], self.PLAYERS)),
                          placement_hash(self.runs[0]))
+
+    def test_every_rung_is_met_before_core_balancing(self):
+        # The floor can miss a rung only when no qualifying item can reach an early filler
+        # location, and it records each miss.
+        for multiworld, held in zip(self.runs, self.rungs_before_core):
+            self.assertTrue(held)
+            for player, rungs in held.items():
+                missed = multiworld.worlds[player].wide_report.floor.missed
+                for rung, met in zip(RUNGS, rungs):
+                    self.assertTrue(met or rung in missed, (multiworld.seed, player, rung))
+
+    def assert_no_rung_missed(self):
+        for multiworld, world in self.wide_worlds():
+            self.assertEqual(world.wide_report.floor.missed, [], multiworld.seed)
 
     def test_pinned_locations_hold_breakers(self):
         for multiworld, world in self.wide_worlds():
@@ -201,6 +256,9 @@ class WideDuoTest(WideScenario, unittest.TestCase):
                                 for loc in dealt))
             self.assertTrue(any(loc.player != world.player for loc in dealt))
 
+    def test_the_floor_meets_every_rung(self):
+        self.assert_no_rung_missed()
+
     def test_the_pin_keeps_a_breaker_where_logic_first_finds_one(self):
         self.assertTrue(any(order.pinned for _multiworld, world in self.wide_worlds()
                             for order in world.wide_report.orders))
@@ -214,6 +272,9 @@ def scenario(cls):
 class SoloPresetTest(WideScenario, unittest.TestCase):
     PLAYERS = [(GAME, PRESET)]
     SEEDS = tuple(range(100, 130))
+
+    def test_the_floor_meets_every_rung(self):
+        self.assert_no_rung_missed()
 
 
 @scenario
