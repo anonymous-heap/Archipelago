@@ -1,7 +1,7 @@
 import base64
 import logging
 import os
-from typing import ClassVar, Sequence, TextIO
+from typing import ClassVar, Sequence, TextIO, Union
 
 from BaseClasses import CollectionState, Item, ItemClassification, MultiWorld, Tutorial
 from worlds.AutoWorld import WebWorld, World
@@ -116,8 +116,16 @@ class CVAOSSettings(settings.Group):
         required = False
         md5s = [AC_GAME_EXE_MD5]
 
+    class WideSmoothingRunsBalancing(settings.Bool):
+        """Whether Wide Item Smoothing runs Archipelago's progression balancing itself in a
+        multiworld, three times, ordering its players' items after each. Core's own balancing then
+        seldom brings their mid-game gear into the first fifth of the run. Turned off, Wide orders
+        once, and about a quarter of its players then get such gear that early. Wide never runs
+        balancing when generation skips it."""
+
     rom_file: RomFile = RomFile("Castlevania - Aria of Sorrow (USA).gba")
     collection_exe: CollectionExePath = CollectionExePath(AC_DEFAULT_EXE_PATH)
+    wide_smoothing_runs_balancing: Union[WideSmoothingRunsBalancing, bool] = True
 
 
 class CVAOSWebWorld(WebWorld):

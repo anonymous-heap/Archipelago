@@ -26,6 +26,10 @@ After the order, the early floor makes sure each player holds early weapons and 
 the castle's own (see ``RUNGS`` and ``_floor_player``). The order alone cannot promise that, since
 it gives cheap items to the scarce early locations.
 
+Core's progression balancing runs after every world's ``stage_post_fill``, so in a multiworld it
+could undo the order. Until core offers a hook after balancing, Wide runs balancing itself, as a
+bridge under the guards that ``_bridge`` lists.
+
 Positions run from 0 to 1 on the player's own clock: the share of their pickup locations that the
 seed's sphere order reaches first. The order reads the room clock, on which a defeat location counts
 as reached once one of its enemy's rooms is. Logic reaches most defeat locations much later, through
@@ -35,6 +39,8 @@ checks early.
 
 from __future__ import annotations
 
+import logging
+import sys
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
@@ -57,6 +63,9 @@ if TYPE_CHECKING:
 # An item is too early for a location when its worth exceeds the location's position by more than
 # this.
 BAND = 0.25
+# In a multiworld, the bridge balances and orders this many times.
+ROUNDS = 3
+SKIP_FLAG = "--skip_prog_balancing"
 
 
 def promote_mid_game_gear(pool: List[Item]) -> None:
@@ -570,9 +579,103 @@ def run(multiworld: MultiWorld, game: str) -> None:
     """Run Wide Item Smoothing for every world of ``game`` with the option on."""
     worlds = [world for world in multiworld.get_game_worlds(game)
               if world.options.wide_item_smoothing]
-    if not worlds:
-        return
+    if worlds:
+        _smooth(multiworld, worlds, _bridge(multiworld, game, worlds))
+
+
+def _smooth(multiworld: MultiWorld, worlds: List["CVAOSWorld"],
+            balance: Optional[Callable[[MultiWorld], None]]) -> None:
+    """Order every player in ``worlds``, then run the floor.
+
+    With ``balance``, each of ROUNDS rounds balances the multiworld and then orders. Without it,
+    the players are ordered once. If a balancing call raises TypeError, as it would if core changed
+    the function's signature, that round still orders and no more rounds follow.
+    """
     for world in worlds:
         world.wide_report = WideReport()
-    _order_round(multiworld, worlds)
+    for _round in range(ROUNDS if balance is not None else 1):
+        if balance is not None:
+            try:
+                balance(multiworld)
+            except TypeError:
+                logging.warning("Wide Item Smoothing could not run progression balancing, so it "
+                                "orders once more and stops.", exc_info=True)
+                balance = None
+        _order_round(multiworld, worlds)
+        if balance is None:
+            break
     _floor(multiworld, worlds)
+
+
+# --- the bridge to core's progression balancing ------------------------------------------------
+
+def _bridge(multiworld: MultiWorld, game: str,
+            worlds: List["CVAOSWorld"]) -> Optional[Callable[[MultiWorld], None]]:
+    """Return core's progression balancing when Wide should run it itself, or None.
+
+    Core balances after every world's ``stage_post_fill``, and it can move a location into an
+    earlier sphere, which brings an item earlier. So in a multiworld Wide balances and orders
+    ROUNDS times itself, and core's balancing afterward finds little left to move. Wide skips the
+    calls when nothing balances afterward: in a solo seed, when no player has progression
+    balancing on, and when the host skips balancing. The host can also turn the calls off.
+
+    In a multiworld, one line in the log names the players and says which way Wide runs, including
+    when core's balancing may still bring their gear early.
+    """
+    if multiworld.players < 2:
+        return None
+    names = ", ".join(multiworld.player_name[world.player] for world in worlds)
+    if not any(multiworld.worlds[player].options.progression_balancing.value > 0
+               for player in multiworld.player_ids):
+        quiet = "no player has progression balancing on"
+    elif host_skips_balancing():
+        quiet = "the host skips progression balancing"
+    else:
+        quiet = None
+    if quiet is not None:
+        logging.info("%s: Wide Item Smoothing orders %s once, because %s, so nothing moves the "
+                     "order afterward.", game, names, quiet)
+        return None
+    balance, reason = None, "the host setting wide_smoothing_runs_balancing is off"
+    if _host_allows_balancing():
+        try:
+            balance = _import_balancing()
+        except ImportError:
+            reason = "it could not import progression balancing"
+    if balance is None:
+        logging.info("%s: Wide Item Smoothing orders %s once, because %s. Core's progression "
+                     "balancing afterward may bring mid-game gear into the first fifth of their "
+                     "runs.", game, names, reason)
+        return None
+    logging.info("%s: Wide Item Smoothing runs progression balancing %d times for %s, ordering "
+                 "after each, so core's own balancing seldom undoes the order.",
+                 game, ROUNDS, names)
+    return balance
+
+
+def _import_balancing() -> Callable[[MultiWorld], None]:
+    # Imported here, inside the pass, so that a core without the function only loses the bridge.
+    from Fill import balance_multiworld_progression
+    return balance_multiworld_progression
+
+
+def host_skips_balancing() -> bool:
+    """Whether this generation runs with ``--skip_prog_balancing``.
+
+    Core keeps the flag only in the arguments of ``Main.main``, so this reads them from the call
+    stack, since ``stage_post_fill`` runs inside ``Main.main`` on the same thread. A generation that
+    does not run through ``Main.main``, such as a test's, falls back to the command line, where
+    argparse also accepts an unambiguous prefix of the flag.
+    """
+    frame = sys._getframe(1)
+    while frame is not None:
+        if frame.f_code.co_name == "main" and frame.f_globals.get("__name__") == "Main":
+            return bool(getattr(frame.f_locals.get("args"), "skip_prog_balancing", False))
+        frame = frame.f_back
+    return any(argument.startswith("--skip_p") and SKIP_FLAG.startswith(argument)
+               for argument in sys.argv[1:])
+
+
+def _host_allows_balancing() -> bool:
+    from . import CVAOSWorld
+    return bool(CVAOSWorld.settings.wide_smoothing_runs_balancing)

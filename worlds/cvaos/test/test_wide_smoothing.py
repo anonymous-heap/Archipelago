@@ -12,11 +12,13 @@ Sorrow slot keeps weapons local and armor non-local.
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import unittest
 from argparse import Namespace
 from unittest import mock
 
+import Fill
 import Main
 from BaseClasses import ItemClassification, MultiWorld, PlandoOptions
 from test.general import setup_multiworld
@@ -160,6 +162,77 @@ class TradeTest(unittest.TestCase):
                 wide_smoothing.walk(multiworld, room_clock=False))
         self.assertTrue(result.undone)
         self.assertEqual(placement_hash(multiworld), before)
+
+
+class BridgeTest(unittest.TestCase):
+    """The bridge: Wide's own calls to core's progression balancing, and their guards."""
+
+    PLAYERS = [(GAME, {"wide_item_smoothing": True}), (GAME, {"wide_item_smoothing": True})]
+
+    def generate_counting(self, players=None, skip_balancing: bool = False, **patches):
+        """Generate a small duo. Return its log lines and how often Wide balanced and walked."""
+        balance = mock.Mock(wraps=Fill.balance_multiworld_progression)
+        walk = mock.Mock(wraps=wide_smoothing.walk)
+        with mock.patch.object(Fill, "balance_multiworld_progression", balance), \
+                mock.patch.object(wide_smoothing, "walk", walk), \
+                self.assertLogs(level="INFO") as logs:
+            for name, value in patches.items():
+                stack = mock.patch.object(wide_smoothing, name, **value)
+                stack.start()
+                self.addCleanup(stack.stop)
+            multiworld = generate(5, players or self.PLAYERS, skip_balancing)
+        lines = [line for line in logs.output if f"{GAME}: Wide Item Smoothing" in line]
+        return multiworld, lines, balance.call_count, walk.call_count
+
+    def test_a_multiworld_balances_three_times_with_one_walk_per_round_for_every_player(self):
+        multiworld, lines, calls, walks = self.generate_counting()
+        self.assertEqual(calls, wide_smoothing.ROUNDS)
+        # Each round walks the room clock and logic once, for both players, and the floor walks
+        # logic once more.
+        self.assertEqual(walks, 2 * wide_smoothing.ROUNDS + 1)
+        self.assertEqual(len(lines), 1)
+        self.assertIn("runs progression balancing 3 times for Castlevania1, Castlevania2", lines[0])
+        self.assertTrue(all(len(world.wide_report.orders) == wide_smoothing.ROUNDS
+                            for world in multiworld.worlds.values()))
+
+    def test_no_calls_when_the_host_skips_balancing(self):
+        multiworld, lines, calls, _walks = self.generate_counting(skip_balancing=True)
+        self.assertEqual(calls, 0)
+        self.assertIn("the host skips progression balancing", lines[0])
+        self.assertEqual(len(multiworld.worlds[1].wide_report.orders), 1)
+
+    def test_no_calls_when_no_player_balances(self):
+        quiet = {"wide_item_smoothing": True, "progression_balancing": 0}
+        _multiworld, lines, calls, _walks = self.generate_counting([(GAME, quiet), (GAME, quiet)])
+        self.assertEqual(calls, 0)
+        self.assertIn("no player has progression balancing on", lines[0])
+
+    def test_the_host_setting_turns_the_calls_off(self):
+        _multiworld, lines, calls, _walks = self.generate_counting(
+            _host_allows_balancing=dict(return_value=False))
+        self.assertEqual(calls, 0)
+        self.assertIn("wide_smoothing_runs_balancing is off", lines[0])
+        self.assertIn("may bring mid-game gear", lines[0])
+
+    def test_a_failed_import_orders_once(self):
+        multiworld, lines, calls, _walks = self.generate_counting(
+            _import_balancing=dict(side_effect=ImportError))
+        self.assertEqual(calls, 0)
+        self.assertIn("could not import progression balancing", lines[0])
+        self.assertEqual(len(multiworld.worlds[1].wide_report.orders), 1)
+
+    def test_a_type_error_from_balancing_orders_once(self):
+        def changed_signature(multiworld):
+            raise TypeError("balance_multiworld_progression() takes 2 arguments")
+        with mock.patch.object(Fill, "balance_multiworld_progression", changed_signature), \
+                self.assertLogs(level="WARNING"):
+            multiworld = generate(5, self.PLAYERS)
+        self.assertEqual(len(multiworld.worlds[1].wide_report.orders), 1)
+
+    def test_outside_main_the_skip_flag_comes_from_the_command_line(self):
+        self.assertFalse(wide_smoothing.host_skips_balancing())
+        with mock.patch.object(wide_smoothing.sys, "argv", ["Generate.py", "--skip_prog"]):
+            self.assertTrue(wide_smoothing.host_skips_balancing())
 
 
 class WideScenario:
