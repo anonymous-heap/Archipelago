@@ -23,8 +23,8 @@ from Options import Choice
 from test.general import setup_multiworld
 
 from .. import CVAOSWorld
-from ..options import (CVAOSOptions, EnemyChecks, EnemyDropRate, KeepSoulDropRates,
-                       ShuffleStartingSoul, SoulShuffle, cvaos_option_groups,
+from ..options import (CVAOSOptions, EnemyChecks, EnemyDropRate, ItemDropShuffle,
+                       KeepSoulDropRates, ShuffleStartingSoul, SoulShuffle, cvaos_option_groups,
                        cvaos_options_presets)
 from .test_smoothing_location_settings import generate
 
@@ -48,14 +48,19 @@ class GroupAndPresetTest(unittest.TestCase):
         experimental = groups["Experimental"]
         self.assertTrue(experimental.start_collapsed)
         self.assertEqual(experimental.options, [EnemyChecks, SoulShuffle, KeepSoulDropRates,
-                                                ShuffleStartingSoul, EnemyDropRate])
+                                                ShuffleStartingSoul, ItemDropShuffle,
+                                                EnemyDropRate])
 
     def test_the_preset_turns_on_the_experimental_options(self):
         preset = cvaos_options_presets["Experimental"]
         self.assertIs(CVAOSWorld.web.options_presets, cvaos_options_presets)
         self.assertEqual(EnemyChecks.from_any(preset["enemy_checks"]), EnemyChecks.option_all)
         self.assertEqual(SoulShuffle.from_any(preset["soul_shuffle"]), SoulShuffle.option_matched)
+        self.assertTrue(ItemDropShuffle.from_any(preset["item_drop_shuffle"]))
         self.assertEqual(EnemyDropRate.from_any(preset["enemy_drop_rate"]).value, 350)
+
+    def test_item_drop_shuffle_is_off_by_default(self):
+        self.assertEqual(ItemDropShuffle.default, 0)
 
     def test_enemy_drop_rate_is_a_percent_from_100_to_1000(self):
         self.assertEqual((EnemyDropRate.range_start, EnemyDropRate.range_end), (100, 1000))

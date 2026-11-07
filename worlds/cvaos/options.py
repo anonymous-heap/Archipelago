@@ -240,7 +240,8 @@ class EnemyDropRate(NamedRange):
 
     Three kinds of drop always keep their usual chance: a strong soul whose enemy your seed
        reaches in the first third of the run, every rare item drop, and the better items (Iron
-       Plate and anything stronger).
+       Plate and anything stronger). With Item Drop Shuffle on, the item rules apply to what each
+       enemy drops after that shuffle.
 
     A soul never drops more often than about once in seven kills, so common souls gain less than
        rare ones, and above 500 souls gain almost nothing more. At 350, a typical three-hour run
@@ -317,6 +318,9 @@ class EnemyChecks(Choice):
        common drop when that drop is cheap, a food or potion that restores HP when it is not, and
        100 Gold when the enemy drops nothing. The food or potion is the one your pool holds
        fewest of, and the pool never holds more copies of one than the 9 the game lets you carry.
+       With Item Drop Shuffle on, a check whose enemy's drop moved adds that drop. Some other
+       checks add another enemy's moved drop instead, starting with those that would add 100
+       Gold.
 
     The item at an enemy check comes through the client a moment after the defeat. The client
        sends no checks from a save file that belongs to another seed, including New Game+ started
@@ -344,6 +348,37 @@ class EnemyChecks(Choice):
     option_bosses = 1
     option_all = 2
     default = option_off
+
+
+class ItemDropShuffle(Toggle):
+    """
+    Moves items that enemies drop into the item pool, so any player's location can hold them.
+       Enemy drops never become locations, and enemies never drop another game's items.
+
+    Each enemy whose drop moved drops another item from this game instead, of similar worth and,
+       where possible, of the same kind. Weapons and armor are ranked against the castle's own
+       pickups of their class, and potions and food by how much they restore. A moved weapon,
+       armor or accessory then drops from no enemy unless Hammer's shop sells it, while food,
+       potions and cures may still drop elsewhere.
+
+    Then every drop is dealt again by how late your seed reaches each enemy and, to a small
+       degree, by its HP. So early enemies drop cheap items and the castle's last enemies drop the
+       best ones. Each item keeps its usual rarity.
+
+    Each moved drop takes the place of a cheap item in your pool, so how many drops move depends
+       on Enemy Checks:
+    - all: every drop no better than what the castle's own pickups offer a quarter of the way in
+      (57 of the 96 drop slots).
+    - bosses: the 26 cheapest drops (25 under the Graham goal).
+    - off: the 16 cheapest drops, which are Mach Punch and 15 foods and potions.
+
+    Enemy Drop Rate, when above 100, also raises how often each common drop appears, as its own
+       description says. The client command /drops lists every enemy's drops.
+
+    Experimental: its balance is measured but not play-tested, and it may change between versions.
+    """
+    display_name = "Item Drop Shuffle"
+    default = 0
 
 
 class ForbiddenAreaButton(Choice):
@@ -629,6 +664,7 @@ class CVAOSOptions(PerGameCommonOptions):
     new_soul_pause: NewSoulPause
     forbidden_area_button: ForbiddenAreaButton
     enemy_checks: EnemyChecks
+    item_drop_shuffle: ItemDropShuffle
     single_jump_divekick: SingleJumpDivekick
     classicvania_movement: ClassicvaniaMovement
     oops_all_whips: OopsAllWhips
@@ -696,18 +732,20 @@ cvaos_option_groups = [
         SoulShuffle,
         KeepSoulDropRates,
         ShuffleStartingSoul,
+        ItemDropShuffle,
         EnemyDropRate,
     ], start_collapsed=True),
 ]
 
 
-# The "Experimental" preset turns on the Experimental options at their measured settings. Early
-# strong drops, such as Minotaur's Battle Axe, drop as often as in the released game, because no
-# option yet orders the enemy drops by how early a seed reaches each enemy.
+# The "Experimental" preset turns on the Experimental options at their measured settings. Item Drop
+# Shuffle deals the enemy drops by how early the seed reaches each enemy, so early enemies drop
+# cheap items, and strong drops such as Minotaur's Battle Axe come from later ones.
 cvaos_options_presets: dict[str, dict[str, object]] = {
     "Experimental": {
         "enemy_checks": "all",
         "soul_shuffle": "matched",
+        "item_drop_shuffle": True,
         "enemy_drop_rate": 350,
     },
 }
