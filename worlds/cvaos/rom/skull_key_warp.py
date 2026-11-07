@@ -67,11 +67,11 @@ assert len(WARPHOOK_BLOB) == 108
 
 # NOTE: both "start with 1" and "never drop below 1" are handled by the CLIENT, not the ROM.
 # ram/accessors.py ``cap_skull_keys(floor=1)`` runs every poll while in-game: it clamps the Skull
-# Key count down to the cap AND up to 1 (the floor). The floor applies as soon as a new game is
-# in-game, so the player effectively starts with one and always has at least one. sUnk_080E0DE4
-# looks like a starting-items table, but it belongs to GameModeBossRushMenuUpdate (Boss Rush), so
-# adding the Skull Key there has no effect on a normal Soma new game, which starts with an empty
-# inventory.
+# Key count down to its limit of 1 AND up to 1 (the floor). The floor applies as soon as a new
+# game is in-game, so the player effectively starts with one and always has at least one.
+# sUnk_080E0DE4 looks like a starting-items table, but it belongs to GameModeBossRushMenuUpdate
+# (Boss Rush), so adding the Skull Key there has no effect on a normal Soma new game, which
+# starts with an empty inventory.
 
 # The 12-byte destination record lives inside the blob (struct SkullKeyWarpDestination):
 #   u32 room_ptr; u16 x; u16 y; s16 x_offset; s16 y_offset

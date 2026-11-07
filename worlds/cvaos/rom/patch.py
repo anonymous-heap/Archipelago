@@ -4,9 +4,10 @@ Build each seed's patch file, and apply it to the base ROM.
 Generation runs without the base ROM, so :func:`patch_rom` fills the patch file with plain
 writes: the location items from :func:`get_location_data`, the identifier and slot auth, and the
 DeathLink hook when that option is on. It also stores ``rom_config.json``, which records the
-seed's settings for the features that must read the base ROM. :class:`CVAOSPatchExtension`
-applies those features on the player's machine when the patch is applied. The base ROM is a cart
-dump or the copy inside the Advance Collection's game.exe (:func:`get_base_rom_bytes`).
+seed's settings for the features that must read the base ROM. When the patch is applied on the
+player's machine, :class:`CVAOSPatchExtension` applies those features in two steps after the
+plain writes: ``apply_rom_features``, then ``apply_enemy_table``. The base ROM is a cart dump or
+the copy inside the Advance Collection's game.exe (:func:`get_base_rom_bytes`).
 """
 from __future__ import annotations
 
@@ -80,10 +81,10 @@ def _item_encodings() -> Dict[int, tuple[int, int, int]]:
     which the client enforces, a PICKUP spawns just as a HARD_PICKUP would. With ``always``, the
     items are meant to spawn in normal mode.
 
-    An item that only an enemy check adds follows its category's rule: every vanilla pickup of a
-    category stores the same subtype, and an item_offset that is the item's id plus a fixed
-    amount. Raises ValueError when the vanilla pickups disagree on an item's encoding or on their
-    category's rule.
+    An item that no vanilla pickup holds follows its category's rule. Only an enemy check or Item
+    Drop Shuffle adds such an item. Every vanilla pickup of a category stores the same subtype,
+    and an item_offset that is the item's id plus a fixed amount. Raises ValueError when the
+    vanilla pickups disagree on an item's encoding or on their category's rule.
     """
     info_by_name = {info.name: info for info in item_info_collection}
     info_by_number = {info.item_number: info for info in item_info_collection}
@@ -145,7 +146,7 @@ assert offset_of(AoSPickupEntity, "subtype") == _TYPE_OFF + 1
 # Location writes: ROM file offset -> bytes
 
 def rom_gives_item(world, location) -> bool:
-    """Whether the ROM hands out ``location``'s item itself when its pickup is collected.
+    """Return whether the ROM hands out ``location``'s item itself when its pickup is collected.
 
     It does for this player's own items, except a Progressive Movement copy, which has no pickup
     of its own. Every other player's item, including an item-link item that this player's own
@@ -229,15 +230,15 @@ def base_rom_override(base: bytes):
 
 
 def get_base_rom_bytes(target: int = TARGET_GBA) -> bytes:
-    """The base ROM to patch against, chosen by the seed's declared target platform.
+    """Return the base ROM to patch against, chosen by the seed's declared target platform.
 
-    - ``advance_collection``: source the ROM from the installed collection automatically. The
-      stock AoS ROM is pulled out of ``windata/`` next to the collection's game.exe, which is
-      ``collection_exe`` or else the one in the player's Steam libraries (find_collection_exe),
-      so a collection player configures nothing. Only if the collection can't be found does it
-      fall back to the prompted ``rom_file``.
-    - ``gba``: use ``rom_file``; accessing it opens a file browser when unset. The pick may be a
-      GBA ROM *or* the collection's game.exe (``_read_base_rom_source`` extracts from the exe).
+    - ``advance_collection``: extract the stock AoS ROM from ``windata/`` next to the collection's
+      game.exe. That exe is ``collection_exe``, or else the one in the player's Steam libraries
+      (find_collection_exe), so a collection player configures nothing. Only when no collection
+      is found does this fall back to the prompted ``rom_file``.
+    - ``gba``: use ``rom_file``, which opens a file browser when it is unset. The file may be a
+      GBA ROM *or* the collection's game.exe, from which ``_read_base_rom_source`` extracts the
+      ROM.
 
     While :func:`base_rom_override` is active, its ROM is returned instead, whatever the target.
     """
@@ -299,8 +300,8 @@ class CVAOSPatchExtension(APPatchExtension):
         # The soul shuffle and the soul-rate edits (apply_soul_edits).
         apply_soul_edits(working, config)
 
-        # The seed's drop table (rom/drop_table.py). apply_enemy_table then scales the common
-        # rarities that it leaves.
+        # The seed's drop table (rom/drop_table.py). apply_enemy_table later scales the
+        # common-drop rarities that this leaves.
         apply_drop_table_edits(working, config)
 
         # Gameplay tweaks ported from Xanthus's AoS patches (see each module's docstring).
@@ -344,9 +345,9 @@ class CVAOSPatchExtension(APPatchExtension):
         rarities that every earlier feature left (rom/enemy_drop_rates.py). A seed without the
         key gets ``rom`` back unchanged.
 
-        Every seed from V0.5 on lists this step, while a released patch lists only the two before
-        it. An apworld from before V0.5 therefore refuses a newer patch with "Unknown procedure"
-        instead of building a ROM without these edits.
+        Every patch from this version lists this step, while a released patch lists only the two
+        before it. A released apworld does not know the step, so it fails on a newer patch with
+        "Unknown procedure" instead of building a ROM without these edits.
         """
         config = json.loads(caller.get_file(config_file_name).decode("utf-8"))
         if not config.get("enemy_drop_rates"):
@@ -380,10 +381,10 @@ def apply_soul_edits(working: bytearray, config: Dict[str, object]) -> None:
     # Adjust selected enemy soul-drop rates (rom/soul_drop_rates.py).
     _apply_writes(working, soul_drop_rates.build_writes(bytes(working)))
 
-    # Global soul-drop-rate multiplier. Last of the rate edits in apply_rom_features on purpose:
-    # it reads the rates as they now stand, so it composes with both the overrides above and a
-    # shuffle that moved rates around. Enemy Drop Rate replaces it, and apply_enemy_table applies
-    # that option after the whole of apply_rom_features.
+    # Global soul-drop-rate multiplier. It comes last among these rate edits because it reads the
+    # rates as they now stand, so it composes with both the overrides above and a shuffle that
+    # moved rates around. An Enemy Drop Rate above 100 turns this option off and replaces it, and
+    # apply_enemy_table applies Enemy Drop Rate after all of apply_rom_features.
     if config["multiply_soul_drop_rates"]:
         _apply_writes(working, soul_drop_rates.build_multiplier_writes(
             bytes(working), config["soul_drop_rate_multiplier"]))
@@ -536,11 +537,11 @@ def build_rom_config(world: CVAOSWorld) -> Dict[str, object]:
     Everything that must READ the base ROM (guards, relocated tables, icon extraction) is
     deferred to the patch extension's steps through this config. Its keys must match what those
     steps look up, and each key needs an entry in ROM_CONFIG_KEY_IDENTIFIERS. target_platform
-    also drives base-ROM source selection at apply time (get_source_data_with_cache), and
+    also chooses where the base ROM comes from at apply time (get_source_data_with_cache), while
     apply_rom_features ignores it.
 
-    With Item Drop Shuffle on or Enemy Drop Rate above 100, this reads the seed depths, so call
-    it only after progression balancing.
+    With Item Drop Shuffle or Wide Item Smoothing on, or an Enemy Drop Rate above 100, this reads
+    the seed depths, so call it only after progression balancing.
     """
     config: Dict[str, object] = {
         "target_platform": world.options.target_platform.value,

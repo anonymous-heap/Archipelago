@@ -1,5 +1,5 @@
 """
-Pins for rom/skull_key_pickup.py, which lets a Skull Key pickup be collected while the player
+Tests for rom/skull_key_pickup.py, which lets a Skull Key pickup be collected while the player
 holds 9 Skull Keys.
 
 The tests check the written bytes, their disassembly, and that apply_rom_features applies them to

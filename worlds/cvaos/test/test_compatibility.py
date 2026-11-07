@@ -1,21 +1,21 @@
 """
 Tests that an outdated install refuses a seed it can't run, and that released seeds still work.
 
-A seed's identifier is the newest among the identifiers that introduced its rom_config.json keys,
-and never older than V0.5, which released clients refuse. A ROM from a released version (V0.3 or
-V0.4) holds nothing the current clients cannot handle, so the BizHawk client and the collection
-client still accept it.
+A seed carries the newest identifier among those that introduced its rom_config.json keys, but
+never one older than V0.5, which released clients refuse. A ROM from a released version (V0.3 or
+V0.4) holds nothing that the current clients cannot handle, so the BizHawk client and the
+collection client both accept it.
 
 Both clients ask the server for the starting inventory as well as other worlds' items. Logic
 counts the starting inventory as owned from the start, but nothing else puts it into the game, so
-a client that does not ask for it can leave a seed unbeatable. Under every identifier after the
-released V0.3 and V0.4, the clients also ask for the player's own items, because the ROM never
-hands out the item at a defeat location. Slot data always lists the pickups whose items the ROM
-hands out.
+a client that does not ask for it can leave a seed unbeatable. For every identifier after the
+released ones, the clients also ask for the player's own items, because the ROM never hands out
+the item at a defeat location. Slot data always lists the pickups whose items the ROM hands out,
+so that the client does not give those items a second time.
 
-Every seed's patch lists the apply_enemy_table step, which an apworld from before V0.5 does not
-know, and the patcher refuses a rom_config.json key it does not know. A released patch, which
-lacks the step, still applies.
+Every patch from this version lists the apply_enemy_table step, which a released apworld does not
+know. The patcher also refuses a rom_config.json key that it does not know. A released patch
+lacks the step, and it still applies.
 
     python -m pytest worlds/cvaos/test/test_compatibility.py -v
 """

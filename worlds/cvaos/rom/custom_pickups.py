@@ -220,8 +220,8 @@ def validate_registry(pickups: List[CustomPickup]) -> None:
 
 # Re-export the content registry's names, so ``custom_pickups.CUSTOM_PICKUPS``,
 # ``.STUDY_SEALSWITCH`` and ``.CUSTOM_PICKUP_TEST_PLACEMENTS`` resolve here as well, as tests and
-# patch.py expect. The module-level __getattr__ (PEP 562) imports them on
-# first access, which avoids the same import cycle as _registry.
+# patch.py expect. The module-level __getattr__ (PEP 562) imports them on first access, which
+# avoids the same import cycle as _registry.
 _CONTENT_NAMES = ("CUSTOM_PICKUPS", "STUDY_SEALSWITCH", "CUSTOM_PICKUP_TEST_PLACEMENTS")
 
 
@@ -382,10 +382,11 @@ def build_writes_from_rom(base_rom: bytes) -> Dict[int, bytes]:
     return writes
 
 
-# Pickup-entity encoding for a custom item: (type_num, subtype_num, item_offset). type 4 = PICKUP,
-# subtype 2 = consumable. subtype MUST stay 2: only the subtype-2 spawn-path icon literal (file
-# 0x440B4) is repointed to our extended table; the subtype-3/4 (weapon/armor) and subtype-0xFF
-# (by-global-id) spawn paths read the ORIGINAL tables, so a var_b>=32 item spawned on any other
-# subtype would read past / mis-read them. item_offset = var_b key.
+# Pickup-entity encoding for a custom item: (type_num, subtype_num, item_offset), where type 4 is
+# PICKUP, subtype 2 is consumable, and item_offset is the var_b that DESC_TABLE is keyed by.
+# The subtype MUST stay 2, because only the subtype-2 spawn path's icon literal (file 0x440B4)
+# points at the extended table. The weapon and armor paths (subtypes 3 and 4) and the by-global-id
+# path (subtype 0xFF) read the ORIGINAL tables, so an item with var_b >= 32 on any of those
+# subtypes would read past them or read the wrong entry.
 def get_encoding(pickup: CustomPickup) -> tuple[int, int, int]:
     return (4, 2, pickup.item_offset)

@@ -1,9 +1,9 @@
 """Structural tests for the custom-pickup framework (rom/custom_pickups.py).
 
-These do not run the ROM; they check the bytes the builder emits (blob shape, the spawn-path literal
-repoint, the extended icon table, the descriptor rows, icon-tile placement, and no write overlaps).
-A full in-game check (the button opening the A01 barrier + its SFX, and the recoloured icon) still
-needs an emulator playtest -- see rom/custom_pickups.py.
+These do not run the ROM. They check the bytes the builder emits: the blob's shape, the
+spawn-path literal repoint, the extended icon table, the descriptor rows, the icon-tile placement,
+and that no two writes overlap. Whether collecting the Study Sealswitch opens the A01 barrier with
+its sound, and how its icon looks, is checked in an emulator playtest, not here.
 """
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ class TestWrites(unittest.TestCase):
                              (p.item_offset, p.flag_field, p.flag_number, p.sfx))
         self.assertIn(cp.DESC_TERMINATOR, dt)
 
-    def test_button_sets_misc_flag_48(self):
+    def test_study_sealswitch_sets_misc_flag_48(self):
         b = cp.STUDY_SEALSWITCH
         self.assertEqual((b.flag_field, b.flag_number), (cp.FLAG_FIELD_MISC, 48))  # A01 barrier flag
         self.assertEqual(b.sfx, 0x133)
@@ -84,8 +84,8 @@ class TestRegistry(unittest.TestCase):
         self.assertEqual(cp.get_encoding(cp.STUDY_SEALSWITCH), (4, 2, cp.STUDY_SEALSWITCH.item_offset))
 
     def test_shadow_outside_saved_soul_block(self):
-        # Regression: the Item-Use shadow MUST NOT live in the SRAM-saved 0x190 player block
-        # (gEwramData+0x1325C..0x133EC) -- pad_133A0 there is entirely soul state, and a shadow on it
+        # The Item-Use shadow MUST NOT live in the SRAM-saved 0x190 player block
+        # (gEwramData+0x1325C..0x133EC). pad_133A0 there is entirely soul state, and a shadow on it
         # corrupts souls. It must sit in the free high-EWRAM tail above the struct (>= 0x02025554).
         self.assertEqual(cp.SHADOW_BASE_GBA + 0x38, cp.SHADOW_INVENTORY_GBA)
         self.assertFalse(0x0201325C <= cp.SHADOW_INVENTORY_GBA < 0x020133EC,
