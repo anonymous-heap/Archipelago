@@ -26,6 +26,9 @@ After the order, the early floor makes sure each player holds early weapons and 
 the castle's own (see ``RUNGS`` and ``_floor_player``). The order alone cannot promise that, since
 it gives cheap items to the scarce early locations.
 
+The same band applies to the enemy drop table, through ``band_drop_table``, which the drop table's
+writer calls whether or not Item Drop Shuffle is on.
+
 Core's progression balancing runs after every world's ``stage_post_fill``, so in a multiworld it
 could undo the order. Until core offers a hook after balancing, Wide runs balancing itself, as a
 bridge under the guards that ``_bridge`` lists. Once core calls ``post_balancing`` on every world,
@@ -44,19 +47,22 @@ import logging
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from BaseClasses import (CollectionState, Item, ItemClassification, Location, LocationProgressType,
                          MultiWorld)
 
 from .data import item_balancing as desirability_data
 from .data.item_balancing import worth
+from .drop_shuffle import EQUIPMENT_CATEGORIES, DropSlot, SlotKey
 from .enemy_checks import enemy_id_for_location
 from .item_smoothing import (PARAMS_BY_KEY, SmoothingParams, _UNREACHED_DEPTH, _accessible,
                              _category, _jittered, _region_depth, _restore_breakers)
 from .items import logic_only_progression_names
 from .locations import CVAOSLocation, pickup_location_ids
 from .regions import _breakers
+from .seed_depth import UNREACHED
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -572,6 +578,79 @@ def _floor(multiworld: MultiWorld, worlds: List["CVAOSWorld"]) -> None:
             _swap(target, source)
         for result in results:
             result.undone = True
+
+
+# --- the drop table's band --------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class DropBand:
+    """A drop table after the band, and what the band changed."""
+
+    table: Mapping[int, Tuple[DropSlot, DropSlot]]  # every enemy id, then slots 1 and 2
+    swaps: int                                      # trades between two slots
+    # Each slot whose drop left the table: the slot, that drop, and the supply item in its place.
+    replaced: Tuple[Tuple[SlotKey, str, str], ...]
+
+
+def band_drop_table(table: Mapping[int, Tuple[DropSlot, DropSlot]], depths: Mapping[int, float],
+                    supply: Sequence[str]) -> DropBand:
+    """Return ``table`` with no drop worth more than its enemy's seed depth plus ``BAND``.
+
+    ``table`` has the shape of ``drop_shuffle.DropShufflePlan.table``. It is Item Drop Shuffle's
+    dealt table, or ``drop_shuffle.vanilla_drop_table()`` when that option is off. ``depths`` gives
+    each enemy's seed depth by enemy id, and an enemy missing from it counts as unreached, at
+    depth 1.0. ``supply`` is ``drop_shuffle.plan_travel(...).supply``.
+
+    The drops above their enemy's line are taken most valuable first. Each one trades places with
+    the drop of the earliest slot whose enemy's line admits it, and the drop that comes back must be
+    under the first slot's line. The partner is looked for among slots of the same kind (common or
+    rare) holding an item of the same kind (equipment or consumable) first, then among slots of the
+    same kind, then among all slots. When no slot admits the drop, the most valuable supply item
+    under the line takes its place, and the drop leaves the table.
+
+    A drop keeps its rarity byte when it moves, and a supply item takes the byte of the slot it
+    fills. Empty slots stay empty, and the result has the same shape as ``table``.
+    """
+    contents: Dict[SlotKey, DropSlot] = {(enemy_id, slot): content
+                                         for enemy_id, row in table.items()
+                                         for slot, content in enumerate(row, start=1)}
+
+    def line(key: SlotKey) -> float:
+        # A hair above the line, so that a drop worth exactly the depth plus the band stays.
+        return depths.get(key[0], UNREACHED) + BAND + 1e-9
+
+    def equipment(name: str) -> bool:
+        return worth.by_name[name].category in EQUIPMENT_CATEGORIES
+
+    over = sorted((key for key, content in contents.items()
+                   if content.item and _worth(content.item) > line(key)),
+                  key=lambda key: (-_worth(contents[key].item), key))
+    swaps = 0
+    replaced: List[Tuple[SlotKey, str, str]] = []
+    for key in over:
+        name = contents[key].item
+        value = _worth(name)
+        partner = None
+        for same_slot, same_item in ((True, True), (True, False), (False, False)):
+            admitting = [other for other, content in contents.items()
+                         if other != key and content.item and line(other) >= value
+                         and _worth(content.item) <= line(key)
+                         and (not same_slot or other[1] == key[1])
+                         and (not same_item or equipment(content.item) == equipment(name))]
+            if admitting:
+                partner = min(admitting, key=lambda other: (depths.get(other[0], UNREACHED), other))
+                break
+        if partner is None:
+            fallback = max((item for item in supply if _worth(item) <= line(key)),
+                           key=lambda item: (_worth(item), item))
+            replaced.append((key, name, fallback))
+            contents[key] = DropSlot(fallback, contents[key].rarity)
+        else:
+            contents[key], contents[partner] = contents[partner], contents[key]
+            swaps += 1
+    banded = {enemy_id: tuple(contents[(enemy_id, slot)] for slot in range(1, len(row) + 1))
+              for enemy_id, row in table.items()}
+    return DropBand(MappingProxyType(banded), swaps, tuple(replaced))
 
 
 # --- entry point ------------------------------------------------------------------------------

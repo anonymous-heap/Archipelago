@@ -16,6 +16,7 @@ import logging
 import os
 import unittest
 from argparse import Namespace
+from collections import Counter
 from unittest import mock
 
 import Fill
@@ -24,8 +25,9 @@ from BaseClasses import ItemClassification, MultiWorld, PlandoOptions
 from test.general import setup_multiworld
 from worlds.AutoWorld import AutoWorldRegister, World
 
-from .. import CVAOSWorld, wide_smoothing
+from .. import CVAOSWorld, seed_depth, wide_smoothing
 from ..data.item_balancing import worth
+from ..drop_shuffle import DropSlot, plan_travel, vanilla_drop_table
 from ..items import logic_only_progression_names
 from ..locations import CVAOSLocation
 from ..wide_smoothing import (BAND, RUNGS, OrderResult, _is_defeat, promote_mid_game_gear,
@@ -252,6 +254,56 @@ class PostBalancingHookTest(unittest.TestCase):
 
     def test_without_the_hook_wide_runs_in_stage_post_fill(self):
         self.assertFalse(wide_smoothing.core_has_post_balancing())
+
+
+class DropBandTest(unittest.TestCase):
+    """The band on the enemy drop table."""
+
+    SUPPLY = ("Potion", "High Potion", "Rapier")
+
+    @staticmethod
+    def table(rows: dict[int, tuple[str, str]]) -> dict[int, tuple[DropSlot, DropSlot]]:
+        return {enemy_id: tuple(DropSlot(item or None, 10 * enemy_id + slot)
+                                for slot, item in enumerate(row, start=1))
+                for enemy_id, row in rows.items()}
+
+    def test_on_the_vanilla_table_every_drop_ends_under_its_enemys_line(self):
+        multiworld = generate(1, [(GAME, PRESET)])
+        depths = seed_depth.enemy_seed_depths(multiworld.worlds[1])
+        before = vanilla_drop_table()
+        band = wide_smoothing.band_drop_table(before, depths, plan_travel(2, 0, True).supply)
+        self.assertGreater(band.swaps, 0)
+        self.assertEqual(set(band.table), set(before))
+        for enemy_id, row in band.table.items():
+            for slot, content in enumerate(row):
+                with self.subTest(enemy_id=enemy_id, slot=slot):
+                    self.assertEqual(content.item is None, before[enemy_id][slot].item is None)
+                    if content.item:
+                        self.assertLessEqual(worth.item_worth(content.item),
+                                             depths[enemy_id] + BAND + 1e-9)
+        # Each drop moved whole, with its rarity byte, unless the supply replaced it.
+        old = Counter(slot for row in before.values() for slot in row if slot.item)
+        new = Counter(slot for row in band.table.values() for slot in row if slot.item)
+        self.assertEqual(sum((old - new).values()), len(band.replaced))
+        changed = sum(1 for enemy_id, row in band.table.items()
+                      for slot, content in enumerate(row) if content != before[enemy_id][slot])
+        self.assertLessEqual(changed, 2 * band.swaps + len(band.replaced))
+
+    def test_a_drop_trades_with_the_earliest_slot_of_its_kind_that_admits_it(self):
+        table = self.table({0: ("Battle Axe", ""), 1: ("Potion", ""), 2: ("Short Sword", ""),
+                            3: ("Leather Plate", ""), 4: ("", "Bamboo Sword")})
+        depths = {0: 0.0, 1: 0.6, 2: 0.7, 3: 0.65, 4: 0.6}
+        band = wide_smoothing.band_drop_table(table, depths, self.SUPPLY)
+        # Enemy 1's Potion is earlier but a consumable, and enemy 4's slot is a rare one.
+        self.assertEqual(band.table[3][0], DropSlot("Battle Axe", 1))
+        self.assertEqual(band.table[0][0], DropSlot("Leather Plate", 31))
+        self.assertEqual((band.swaps, band.replaced), (1, ()))
+
+    def test_a_drop_no_slot_admits_gives_way_to_the_best_supply_item_under_the_line(self):
+        band = wide_smoothing.band_drop_table(self.table({0: ("Final Sword", "Potion")}), {0: 0.0},
+                                              self.SUPPLY)
+        self.assertEqual(band.table[0], (DropSlot("High Potion", 1), DropSlot("Potion", 2)))
+        self.assertEqual(band.replaced, (((0, 1), "Final Sword", "High Potion"),))
 
 
 class WideScenario:
