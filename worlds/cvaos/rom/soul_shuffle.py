@@ -73,6 +73,7 @@ SOUL_TYPE_ABILITY = 3
 MODE_OFF = "off"
 MODE_WITHIN_TYPE = "within_type"
 MODE_ANY_TYPE = "any_type"
+MODE_MATCHED = "matched"
 
 # --- The free starting soul -------------------------------------------------------------
 # The intro gives Soma one Winged Skeleton soul. The grant is not an enemy drop: the soul's type
@@ -284,6 +285,8 @@ def plan_shuffle(random: Random, mode: str) -> Dict[int, int]:
     Reads only :data:`VANILLA`, so this runs at generation time without a base ROM. Enemies
     that keep their own soul are omitted, so the result is a permutation of its own key set.
     """
+    if mode == MODE_MATCHED:
+        raise NotImplementedError("Soul Shuffle's matched value has no shuffle in this version")
     eligible = shuffleable_enemies(mode)
     if not eligible:
         return {}

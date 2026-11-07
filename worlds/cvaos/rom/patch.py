@@ -102,6 +102,7 @@ _SOUL_SHUFFLE_MODES = {
     SoulShuffle.option_off: soul_shuffle.MODE_OFF,
     SoulShuffle.option_within_type: soul_shuffle.MODE_WITHIN_TYPE,
     SoulShuffle.option_any_type: soul_shuffle.MODE_ANY_TYPE,
+    SoulShuffle.option_matched: soul_shuffle.MODE_MATCHED,
 }
 
 

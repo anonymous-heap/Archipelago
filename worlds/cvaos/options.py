@@ -10,6 +10,7 @@ inherit. An inherited technique is in logic when the preset is at or above its t
 TECHNIQUES registry.
 """
 
+import random
 from dataclasses import dataclass
 from enum import IntEnum
 
@@ -121,17 +122,43 @@ class SoulShuffle(Choice):
     - within_type: red souls swap with red, blue with blue, yellow with yellow (pools of 53,
       18 and 32).
     - any_type: one permutation across all 103 souls, ignoring type.
+    - matched: each soul trades places only with a soul of the same type and strength tier. The
+      five tiers come from community tier lists. Each enemy keeps its own soul drop rate,
+      whatever Keep Soul Drop Rates says, so a run gives as many souls of each type and tier, in
+      each part of the castle, as an unshuffled run would. About 86% of the 103 souls move.
+      Headhunter, Death, Legion and Balore each still award one soul, of their own type and tier.
+      Experimental: its balance is measured but not play-tested, and it may change between
+      versions.
+
+    random picks only off, within_type or any_type, so a YAML written before matched existed
+       rolls as it always has.
+
+    The client command /souls lists which enemy drops each soul.
     """
     display_name = "Soul Shuffle"
     option_off = 0
     option_within_type = 1
     option_any_type = 2
+    option_matched = 3
     default = option_off
+
+    # The values that "random" draws from: the ones released before matched existed.
+    RANDOM_VALUES = (option_off, option_within_type, option_any_type)
+
+    @classmethod
+    def from_text(cls, text: str) -> "SoulShuffle":
+        # "random" draws only the released values, so a released YAML that says random rolls
+        # the same value, and leaves the same random state for the options after it. celeste64
+        # and kdl3 limit "random" the same way.
+        if text.lower() == "random":
+            return cls(random.choice(cls.RANDOM_VALUES))
+        return super().from_text(text)
 
 
 class KeepSoulDropRates(DefaultOnToggle):
     """
-    No effect when Soul Shuffle is off.
+    No effect when Soul Shuffle is off or matched. With matched, each enemy keeps its own soul
+       drop rate.
 
     Whether a soul keeps its own drop rate when it moves to a new enemy, or inherits the rate
        of the enemy now dropping it.
@@ -159,7 +186,8 @@ class ShuffleStartingSoul(DefaultOnToggle):
 
     Note that the cutscene will still _say_ "Winged Skeleton" in all cases for now.
 
-    - on: the soul becomes whatever soul now drops from the Winged Skeleton enemy.
+    - on: the soul becomes whatever soul now drops from the Winged Skeleton enemy. With matched,
+      that is one of the nine red souls in Winged Skeleton's tier.
     - off: you always start with the vanilla Winged Skeleton soul.
     """
     display_name = "Shuffle Starting Soul"
@@ -167,6 +195,8 @@ class ShuffleStartingSoul(DefaultOnToggle):
 
 class MultiplySoulDropRates(Toggle):
     """
+    No effect when Enemy Drop Rate is above 100, because that option replaces this one.
+
     Makes souls drop more often across the board, independently of Soul Shuffle.
 
     Set the size of the increase with Soul Drop Rate Multiplier.
@@ -177,7 +207,7 @@ class MultiplySoulDropRates(Toggle):
 
 class SoulDropRateMultiplier(NamedRange):
     """
-    No effect when Multiply Soul Drop Rates is off.
+    No effect when Multiply Soul Drop Rates is off, or when Enemy Drop Rate is above 100.
 
     How much more often souls drop, in percent: 100 is vanilla, 120 means a soul appears 1.2x
        as often, 400 means four times as often.
@@ -196,6 +226,44 @@ class SoulDropRateMultiplier(NamedRange):
         "double": 200,
         "quadruple": 400,
         "tenfold": 1000,
+    }
+
+
+class EnemyDropRate(NamedRange):
+    """
+    How often enemies drop their soul and their common item, in percent of the usual chance.
+       100 changes nothing.
+
+    Kinds of enemy that your seed reaches in its first quarter get only a sixth of the boost, for
+       the whole run, because you meet them early anyway: about 142% at 350. Every other kind gets
+       the full value.
+
+    Three kinds of drop always keep their usual chance: a strong soul whose enemy your seed
+       reaches in the first third of the run, every rare item drop, and the better items (Iron
+       Plate and anything stronger).
+
+    A soul never drops more often than about once in seven kills, so common souls gain less than
+       rare ones, and above 500 souls gain almost nothing more. At 350, a typical three-hour run
+       ends with about 44 of the 110 enemy souls instead of 29, a new soul about every 4 minutes.
+       In most runs the first hour or so is quicker than that, because you meet many new kinds of
+       enemy then, and the last hour is slower. A player who kills more or fewer enemies than most
+       also sees a faster or slower pace.
+
+    Above 100, this replaces Multiply Soul Drop Rates and Soul Drop Rate Multiplier. Hard Mode,
+       luck, the Soul Eater Ring and Ancient Book Soul Drops still apply on top.
+
+    Experimental: its balance is measured but not play-tested, and it may change between versions.
+    """
+    display_name = "Enemy Drop Rate"
+    range_start = 100
+    range_end = 1000
+    default = 100
+    special_range_names = {
+        "vanilla": 100,
+        "double": 200,
+        "triple": 300,
+        "quintuple": 500,
+        "maximum": 1000,
     }
 
 
@@ -536,6 +604,7 @@ class CVAOSOptions(PerGameCommonOptions):
     shuffle_starting_soul: ShuffleStartingSoul
     multiply_soul_drop_rates: MultiplySoulDropRates
     soul_drop_rate_multiplier: SoulDropRateMultiplier
+    enemy_drop_rate: EnemyDropRate
     ancient_book_soul_drops: AncientBookSoulDrops
     skull_key_warp: SkullKeyWarp
     new_soul_pause: NewSoulPause
@@ -575,11 +644,6 @@ LOGIC_OPTION_NAMES: tuple[str, ...] = (
 
 
 cvaos_option_groups = [
-    OptionGroup("Soul Shuffle", [
-        SoulShuffle,
-        KeepSoulDropRates,
-        ShuffleStartingSoul,
-    ]),
     OptionGroup("Soul Drop Rates", [
         MultiplySoulDropRates,
         SoulDropRateMultiplier,
@@ -605,7 +669,29 @@ cvaos_option_groups = [
         OopsAllWhips,
         NewSoulPause,
     ]),
+    # An option sits in one group only, so Soul Shuffle, Keep Soul Drop Rates and Shuffle Starting
+    # Soul are here rather than in a group of their own. Groups change only how the options page
+    # shows the options, so no YAML key depends on them.
+    OptionGroup("Experimental", [
+        EnemyChecks,
+        SoulShuffle,
+        KeepSoulDropRates,
+        ShuffleStartingSoul,
+        EnemyDropRate,
+    ], start_collapsed=True),
 ]
+
+
+# The "Experimental" preset turns on the Experimental options at their measured settings. Early
+# strong drops, such as Minotaur's Battle Axe, drop as often as in the released game, because no
+# option yet orders the enemy drops by how early a seed reaches each enemy.
+cvaos_options_presets: dict[str, dict[str, object]] = {
+    "Experimental": {
+        "enemy_checks": "all",
+        "soul_shuffle": "matched",
+        "enemy_drop_rate": 350,
+    },
+}
 
 
 def hard_mode_pickups_included(options: CVAOSOptions) -> bool:

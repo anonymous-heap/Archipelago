@@ -324,7 +324,8 @@ class TestWiring(unittest.TestCase):
                          if name.startswith("option_")}
         self.assertEqual(set(_SOUL_SHUFFLE_MODES), option_values)
         for mode in _SOUL_SHUFFLE_MODES.values():
-            self.assertIn(mode, (ss.MODE_OFF, ss.MODE_WITHIN_TYPE, ss.MODE_ANY_TYPE))
+            self.assertIn(mode, (ss.MODE_OFF, ss.MODE_WITHIN_TYPE, ss.MODE_ANY_TYPE,
+                                 ss.MODE_MATCHED))
 
     def test_build_writes_receives_the_plan_with_integer_keys(self):
         """rom_config.json stores the plan's keys as strings, so apply_rom_features converts them
