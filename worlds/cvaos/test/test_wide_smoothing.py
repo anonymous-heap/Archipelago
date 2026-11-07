@@ -12,7 +12,6 @@ Sorrow slot keeps weapons local and armor non-local.
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 import unittest
 from argparse import Namespace
@@ -63,7 +62,8 @@ def generate(seed: int, players: list[tuple[str, dict]],
     return Main.main(args, seed)
 
 
-# Where the design measures each rung: a fifth of the run for the first, and 0.35 for the others.
+# How early each rung's gear should be held: by a fifth of the run for the first weapon, and by
+# 0.35, about a third, for the other weapon and the armor.
 RUNG_DEPTHS = (0.2, 0.35, 0.35)
 
 
@@ -111,7 +111,7 @@ class WideOffTest(unittest.TestCase):
 
 class PoolTest(unittest.TestCase):
     def test_mid_game_filler_gear_becomes_useful(self):
-        world = generate(1, [(GAME, {})]).worlds[1]
+        world = setup_multiworld(CVAOSWorld, (), seed=1).worlds[1]
         pool = [world.create_item(name) for name in ("Samurai Armor", "Gungner", "Copper Plate",
                                                      "Potion")]
         promote_mid_game_gear(pool)
@@ -271,6 +271,7 @@ class DropBandTest(unittest.TestCase):
         multiworld = generate(1, [(GAME, PRESET)])
         depths = seed_depth.enemy_seed_depths(multiworld.worlds[1])
         before = vanilla_drop_table()
+        # Any supply works here. This one is the preset's.
         band = wide_smoothing.band_drop_table(before, depths, plan_travel(2, 0, True).supply)
         self.assertGreater(band.swaps, 0)
         self.assertEqual(set(band.table), set(before))
@@ -365,9 +366,10 @@ class WideScenario:
                 for rung, met in zip(RUNGS, rungs):
                     self.assertTrue(met or rung in missed, (multiworld.seed, player, rung))
 
-    def assert_no_rung_missed(self):
-        for multiworld, world in self.wide_worlds():
-            self.assertEqual(world.wide_report.floor.missed, [], multiworld.seed)
+    def assert_every_rung_held(self):
+        for multiworld, held in zip(self.runs, self.rungs_before_core):
+            for player, rungs in held.items():
+                self.assertEqual(rungs, (True, True, True), (multiworld.seed, player))
 
     def test_pinned_locations_hold_breakers(self):
         for multiworld, world in self.wide_worlds():
@@ -400,8 +402,8 @@ class WideDuoTest(WideScenario, unittest.TestCase):
                                 for loc in dealt))
             self.assertTrue(any(loc.player != world.player for loc in dealt))
 
-    def test_the_floor_meets_every_rung(self):
-        self.assert_no_rung_missed()
+    def test_every_player_holds_every_rung(self):
+        self.assert_every_rung_held()
 
     def test_the_pin_keeps_a_breaker_where_logic_first_finds_one(self):
         self.assertTrue(any(order.pinned for _multiworld, world in self.wide_worlds()
@@ -417,8 +419,8 @@ class SoloPresetTest(WideScenario, unittest.TestCase):
     PLAYERS = [(GAME, PRESET)]
     SEEDS = tuple(range(100, 130))
 
-    def test_the_floor_meets_every_rung(self):
-        self.assert_no_rung_missed()
+    def test_every_player_holds_every_rung(self):
+        self.assert_every_rung_held()
 
 
 @scenario
