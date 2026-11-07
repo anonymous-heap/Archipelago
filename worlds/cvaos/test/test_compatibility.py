@@ -2,9 +2,16 @@
 Tests that an outdated install refuses a seed it can't run, and that released seeds still work.
 
 A seed's identifier is the newest among the identifiers that introduced its rom_config.json keys,
-and never older than V0.5, which released clients refuse. The client asks the server for the
-player's own items under every identifier after the released V0.3 and V0.4, and slot data always
-lists the pickups whose items the ROM hands out.
+and never older than V0.5, which released clients refuse. A ROM from a released version (V0.3 or
+V0.4) holds nothing the current clients cannot handle, so the BizHawk client and the collection
+client still accept it.
+
+Both clients ask the server for the starting inventory as well as other worlds' items. Logic
+counts the starting inventory as owned from the start, but nothing else puts it into the game, so
+a client that does not ask for it can leave a seed unbeatable. Under every identifier after the
+released V0.3 and V0.4, the clients also ask for the player's own items, because the ROM never
+hands out the item at a defeat location. Slot data always lists the pickups whose items the ROM
+hands out.
 
 Every seed's patch lists the apply_enemy_table step, which an apworld from before V0.5 does not
 know, and the patcher refuses a rom_config.json key it does not know. A released patch, which
@@ -18,16 +25,23 @@ import json
 import os
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 from test.general import setup_multiworld
 from worlds.Files import APTokenTypes
 
 from .. import CVAOSWorld
+from ..client import ROM_NAME, CVAOSClient
 from ..client_logic import ITEMS_FROM_OTHER_WORLDS, ITEMS_INCLUDING_OWN, items_handling_for
 from ..locations import pickup_location_ids
 from ..rom import identifiers, patch
 from . import find_rom, generate, run_apply_rom_features
+
+# The items_handling bits that a client sends when it connects.
+OTHER_WORLDS = 0b001
+OWN_ITEMS = 0b010
+STARTING_INVENTORY = 0b100
 
 # The procedure and rom_config.json of a patch from the released V0.4 world, with its defaults.
 RELEASED_PROCEDURE = [("apply_tokens", ["token_data.bin"]),
@@ -64,6 +78,54 @@ class IdentifierTest(unittest.TestCase):
         self.assertEqual(identifiers.RELEASED_IDENTIFIERS, {"CVAOS_AP_V0.3", "CVAOS_AP_V0.4"})
 
 
+class BizHawkClientTest(unittest.IsolatedAsyncioTestCase):
+    async def validate(self, identifier: str) -> tuple[bool, SimpleNamespace]:
+        """Run validate_rom on a ROM that carries ``identifier``, and return its result and the
+        context it filled in."""
+        client = CVAOSClient.__new__(CVAOSClient)
+        ctx = SimpleNamespace(bizhawk_ctx=None)
+        reads = [ROM_NAME.encode("ascii"), identifier.encode("ascii")]
+        with mock.patch("worlds._bizhawk.read", new=mock.AsyncMock(return_value=reads)):
+            return await client.validate_rom(ctx), ctx
+
+    async def test_this_version_also_asks_for_own_items(self):
+        valid, ctx = await self.validate(identifiers.MIN_SEED_IDENTIFIER)
+        self.assertTrue(valid)
+        self.assertEqual(ctx.items_handling, OTHER_WORLDS | OWN_ITEMS | STARTING_INVENTORY)
+
+    async def test_released_versions_are_accepted_and_ask_for_other_worlds_items(self) -> None:
+        for identifier in ("CVAOS_AP_V0.3", "CVAOS_AP_V0.4"):
+            with self.subTest(identifier=identifier):
+                valid, ctx = await self.validate(identifier)
+                self.assertTrue(valid)
+                self.assertEqual(ctx.items_handling, OTHER_WORLDS | STARTING_INVENTORY)
+
+    async def test_an_older_version_is_refused(self) -> None:
+        valid, _ctx = await self.validate("CVAOS_AP_V0.2")
+        self.assertFalse(valid)
+
+
+class CollectionClientTest(unittest.IsolatedAsyncioTestCase):
+    async def test_collection_client_reads_the_items_handling_from_the_installed_rom(self):
+        from ..collection_client import CVAOSCollectionContext
+        for identifier, expected in (
+                ("CVAOS_AP_V0.4", OTHER_WORLDS | STARTING_INVENTORY),
+                (identifiers.MIN_SEED_IDENTIFIER, OTHER_WORLDS | OWN_ITEMS | STARTING_INVENTORY)):
+            def read(address: int, size: int, identifier: str = identifier) -> bytes:
+                if address == identifiers.ARCHIPELAGO_IDENTIFIER_START:
+                    return identifier.encode("ascii")[:size]
+                return bytes(size)
+
+            ctx = CVAOSCollectionContext.__new__(CVAOSCollectionContext)
+            ctx.backend = SimpleNamespace(rom_base=0, proc=SimpleNamespace(read=read))
+            ctx.auth, ctx.password = "auth", None
+            ctx.send_connect = mock.AsyncMock()
+            await ctx.server_auth()
+            with self.subTest(identifier=identifier):
+                self.assertEqual(ctx.items_handling, expected)
+                ctx.send_connect.assert_awaited_once()
+
+
 class SlotDataTest(unittest.TestCase):
     def test_slot_data_lists_the_rom_given_pickups_without_enemy_checks(self):
         multiworld = generate(2, {"enemy_checks": "off"})
@@ -75,6 +137,11 @@ class SlotDataTest(unittest.TestCase):
         self.assertTrue(listed)
         self.assertEqual(listed, expected)
 
+    def test_slot_data_tells_the_client_its_counter_includes_the_starting_inventory(self):
+        # Without the key, the client treats the seed as an older one, whose saves count only
+        # items from other worlds.
+        multiworld = setup_multiworld(CVAOSWorld, seed=1)
+        self.assertIs(multiworld.worlds[1].fill_slot_data()["starting_inventory_from_server"], True)
 
 
 class PatchProcedureTest(unittest.TestCase):
