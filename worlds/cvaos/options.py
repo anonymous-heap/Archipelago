@@ -780,13 +780,15 @@ cvaos_option_groups = [
 
 # The "Experimental" preset turns on the Experimental options at their measured settings. Item Drop
 # Shuffle deals the enemy drops by how early the seed reaches each enemy, so early enemies drop
-# cheap items, and strong drops such as Minotaur's Battle Axe come from later ones.
+# cheap items, and strong drops such as Minotaur's Battle Axe come from later ones. Wide Item
+# Smoothing keeps gear that is too good for the start of the run out of it, from every source.
 cvaos_options_presets: dict[str, dict[str, object]] = {
     "Experimental": {
         "enemy_checks": "all",
         "soul_shuffle": "matched",
         "item_drop_shuffle": True,
         "enemy_drop_rate": 350,
+        "wide_item_smoothing": True,
     },
 }
 

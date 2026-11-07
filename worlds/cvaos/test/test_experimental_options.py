@@ -59,6 +59,7 @@ class GroupAndPresetTest(unittest.TestCase):
         self.assertEqual(SoulShuffle.from_any(preset["soul_shuffle"]), SoulShuffle.option_matched)
         self.assertTrue(ItemDropShuffle.from_any(preset["item_drop_shuffle"]))
         self.assertEqual(EnemyDropRate.from_any(preset["enemy_drop_rate"]).value, 350)
+        self.assertIs(preset["wide_item_smoothing"], True)
 
     def test_item_drop_shuffle_is_off_by_default(self):
         self.assertEqual(ItemDropShuffle.default, 0)
