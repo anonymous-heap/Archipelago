@@ -26,9 +26,10 @@ __all__ = [
     "rows",
 ]
 
-# The lines that the Experimental options compare worth with. An item worth CHEAP_WORTH or less
-# may arrive anywhere in a run. Weapons and armor worth MID_GAME_WORTH or more are mid-game gear,
-# and items worth STRONG_WORTH or more are strong.
+# The lines that enemy checks, filler, Item Drop Shuffle, Enemy Drop Rate and Wide Item Smoothing
+# compare worth with. An item worth CHEAP_WORTH or less may arrive anywhere in a run. Weapons and
+# armor worth MID_GAME_WORTH or more are mid-game gear, and items worth STRONG_WORTH or more are
+# strong.
 CHEAP_WORTH = 0.25
 MID_GAME_WORTH = 0.45
 STRONG_WORTH = 0.6

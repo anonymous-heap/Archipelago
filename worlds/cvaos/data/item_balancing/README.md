@@ -1,16 +1,23 @@
-# Item balancing: desirability smoothing
+# Item balancing: desirability, worth and soul tiers
+
+This directory holds three tables that rate items, with the scripts that build them:
+
+- **Desirability**, which item smoothing reads, comes from the community tier lists. Most of this
+  README describes it and the placement that uses it.
+- **Worth** places every item except the souls on the scale of a vanilla run (see
+  [Worth](#worth)). Enemy checks, filler, Item Drop Shuffle, Enemy Drop Rate and Wide Item
+  Smoothing compare items by it.
+- **Soul tiers** give each soul a rating and a tier (see [Soul tiers](#soul-tiers)). Soul
+  Shuffle's `matched` and Enemy Drop Rate read them.
 
 Item smoothing places less useful items earlier in a run and more useful items later, so that a
 player isn't handed something in sphere 1 that makes every later pickup boring. Placement keeps
 enough randomness that a lucky early find is still possible.
 
-This directory holds the data: the community tier lists, the script that combines them, and the
-resulting desirability table. The placement code is in
+The desirability data consists of the community tier lists, the script that combines them, and
+the resulting desirability table. The placement code is in
 [`../../item_smoothing.py`](../../item_smoothing.py), and it runs only when the `item_smoothing`
 option is `loose` or `strict`.
-
-The directory also holds two tables that the Experimental options read: each item's worth (see
-[Worth](#worth)) and each soul's rating and tier (see [Soul tiers](#soul-tiers)).
 
 **Orientation:** higher desirability means a later placement. Desirability runs from `0.0` (junk,
 placed earliest) to `1.0` (the best items, placed latest). Positions in the run go from `0` (the
@@ -323,9 +330,9 @@ places, each through the passes described above.
 
 [`worth.csv`](worth.csv) gives every item except the souls a worth from 0 to 1, on the scale of a
 vanilla run. An item is worth the point in the run where the castle's own pickups first offer as
-much, so an item worth 0.25 is no better than what the pickups offer a quarter of the way in. The
-Experimental options read it through `item_worth` in [`worth.py`](worth.py). Item smoothing does
-not read it.
+much, so an item worth 0.25 is no better than what the pickups offer a quarter of the way in.
+Enemy checks, filler, Item Drop Shuffle, Enemy Drop Rate and Wide Item Smoothing read it through
+[`worth.py`](worth.py). Item smoothing does not read it.
 
 [`build_worth.py`](build_worth.py) writes the table, and is run by hand. It gives each item one of
 these worths:
@@ -354,9 +361,9 @@ The `worth` values keep six decimals, and the build fails if rounding to them mo
 sit at 0.4478, so they are just under the 0.45 line.
 
 **Where the inputs come from.** [`worth_inputs.csv`](worth_inputs.csv) holds the facts that no
-other table in the repository records. It was taken from the Experimental options design
-workspace (`local_docs/experimental_options_design/foundation/items.csv`, which is not in the
-repository).
+other table in the repository records. It was taken from `items.csv` in the design workspace for
+the options that use worth (`local_docs/experimental_options_design/foundation/`, which is not in
+the repository).
 
 - `item_class` and `utility` were read from the US ROM's item records. A weapon's class comes from
   its record's family byte (+0x08) and animation byte (+0x12), at GBA 0x08505D3C with 28 bytes per
@@ -375,7 +382,7 @@ repository).
 
 [`soul_tiers.csv`](soul_tiers.csv) gives every soul a rating from 0 to 1 and a tier from D to S.
 [`build_soul_tiers.py`](build_soul_tiers.py) writes it, and is run by hand.
-[`soul_tiers.py`](soul_tiers.py) loads it for the Experimental options.
+[`soul_tiers.py`](soul_tiers.py) loads it for Soul Shuffle's `matched` and for Enemy Drop Rate.
 
 - **Rating.** Each list in [`soul_tier_lists/lists/`](soul_tier_lists/lists/) scores a soul
   `1 - tier_index / (n_tiers - 1)`, as stage 1 does for items. The rating is the mean over the
@@ -384,8 +391,8 @@ repository).
   soul lists leave out.
 - **Tier.** Ratings are cut at 0.2, 0.4, 0.6 and 0.8 into the tiers D, C, B, A and S. A soul in
   tier A or S, rated 0.6 or more, is strong: 23 of the 110 souls that enemies drop are.
-- **Matched groups.** Under `matched`, a soul trades places only with souls of the same colour and
-  tier, which `matched_group` returns.
+- **Matched groups.** Under Soul Shuffle's `matched`, a soul trades places only with souls of the
+  same colour and tier, which `matched_group` returns.
 
 The table's columns are `soul`, `colour` (`red`, `blue`, `yellow` or `ability`), `rating`,
 `tier`, `raters` (how many soul lists rank it) and `rating_source`. The red soul Cagnazzo in

@@ -23,9 +23,9 @@ interpolated between them. Below the first rung, depth falls in proportion to ut
 * Valmanway, Chaos Ring and Soul Eater Ring are set to 1.0, so that no rule looking for an item of
   similar worth ever picks one of them.
 
-The inputs are ``worth_inputs.csv`` (each item's class, utility and earliest vanilla pickup
-depth; the README says where it came from), ``desirability.csv``, and the item and pickup tables.
-Run from anywhere: ``python build_worth.py``.
+The inputs are ``worth_inputs.csv``, ``desirability.csv``, and the item and pickup tables.
+``worth_inputs.csv`` holds each item's class, utility and earliest vanilla pickup depth, and the
+README says where it came from. Run from anywhere: ``python build_worth.py``.
 """
 
 from __future__ import annotations
@@ -56,8 +56,10 @@ UNRATED_OTHER_WORTH = 0.1
 FIXED_WORTH = {"Valmanway": 1.0, "Chaos Ring": 1.0, "Soul Eater Ring": 1.0}
 MONEY_SUBTYPE = 1
 
-# worth.csv keeps this many decimals. build() checks that rounding moves no item across a line
-# that the design compares worth with, nor any pair of items across the 0.05 replacement window.
+# worth.csv keeps this many decimals. build() checks that rounding moves no item across one of
+# LINES, which are worth.py's CHEAP_WORTH, MID_GAME_WORTH and STRONG_WORTH. It also checks that
+# rounding never changes whether two items are within WINDOW of each other. WINDOW is Item Drop
+# Shuffle's replacement window.
 DECIMALS = 6
 LINES = (0.25, 0.45, 0.6)
 WINDOW = 0.05
@@ -175,7 +177,8 @@ def worth_row(item: Item, ladders: Dict[str, Tuple[Rung, ...]]) -> dict:
 
 
 def _check_rounding(rows: List[dict]) -> None:
-    """Raise if rounding to DECIMALS changes how any worth compares with the design's lines."""
+    """Raise if rounding to DECIMALS changes how any worth compares with LINES, or whether two
+    worths are within WINDOW of each other."""
     exact = [row["worth"] for row in rows]
     rounded = [round(value, DECIMALS) for value in exact]
     for line in LINES:

@@ -3,7 +3,7 @@ Tests for the item worth table (data/item_balancing/worth.csv).
 
 Weapons, armor and restoratives take their depth on their class's ladder of vanilla pickups, and
 weapons and armor take their tier-list desirability instead when it is higher. The anchors below
-are the values the Experimental options design quotes.
+pin the worths and ladder depths that the options using this table were designed around.
 
     python -m pytest worlds/cvaos/test/test_worth.py -v
 """
@@ -15,13 +15,13 @@ from ..data import item_info_collection
 from ..data.item_balancing import build_worth, worth
 from ..items import item_table
 
-# Worth, as the design quotes it to two decimals.
+# Each item's worth, to two decimals.
 WORTH_ANCHORS = {
     "Tasty Meat": 0.04, "Super Potion": 0.57, "Mind Up": 0.06, "Mana Prism": 0.30,
     "Iron Plate": 0.45, "Cutall": 0.45, "Battle Axe": 0.80, "Warhammer": 0.68,
     "Samurai Armor": 0.69, "Hrunting": 0.77,
 }
-# Depth on the item's class ladder, as the design quotes the sword and armor ladders.
+# Each item's depth on its class ladder, to two decimals, from the sword and armor ladders.
 LADDER_ANCHORS = {
     "Short Sword": 0.01, "Hrunting": 0.35, "Balmung": 0.71, "Leather Plate": 0.09, "Eversing": 0.61,
 }

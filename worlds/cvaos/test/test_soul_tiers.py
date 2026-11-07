@@ -49,7 +49,8 @@ class SoulTiersTest(unittest.TestCase):
         self.assertEqual(soul_tiers.matched_group("Winged Skeleton"), ("red", "B"))
         eligible = soul_shuffle.shuffleable_enemies(soul_shuffle.MODE_WITHIN_TYPE)
         groups = Counter(soul_tiers.matched_group(enemy_soul(eid)) for eid in eligible)
-        # The Shuffle Starting Soul docstring promises nine red souls in Winged Skeleton's group.
+        # The Shuffle Starting Soul docstring says there are nine red souls in Winged Skeleton's
+        # group.
         self.assertEqual(groups[("red", "B")], 9)
 
     def test_the_table_matches_its_build_script(self):

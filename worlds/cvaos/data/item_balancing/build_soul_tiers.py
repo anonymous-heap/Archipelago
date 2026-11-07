@@ -1,11 +1,11 @@
 """
 Builds ``soul_tiers.csv``: each soul's rating from 0 to 1, and its tier from D to S.
 
-The rating comes from the community soul tier lists in ``soul_tier_lists/lists/``. Each rater
-scores a soul ``1 - tier_index / (n_tiers - 1)``, so their top tier scores 1.0 and their bottom
-tier 0.0, and a soul's rating is the mean over the raters who ranked it. A soul that fewer than
-three raters ranked takes its desirability from ``desirability.csv`` instead, when it has one,
-because those four raters ranked the movement souls that most soul lists leave out.
+The rating comes from the community soul tier lists in ``soul_tier_lists/lists/``. Each list gives
+a soul the score ``1 - tier_index / (n_tiers - 1)``, so its top tier scores 1.0 and its bottom
+tier 0.0, and a soul's rating is the mean over the lists that rank it. A soul that fewer than
+three lists rank takes its desirability from ``desirability.csv`` instead, when it has one. The
+four raters behind that table ranked the movement souls that most soul lists leave out.
 
 Tiers are cut at ratings 0.2, 0.4, 0.6 and 0.8, so a soul rated 0.6 or more is in tier A or S.
 

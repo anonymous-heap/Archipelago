@@ -10,8 +10,8 @@ folder records which soul each picture shows, and holds rankings decoded from su
 | `lists/` | Rankings decoded from lists, in the format of `../tier_jsons/`. |
 
 `../build_soul_tiers.py` reads `lists/` to rate each soul in `../soul_tiers.csv`.
-`aggregate_tiers.py` reads only `../tier_jsons/`, so nothing here changes `desirability.csv`
-until a list is copied there.
+`../aggregate_tiers.py` reads only `../tier_jsons/`, so nothing here changes
+`../desirability.csv` until a list is copied there.
 
 The template images themselves are not kept in the repository. The CSVs name each image by its
 TierMaker file name, and TierMaker's image list for a template (see "Reading a list") gives their
