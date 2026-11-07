@@ -4,7 +4,7 @@ The collection client asks the server for the starting inventory as well as othe
 Logic counts the starting inventory as owned from the start, but nothing else puts it into the
 game. A client that does not ask for it can therefore leave a seed unbeatable.
 
-A seed with enemy checks also asks for the player's own items, because the ROM never hands out the
+A seed from V0.5 on also asks for the player's own items, because the ROM never hands out the
 item at a defeat location. The installed ROM's identifier tells the client which kind of seed it
 is. test_identifier.py checks the same choice in the BizHawk client.
 
@@ -16,8 +16,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from ..rom import (ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START,
-                   OWN_ITEMS_FROM_SERVER_IDENTIFIER)
+from ..rom import ARCHIPELAGO_IDENTIFIER_START, MIN_SEED_IDENTIFIER
 
 OTHER_WORLDS = 0b001
 OWN_ITEMS = 0b010
@@ -28,8 +27,8 @@ class ItemsHandlingTest(unittest.IsolatedAsyncioTestCase):
     async def test_collection_client_reads_the_items_handling_from_the_installed_rom(self):
         from ..collection_client import CVAOSCollectionContext
         for identifier, expected in (
-                (ARCHIPELAGO_IDENTIFIER, OTHER_WORLDS | STARTING_INVENTORY),
-                (OWN_ITEMS_FROM_SERVER_IDENTIFIER, OTHER_WORLDS | OWN_ITEMS | STARTING_INVENTORY)):
+                ("CVAOS_AP_V0.4", OTHER_WORLDS | STARTING_INVENTORY),
+                (MIN_SEED_IDENTIFIER, OTHER_WORLDS | OWN_ITEMS | STARTING_INVENTORY)):
             def read(address: int, size: int, identifier: str = identifier) -> bytes:
                 if address == ARCHIPELAGO_IDENTIFIER_START:
                     return identifier.encode("ascii")[:size]

@@ -31,7 +31,7 @@ from .items import PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, item_table
 from .locations import flag_offset_to_location_id
 from .options import Goal
 from .ram import AoSRAM, addresses as addr
-from .rom.patch import OWN_ITEMS_FROM_SERVER_IDENTIFIER
+from .rom.patch import RELEASED_IDENTIFIERS
 
 if TYPE_CHECKING:
     from CommonClient import CommonContext
@@ -49,17 +49,22 @@ EXPLORATION_INTERVAL = 2.0
 PLAY_DATA_INTERVAL = 2.0
 
 # The items_handling a client connects with. Both ask for items from other worlds and for the
-# starting inventory. A seed with enemy checks also asks for the player's own items, because the
-# ROM never hands out the item at a defeat location (see items_handling_for).
+# starting inventory. A seed from V0.5 on also asks for the player's own items, because the ROM
+# never hands out the item at a defeat location (see items_handling_for).
 ITEMS_FROM_OTHER_WORLDS = 0b101
 ITEMS_INCLUDING_OWN = 0b111
 
 
 def items_handling_for(identifier: bytes) -> int:
-    """Return the items_handling for a ROM that carries ``identifier``."""
-    if identifier == OWN_ITEMS_FROM_SERVER_IDENTIFIER.encode("ascii"):
-        return ITEMS_INCLUDING_OWN
-    return ITEMS_FROM_OTHER_WORLDS
+    """Return the items_handling for a ROM that carries ``identifier``.
+
+    A released seed (V0.3 or V0.4) asks only for other worlds' items and the starting inventory,
+    because its slot data does not list the pickups whose items the ROM hands out. Every newer
+    identifier asks for the player's own items too.
+    """
+    if identifier.decode("ascii", "replace") in RELEASED_IDENTIFIERS:
+        return ITEMS_FROM_OTHER_WORLDS
+    return ITEMS_INCLUDING_OWN
 
 
 # Max items to grant per tick, so a large backlog on connect can't stall the watcher
@@ -413,9 +418,9 @@ class CVAOSClientLogic:
         saves count only the items from other worlds. For such a seed this leaves the starting
         inventory out, so the client does not give it.
 
-        A seed with enemy checks asks the server for the player's own items too. The ones at the
-        slot data's ``rom_given_locations`` were already handed out by the ROM, so they are left
-        out. The rest, such as an own item at a defeat location, are given like any other.
+        A seed from V0.5 on asks the server for the player's own items too. The ones at the slot
+        data's ``rom_given_locations`` were already handed out by the ROM, so they are left out.
+        The rest, such as an own item at a defeat location, are given like any other.
         """
         items = ctx.items_received
         if ctx.items_handling & 0b010:

@@ -669,7 +669,7 @@ class CVAOSCollectionContext(CommonContext):
             # ROM free space. The world registers the same value under connect_names.
             auth_raw = self.backend.proc.read(self.backend.rom_base + AUTH_NUMBER_START, 16)
             self.auth = base64.b64encode(auth_raw).decode("ascii")
-        # A seed with enemy checks also asks for this player's own items, as the BizHawk Client does.
+        # A seed from V0.5 on also asks for this player's own items, as the BizHawk Client does.
         self.items_handling = items_handling_for(self.backend.proc.read(
             self.backend.rom_base + ARCHIPELAGO_IDENTIFIER_START, len(ARCHIPELAGO_IDENTIFIER)))
         if password_requested and not self.password:

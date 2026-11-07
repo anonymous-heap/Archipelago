@@ -5,8 +5,8 @@ The game's Enemy List keeps a saved bit for each enemy type, and the death routi
 bit on its first defeat (EWRAM 0x020133A0, bit ``id & 7`` of byte ``id >> 3``). The client
 reads those bits, so detecting a defeat needs no ROM change, and a defeat made offline is sent on
 the next connection. The ROM never hands out the item at an enemy check. The client gets it from
-the server instead, so with enemy checks on, the client also asks the server for the player's own
-items (see :func:`uses_enemy_checks`).
+the server instead, because it asks the server for the player's own items too
+(``client_logic.items_handling_for``).
 
 Logic treats a type's check as reachable when any of its placements is. A placement with routing
 in the enemy routing CSV uses that routing. One without routing has not been annotated yet, so

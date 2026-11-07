@@ -11,8 +11,7 @@ import settings
 from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA_ROM_MD5
 from .items import (FILLER_ITEM_NAMES, PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, CVAOSItem,
                     item_name_groups, item_name_to_id, create_item, create_itempool)
-from .enemy_checks import (defeat_location_name, enemy_check_types, has_recorded_route,
-                           uses_enemy_checks)
+from .enemy_checks import defeat_location_name, enemy_check_types, has_recorded_route
 from .locations import defeat_location_names, location_name_to_id, pickup_location_ids
 from .options import LOGIC_OPTION_NAMES, CVAOSOptions, Goal, cvaos_option_groups
 from .regions import UT_TRICKS_ITEM, create_regions, can_reach_room
@@ -403,14 +402,13 @@ class CVAOSWorld(World):
             # received-item counter it saves. Seeds without this key were generated for a client
             # that did neither.
             "starting_inventory_from_server": True,
-            # With enemy checks, the client asks the server for this player's own items too, because
-            # the ROM never hands out the item at a defeat location. It skips the items the ROM
-            # already handed out: those at these locations.
-            **({"rom_given_locations": sorted(
+            # The client asks the server for this player's own items too, because the ROM never
+            # hands out the item at a defeat location. It skips the items the ROM already handed
+            # out: those at these locations.
+            "rom_given_locations": sorted(
                 loc.address for loc in self.multiworld.get_locations(self.player)
                 if loc.address in pickup_location_ids and loc.item is not None
-                and rom_gives_item(self, loc))}
-               if uses_enemy_checks(self.options) else {}),
+                and rom_gives_item(self, loc)),
         }
 
     def modify_multidata(self, multidata: dict) -> None:

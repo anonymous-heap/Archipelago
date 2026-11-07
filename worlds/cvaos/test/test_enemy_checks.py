@@ -24,9 +24,7 @@ from ..items import ENEMY_ITEM, item_table
 from ..locations import defeat_location_names, location_name_to_id, pickup_location_ids
 from ..options import EnemyChecks, Goal
 from ..rom.entity import GBA_ROM_BASE, PICKUP
-from ..rom.patch import (_ITEM_OFF, _TYPE_OFF, ARCHIPELAGO_IDENTIFIER, COMPATIBLE_IDENTIFIERS,
-                         OWN_ITEMS_FROM_SERVER_IDENTIFIER, get_location_data, rom_gives_item,
-                         seed_identifier)
+from ..rom.patch import _ITEM_OFF, _TYPE_OFF, get_location_data, rom_gives_item
 from .test_smoothing_location_settings import generate
 
 BUILD_STEPS = ("generate_early", "create_regions", "create_items", "set_rules")
@@ -230,14 +228,6 @@ class DeliveryTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.with_checks = generate(3, {"enemy_checks": "all"})
 
-    def test_the_rom_identifier_tells_the_client_how_to_ask_for_items(self):
-        self.assertEqual(seed_identifier(build("off").worlds[1]), ARCHIPELAGO_IDENTIFIER)
-        self.assertEqual(seed_identifier(self.with_checks.worlds[1]),
-                         OWN_ITEMS_FROM_SERVER_IDENTIFIER)
-        # Both fill the same 13 bytes, and the clients accept both.
-        self.assertEqual(len(OWN_ITEMS_FROM_SERVER_IDENTIFIER), len(ARCHIPELAGO_IDENTIFIER))
-        self.assertIn(OWN_ITEMS_FROM_SERVER_IDENTIFIER, COMPATIBLE_IDENTIFIERS)
-
     def test_slot_data_lists_exactly_the_pickups_the_rom_hands_out(self):
         world = self.with_checks.worlds[1]
         listed = set(world.fill_slot_data()["rom_given_locations"])
@@ -270,9 +260,6 @@ class DeliveryTest(unittest.TestCase):
                 self.assertEqual(writes[offset + _TYPE_OFF], bytes([PICKUP, subtype_num]))
                 self.assertEqual(writes[offset + _ITEM_OFF],
                                  (info.id + added).to_bytes(2, "little"))
-
-    def test_slot_data_has_no_list_without_enemy_checks(self):
-        self.assertNotIn("rom_given_locations", build("off").worlds[1].fill_slot_data())
 
     def test_item_smoothing_moves_items_only_between_pickups(self):
         positions = item_smoothing._run_position(self.with_checks, 1)

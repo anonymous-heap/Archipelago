@@ -90,8 +90,8 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
 
         ctx.game = self.game
         # Receive items from other worlds and the starting inventory. Nothing else delivers the
-        # starting inventory to the game, while logic counts it as owned from the start. A seed with
-        # enemy checks also asks for this player's own items (client_logic.items_handling_for).
+        # starting inventory to the game, while logic counts it as owned from the start. A seed from
+        # V0.5 on also asks for this player's own items (client_logic.items_handling_for).
         ctx.items_handling = items_handling_for(identifier)
         ctx.want_slot_data = True
         ctx.watcher_timeout = 0.125
