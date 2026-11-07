@@ -9,10 +9,11 @@ feature has set the row's bytes, and scales each byte as it then stands.
 Both chances have the same form (``rom/enemy_table.py``). A soul's denominator is
 ``rate*8 + 32``, which is ``8 * (rate + 4)``, and an item's is ``rarity*4 + 16``, which is
 ``4 * (rarity + 4)``. So for both, the chance ratio between two byte values is
-``(old + 4) / (new + 4)``, and :func:`.soul_drop_rates.scaled_rate` inverts it for either byte. A
-byte of 0 stays 0, and no other byte falls below 1.
+``(old + 4) / (new + 4)``, and :func:`.soul_drop_rates.scaled_rate` solves it for the new byte,
+whether that byte is a soul rate or an item rarity. A byte of 0 stays 0, and no other byte falls
+below 1.
 
-Scaling the bytes in place keeps what the earlier features decided. A scripted boss keeps its soul
+Scaling the bytes in place keeps what the earlier features set. A scripted boss keeps its soul
 rate of 0, so its soul never gains a random roll. An ordinary enemy that holds a boss's soul keeps
 a nonzero rate, so that soul can still drop.
 """

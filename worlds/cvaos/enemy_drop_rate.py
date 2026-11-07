@@ -2,20 +2,23 @@
 Enemy Drop Rate: how often each enemy drops its soul and its common item, in percent of the usual
 chance.
 
-The option's value applies per kind of enemy. A kind that the seed first reaches before seed depth
-EARLY_DEPTH gets 100 plus a sixth of the boost, for the whole run, because the player meets it
-early anyway. At 350 that is 142. Every other kind gets the full value. An enemy with no seed depth
-counts as depth 1.0.
+The option's value applies per kind of enemy, meaning per row of the enemy stat table. A kind that
+the seed first reaches before seed depth EARLY_DEPTH gets 100 plus EARLY_SHARE (a sixth) of the
+boost above 100, for the whole run, because the player meets it early anyway. At 350 that is 142.
+Every other kind gets the full value. An enemy with no seed depth counts as depth 1.0.
 
-Within a kind, three drops keep their usual chance:
+Three drops keep their usual chance on every kind of enemy:
 
 * a strong soul (rated STRONG_RATING or more) whose enemy the seed reaches before
   STRONG_SOUL_DEPTH;
 * a common item worth MID_GAME_WORTH or more;
 * every rare item, because the rare drop slot never scales.
 
-The rule reads the soul that each row holds after the soul shuffle, so it follows every shuffle
-mode. :func:`drop_rate_percents` returns the percents for ``rom_config.json``, and
+The soul exemption reads the soul that each row holds after the soul shuffle, so it applies under
+every shuffle mode. Likewise, the item exemption reads the item that each common slot holds in the
+seed's final drop table.
+
+:func:`drop_rate_percents` returns the percents for ``rom_config.json``, and
 ``rom/enemy_drop_rates.py`` applies them after every other feature.
 """
 from __future__ import annotations
@@ -52,16 +55,16 @@ def drop_rate_percents(world: CVAOSWorld, soul_plan: Mapping[int, int],
                        ) -> Dict[str, List[int]]:
     """Return ``rom_config.json``'s ``enemy_drop_rates`` for ``world``.
 
-    That is ``{enemy id: [soul percent, common drop percent]}``, keyed by the id as a string, and
-    leaving out each row whose two percents are both 100. ``soul_plan`` is the seed's soul shuffle
-    plan, ``{target enemy: source enemy}``. Returns an empty dict when the option is 100.
+    The result maps each enemy id, as a string, to ``[soul percent, common drop percent]``. A row
+    whose two percents are both 100 is left out, so the result is empty when the option is 100.
+    ``soul_plan`` is the seed's soul shuffle plan, ``{target enemy: source enemy}`` by enemy id.
 
     ``common_drops`` names the item in each enemy's common slot, by enemy id, with None for an
-    empty slot. Without it, the slots hold their vanilla items. A seed that deals new drops must
-    pass the dealt items, because the exemption for items worth MID_GAME_WORTH or more reads the
-    item that the slot will hold.
+    empty slot. When it is None, each slot's vanilla item is used. A seed that changes the drop
+    table must pass its new items, because the exemption for items worth MID_GAME_WORTH or more
+    reads the item that the slot will hold.
 
-    Reads the seed depths, so call it only after progression balancing.
+    This reads the seed depths, so call it only after progression balancing.
     """
     value = world.options.enemy_drop_rate.value
     if value == 100:

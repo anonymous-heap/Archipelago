@@ -4,8 +4,8 @@ Tests for Enemy Drop Rate (enemy_drop_rate.py and rom/enemy_drop_rates.py).
 Each kind of enemy that the seed reaches before seed depth 0.25 gets 100 plus a sixth of the boost,
 and every other kind gets the full value. A strong soul on an enemy reached before 0.35 keeps its
 chance, as does a common item worth 0.45 or more, and the rare slot never scales. The patch scales
-the bytes that every earlier feature left, in its last step, so a soul rate of 0 stays 0 and no
-other rate falls below 1.
+the bytes in its last step, after every other feature has set them. A soul rate of 0 stays 0, and
+no other rate falls below 1.
 
 The patched-ROM tests generate the Experimental preset and apply its patch to each base ROM that
 is available: a cart dump, and the Advance Collection's copy.
@@ -143,7 +143,8 @@ class PresetPatchTest(unittest.TestCase):
         cls.config, cls.patched = seed.config, seed.patched
 
     def patched_roms(self) -> dict[str, tuple[bytes, bytes]]:
-        """Return each base's ROM before the enemy-table step and after it, or skip without one."""
+        """Return each base's ROM before the patch's last step and after it, or skip the test when
+        no base ROM is available."""
         if not self.patched:
             self.skipTest("needs a USA Aria of Sorrow ROM")
         return self.patched
