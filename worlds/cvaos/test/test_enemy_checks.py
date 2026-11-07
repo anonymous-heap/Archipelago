@@ -240,6 +240,30 @@ class LogicTest(unittest.TestCase):
         self.assertIn("beating the boss in room 725", alura_une_in_710.access_rule.uses(state))
 
 
+class LocationGroupTest(unittest.TestCase):
+    groups = CVAOSWorld.location_name_groups
+
+    def test_groups_hold_every_check_the_bosses_and_the_unrouted_types(self):
+        self.assertEqual(self.groups["Enemy Defeats"], defeat_location_names)
+        self.assertEqual(self.groups["Boss Defeats"],
+                         {defeat_location_name(name) for name in BOSS_TYPES})
+        unrouted = self.groups["Unrouted Enemy Defeats"]
+        self.assertEqual(len(unrouted), 94)
+        self.assertEqual(unrouted, {defeat_location_name(enemy.name)
+                                    for enemy in enemy_type_collection if enemy.name != "Chaos"
+                                    and not has_recorded_route(enemy.name)})
+        self.assertIn("Defeat Bat", unrouted)
+        self.assertNotIn("Defeat Death", unrouted)
+
+    def test_a_type_joins_the_group_of_every_area_where_it_appears(self):
+        areas = {name for name in self.groups if name.endswith(" Defeats")
+                 and name not in ("Enemy Defeats", "Boss Defeats", "Unrouted Enemy Defeats")}
+        self.assertEqual(len(areas), 12)
+        self.assertEqual(set().union(*(self.groups[area] for area in areas)), defeat_location_names)
+        self.assertEqual({area for area in areas if "Defeat Creaking Skull" in self.groups[area]},
+                         {"Castle Corridor Defeats", "Dance Hall Defeats"})
+
+
 class PriorityCapTest(unittest.TestCase):
     def test_at_most_ten_defeats_without_a_route_stay_priority(self):
         fallback_only = sorted(defeat_location_name(enemy.name)

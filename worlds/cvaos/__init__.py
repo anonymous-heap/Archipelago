@@ -12,7 +12,7 @@ from .constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5, USA
 from .items import (FILLER_ITEM_NAMES, PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, CVAOSItem,
                     item_name_groups, item_name_to_id, create_item, create_itempool)
 from .enemy_checks import defeat_location_name, enemy_check_types, has_recorded_route
-from .locations import defeat_location_names, location_name_to_id, pickup_location_ids
+from .locations import location_name_groups, location_name_to_id, pickup_location_ids
 from .options import (LOGIC_OPTION_NAMES, CVAOSOptions, Goal, SoulShuffle, cvaos_option_groups,
                       cvaos_options_presets)
 from .regions import UT_TRICKS_ITEM, create_regions, can_reach_room
@@ -155,7 +155,7 @@ class CVAOSWorld(World):
     item_name_to_id = item_name_to_id
     item_name_groups = item_name_groups
     location_name_to_id = location_name_to_id
-    location_name_groups = {"Enemy Defeats": set(defeat_location_names)}
+    location_name_groups = location_name_groups
 
     topology_present = True
     origin_region_name = "Menu"

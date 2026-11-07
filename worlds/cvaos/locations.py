@@ -1,5 +1,5 @@
 """
-Location tables for Castlevania: Aria of Sorrow.
+Location tables and location groups for Castlevania: Aria of Sorrow.
 
 The tables name a location for every ground pickup, and for the first defeat of each kind of
 enemy that enemy checks can cover. They hold all of these whatever the options, so location ids
@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING
 from BaseClasses import Location
 
 from .data import pickup_info_collection
-from .enemy_checks import checkable_types, defeat_location_id, defeat_location_name
+from .enemy_checks import (BOSS_TYPES, checkable_types, defeat_location_id, defeat_location_name,
+                           has_recorded_route, placements_of)
+from .tracker_map import AREA_NAMES
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -25,6 +27,7 @@ __all__ = [
     "flag_offset_to_location_id",
     "pickup_location_ids",
     "defeat_location_names",
+    "location_name_groups",
 ]
 
 
@@ -81,6 +84,35 @@ for _enemy in checkable_types():
         raise ValueError(f"defeat location {_name!r} ({_location_id:#x}) clashes with a pickup")
     location_name_to_id[_name] = _location_id
     location_id_to_name[_location_id] = _name
+
+
+def _build_location_name_groups() -> dict[str, set[str]]:
+    """
+    Return the location groups, which let a YAML exclude or prioritize a set of enemy checks.
+
+    "Enemy Defeats" holds every defeat location, and "Boss Defeats" holds those of BOSS_TYPES.
+    "Unrouted Enemy Defeats" holds the checks that need enemy_checks.FALLBACK_SOULS. Each
+    "<Area> Defeats" group holds the checks of the types that appear in that area, so a type joins
+    the group of every area where it appears.
+
+    The groups hold every possible defeat location, whatever the options. Archipelago skips a
+    grouped location that a seed doesn't create.
+    """
+    groups: dict[str, set[str]] = {"Enemy Defeats": set(), "Boss Defeats": set(),
+                                   "Unrouted Enemy Defeats": set()}
+    for enemy in checkable_types():
+        name = defeat_location_name(enemy.name)
+        groups["Enemy Defeats"].add(name)
+        if enemy.name in BOSS_TYPES:
+            groups["Boss Defeats"].add(name)
+        if not has_recorded_route(enemy.name):
+            groups["Unrouted Enemy Defeats"].add(name)
+        for placement in placements_of(enemy.name):
+            groups.setdefault(f"{AREA_NAMES[placement.room[0]]} Defeats", set()).add(name)
+    return groups
+
+
+location_name_groups: dict[str, set[str]] = _build_location_name_groups()
 
 
 def _build_flag_offset_map() -> dict[int, int]:
