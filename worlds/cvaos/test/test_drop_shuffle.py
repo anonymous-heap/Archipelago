@@ -1,11 +1,11 @@
 """
-Tests for Item Drop Shuffle's plan (drop_shuffle.py): which drops travel into the pool, what fills
-the slots they vacate, and how the progression deals the drop table. Also tests the item pool
-that the moved drops join.
+Tests for Item Drop Shuffle's plan (drop_shuffle.py) and for the item pool it changes.
 
-Each moved drop takes the place of one cheap item: the item its own check would add, another
-check's filler, or one copy of a base restorative. The pool depends only on options, so Universal
-Tracker rebuilds it from the slot data (test_universal_tracker covers the round trip).
+The plan tests cover which drops travel into the pool, which items fill the slots they vacate, and
+how the drop table is dealt by seed depth. The pool tests check that each moved drop takes the
+place of one cheap item: the item its own check would add, another check's filler, or one copy of
+a base restorative. The pool depends only on options, so Universal Tracker can rebuild it from the
+slot data (test_universal_tracker covers that round trip).
 
     python -m pytest worlds/cvaos/test/test_drop_shuffle.py -v
 """
@@ -43,7 +43,8 @@ def category(name: str) -> str:
 
 
 def depth_maps(count: int = 5) -> list[dict[int, float]]:
-    """Seeded depth maps. The last one leaves some enemies out, as an unreached enemy is."""
+    """Return ``count`` seeded maps of enemy id to seed depth. The last map leaves some enemies
+    out, as a seed does for enemies it never reaches."""
     rng = random.Random(7)
     maps = [{enemy.id: rng.random() for enemy in enemy_type_collection} for _ in range(count)]
     maps[-1] = {enemy_id: depth for enemy_id, depth in maps[-1].items() if enemy_id % 5}
@@ -56,9 +57,10 @@ def table_items(plan) -> list[str]:
 
 class TravelTest(unittest.TestCase):
     def test_travel_sets_match_the_design(self):
-        # Weapons, armor, accessories and consumables, as the design's appendix A11 counts them.
-        # Wide Item Smoothing matters only with all. The Graham goal matters only with bosses,
-        # where Graham's check is one place fewer.
+        # The travelling weapons, armor, accessories and consumables, as the design's appendix A11
+        # counts them. Wide Item Smoothing matters only when Enemy Checks is all. The Graham goal
+        # matters only when Enemy Checks is bosses, where it removes Graham's check and so one
+        # place.
         def expected(checks, goal, wide):
             if checks == EnemyChecks.option_off:
                 return 1, 0, 0, 15
@@ -180,7 +182,7 @@ class TableTest(unittest.TestCase):
 
 # The rows of the design's table of option combinations: each Enemy Checks setting, with the Graham
 # goal where it changes what moves, and Item Drop Shuffle off and on. Wide Item Smoothing changes
-# what moves only with every check, so its rows use that setting.
+# what moves only when Enemy Checks is all, so its rows use that setting.
 ROWS = [{"enemy_checks": checks, "goal": goal, "item_drop_shuffle": on}
         for checks, goal in (("off", "chaos"), ("bosses", "chaos"), ("bosses", "graham"),
                              ("all", "chaos"))
@@ -244,8 +246,10 @@ class PoolTest(unittest.TestCase):
                     self.assertEqual(progression[1], progression[0])
 
     def test_moved_drops_count_before_any_rung_is_chosen(self):
-        # Flame Demon's Laevatain is too dear for its check, so the check adds the rung the pool
-        # holds fewest of. A moved drop at a later check already counts.
+        # Flame Demon's Laevatain is worth more than CHEAP_WORTH, so its check adds the HP
+        # restorative that the pool holds fewest copies of. Bat's moved drop is the first HP
+        # restorative, and it counts before that choice even though Bat's check comes later. So
+        # Flame Demon's check adds the second.
         types = [enemy_type_by_name[name] for name in ("Flame Demon", "Bat")]
         names = check_item_names(types, [], {"Bat": HP_RESTORATIVES[0]})
         self.assertEqual(names, [HP_RESTORATIVES[1], HP_RESTORATIVES[0]])
