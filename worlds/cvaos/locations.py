@@ -12,11 +12,10 @@ from typing import TYPE_CHECKING
 
 from BaseClasses import Location
 
-from .data import enemy_placements, pickup_info_collection
+from .data import area_names, enemy_placements, pickup_info_collection
 from .enemy_checks import (ARENA_PLACEMENTS, BOSS_TYPES, SPAWNS_AFTER_BOSS_IN, checkable_types,
                            defeat_location_id, defeat_location_name, has_recorded_route,
                            placements_of)
-from .tracker_map import AREA_NAMES
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
@@ -110,7 +109,7 @@ def _build_location_name_groups() -> dict[str, set[str]]:
         if not has_recorded_route(enemy.name):
             groups["Unrouted Enemy Defeats"].add(name)
         for placement in placements_of(enemy.name):
-            groups.setdefault(f"{AREA_NAMES[placement.room[0]]} Defeats", set()).add(name)
+            groups.setdefault(f"{area_names[placement.room[0]]} Defeats", set()).add(name)
     return groups
 
 
@@ -138,7 +137,7 @@ def defeat_hint_text(enemy_name: str) -> str:
     for room in sorted(bosses_by_room):
         bosses = bosses_by_room[room]
         text = room if None in bosses else f"{room} (after {' or '.join(sorted(bosses))})"
-        rooms_by_area.setdefault(AREA_NAMES[room[0]], []).append(text)
+        rooms_by_area.setdefault(area_names[room[0]], []).append(text)
     return "; ".join(f"{area} {', '.join(rooms)}" for area, rooms in rooms_by_area.items())
 
 

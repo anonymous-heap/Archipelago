@@ -8,10 +8,10 @@ appears.
 """
 from __future__ import annotations
 
-from ..data import map_info, pickup_info_collection
+from ..data import area_names, map_info, pickup_info_collection
 from ..data.room_info import by_identifier as rooms_by_identifier
 from ..locations import location_name_to_id
-from ..tracker_map import AREA_NAMES, REALM_AREA, ROOM_CELL, cell_position, defeat_pins
+from ..tracker_map import REALM_AREA, ROOM_CELL, cell_position, defeat_pins
 
 EDGE_KINDS = {map_info.HIDDEN_DOOR: "hidden", map_info.DOOR: "door", map_info.WALL: "wall"}
 
@@ -48,7 +48,7 @@ def _areas(cells: list[dict]) -> list[dict]:
     for area in sorted({cell["area"] for cell in cells}, key=lambda a: (a == REALM_AREA, a)):
         xs = [cell["x"] for cell in cells if cell["area"] == area]
         ys = [cell["y"] for cell in cells if cell["area"] == area]
-        areas.append({"id": area, "name": AREA_NAMES[area], "realm": area == REALM_AREA,
+        areas.append({"id": area, "name": area_names[area], "realm": area == REALM_AREA,
                       "bounds": [min(xs), min(ys), max(xs) + 1, max(ys) + 1]})
     return areas
 

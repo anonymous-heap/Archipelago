@@ -24,7 +24,7 @@ from NetUtils import HintStatus
 from Utils import async_start
 
 from .. import CVAOSWorld, exploration, tracker_map, tracker_route
-from ..data import item_info_collection
+from ..data import area_names, item_info_collection
 from ..enemy_checks import enemy_id_for_location
 from ..item_granting import canonical_code
 from ..regions import UT_TRICKS_ITEM
@@ -557,7 +557,7 @@ class TrackerContext(CommonContext):
             "target": route.location.address,
             "start_room": route.start_room,
             "tricks": route.tricks,
-            "steps": [{"room": room, "area": tracker_map.AREA_NAMES[room[0]], "needs": needs}
+            "steps": [{"room": room, "area": area_names[room[0]], "needs": needs}
                       for room, needs in steps],
             "points": [list(point) for point in tracker_route.route_points(route)],
         }

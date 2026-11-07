@@ -23,11 +23,10 @@ from typing import TYPE_CHECKING, NamedTuple, Sequence
 from BaseClasses import CollectionState, Entrance, Location, Region
 from Utils import get_intended_text
 
-from .data import map_info
+from .data import area_names, map_info
 from .data.entrance_info import rows as entrance_rows
 from .data.room_info import by_identifier as rooms_by_identifier
 from .regions import UT_TRICKS_ITEM
-from .tracker_map import AREA_NAMES
 
 if TYPE_CHECKING:
     from NetUtils import JSONMessagePart
@@ -189,7 +188,7 @@ def route_messages(location: Location, steps: list[tuple[str, list[str]]],
     messages: list[list[JSONMessagePart]] = []
     if tricks:
         messages.append([{"type": "color", "color": "yellow", "text": "Using tricks:"}])
-    for area, area_steps in itertools.groupby(steps, key=lambda step: AREA_NAMES[step[0][0]]):
+    for area, area_steps in itertools.groupby(steps, key=lambda step: area_names[step[0][0]]):
         rooms = [f"{room} ({', '.join(needed)})" if needed else room for room, needed in area_steps]
         messages.append([{"type": "color", "color": "blue", "text": f"{area}:"},
                          {"type": "text", "text": " " + " > ".join(rooms)}])

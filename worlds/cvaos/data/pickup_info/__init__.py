@@ -14,6 +14,7 @@ from ..parse_int import parse_hex
 
 __all__ = [
     "PickupInfo",
+    "area_names",
     "rows",
 ]
 
@@ -245,6 +246,10 @@ by_identifier_key: dict[str, PickupInfo] = {row.identifier_key: row for row in r
 by_simple_name: dict[str, list[PickupInfo]] = {}
 for row in rows:
     by_simple_name.setdefault(row.simple_name, []).append(row)
+
+# Each area's name, as the location names give it ("Dance Hall" for the 3xx rooms).
+area_names: dict[str, str] = {row["room_identifier"][0]: row["region"] for row in open_csv(
+    __name__, "friendly_location_names.csv")}
 
 
 def find(key: int | str) -> PickupInfo:

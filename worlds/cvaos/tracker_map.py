@@ -33,9 +33,8 @@ import os
 from typing import NamedTuple
 
 from . import tracker_png
-from .data import map_info, pickup_info_collection
+from .data import area_names, map_info, pickup_info_collection
 from .enemy_checks import checkable_types, defeat_location_name, pin_rooms
-from .data._csv_resources import open_csv
 from .data.room_info import by_identifier as rooms_by_identifier
 
 CELL_PIXELS = 24                 # image pixels per map cell
@@ -96,11 +95,6 @@ class TrackerMap(NamedTuple):
                 (last_y - first_y + 1 + 2 * MARGIN) * CELL_PIXELS)
 
 
-# Each area's name, as the location names give it ("Dance Hall" for the 3xx rooms).
-AREA_NAMES: dict[str, str] = {row["room_identifier"][0]: row["region"] for row in open_csv(
-    "worlds.cvaos.data.pickup_info", "friendly_location_names.csv")}
-
-
 def _bounds(rooms: frozenset[str], pad: int, within: tuple[int, int, int, int] | None = None):
     cells = [(x, y) for y in range(map_info.ROWS) for x in range(map_info.COLUMNS)
              if map_info.room_at(x, y) in rooms]
@@ -120,12 +114,12 @@ def _make_maps() -> tuple[TrackerMap, ...]:
     realm = frozenset(room for room in rooms_by_identifier if room[0] == REALM_AREA)
     castle = frozenset(rooms_by_identifier) - realm
     castle_bounds = _bounds(castle, 0)
-    realm_name = AREA_NAMES[REALM_AREA]
+    realm_name = area_names[REALM_AREA]
     maps = [TrackerMap("Castle", "castle.png", castle_bounds, castle, frozenset()),
             TrackerMap(realm_name, _image_name(realm_name), _bounds(realm, 0), realm, frozenset())]
     for area in sorted({room[0] for room in castle}):
         rooms = frozenset(room for room in castle if room[0] == area)
-        maps.append(TrackerMap(AREA_NAMES[area], _image_name(AREA_NAMES[area]),
+        maps.append(TrackerMap(area_names[area], _image_name(area_names[area]),
                                _bounds(rooms, 1, castle_bounds), rooms, castle - rooms))
     return tuple(maps)
 

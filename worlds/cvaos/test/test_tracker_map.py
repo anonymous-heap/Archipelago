@@ -16,7 +16,7 @@ from unittest import mock
 
 from .. import CVAOSWorld, client_logic, tracker_map, tracker_png
 from ..client_logic import CVAOSClientLogic
-from ..data import map_info, pickup_info_collection
+from ..data import area_names, map_info, pickup_info_collection
 from ..data.room_info import by_identifier as rooms_by_identifier
 from ..enemy_checks import checkable_types, defeat_location_name, pin_rooms, placements_of
 from ..locations import location_name_to_id
@@ -83,7 +83,7 @@ class TrackerMapTest(unittest.TestCase):
             for room in rooms[name]:
                 area = room[0]
                 expected += (["Chaotic Realm"] if area == tracker_map.REALM_AREA
-                             else ["Castle", tracker_map.AREA_NAMES[area]])
+                             else ["Castle", area_names[area]])
             with self.subTest(location=name):
                 self.assertEqual([pin["map"] for pin in node["map_locations"]], expected)
 

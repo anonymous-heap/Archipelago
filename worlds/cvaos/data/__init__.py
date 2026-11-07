@@ -17,7 +17,7 @@ from .enemy_info import EnemyType, by_name as enemy_type_by_name, rows as enemy_
 from .entrance_info import EntranceInfo, rows as entrance_info_collection
 from .item_balancing import DesirabilityInfo, rows as desirability_collection
 from .item_info import ItemInfo, rows as item_info_collection
-from .pickup_info import PickupInfo, rows as pickup_info_collection
+from .pickup_info import PickupInfo, area_names, rows as pickup_info_collection
 from .room_info import RoomInfo, rows as room_info_collection
 from .routing_info import (
     AbilityCombo,
@@ -52,6 +52,7 @@ __all__ = [
     "RoomInfo",
     "RoutingInfo",
     "TransdoorConnection",
+    "area_names",
     "by_enemy_name_for_enemy_regions",
     "by_enemy_number_for_enemy_regions",
     "by_from_entrance_for_transdoor",

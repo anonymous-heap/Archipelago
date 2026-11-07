@@ -102,7 +102,7 @@ Spatial and room data for each pickup. Columns: `pickup_number`, `ptr_address`, 
 A friendly name for each pickup's location. Columns: `pickup_number`, `room_identifier`, `simple_name`, `specifier`, `region`, and `SchwartzGandhi's names`, which holds the friendly name. The loader checks that each named row's `room_identifier` matches `pickup_rooms.csv`.
 
 **`__init__.py`**
-Merges the three CSVs by `pickup_number` into `PickupInfo` Pydantic models at module init. The `ptr_address` is cross-validated between `pickup_identifiers.csv` and `pickup_rooms.csv` where both have it. Builds lookup dicts by `ptr_address`, `pickup_number`, and `identifier_key` (`simple_name` + `specifier`). Exports the `rows` tuple.
+Merges the three CSVs by `pickup_number` into `PickupInfo` Pydantic models at module init. The `ptr_address` is cross-validated between `pickup_identifiers.csv` and `pickup_rooms.csv` where both have it. Builds lookup dicts by `ptr_address`, `pickup_number`, and `identifier_key` (`simple_name` + `specifier`). Exports the `rows` tuple, and `area_names`, which maps the first character of a room identifier to the name of its area, as the `region` column gives it.
 
 Each pickup has three names. `item_name` is the Archipelago item name, which every pickup of the same item shares. `display_name` adds the specifier, as in `Potion (A)`, and `location_name` adds the friendly name and room, as in `White Dragon Hallway [00D Potion (A)]`.
 
