@@ -199,7 +199,7 @@ class BridgeTest(unittest.TestCase):
         lines = [line for line in logs.output if f"{GAME}: Wide Item Smoothing" in line]
         return multiworld, lines, balance.call_count, walk.call_count
 
-    def test_a_multiworld_balances_three_times_with_one_walk_per_round_for_every_player(self):
+    def test_a_multiworld_balances_three_times_and_every_player_shares_each_walk(self):
         multiworld, lines, calls, walks = self.generate_counting()
         self.assertEqual(calls, wide_smoothing.ROUNDS)
         # Each round walks once on each clock for both players together, and the floor walks the
