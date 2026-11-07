@@ -31,12 +31,12 @@ from ..drop_shuffle import (DropSlot, _supply, plan_drop_shuffle, plan_travel,
 from ..drop_sources import final_drop_table, travel_plan
 from ..items import logic_only_progression_names
 from ..locations import CVAOSLocation
+from ..options import cvaos_options_presets
 from ..wide_smoothing import (BAND, RUNGS, OrderResult, _is_defeat, promote_mid_game_gear,
                               qualifies)
 
 GAME = CVAOSWorld.game
-PRESET = {"enemy_checks": "all", "soul_shuffle": "matched", "enemy_drop_rate": 350,
-          "wide_item_smoothing": True}
+PRESET = dict(cvaos_options_presets["Experimental"])
 SCENARIOS = bool(os.environ.get("CVAOS_WIDE_SCENARIOS"))
 
 
