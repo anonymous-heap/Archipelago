@@ -15,8 +15,7 @@ import unittest
 from unittest import mock
 
 from BaseClasses import CollectionState, LocationProgressType, MultiWorld
-from Fill import (distribute_items_restrictive, distribute_planned_blocks, parse_planned_blocks,
-                  resolve_early_locations_for_planned)
+from Fill import distribute_items_restrictive
 from test.general import setup_multiworld
 from worlds.AutoWorld import call_all
 from worlds.generic.Rules import exclusion_rules
@@ -27,34 +26,12 @@ from ..item_smoothing import (ANCIENT_BOOK_NAMES, BIASED_SOULS, BLACK_PANTHER, M
                               smoothable_locations_in_order)
 from ..items import logic_only_progression_names
 from ..locations import location_name_to_id, pickup_location_ids
+from . import BEFORE_FILL, generate
 
-BEFORE_FILL = ("generate_early", "create_regions", "create_items", "set_rules",
-               "connect_entrances", "generate_basic")
 # The pickup locations: these tests leave enemy checks off.
 LOCATION_NAMES = sorted(name for name, location_id in location_name_to_id.items()
                         if location_id in pickup_location_ids)
 SMOOTHED = (*BIASED_SOULS, BLACK_PANTHER, *ANCIENT_BOOK_NAMES)
-
-
-def generate(seed: int, options: dict) -> MultiWorld:
-    """Generate one world the way Main does, including its location settings and item plando."""
-    multiworld = setup_multiworld(CVAOSWorld, BEFORE_FILL[:4], seed=seed,
-                                  options={"item_smoothing": "strict", **options})
-    world = multiworld.worlds[1]
-    excluded = world.options.exclude_locations.value
-    exclusion_rules(multiworld, 1, excluded)
-    existing = {location.name for location in multiworld.get_locations(1)}
-    for name in (world.options.priority_locations.value - excluded) & existing:
-        multiworld.get_location(name, 1).progress_type = LocationProgressType.PRIORITY
-    multiworld.plando_item_blocks = parse_planned_blocks(multiworld)
-    for step in BEFORE_FILL[4:]:
-        call_all(multiworld, step)
-    resolve_early_locations_for_planned(multiworld)
-    distribute_planned_blocks(multiworld, multiworld.plando_item_blocks[1])
-    call_all(multiworld, "pre_fill")
-    distribute_items_restrictive(multiworld)
-    call_all(multiworld, "post_fill")
-    return multiworld
 
 
 class LocationSettingsTest(unittest.TestCase):

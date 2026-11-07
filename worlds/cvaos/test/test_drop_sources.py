@@ -16,8 +16,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from ..drop_sources import planned_drop_table_lines, rom_drop_table_lines
-from .test_enemy_drop_rate import preset_seed
-from .test_experimental_options import early
+from . import early, preset_seed
 from .test_soul_sources import rom_reads, spoiler_sections
 
 

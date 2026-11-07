@@ -1,6 +1,24 @@
+import functools
+import glob
+import json
 import os
+import tempfile
+import unittest
+import zipfile
+from typing import NamedTuple
+from unittest import mock
 
+from BaseClasses import LocationProgressType, MultiWorld
+from Fill import (distribute_items_restrictive, distribute_planned_blocks, parse_planned_blocks,
+                  resolve_early_locations_for_planned)
 from test.bases import WorldTestBase
+from test.general import setup_multiworld
+from worlds.AutoWorld import call_all
+from worlds.generic.Rules import exclusion_rules
+
+from .. import CVAOSWorld
+from ..options import cvaos_options_presets
+from ..rom import patch
 
 
 class CVAOSTestBase(WorldTestBase):
@@ -68,3 +86,99 @@ def base_roms() -> dict[str, bytes]:
     if collection is not None:
         roms["collection"] = collection
     return roms
+
+
+BEFORE_FILL = ("generate_early", "create_regions", "create_items", "set_rules",
+               "connect_entrances", "generate_basic")
+
+
+def generate(seed: int, options: dict) -> MultiWorld:
+    """Generate one world the way Main does, including its location settings and item plando."""
+    multiworld = setup_multiworld(CVAOSWorld, BEFORE_FILL[:4], seed=seed,
+                                  options={"item_smoothing": "strict", **options})
+    world = multiworld.worlds[1]
+    excluded = world.options.exclude_locations.value
+    exclusion_rules(multiworld, 1, excluded)
+    existing = {location.name for location in multiworld.get_locations(1)}
+    for name in (world.options.priority_locations.value - excluded) & existing:
+        multiworld.get_location(name, 1).progress_type = LocationProgressType.PRIORITY
+    multiworld.plando_item_blocks = parse_planned_blocks(multiworld)
+    for step in BEFORE_FILL[4:]:
+        call_all(multiworld, step)
+    resolve_early_locations_for_planned(multiworld)
+    distribute_planned_blocks(multiworld, multiworld.plando_item_blocks[1])
+    call_all(multiworld, "pre_fill")
+    distribute_items_restrictive(multiworld)
+    call_all(multiworld, "post_fill")
+    return multiworld
+
+
+def early(**options) -> CVAOSWorld:
+    """Return one world with ``options``, after only generate_early."""
+    return setup_multiworld(CVAOSWorld, ("generate_early",), seed=1, options=options).worlds[1]
+
+
+# rom_config.json with every optional feature off. run_apply_rom_features overrides entries of it.
+FEATURES_OFF = {"skull_key_warp": False, "ancient_book_soul_drops": False,
+                "forbidden_area_pickup": False, "soul_shuffle_plan": {},
+                "multiply_soul_drop_rates": False, "single_jump_divekick": False,
+                "classicvania_movement": False, "oops_all_whips": False}
+
+# The builders, as (module, function), that need more of a real base ROM than a test fixture has.
+STUBBED_BUILDERS = (("soul_guarantee_hook", "build_writes"), ("soul_shuffle", "build_writes"),
+                    ("soul_drop_rates", "build_writes"), ("received_item_box", "build_writes"),
+                    ("custom_pickups", "build_writes_from_rom"), ("inventory_menu", "build_writes"))
+
+
+def run_apply_rom_features(test: unittest.TestCase, rom: bytes, **config) -> dict[str, mock.Mock]:
+    """Run apply_rom_features on ``rom``, with ``config`` overriding entries of FEATURES_OFF.
+
+    The config is passed as JSON, the way rom_config.json stores it. Each builder in
+    STUBBED_BUILDERS is replaced by a stub that writes nothing, until ``test`` ends. Returns each
+    stub by its module's name, so a test can check the arguments that builder received.
+    """
+    caller = mock.Mock(get_file=lambda name: json.dumps({**FEATURES_OFF, **config}).encode())
+    stubs = {}
+    for module, function in STUBBED_BUILDERS:
+        patcher = mock.patch.object(getattr(patch, module), function, return_value={})
+        stubs[module] = patcher.start()
+        test.addCleanup(patcher.stop)
+    patch.CVAOSPatchExtension.apply_rom_features(caller, rom, "rom_config.json")
+    return stubs
+
+
+PRESET = cvaos_options_presets["Experimental"]
+SCRIPTED_BOSSES = (106, 107, 108, 109)  # Headhunter, Death, Legion, Balore
+
+
+def apply_patch(patch_path: str, base: bytes, folder: str) -> tuple[bytes, bytes]:
+    """Apply the patch at ``patch_path`` to ``base``, and return the ROM just before the
+    enemy-table step and the finished ROM."""
+    out_path = os.path.join(folder, "patched.gba")
+    step = patch.CVAOSPatchExtension.apply_enemy_table
+    with patch.base_rom_override(base), mock.patch.object(
+            patch.CVAOSPatchExtension, "apply_enemy_table", wraps=step) as spy:
+        patch.CVAOSProcedurePatch(patch_path).patch(out_path)
+    with open(out_path, "rb") as fh:
+        return spy.call_args.args[1], fh.read()
+
+
+class PresetSeed(NamedTuple):
+    world: CVAOSWorld
+    config: dict  # the patch's rom_config.json
+    patched: dict[str, tuple[bytes, bytes]]  # base name -> ROM before the last step, and after
+
+
+@functools.cache
+def preset_seed() -> PresetSeed:
+    """Generate one seed with the Experimental preset, write its patch, and apply the patch to each
+    available base ROM. The result is shared by every test that reads it."""
+    world = generate(2, dict(PRESET)).worlds[1]
+    with tempfile.TemporaryDirectory() as folder:
+        world.generate_output(folder)
+        (patch_path,) = glob.glob(os.path.join(folder, "*.apcvaos"))
+        with zipfile.ZipFile(patch_path) as patch_file:
+            config = json.loads(patch_file.read("rom_config.json"))
+        patched = {name: apply_patch(patch_path, base, folder)
+                   for name, base in base_roms().items()}
+    return PresetSeed(world, config, patched)

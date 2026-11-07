@@ -27,7 +27,7 @@ from ..item_smoothing import (ANCIENT_BOOK_NAMES, BIASED_SOULS, EARLY_BAND, EARL
                               smoothable_locations_in_order)
 from ..items import CVAOSItem, item_table
 from ..regions import can_reach_room
-from .test_smoothing_location_settings import BEFORE_FILL, generate
+from . import BEFORE_FILL, generate
 
 # The post-fill pass aims one book into each of [0, 1/3], [1/3, 2/3] and [1/2, 3/4] of the run, so
 # the books in run order belong in these bands. A swap can stop short of its target, so each band

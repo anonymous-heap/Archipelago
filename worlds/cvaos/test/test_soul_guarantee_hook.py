@@ -10,9 +10,7 @@ drops, how the new strings are laid out, and whether and when the patch applies 
 """
 from __future__ import annotations
 
-import json
 import unittest
-from unittest import mock
 
 from ..ram import addresses as addr
 from ..rom import custom_pickups as cp
@@ -20,6 +18,7 @@ from ..rom import soul_guarantee_hook as sgh
 from ..rom.address_space import m2_region_hit
 from ..rom.entity import GBA_ROM_BASE
 from ..rom.soul_shuffle import VANILLA
+from . import run_apply_rom_features
 
 try:
     import capstone
@@ -242,36 +241,6 @@ class DescriptionTest(unittest.TestCase):
         put(rom, sgh.STRINGPTR_GBA + 4 * FIXTURE_TEXT_IDS[26], (0x08600000).to_bytes(4, "little"))
         with self.assertRaisesRegex(ValueError, "ROM mismatch"):
             sgh.build_description_writes(bytes(rom))
-
-
-# rom_config.json with every optional feature off. run_apply_rom_features overrides entries of it.
-FEATURES_OFF = {"skull_key_warp": False, "ancient_book_soul_drops": False,
-                "forbidden_area_pickup": False, "soul_shuffle_plan": {},
-                "multiply_soul_drop_rates": False, "single_jump_divekick": False,
-                "classicvania_movement": False, "oops_all_whips": False}
-
-# The builders, as (module, function), that need more of a real base ROM than a test fixture has.
-STUBBED_BUILDERS = (("soul_guarantee_hook", "build_writes"), ("soul_shuffle", "build_writes"),
-                    ("soul_drop_rates", "build_writes"), ("received_item_box", "build_writes"),
-                    ("custom_pickups", "build_writes_from_rom"), ("inventory_menu", "build_writes"))
-
-
-def run_apply_rom_features(test: unittest.TestCase, rom: bytes, **config) -> dict[str, mock.Mock]:
-    """Run apply_rom_features on ``rom``, with ``config`` overriding entries of FEATURES_OFF.
-
-    The config is passed as JSON, the way rom_config.json stores it. Each builder in
-    STUBBED_BUILDERS is replaced by a stub that writes nothing, until ``test`` ends. Returns each
-    stub by its module's name, so a test can check the arguments that builder received.
-    """
-    from ..rom import patch as rp
-    caller = mock.Mock(get_file=lambda name: json.dumps({**FEATURES_OFF, **config}).encode())
-    stubs = {}
-    for module, function in STUBBED_BUILDERS:
-        patcher = mock.patch.object(getattr(rp, module), function, return_value={})
-        stubs[module] = patcher.start()
-        test.addCleanup(patcher.stop)
-    rp.CVAOSPatchExtension.apply_rom_features(caller, rom, "rom_config.json")
-    return stubs
 
 
 class PatchPipelineTest(unittest.TestCase):

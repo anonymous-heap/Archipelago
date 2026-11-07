@@ -21,13 +21,12 @@ from unittest import mock
 
 import Generate
 from Options import Choice
-from test.general import setup_multiworld
 
 from .. import CVAOSWorld
 from ..options import (CVAOSOptions, EnemyChecks, EnemyDropRate, ItemDropShuffle, ItemSmoothing,
                        ItemSmoothingOrder, KeepSoulDropRates, ShuffleStartingSoul, SoulShuffle,
                        WideItemSmoothing, cvaos_option_groups, cvaos_options_presets)
-from .test_smoothing_location_settings import generate
+from . import early, generate
 
 
 class ReleasedSoulShuffle(Choice):
@@ -36,10 +35,6 @@ class ReleasedSoulShuffle(Choice):
     option_within_type = 1
     option_any_type = 2
     default = option_off
-
-
-def early(**options) -> CVAOSWorld:
-    return setup_multiworld(CVAOSWorld, ("generate_early",), seed=1, options=options).worlds[1]
 
 
 class GroupAndPresetTest(unittest.TestCase):

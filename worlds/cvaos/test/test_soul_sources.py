@@ -22,9 +22,7 @@ from ..rom import patch, soul_shuffle
 from ..rom.enemy_table import TABLE_OFFSET, TABLE_SIZE, parse_table
 from ..soul_sources import (planned_soul_table_lines, rom_soul_table_lines, soul_name,
                             vanilla_soul_name)
-from . import base_roms
-from .test_enemy_drop_rate import SCRIPTED_BOSSES, preset_seed
-from .test_experimental_options import early
+from . import SCRIPTED_BOSSES, base_roms, early, preset_seed
 
 
 def config_for(mode: str, seed: int, **options) -> dict:

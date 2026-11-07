@@ -14,7 +14,7 @@ import unittest
 from random import Random
 
 import worlds.cvaos.rom.soul_shuffle as ss
-from worlds.cvaos.test.test_soul_guarantee_hook import run_apply_rom_features
+from worlds.cvaos.test import early, run_apply_rom_features
 
 
 def _fake_rom() -> bytes:
@@ -242,7 +242,6 @@ class TestMatched(unittest.TestCase):
 
     def test_every_rate_byte_stays_on_its_row_whatever_keep_soul_drop_rates_says(self):
         from worlds.cvaos.rom.patch import build_rom_config
-        from .test_experimental_options import early
         config = build_rom_config(early(soul_shuffle="matched", keep_soul_drop_rates=True))
         plan = {int(target): source for target, source in config["soul_shuffle_plan"].items()}
         self.assertTrue(plan)

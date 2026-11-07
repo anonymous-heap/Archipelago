@@ -27,9 +27,7 @@ from .. import CVAOSWorld
 from ..client_logic import ITEMS_FROM_OTHER_WORLDS, ITEMS_INCLUDING_OWN, items_handling_for
 from ..locations import pickup_location_ids
 from ..rom import identifiers, patch
-from . import find_rom
-from .test_smoothing_location_settings import generate
-from .test_soul_guarantee_hook import run_apply_rom_features
+from . import find_rom, generate, run_apply_rom_features
 
 # The procedure and rom_config.json of a patch from the released V0.4 world, with its defaults.
 RELEASED_PROCEDURE = [("apply_tokens", ["token_data.bin"]),

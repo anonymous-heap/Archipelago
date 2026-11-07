@@ -16,8 +16,7 @@ from ..ram import addresses as addr
 from ..rom import patch as rom_patch
 from ..rom import skull_key_pickup as skp
 from ..rom.entity import GBA_ROM_BASE
-from . import find_rom
-from .test_soul_guarantee_hook import run_apply_rom_features
+from . import find_rom, run_apply_rom_features
 
 try:
     import capstone

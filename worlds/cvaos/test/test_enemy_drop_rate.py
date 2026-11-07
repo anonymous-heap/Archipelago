@@ -14,35 +14,24 @@ is available: a cart dump, and the Advance Collection's copy.
 """
 from __future__ import annotations
 
-import functools
-import glob
-import json
-import os
-import tempfile
 import unittest
-import zipfile
 from types import SimpleNamespace
-from typing import NamedTuple
 from unittest import mock
 
-from .. import CVAOSWorld, enemy_drop_rate
+from .. import enemy_drop_rate
 from .._bytemaker_compat import sizeof
 from ..data import enemy_type_by_name, enemy_type_collection
 from ..data.item_balancing.soul_tiers import soul_rating
 from ..data.item_balancing.worth import item_worth
 from ..data.item_info import by_item_number
-from ..options import cvaos_options_presets
-from ..rom import enemy_drop_rates, identifiers, patch
+from ..rom import enemy_drop_rates, identifiers
 from ..rom.address_space import gba_space
 from ..rom.enemy_table import ENEMY_COUNT, ENEMY_TABLE, EnemyDNA, field_offset, row_offset
 from ..rom.soul_drop_rates import scaled_rate
 from ..seed_depth import enemy_seed_depths
 from ..soul_sources import soul_name, vanilla_soul_name
-from . import base_roms
-from .test_smoothing_location_settings import generate
+from . import SCRIPTED_BOSSES, preset_seed
 
-PRESET = cvaos_options_presets["Experimental"]
-SCRIPTED_BOSSES = (106, 107, 108, 109)  # Headhunter, Death, Legion, Balore
 TABLE_END = row_offset(ENEMY_COUNT - 1) + sizeof(EnemyDNA)
 
 
@@ -140,41 +129,8 @@ class BuildWritesTest(unittest.TestCase):
             enemy_drop_rates.build_writes(bytes(rom), {"113": [350, 350]})
 
 
-def apply_patch(patch_path: str, base: bytes, folder: str) -> tuple[bytes, bytes]:
-    """Apply the patch at ``patch_path`` to ``base``, and return the ROM just before the
-    enemy-table step and the finished ROM."""
-    out_path = os.path.join(folder, "patched.gba")
-    step = patch.CVAOSPatchExtension.apply_enemy_table
-    with patch.base_rom_override(base), mock.patch.object(
-            patch.CVAOSPatchExtension, "apply_enemy_table", wraps=step) as spy:
-        patch.CVAOSProcedurePatch(patch_path).patch(out_path)
-    with open(out_path, "rb") as fh:
-        return spy.call_args.args[1], fh.read()
-
-
 def rows_of(rom: bytes) -> list:
     return ENEMY_TABLE.bind(gba_space(rom)).read()
-
-
-class PresetSeed(NamedTuple):
-    world: CVAOSWorld
-    config: dict  # the patch's rom_config.json
-    patched: dict[str, tuple[bytes, bytes]]  # base name -> ROM before the last step, and after
-
-
-@functools.cache
-def preset_seed() -> PresetSeed:
-    """Generate one seed with the Experimental preset, write its patch, and apply the patch to each
-    available base ROM. The result is shared by every test that reads it."""
-    world = generate(2, dict(PRESET)).worlds[1]
-    with tempfile.TemporaryDirectory() as folder:
-        world.generate_output(folder)
-        (patch_path,) = glob.glob(os.path.join(folder, "*.apcvaos"))
-        with zipfile.ZipFile(patch_path) as patch_file:
-            config = json.loads(patch_file.read("rom_config.json"))
-        patched = {name: apply_patch(patch_path, base, folder)
-                   for name, base in base_roms().items()}
-    return PresetSeed(world, config, patched)
 
 
 class PresetPatchTest(unittest.TestCase):

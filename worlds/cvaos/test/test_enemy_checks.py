@@ -29,7 +29,7 @@ from ..options import EnemyChecks, Goal
 from ..regions import UT_TRICKS_ITEM, can_reach_room
 from ..rom.entity import GBA_ROM_BASE, PICKUP
 from ..rom.patch import _ITEM_OFF, _TYPE_OFF, get_location_data, rom_gives_item
-from .test_smoothing_location_settings import generate
+from . import generate
 from .test_universal_tracker import generate as generate_for_tracker, regenerate_from, state_with
 
 BUILD_STEPS = ("generate_early", "create_regions", "create_items", "set_rules")

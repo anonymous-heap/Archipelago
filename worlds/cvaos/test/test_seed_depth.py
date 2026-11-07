@@ -14,7 +14,7 @@ from .. import seed_depth
 from ..data import enemy_type_by_name, enemy_type_collection
 from ..enemy_checks import defeat_location_name, enemy_id_for_location, placements_of
 from ..locations import pickup_location_ids
-from .test_smoothing_location_settings import generate
+from . import generate
 
 
 class SeedDepthTest(unittest.TestCase):
