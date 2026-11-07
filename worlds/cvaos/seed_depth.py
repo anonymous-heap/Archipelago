@@ -34,7 +34,7 @@ from BaseClasses import CollectionState
 
 from .data import enemy_type_collection
 from .enemy_checks import enemy_id_for_location, placements_of
-from .item_smoothing import _UNREACHED_DEPTH, _region_depth
+from .item_smoothing import UNREACHED_DEPTH, region_depth
 from .locations import pickup_location_ids
 from .regions import can_reach_room
 
@@ -90,7 +90,7 @@ def _sweep(world: "CVAOSWorld") -> SeedDepths:
     is also when that sphere's locations become reachable.
     """
     multiworld, player = world.multiworld, world.player
-    map_depth = _region_depth(multiworld, player)
+    map_depth = region_depth(multiworld, player)
     rooms = sorted({placement.room for enemy in enemy_type_collection
                     for placement in placements_of(enemy.name)})
 
@@ -103,7 +103,7 @@ def _sweep(world: "CVAOSWorld") -> SeedDepths:
         for room in rooms:
             if room not in room_keys and can_reach_room(state, world, room):
                 doors = world.entrance_region_names_by_room.get(room, ())
-                room_keys[room] = (sphere_index, min(map_depth.get(name, _UNREACHED_DEPTH)
+                room_keys[room] = (sphere_index, min(map_depth.get(name, UNREACHED_DEPTH)
                                                      for name in doors))
         sphere = {location for location in locations if location.can_reach(state)}
         if not sphere:
@@ -111,7 +111,7 @@ def _sweep(world: "CVAOSWorld") -> SeedDepths:
         for location in sphere:
             if location.player == player and location.address in pickup_location_ids:
                 pickup_keys[location.name] = (
-                    sphere_index, map_depth.get(location.parent_region.name, _UNREACHED_DEPTH))
+                    sphere_index, map_depth.get(location.parent_region.name, UNREACHED_DEPTH))
         for location in sphere:
             state.collect(location.item, True, location)
         locations -= sphere

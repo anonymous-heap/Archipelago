@@ -22,8 +22,8 @@ from worlds.AutoWorld import call_all
 from .. import CVAOSWorld
 from ..data import item_balancing as desirability_data
 from ..item_smoothing import (ANCIENT_BOOK_NAMES, BIASED_SOULS, EARLY_BAND, EARLY_GUARANTEE,
-                              SmoothingParams, _UNREACHED_DEPTH, _assign_targets,
-                              _designate_early_soul, _region_depth, _run_position,
+                              UNREACHED_DEPTH, SmoothingParams, _assign_targets,
+                              _designate_early_soul, _run_position, region_depth,
                               smoothable_locations_in_order)
 from ..items import CVAOSItem, item_table
 from ..regions import can_reach_room
@@ -54,7 +54,7 @@ def positions_by_desirability(multiworld: MultiWorld, by_map_distance: bool) -> 
     the pass places gold by amount rather than by desirability.
     """
     ordered = smoothable_locations_in_order(multiworld, 1, list(multiworld.get_spheres()),
-                                            _region_depth(multiworld, 1),
+                                            region_depth(multiworld, 1),
                                             by_map_distance=by_map_distance)
     last = max(1, len(ordered) - 1)
     rated = []
@@ -143,11 +143,11 @@ class SmoothingOrderTest(unittest.TestCase):
 
     def test_map_distance_order_follows_map_depth(self):
         multiworld = self.multiworlds["map_distance"]
-        depth = _region_depth(multiworld, 1)
+        depth = region_depth(multiworld, 1)
         ordered = smoothable_locations_in_order(multiworld, 1, list(multiworld.get_spheres()),
                                                 depth, by_map_distance=True)
         self.assertGreater(len(ordered), 10)
-        depths = [depth.get(loc.parent_region.name, _UNREACHED_DEPTH) for loc in ordered]
+        depths = [depth.get(loc.parent_region.name, UNREACHED_DEPTH) for loc in ordered]
         self.assertEqual(depths, sorted(depths))
 
 

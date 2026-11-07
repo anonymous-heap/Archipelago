@@ -15,7 +15,7 @@ swing, so feel (and some incidental enemy hits) will differ.
 
 Logic impact: a weapon breaks floors and ceilings through its own swing, and the Whip Sword's
 swing breaks neither. With this option on, no weapon can break them, so logic counts only the
-breakers that are not weapons (regions._breakers).
+breakers that are not weapons (regions.breakers).
 
 ``_RECORDS`` is byte-for-byte from Xanthus's distributed patch.
 """

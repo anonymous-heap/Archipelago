@@ -113,14 +113,14 @@ MOVEMENT_SOULS = frozenset({
 })
 
 ORIGIN_REGION = "Menu"
-_UNREACHED_DEPTH = 10 ** 9  # sort graph-disconnected regions last
+UNREACHED_DEPTH = 10 ** 9  # sort graph-disconnected regions last
 
 _GOLD = re.compile(r"^\d+ Gold$")
 
 
 # --- item identity ----------------------------------------------------------------------------
 
-def _category(name: str) -> str:
+def category(name: str) -> str:
     """
     Get the category of an item from its name.
     """
@@ -147,7 +147,7 @@ def _student_t(nu: float, rng) -> float:
     return rng.gauss(0.0, 1.0) / math.sqrt(chi2 / nu)
 
 
-def _jittered(base: float, scale: float, params: SmoothingParams, rng) -> float:
+def jittered(base: float, scale: float, params: SmoothingParams, rng) -> float:
     """
     Return ``base`` plus long-tailed jitter of width ``scale``, or, with probability ``eps``, a
     uniform random wildcard in [0, 1].
@@ -193,7 +193,7 @@ def _assign_targets(items: List[Item], params: SmoothingParams, rng) -> List[flo
 
     # Gold is placed by copy rather than by desirability, so the money rows in desirability.csv are
     # not used here.
-    golds = [i for i, it in enumerate(items) if _category(it.name) == "money"]
+    golds = [i for i, it in enumerate(items) if category(it.name) == "money"]
     rng.shuffle(golds)
 
     # One copy of each larger gold amount gets a base above every rated item, so it lands after the
@@ -275,7 +275,7 @@ def _assign_targets(items: List[Item], params: SmoothingParams, rng) -> List[flo
 
 # --- shared progress ordering -----------------------------------------------------------------
 
-def _region_depth(multiworld: MultiWorld, player: int) -> Dict[str, int]:
+def region_depth(multiworld: MultiWorld, player: int) -> Dict[str, int]:
     """
     Return each region's breadth-first distance from the origin region, ignoring access rules.
 
@@ -343,10 +343,10 @@ def smoothable_locations_in_order(multiworld: MultiWorld, player: int, spheres: 
                   and (not loc.item.advancement
                        or loc.item.name in logic_only_progression_names)]
     if by_map_distance:
-        candidates.sort(key=lambda loc: (depth.get(loc.parent_region.name, _UNREACHED_DEPTH), loc.name))
+        candidates.sort(key=lambda loc: (depth.get(loc.parent_region.name, UNREACHED_DEPTH), loc.name))
     else:
         candidates.sort(key=lambda loc: (sphere_of[loc],
-                                         depth.get(loc.parent_region.name, _UNREACHED_DEPTH), loc.name))
+                                         depth.get(loc.parent_region.name, UNREACHED_DEPTH), loc.name))
     return candidates
 
 
@@ -650,7 +650,7 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
     if not targets:
         return
 
-    depth = _region_depth(multiworld, player)
+    depth = region_depth(multiworld, player)
     lateness = _lateness_ranking(multiworld, player, depth)
     # The placement below compares each target with the pre-fill lateness. The post-fill refine
     # pass later moves each item toward the same target in sphere order, so the targets are stored.
@@ -689,19 +689,19 @@ def _run_position(multiworld: MultiWorld, player: int) -> Dict[Location, float]:
     this seed, and it needs the spheres, so it is available only after the main fill. The refine
     passes use this order whatever ``item_smoothing_order`` is set to.
     """
-    depth = _region_depth(multiworld, player)
+    depth = region_depth(multiworld, player)
     locs = [loc for loc in multiworld.get_locations(player)
             if loc.address in pickup_location_ids and loc.item is not None
             and loc.parent_region is not None]
     spheres = list(multiworld.get_spheres())
     sphere_of = {loc: i for i, sphere in enumerate(spheres) for loc in sphere}
-    locs.sort(key=lambda loc: (sphere_of.get(loc, _UNREACHED_DEPTH),
-                               depth.get(loc.parent_region.name, _UNREACHED_DEPTH), loc.name))
+    locs.sort(key=lambda loc: (sphere_of.get(loc, UNREACHED_DEPTH),
+                               depth.get(loc.parent_region.name, UNREACHED_DEPTH), loc.name))
     denom = max(1, len(locs) - 1)
     return {loc: i / denom for i, loc in enumerate(locs)}
 
 
-def _accessible(multiworld: MultiWorld) -> bool:
+def accessible(multiworld: MultiWorld) -> bool:
     """
     Return whether the whole multiworld fulfills its accessibility settings.
 
@@ -753,7 +753,7 @@ def _swap_if_safe(multiworld: MultiWorld, soul_loc: Location, dest: Location) ->
     soul, other = soul_loc.item, dest.item
     soul_loc.item, dest.item = other, soul
     soul.location, other.location = dest, soul_loc
-    if _accessible(multiworld):
+    if accessible(multiworld):
         soul_loc.locked, dest.locked = False, True
         return True
     soul_loc.item, dest.item = soul, other  # revert
@@ -881,7 +881,7 @@ def spread_ancient_books(world: "CVAOSWorld") -> None:
     if not books:
         return
 
-    depth = _region_depth(multiworld, player)
+    depth = region_depth(multiworld, player)
     candidates = [loc for loc in multiworld.get_locations(player)
                   if loc.address in pickup_location_ids and loc.item is None and not loc.locked
                   and loc.progress_type != LocationProgressType.EXCLUDED
@@ -922,7 +922,7 @@ def _place_in_band(book: Item, bands: List[List[Location]], index: int,
     first, then the other two. Within a band, the book goes to a random free location that is
     reachable in ``state`` and accepts it, and that location is locked.
     """
-    target = _jittered((index + 0.5) / 3.0, params.sigma_base, params, rng)
+    target = jittered((index + 0.5) / 3.0, params.sigma_base, params, rng)
     clamped = min(0.999999, max(0.0, target))
     band_index = int(clamped * 3)
     order = [band_index] + [other for other in range(3) if other != band_index]
@@ -962,7 +962,7 @@ def smooth_placed_items(multiworld: MultiWorld, game: str) -> None:
     spheres = list(multiworld.get_spheres())
     for world in worlds:
         params = PARAMS_BY_KEY[world.options.item_smoothing.current_key]
-        depth = _region_depth(multiworld, world.player)
+        depth = region_depth(multiworld, world.player)
         by_map_distance = world.options.item_smoothing_order.current_key == "map_distance"
         ordered = smoothable_locations_in_order(multiworld, world.player, spheres, depth,
                                                 by_map_distance=by_map_distance)
@@ -983,11 +983,11 @@ def smooth_placed_items(multiworld: MultiWorld, game: str) -> None:
         # If the new arrangement put a floor or ceiling gate out of reach, put the breakers back
         # where the main fill had them. The non-advancement items keep their new locations, since
         # they don't affect logic.
-        if breaker_homes and not _accessible(multiworld):
-            _restore_breakers(breaker_homes)
+        if breaker_homes and not accessible(multiworld):
+            restore_breakers(breaker_homes)
 
 
-def _restore_breakers(breaker_homes: List[Tuple[Item, Location]]) -> None:
+def restore_breakers(breaker_homes: List[Tuple[Item, Location]]) -> None:
     """Swap each breaker back to its pre-smoothing (fill) location, undoing only the breaker moves."""
     for breaker, home in breaker_homes:
         current = breaker.location

@@ -495,7 +495,7 @@ _WEAPON_NAMES: frozenset[str] = frozenset(
     info.name for info in item_info_collection if info.item_category == "weapon")
 
 
-def _breakers(world: CVAOSWorld) -> tuple[frozenset[str], frozenset[str]]:
+def breakers(world: CVAOSWorld) -> tuple[frozenset[str], frozenset[str]]:
     """Return the items that break ceilings in ``world``, then the items that break floors."""
     if world.options.oops_all_whips:
         return _CEILING_BREAKERS - _WEAPON_NAMES, _FLOOR_BREAKERS - _WEAPON_NAMES
@@ -536,7 +536,7 @@ def _create_access_rule_from_routing(
 
     A soul bit requires the soul that _ABILITY_TO_ITEM names. The Tform bit requires a reachable
     source of a transformation soul (_tform_available). The Ceil and Floor bits require an item
-    that breaks ceilings or floors respectively (_breakers, which leaves out the weapons under
+    that breaks ceilings or floors respectively (breakers, which leaves out the weapons under
     Oops! All Whips).
 
     Technique bits depend on the resolved logic options (options.resolve_allowed_techniques),
@@ -587,7 +587,7 @@ def _create_access_rule_from_routing(
     resolved_needs = tuple(dict.fromkeys(needs))
     resolved_trick_needs = tuple(dict.fromkeys(trick_needs))
     player = world.player
-    ceiling_breakers, floor_breakers = _breakers(world)
+    ceiling_breakers, floor_breakers = breakers(world)
 
     def satisfied(state: CollectionState, need: tuple[tuple[str, ...], bool, bool, bool]) -> bool:
         items, needs_tform, needs_ceiling, needs_floor = need

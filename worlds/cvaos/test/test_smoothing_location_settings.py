@@ -23,7 +23,7 @@ from worlds.generic.Rules import exclusion_rules
 
 from .. import CVAOSWorld
 from ..item_smoothing import (ANCIENT_BOOK_NAMES, BIASED_SOULS, BLACK_PANTHER, MOVEMENT_SOULS,
-                              _region_depth, _soul_tiers, _state_without,
+                              _soul_tiers, _state_without, region_depth,
                               smoothable_locations_in_order)
 from ..items import logic_only_progression_names
 from ..locations import location_name_to_id, pickup_location_ids
@@ -103,7 +103,7 @@ class LocationSettingsTest(unittest.TestCase):
                        and loc.item.name in logic_only_progression_names)
         breaker.progress_type = LocationProgressType.PRIORITY
         ordered = smoothable_locations_in_order(multiworld, 1, list(multiworld.get_spheres()),
-                                                _region_depth(multiworld, 1))
+                                                region_depth(multiworld, 1))
         self.assertTrue(ordered)
         self.assertNotIn(breaker, ordered)
 
@@ -115,7 +115,7 @@ class LocationSettingsTest(unittest.TestCase):
         world = multiworld.worlds[1]
         pool = [*multiworld.itempool, *world.get_pre_fill_items()]
         souls = [item for item in pool if item.player == 1 and item.name in MOVEMENT_SOULS]
-        depth = _region_depth(multiworld, 1)
+        depth = region_depth(multiworld, 1)
         locations = [loc for loc in multiworld.get_locations(1)
                      if loc.address is not None and loc.parent_region.name in depth]
         tiers = _soul_tiers(multiworld, 1, pool, souls, locations)

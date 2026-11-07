@@ -59,11 +59,11 @@ from .data import item_balancing as desirability_data
 from .data.item_balancing import worth
 from .drop_shuffle import EQUIPMENT_CATEGORIES, DropSlot, SlotKey
 from .enemy_checks import enemy_id_for_location
-from .item_smoothing import (PARAMS_BY_KEY, SmoothingParams, _UNREACHED_DEPTH, _accessible,
-                             _category, _jittered, _region_depth, _restore_breakers)
+from .item_smoothing import (PARAMS_BY_KEY, UNREACHED_DEPTH, SmoothingParams, accessible,
+                             category, jittered, region_depth, restore_breakers)
 from .items import logic_only_progression_names
 from .locations import CVAOSLocation, pickup_location_ids
-from .regions import _breakers
+from .regions import breakers
 from .seed_depth import UNREACHED
 
 if TYPE_CHECKING:
@@ -170,12 +170,12 @@ class Clock:
     def __init__(self, multiworld: MultiWorld, player: int, sweep: Walk):
         self.player = player
         self.walk = sweep
-        depth = _region_depth(multiworld, player)
+        depth = region_depth(multiworld, player)
         pickups = sorted(
             (location for location in multiworld.get_locations(player)
              if location.address in pickup_location_ids and location in sweep.sphere_of),
             key=lambda location: (sweep.sphere_of[location],
-                                  depth.get(location.parent_region.name, _UNREACHED_DEPTH),
+                                  depth.get(location.parent_region.name, UNREACHED_DEPTH),
                                   location.name))
         count = max(1, len(pickups))
         self._pickups = {location: (index + 0.5) / count for index, location in enumerate(pickups)}
@@ -272,7 +272,7 @@ def _targets(items: List[Item], params: SmoothingParams, rng) -> List[float]:
     order, and then jittered. No consumables are held for the second half, because worth already
     ranks restoratives by how much they restore.
     """
-    golds = [index for index, item in enumerate(items) if _category(item.name) == "money"]
+    golds = [index for index, item in enumerate(items) if category(item.name) == "money"]
     rng.shuffle(golds)
     base: Dict[int, float] = {}
     scale: Dict[int, float] = {}
@@ -298,7 +298,7 @@ def _targets(items: List[Item], params: SmoothingParams, rng) -> List[float]:
     position = {index: rank / denominator for rank, index in enumerate(ranked)}
     for slot, index in enumerate(banded):
         position[index] = rng.uniform(slot / len(banded), (slot + 1) / len(banded))
-    return [_jittered(position[index], scale[index], params, rng) for index in range(len(items))]
+    return [jittered(position[index], scale[index], params, rng) for index in range(len(items))]
 
 
 def _take(pool: List[Item], fits: Callable[[Item], bool]) -> Optional[Item]:
@@ -376,7 +376,7 @@ def _pin(multiworld: MultiWorld, world: "CVAOSWorld", positions: Dict[Location, 
 
     Each breaker placed leaves ``pool``. Return the locations that got one.
     """
-    ceiling, floor = _breakers(world)
+    ceiling, floor = breakers(world)
     held = [location for location in multiworld.get_filled_locations()
             if location.item.player == world.player and _is_breaker(location.item)]
     needs: Dict[Location, List[bool]] = {}
@@ -384,7 +384,7 @@ def _pin(multiworld: MultiWorld, world: "CVAOSWorld", positions: Dict[Location, 
         homes = [location for location in held if location.item.name in names]
         if not homes:
             continue
-        first = min(homes, key=lambda location: (logic.sphere_of.get(location, _UNREACHED_DEPTH),
+        first = min(homes, key=lambda location: (logic.sphere_of.get(location, UNREACHED_DEPTH),
                                                  positions.get(location, 1.0), location.name))
         # A location outside the order keeps its breaker anyway.
         if first in positions:
@@ -453,8 +453,8 @@ def _order_round(multiworld: MultiWorld, worlds: List["CVAOSWorld"]) -> None:
         result = _order_player(multiworld, world, room, logic)
         world.wide_report.orders.append(result)
         homes += result.breaker_homes
-    if homes and not _accessible(multiworld):
-        _restore_breakers(homes)
+    if homes and not accessible(multiworld):
+        restore_breakers(homes)
         for world in worlds:
             world.wide_report.restores += 1
 
@@ -490,7 +490,7 @@ class FloorResult:
 def qualifies(item: Item, rung: Rung) -> bool:
     """Whether ``item`` is gear of ``rung``'s kind with at least its class-fit depth."""
     row = worth.by_name.get(item.name)
-    return (row is not None and _category(item.name) == rung.kind
+    return (row is not None and category(item.name) == rung.kind
             and (row.class_fit_depth or 0.0) >= rung.class_fit - 1e-9)
 
 
@@ -506,8 +506,8 @@ def _floor_trade_fits(source: Location, target: Location, position: Dict[Locatio
     if target is source or _worth(item.name) > position[target] + BAND:
         return False
     # A breaker moves only to a location that logic reaches no later, so logic only gains.
-    if _is_breaker(item) and (logic.sphere_of.get(target, _UNREACHED_DEPTH)
-                              > logic.sphere_of.get(source, _UNREACHED_DEPTH)):
+    if _is_breaker(item) and (logic.sphere_of.get(target, UNREACHED_DEPTH)
+                              > logic.sphere_of.get(source, UNREACHED_DEPTH)):
         return False
     return target.can_fill(state, item, False) and source.can_fill(state, target.item, False)
 
@@ -579,7 +579,7 @@ def _floor(multiworld: MultiWorld, worlds: List["CVAOSWorld"]) -> None:
             world.wide_report.floor = _floor_player(multiworld, world, logic)
             results.append(world.wide_report.floor)
     trades = [trade for result in results for trade in result.trades]
-    if trades and not _accessible(multiworld):
+    if trades and not accessible(multiworld):
         for target, source in reversed(trades):
             _swap(target, source)
         for result in results:
