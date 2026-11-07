@@ -98,8 +98,8 @@ class TrackerContext(CommonContext):
         self.room_address = server_address  # the address asked for, as given
         self.core = TrackerCore(logger, False, False)
         self.result: CurrentTrackerState | None = None
-        # For each defeat location in logic or with tricks, by location id: its rooms in logic or
-        # with tricks, each with that status (defeat_room_statuses).
+        # The rooms where each defeat location can be checked, by location id, for the locations
+        # in logic or with tricks. Each room maps to "in_logic" or "tricks" (defeat_room_statuses).
         self.defeat_rooms: dict[int, dict[str, str]] = {}
         self.listeners: list[Callable[[], None]] = []
         self.status = "Not connected"
@@ -369,11 +369,12 @@ class TrackerContext(CommonContext):
         return "out_of_logic"
 
     def defeat_room_statuses(self) -> dict[int, dict[str, str]]:
-        """Return the rooms where each defeat location in logic or with tricks can be checked.
+        """Return the rooms where each defeat location can be checked, for the defeat locations in
+        logic or with tricks.
 
-        A defeat location has a pin in each room where its enemy appears, and logic can reach the
-        enemy in some of those rooms only. Each room listed has the status "in_logic" or "tricks",
-        and the page shows the pins in the other rooms as out of logic.
+        A defeat location has a pin in each room where its enemy appears, but logic may reach the
+        enemy in only some of those rooms. Each room listed maps to "in_logic" or "tricks". The
+        page shows the location's pins in the other rooms as out of logic.
         """
         world = self.core.get_current_world()
         defeats = {location.address: location for location in world.get_locations()

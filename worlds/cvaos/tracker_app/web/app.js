@@ -386,17 +386,17 @@ function spotShown(spot, visible, visited) {
   return (!visible || visible.has(cell)) && drawnInFull(cell, visited);
 }
 
-// The spots of a location that show, among those in an area that inArea accepts. A location shows
-// in the sidebar and in the counts when any of its spots does. A defeat location has a spot in each
-// room where its enemy appears, and it counts once however many of them show.
+// The spots of a location that show, among those in an area that inArea accepts. The sidebar and
+// the counts take a location's status from these spots only (bestStatus). A defeat location has a
+// spot in each room where its enemy appears, and it counts once however many of them show.
 function shownSpots(location, visible, visited, inArea = () => true) {
   return location.spots.filter((spot) => inArea(spot.area) && spotShown(spot, visible, visited));
 }
 
-// A pin's status. A defeat location has a pin in each room where its enemy appears, and the
-// snapshot lists the rooms where logic, or logic with tricks, reaches the enemy. While the
-// location is in logic or with tricks, its pins in other rooms show as out of logic. Every other
-// pin takes its location's status.
+// The status of a location's pin at spot. A defeat location has a pin in each room where its enemy
+// appears, and the snapshot lists the rooms where logic, or logic with tricks, reaches the enemy.
+// While the location is in logic or with tricks, its pins in other rooms show as out of logic.
+// Every other pin takes its location's status.
 function spotStatus(location, spot) {
   const status = (page.snapshot.locations || {})[location.id];
   const rooms = (page.snapshot.defeat_rooms || {})[location.id];
@@ -543,8 +543,8 @@ function renderRoute() {
     points.unshift([marker.x, marker.y]);  // the line starts at Soma's dot, wherever it is drawn
   }
   // A defeat location has a spot in each room where its enemy appears, and the route leads to one
-  // of them. The line ends at the spot in the route's last room, or else at the spot nearest the
-  // route's last point.
+  // of them. The line ends at the spot nearest the route's last point, among the spots in the
+  // route's last room when there are any.
   const target = locationsById.get(route.target);
   const endRoom = route.steps.length ? route.steps[route.steps.length - 1].room : null;
   const inEndRoom = target ? target.spots.filter((spot) => spot.room === endRoom) : [];
@@ -578,7 +578,8 @@ function renderSelectionRing() {
 
 // Count an area's locations that are in logic, and those with tricks, among the ones that show
 // (shownSpots). So while unexplored cells are hidden, the numbers don't give away what lies in
-// rooms Soma hasn't visited. A defeat location counts by the status of its pins in the area.
+// rooms Soma hasn't visited. A defeat location counts by the best status among its pins that show
+// in the area.
 function counts(area, visible, visited) {
   let inLogic = 0;
   let tricks = 0;
@@ -789,8 +790,8 @@ function renderLocationList() {
   $("list-heading").textContent = `In logic · ${focusName}`;
   const visible = visibleCells({ countRealm: true });
   const visited = visitedCells();
-  // Each location's best status among its spots in focus that show. So a defeat location is
-  // listed only when one of its pins here is in logic or with tricks.
+  // List each location by its best status among the spots that show in focus, so a defeat
+  // location is listed only when one of those pins is in logic or with tricks.
   const listed = new Map();
   for (const location of page.map.locations) {
     const best = bestStatus(location, shownSpots(location, visible, visited, inFocus));

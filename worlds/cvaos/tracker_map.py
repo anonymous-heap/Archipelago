@@ -241,8 +241,9 @@ PIN_SPACING = 0.5
 _OFFSETS = sorted(((dx / 8, dy / 8) for dx in range(-12, 13) for dy in range(-12, 13)),
                   key=lambda offset: (math.hypot(*offset), offset))
 
-# The farthest a pin can move from its start. A pin farther than this plus PIN_SPACING from the
-# start can't come within PIN_SPACING of any spot the moving pin might take, so placement ignores it.
+# The farthest a pin can move from its start. Another pin farther than this plus PIN_SPACING from
+# that start can't come within PIN_SPACING of any spot the moving pin might take, so placement
+# ignores it.
 _MAX_MOVE = max(math.hypot(*offset) for offset in _OFFSETS)
 
 

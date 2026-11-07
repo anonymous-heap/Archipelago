@@ -157,9 +157,9 @@ def plan_route(world: CVAOSWorld, location: Location,
 def defeat_rooms(location: Location, state: CollectionState) -> set[str]:
     """Return the rooms where ``state`` can reach the enemy whose defeat is ``location``.
 
-    Each placement of the enemy connects to the location's region from doors of its own room
-    (regions._create_enemy_checks). So the room of each such door that ``state`` can use is a room
-    where the player can defeat the enemy.
+    Each placement of the enemy connects to the location's region from doors of the placement's
+    room (regions._create_enemy_checks). So each room with such a door that ``state`` can use is a
+    room where the player can defeat the enemy.
     """
     return {_room_of(entrance.parent_region) for entrance in location.parent_region.entrances
             if entrance.can_reach(state)} - {None}

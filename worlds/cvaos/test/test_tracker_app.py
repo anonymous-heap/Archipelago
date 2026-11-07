@@ -350,8 +350,8 @@ class TrackerContextTest(unittest.IsolatedAsyncioTestCase):
 
 
 class DefeatPinTest(unittest.IsolatedAsyncioTestCase):
-    """A defeat location's pins, one in each room where its enemy appears, in a seed with every
-    enemy check."""
+    """The status of each pin of a defeat location, in a seed with every enemy check. A defeat
+    location has a pin in each room where its enemy appears."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -376,7 +376,7 @@ class DefeatPinTest(unittest.IsolatedAsyncioTestCase):
         # shows the pin in 016 as out of logic.
         self.assertEqual(snapshot["locations"][zombie], "in_logic")
         self.assertEqual(snapshot["defeat_rooms"][zombie], {"003": "in_logic"})
-        # Bat has no recorded route, so the rooms the tracker can reach show it with tricks.
+        # Bat has no recorded route, so each of its rooms that tricks reach has the status "tricks".
         self.assertEqual(snapshot["locations"][bat], "tricks")
         self.assertEqual(set(snapshot["defeat_rooms"][bat].values()), {"tricks"})
         self.assertNotIn(lilith, snapshot["defeat_rooms"])
