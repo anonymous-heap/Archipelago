@@ -4,7 +4,7 @@ Wide Item Smoothing: keep gear that is too good for the start of a run out of it
 The pass runs in ``stage_post_fill`` for every player with the ``wide_item_smoothing`` option on,
 after the passes of ``item_smoothing`` that place the souls and books.
 
-The order deals each player's items again among the locations that already hold them, earliest
+The order reassigns each player's items among the locations that already hold them, earliest
 location first. It covers the player's pickups, their defeat locations and their items in other
 worlds. It moves the items that are not progression, and the weapons whose only progression use is
 breaking floors or ceilings. Locked, excluded and priority locations keep their items, so plando
@@ -16,11 +16,13 @@ more than ``BAND``. The order gives a location such an item only when no other r
 there.
 
 Every placement passes the location's ``can_fill``, so item rules, Local Items and Non-Local Items
-hold. When no remaining item fits a location, it trades with an earlier location that both accept
-(see ``_trade``). If no such pair exists, the order is undone for that player.
+hold. When no remaining item fits a location, that location takes the item of an earlier location
+instead, and the earlier location takes a remaining item (see ``_trade``). If no such pair exists,
+the order is undone for that player.
 
-Moving a breaker can change what logic reaches, so the order pins one of each kind (see ``_pin``).
-Logic then reaches every location no later than before, and the breakers never need to go back.
+Moving a breaker can change what logic reaches, so the order keeps a breaker of each kind where
+logic first finds one (see ``_pin``). Logic then reaches every location no later than before, so
+the breakers never need to go back.
 
 After the order, the early floor makes sure each player holds early weapons and armor as good as
 the castle's own (see ``RUNGS`` and ``_floor_player``). The order alone cannot promise that, since
@@ -78,9 +80,9 @@ SKIP_FLAG = "--skip_prog_balancing"
 def promote_mid_game_gear(pool: List[Item]) -> None:
     """Make every filler weapon and armor in ``pool`` worth MID_GAME_WORTH or more useful.
 
-    The order never deals to an excluded location, and the main fill may put filler on another
-    player's excluded location. Useful items never land there, so the order can reach this gear
-    wherever the fill puts it.
+    The order never moves an item at an excluded location, and the main fill may put filler on
+    another player's excluded location. Useful items never land there, so the order can reach this
+    gear wherever the fill puts it.
     """
     for item in pool:
         row = worth.by_name.get(item.name)
@@ -160,20 +162,21 @@ class Clock:
     """One player's position in the run, from 0 to 1, for the locations of a walk.
 
     The player's pickup locations are ordered by sphere, then map distance, then name, and each one
-    sits in the middle of its share of the run. Any other location sits at the middle of its sphere's
-    pickups. A defeat location of the player takes the sphere where one of its enemy's rooms is
-    first reached.
+    sits in the middle of its share of the run. Any other location sits at the middle of its
+    sphere's pickups. A defeat location of the player takes the sphere where one of its enemy's
+    rooms is first reached.
     """
 
     def __init__(self, multiworld: MultiWorld, player: int, sweep: Walk):
         self.player = player
         self.walk = sweep
         depth = _region_depth(multiworld, player)
-        pickups = sorted((location for location in multiworld.get_locations(player)
-                          if location.address in pickup_location_ids and location in sweep.sphere_of),
-                         key=lambda location: (sweep.sphere_of[location],
-                                               depth.get(location.parent_region.name, _UNREACHED_DEPTH),
-                                               location.name))
+        pickups = sorted(
+            (location for location in multiworld.get_locations(player)
+             if location.address in pickup_location_ids and location in sweep.sphere_of),
+            key=lambda location: (sweep.sphere_of[location],
+                                  depth.get(location.parent_region.name, _UNREACHED_DEPTH),
+                                  location.name))
         count = max(1, len(pickups))
         self._pickups = {location: (index + 0.5) / count for index, location in enumerate(pickups)}
         per_sphere = Counter(sweep.sphere_of[location] for location in pickups)
@@ -211,13 +214,13 @@ class Clock:
 class OrderResult:
     """What one order did for one player."""
 
-    positions: Dict[Location, float]   # each location the order dealt to, at its position
+    positions: Dict[Location, float]   # each location the order reassigns, at its position
     placed: Dict[Location, Item] = field(default_factory=dict)  # their items when it finished
     over_band: int = 0                 # items given above the band, because nothing else fit
     trades: int = 0                    # trades with an earlier location, by _trade
     undone: bool = False               # some location had no remaining item and no trade
     pinned: List[Location] = field(default_factory=list)  # the locations _pin gave a breaker
-    # Each breaker the order dealt, with the location that held it before.
+    # Each breaker the order moves, with the location that held it before.
     breaker_homes: List[Tuple[Item, Location]] = field(default_factory=list)
 
 
@@ -230,8 +233,8 @@ class WideReport:
     floor: Optional["FloorResult"] = None
 
 
-def _dealt_locations(multiworld: MultiWorld, player: int, clock: Clock) -> Dict[Location, float]:
-    """Return the locations whose items the player's order deals, earliest first, with their
+def _order_locations(multiworld: MultiWorld, player: int, clock: Clock) -> Dict[Location, float]:
+    """Return the locations whose items the player's order reassigns, earliest first, with their
     positions.
 
     A location in another world sorts after the player's own locations in the same sphere, as Dark
@@ -288,7 +291,8 @@ def _targets(items: List[Item], params: SmoothingParams, rng) -> List[float]:
             continue
         base[index] = _worth(item.name)
         info = desirability_data.by_name.get(item.name)
-        scale[index] = params.sigma_base + (params.k * info.disagreement if info is not None else 0.0)
+        disagreement = info.disagreement if info is not None else 0.0
+        scale[index] = params.sigma_base + params.k * disagreement
     ranked = sorted(base, key=lambda index: (base[index], rng.random()))
     denominator = max(1, len(ranked) - 1)
     position = {index: rank / denominator for rank, index in enumerate(ranked)}
@@ -316,7 +320,8 @@ def _deal(locations: List[Location], pool: List[Item], positions: Dict[Location,
     dealt: List[Location] = []
     for location in locations:
         limit = positions[location] + BAND
-        item = _take(pool, lambda it: _worth(it.name) <= limit and location.can_fill(state, it, False))
+        item = _take(pool, lambda it: _worth(it.name) <= limit
+                     and location.can_fill(state, it, False))
         if item is None:
             item = _take(pool, lambda it: location.can_fill(state, it, False))
             result.over_band += item is not None
@@ -402,17 +407,18 @@ def _pin(multiworld: MultiWorld, world: "CVAOSWorld", positions: Dict[Location, 
 
 def _order_player(multiworld: MultiWorld, world: "CVAOSWorld", room: Walk,
                   logic: Walk) -> OrderResult:
-    """Deal one player's items again among the locations that hold them.
+    """Reassign one player's items among the locations that hold them.
 
-    The items are sorted by their targets. ``_pin`` places its breakers first, and ``_deal`` hands
-    out the rest. A pinned breaker above the band counts as such a placement. When the deal fails,
+    The items are sorted by their targets. ``_pin`` places its breakers first, and ``_deal`` places
+    the rest. A pinned breaker above the band counts toward ``over_band``. When the deal fails,
     every location gets back the item it held before.
     """
-    positions = _dealt_locations(multiworld, world.player, Clock(multiworld, world.player, room))
+    positions = _order_locations(multiworld, world.player, Clock(multiworld, world.player, room))
     result = OrderResult(positions)
     locations = list(positions)
     before = {location: location.item for location in locations}
-    result.breaker_homes = [(item, location) for location, item in before.items() if _is_breaker(item)]
+    result.breaker_homes = [(item, location) for location, item in before.items()
+                            if _is_breaker(item)]
     items = list(before.values())
     params = PARAMS_BY_KEY[world.options.item_smoothing.current_key]
     targets = _targets(items, params, world.random)
@@ -466,8 +472,8 @@ class Rung:
 
 # A weapon as good for its class as the castle's Rapier, then a weapon as good as its Lance and an
 # armor as good as its Copper Plate. The player should hold the first by a fifth of the run and the
-# other two by about a third. Each bound sits 0.05 earlier than that, so that core's balancing
-# afterward seldom undoes it.
+# other two by about a third. Each bound sits a little earlier than that, so that core's balancing
+# afterward seldom undoes a rung.
 RUNGS = (Rung("weapon", 0.15, 0.15), Rung("weapon", 0.24, 0.30), Rung("armor", 0.24, 0.30))
 
 
@@ -495,7 +501,7 @@ def _swap(first: Location, second: Location) -> None:
 
 def _floor_trade_fits(source: Location, target: Location, position: Dict[Location, float],
                       logic: Walk, state: CollectionState) -> bool:
-    """Whether the floor may move the item at ``source`` to ``target``, and ``target``'s item back."""
+    """Whether the floor may trade the items at ``source`` and ``target``."""
     item = source.item
     if target is source or _worth(item.name) > position[target] + BAND:
         return False
@@ -513,9 +519,9 @@ def _floor_player(multiworld: MultiWorld, world: "CVAOSWorld", logic: Walk) -> F
     bound at one of the player's own locations, or anywhere when it is a breaker. Otherwise the
     cheapest qualifying item worth under MID_GAME_WORTH trades places with one of the player's
     filler items at the latest location before the bound, the player's own locations first.
-    Breakers come first among those items, because most of them meet both weapon rungs at once,
-    which leaves the player's last early filler location free for the armor rung. A trade keeps the
-    band and passes can_fill both ways. The pinned locations stay as they are, and so does the item
+    Breakers come first among those items. Most of them meet both weapon rungs at once, which leaves
+    the player's last early filler location free for the armor rung. A trade keeps the band and
+    passes can_fill both ways. The pinned locations stay as they are, and so does the item
     that met an earlier rung.
     """
     player = world.player
