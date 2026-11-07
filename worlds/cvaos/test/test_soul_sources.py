@@ -1,17 +1,21 @@
 """
-Tests for the soul table (soul_sources.py) that the spoiler prints.
+Tests for the soul table (soul_sources.py) that the spoiler and the /souls command print.
 
 Generation has no base ROM, so the spoiler runs the patch's own soul edits on a stand-in that holds
 the vanilla soul bytes. Its table must equal the one read back from a patched ROM, for every soul
-shuffle mode and rate option, on each base ROM.
+shuffle mode and rate option, on each base ROM. /souls reads the table from the ROM in the game's
+memory, on BizHawk and on the Advance Collection, so it prints the spoiler's table too.
 
     python -m pytest worlds/cvaos/test/test_soul_sources.py -v
 """
 from __future__ import annotations
 
+import asyncio
 import io
 import unittest
 from random import Random
+from types import SimpleNamespace
+from unittest import mock
 
 from ..rom import patch, soul_shuffle
 from ..rom.enemy_table import TABLE_OFFSET, TABLE_SIZE, parse_table
@@ -82,6 +86,65 @@ class PlannedTableTest(unittest.TestCase):
                 with self.subTest(base=base_name, config=name):
                     self.assertEqual(planned_soul_table_lines(config),
                                      rom_soul_table_lines(bytes(real)))
+
+
+def rom_reads(rom: bytes):
+    """Return a stand-in for a backend's reads, which serves ROM-domain reads from ``rom``."""
+    def read(requests) -> list[bytes]:
+        assert all(domain == "ROM" for _offset, _size, domain in requests)
+        return [rom[offset:offset + size] for offset, size, _domain in requests]
+    return read
+
+
+class SoulsCommandTest(unittest.TestCase):
+    """/souls on both clients prints the table that the patched ROM in the game holds."""
+
+    def test_both_clients_print_the_spoilers_table(self):
+        from .. import client, collection_client
+        seed = preset_seed()
+        if not seed.patched:
+            self.skipTest("needs a USA Aria of Sorrow ROM")
+        spoiler = io.StringIO()
+        seed.world.write_spoiler(spoiler)
+        expected = "Soul sources:\n" + spoiler.getvalue().split(":\n", 1)[1].rstrip("\n")
+        for name, (_before, after) in seed.patched.items():
+            read = rom_reads(after)
+            bizhawk_read = mock.AsyncMock(side_effect=lambda _ctx, requests: read(requests))
+            with self.subTest(base=name, client="BizHawk"), \
+                    mock.patch("worlds._bizhawk.read", new=bizhawk_read), \
+                    self.assertLogs("Client", level="INFO") as logs:
+                asyncio.run(client.log_soul_table(SimpleNamespace(bizhawk_ctx=None)))
+            self.assertEqual(logs.records[-1].getMessage(), expected)
+            backend = SimpleNamespace(read_many=mock.AsyncMock(side_effect=read))
+            with self.subTest(base=name, client="collection"), \
+                    self.assertLogs("Client", level="INFO") as logs:
+                asyncio.run(collection_client.log_soul_table(SimpleNamespace(backend=backend)))
+            self.assertEqual(logs.records[-1].getMessage(), expected)
+
+    def test_without_the_game_each_client_says_to_try_again(self):
+        import worlds._bizhawk as bizhawk
+        from .. import client, collection_client
+        failing = mock.AsyncMock(side_effect=bizhawk.RequestFailedError("no connector"))
+        with mock.patch("worlds._bizhawk.read", new=failing), \
+                self.assertLogs("Client", level="INFO") as logs:
+            asyncio.run(client.log_soul_table(SimpleNamespace(bizhawk_ctx=None)))
+            asyncio.run(collection_client.log_soul_table(SimpleNamespace(backend=None)))
+        self.assertEqual(len(logs.output), 2)
+        self.assertTrue(all("try /souls again" in line for line in logs.output))
+
+    def test_bizhawk_offers_souls_only_while_an_aria_of_sorrow_rom_is_loaded(self):
+        from ..client import CVAOSClient, cmd_souls
+        from ..collection_client import CVAOSCollectionContext
+        ctx = mock.Mock()
+        ctx.command_processor.commands = {}
+        for valid in (True, False):
+            checked = mock.AsyncMock(return_value=valid)
+            with self.subTest(valid=valid), \
+                    mock.patch.object(CVAOSClient, "_validate_rom", checked):
+                asyncio.run(CVAOSClient().validate_rom(ctx))
+                self.assertEqual(ctx.command_processor.commands.get("souls"),
+                                 cmd_souls if valid else None)
+        self.assertIn("souls", CVAOSCollectionContext.command_processor.commands)
 
 
 if __name__ == "__main__":

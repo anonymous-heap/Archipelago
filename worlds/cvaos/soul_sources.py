@@ -6,9 +6,10 @@ The enemy table names each enemy's soul by two bytes: its type (0 red, 1 blue, 2
 lists the same souls by category and 0-based id, so :func:`soul_name` converts the table's bytes
 into a soul's name.
 
-The spoiler prints the soul table from :func:`soul_table_lines`. Generation has no ROM, so
-:func:`planned_soul_table_lines` runs the patch's own soul edits on a stand-in that holds only the
-vanilla soul bytes.
+The spoiler and the clients' /souls command print the same table, from :func:`soul_table_lines`.
+/souls reads the enemy table from the ROM in the game's memory, so it shows what the installed
+patch wrote. Generation has no ROM, so :func:`planned_soul_table_lines` runs the patch's own soul
+edits on a stand-in that holds only the vanilla soul bytes.
 """
 from __future__ import annotations
 
@@ -23,10 +24,12 @@ from .rom.soul_shuffle import (SOUL_TYPE_ABILITY, SOUL_TYPE_BLUE, SOUL_TYPE_RED,
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
+    from .ram import AoSRAM
 
 __all__ = [
     "SOUL_CATEGORIES",
     "planned_soul_table_lines",
+    "read_soul_table_report",
     "rom_soul_table_lines",
     "soul_name",
     "soul_table_lines",
@@ -41,6 +44,8 @@ SOUL_CATEGORIES = {
     SOUL_TYPE_YELLOW: "yellow_soul",
     SOUL_TYPE_ABILITY: "ability_soul",
 }
+
+ROM_DOMAIN = "ROM"  # the memory domain whose offsets are ROM file offsets (ram/backend.py)
 
 # The intro's starting-soul grant: the immediates of ``movs r0, #type`` and ``movs r1, #index``,
 # with the index 0-based (rom/soul_shuffle.py).
@@ -106,6 +111,13 @@ def rom_soul_table_lines(rom: bytes) -> List[str]:
     """Return the soul table of a whole ROM image."""
     return soul_table_lines(rom[TABLE_OFFSET:TABLE_OFFSET + TABLE_SIZE],
                             rom[GRANT_OFFSET:GRANT_OFFSET + GRANT_SIZE])
+
+
+async def read_soul_table_report(ram: AoSRAM) -> str:
+    """Return the soul table of the ROM in the game's memory, as /souls prints it."""
+    table = await ram.read(TABLE_OFFSET, TABLE_SIZE, ROM_DOMAIN)
+    grant = await ram.read(GRANT_OFFSET, GRANT_SIZE, ROM_DOMAIN)
+    return "\n".join(["Soul sources:", *(f"    {line}" for line in soul_table_lines(table, grant))])
 
 
 def planned_soul_table_lines(rom_config: Dict[str, object]) -> List[str]:

@@ -631,6 +631,26 @@ class CVAOSCollectionCommandProcessor(ClientCommandProcessor):
         from .tracker_app import open_for_client
         open_for_client(self.ctx)
 
+    def _cmd_souls(self) -> None:
+        """List which enemy drops each soul, and how often."""
+        Utils.async_start(log_soul_table(self.ctx), name="souls")
+
+
+async def log_soul_table(ctx: "CVAOSCollectionContext") -> None:
+    """Log the soul table of the ROM that the collection is running, which the installed patch
+    wrote."""
+    from .soul_sources import read_soul_table_report
+    if ctx.backend is None:
+        logger.info("The client isn't attached to the Advance Collection yet. Start Aria of "
+                    "Sorrow, then try /souls again.")
+        return
+    try:
+        report = await read_soul_table_report(AoSRAM(ctx.backend))
+    except CollectionError as exc:
+        logger.info("Couldn't read the souls from the Advance Collection (%s).", exc)
+        return
+    logger.info(report)
+
 
 class CVAOSCollectionContext(CommonContext):
     game = "Castlevania - Aria of Sorrow"
