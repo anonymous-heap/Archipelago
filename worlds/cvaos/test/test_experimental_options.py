@@ -2,8 +2,9 @@
 Tests for the Experimental options group, its preset, and the options that newer options replace.
 
 Soul Shuffle's matched value is new, so "random" draws only the released values, and a released
-YAML rolls as it always has. Enemy Drop Rate above 100 turns off Multiply Soul Drop Rates, and
-matched turns off Keep Soul Drop Rates, so the spoiler shows what runs.
+YAML rolls as it always has. Enemy Drop Rate above 100 turns off Multiply Soul Drop Rates, matched
+turns off Keep Soul Drop Rates, and Wide Item Smoothing sets Item Smoothing to strict in the
+spheres order, so the spoiler shows what runs.
 
     python -m pytest worlds/cvaos/test/test_experimental_options.py -v
 """
@@ -23,9 +24,9 @@ from Options import Choice
 from test.general import setup_multiworld
 
 from .. import CVAOSWorld
-from ..options import (CVAOSOptions, EnemyChecks, EnemyDropRate, ItemDropShuffle,
-                       KeepSoulDropRates, ShuffleStartingSoul, SoulShuffle, cvaos_option_groups,
-                       cvaos_options_presets)
+from ..options import (CVAOSOptions, EnemyChecks, EnemyDropRate, ItemDropShuffle, ItemSmoothing,
+                       ItemSmoothingOrder, KeepSoulDropRates, ShuffleStartingSoul, SoulShuffle,
+                       WideItemSmoothing, cvaos_option_groups, cvaos_options_presets)
 from .test_smoothing_location_settings import generate
 
 
@@ -49,7 +50,7 @@ class GroupAndPresetTest(unittest.TestCase):
         self.assertTrue(experimental.start_collapsed)
         self.assertEqual(experimental.options, [EnemyChecks, SoulShuffle, KeepSoulDropRates,
                                                 ShuffleStartingSoul, ItemDropShuffle,
-                                                EnemyDropRate])
+                                                EnemyDropRate, WideItemSmoothing])
 
     def test_the_preset_turns_on_the_experimental_options(self):
         preset = cvaos_options_presets["Experimental"]
@@ -110,6 +111,20 @@ class EffectiveValuesTest(unittest.TestCase):
         self.assertEqual(sum("Keep Soul Drop Rates is off" in line for line in logs.output), 1)
         self.assertTrue(early(soul_shuffle="within_type", keep_soul_drop_rates=True)
                         .options.keep_soul_drop_rates)
+
+    def test_wide_item_smoothing_sets_item_smoothing_to_strict_in_the_spheres_order(self):
+        with self.assertLogs(level="INFO") as logs:
+            world = early(wide_item_smoothing=True, item_smoothing="off",
+                          item_smoothing_order="map_distance")
+        self.assertEqual(world.options.item_smoothing.value, ItemSmoothing.option_strict)
+        self.assertEqual(world.options.item_smoothing_order.value,
+                         ItemSmoothingOrder.option_spheres)
+        self.assertEqual(sum("because Wide Item Smoothing sets it" in line
+                             for line in logs.output), 2)
+        unchanged = early(item_smoothing="loose", item_smoothing_order="map_distance").options
+        self.assertEqual(unchanged.item_smoothing.value, ItemSmoothing.option_loose)
+        self.assertEqual(unchanged.item_smoothing_order.value,
+                         ItemSmoothingOrder.option_map_distance)
 
     def test_a_seed_with_enemy_drop_rate_generates_and_patches_the_value_that_runs(self):
         multiworld = generate(5, {"enemy_drop_rate": 350, "multiply_soul_drop_rates": True})

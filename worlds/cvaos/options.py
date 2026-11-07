@@ -268,6 +268,37 @@ class EnemyDropRate(NamedRange):
     }
 
 
+class WideItemSmoothing(Toggle):
+    """
+    Keeps weapons and armor that are too good for the early game out of it, from every source:
+       pickups, enemy checks, your items in other worlds, and enemy drops. No weapon or armor
+       reaches you more than a quarter of the run before the point where the castle's own pickups
+       offer one as good, except where an item rule leaves no other placement.
+
+    It also makes sure you have early gear. By a fifth of the run you hold a weapon as good for
+       its class as the castle's Rapier. By a third you also hold a weapon as good as its Lance and
+       an armor as good as its Copper Plate.
+
+    While on, it sets Item Smoothing to strict and Item Smoothing Order to spheres, whatever those
+       options say, so Early Mobility Souls and Black Panther Bias still apply. It changes enemy
+       drops even with Item Drop Shuffle off: a drop too good for its enemy's place in your seed
+       trades places with a weaker one.
+
+    It keeps Local Items, Non-Local Items and every other placement rule. When those rules leave no
+       other choice, a few items arrive earlier than the limit above.
+
+    In a multiworld it runs Archipelago's progression balancing itself, so that the host's own
+       balancing seldom undoes the order. When the host skips balancing, nothing runs after the
+       order, so it skips this step too. A host can also turn the step off in the host settings.
+       About a quarter of players in a multiworld then hold mid-game gear by a fifth of the run.
+       Another player's release, item links and plando still bypass the order.
+
+    Experimental: its balance is measured but not play-tested, and it may change between versions.
+    """
+    display_name = "Wide Item Smoothing"
+    default = 0
+
+
 class AncientBookSoulDrops(DefaultOnToggle):
     """
     While you carry Ancient Book 1, every Flame Demon you defeat drops its soul. Ancient Book 3
@@ -436,8 +467,12 @@ class ItemSmoothing(Choice):
     """
     **This is the flag to turn off if you want a totally-random-yet-finishable run.**
 
+    While Wide Item Smoothing is on, this is set to strict whatever you choose here.
+
     Biases item placement so less-desirable items show up earlier and more-desirable ones later,
-       using community tier-list data (data/item_balancing).
+       using community tier-list data (data/item_balancing). It orders the castle's pickup
+       locations only. Wide Item Smoothing also orders enemy checks and your items in other
+       worlds.
 
     Most progression items are placed as usual, with three exceptions. The three Ancient Books are
        spread across the early, middle and late parts of the run. The mobility souls and Black
@@ -457,7 +492,7 @@ class ItemSmoothing(Choice):
 
 class ItemSmoothingOrder(Choice):
     """
-    No effect when Item Smoothing is off.
+    No effect when Item Smoothing is off. While Wide Item Smoothing is on, this is set to spheres.
 
     Decides what "later" means when Item Smoothing puts good stuff later. For example, should
        Claimh Solais (a very strong weapon) show up late in this seed's progression (spheres), or
@@ -659,6 +694,7 @@ class CVAOSOptions(PerGameCommonOptions):
     multiply_soul_drop_rates: MultiplySoulDropRates
     soul_drop_rate_multiplier: SoulDropRateMultiplier
     enemy_drop_rate: EnemyDropRate
+    wide_item_smoothing: WideItemSmoothing
     ancient_book_soul_drops: AncientBookSoulDrops
     skull_key_warp: SkullKeyWarp
     new_soul_pause: NewSoulPause
@@ -735,6 +771,7 @@ cvaos_option_groups = [
         ShuffleStartingSoul,
         ItemDropShuffle,
         EnemyDropRate,
+        WideItemSmoothing,
     ], start_collapsed=True),
 ]
 

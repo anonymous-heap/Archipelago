@@ -30,11 +30,13 @@ UT_STEPS = ("generate_early", "create_regions", "create_items", "set_rules", "co
 # Options that create_items reads to decide which items item smoothing places itself in pre_fill.
 # They move items between the multiworld pool and the pre-fill items without changing what logic
 # needs, so slot data does not carry them. generate_early also reads the soul options whose
-# effective values it sets, and those change only the ROM.
+# effective values it sets, and those change only the ROM. Wide Item Smoothing sets the item
+# smoothing options in generate_early and changes only how the pool's items are ordered.
 READ_BUT_NOT_LOGIC = frozenset({"item_smoothing", "early_mobility_souls", "black_panther_bias",
                                 "non_local_items", "plando_items", "priority_locations",
                                 "exclude_locations", "enemy_drop_rate", "multiply_soul_drop_rates",
-                                "soul_shuffle", "keep_soul_drop_rates"})
+                                "soul_shuffle", "keep_soul_drop_rates", "wide_item_smoothing",
+                                "item_smoothing_order"})
 
 # Pairs of (probed option, configuration). In each configuration, setting the probed option back to
 # its default changes the logic, and the round-trip test checks that it does. So if slot data fails

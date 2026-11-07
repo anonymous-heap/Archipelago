@@ -14,8 +14,8 @@ from .items import (FILLER_ITEM_NAMES, PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMEN
 from .enemy_checks import defeat_location_name, enemy_check_types, has_recorded_route
 from .locations import (defeat_hint_text, location_name_groups, location_name_to_id,
                         pickup_location_ids)
-from .options import (LOGIC_OPTION_NAMES, CVAOSOptions, Goal, SoulShuffle, cvaos_option_groups,
-                      cvaos_options_presets)
+from .options import (LOGIC_OPTION_NAMES, CVAOSOptions, Goal, ItemSmoothing, ItemSmoothingOrder,
+                      SoulShuffle, cvaos_option_groups, cvaos_options_presets)
 from .regions import UT_TRICKS_ITEM, create_regions, can_reach_room
 from . import tracker_map, tracker_route
 from .client import CVAOSClient  # noqa: F401  (imported for its registration side effect)
@@ -243,13 +243,24 @@ class CVAOSWorld(World):
         self._set_effective_values()
 
     def _set_effective_values(self) -> None:
-        """Turn off the options that a newer option replaces, so the spoiler shows what runs.
+        """Set the options that a newer option replaces to the values that run, so the spoiler
+        shows them.
 
         Enemy Drop Rate above 100 replaces Multiply Soul Drop Rates, and Soul Shuffle's matched
-        keeps each enemy's own soul drop rate, whatever Keep Soul Drop Rates says. Each option
-        turned off logs one line.
+        keeps each enemy's own soul drop rate, whatever Keep Soul Drop Rates says. Wide Item
+        Smoothing runs Item Smoothing as strict, in the spheres order. Each option changed logs
+        one line.
         """
         options = self.options
+        if options.wide_item_smoothing:
+            if options.item_smoothing.value != ItemSmoothing.option_strict:
+                options.item_smoothing.value = ItemSmoothing.option_strict
+                logging.info("%s: Item Smoothing is strict, because Wide Item Smoothing sets it.",
+                             self.player_name)
+            if options.item_smoothing_order.value != ItemSmoothingOrder.option_spheres:
+                options.item_smoothing_order.value = ItemSmoothingOrder.option_spheres
+                logging.info("%s: Item Smoothing Order is spheres, because Wide Item Smoothing "
+                             "sets it.", self.player_name)
         if options.enemy_drop_rate.value > 100 and options.multiply_soul_drop_rates:
             options.multiply_soul_drop_rates.value = 0
             logging.info("%s: Multiply Soul Drop Rates is off, because Enemy Drop Rate %d replaces "
