@@ -2,10 +2,14 @@
 Parsed Castlevania: Aria of Sorrow game data.
 
 Each table's subpackage loads its CSVs once at import and exposes the result as an immutable
-``rows`` tuple plus whatever lookup dicts it needs. This module is the single import point
-for those tables, so it re-exports each ``rows`` tuple under a name that says which table it
-came from. The alias is the same object, not a copy. ``map_info`` holds the in-game map
-rather than a table, and it is imported on its own.
+``rows`` tuple plus whatever lookup dicts it needs. This module re-exports each ``rows`` tuple
+under a name that says which table it came from, such as ``item_info_collection``. The alias is
+the same object, not a copy. It also re-exports the row types and a few lookups, such as
+``enemy_type_by_name`` and the routing indexes.
+
+Everything else is imported from its own subpackage. That covers the other lookup dicts, such as
+``item_info.by_item_number``, and the worth and soul tier tables in ``item_balancing``. It also
+covers ``map_info``, which holds the in-game map rather than a table.
 
 Route solving over this data is in ``worlds/cvaos/tools/routing``, which may import from
 here but is never imported by it.

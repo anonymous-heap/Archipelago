@@ -247,7 +247,8 @@ by_simple_name: dict[str, list[PickupInfo]] = {}
 for row in rows:
     by_simple_name.setdefault(row.simple_name, []).append(row)
 
-# Each area's name, as the location names give it ("Dance Hall" for the 3xx rooms).
+# Each area's name, keyed by the first character of its room identifiers, as the region column of
+# friendly_location_names.csv gives it ("Dance Hall" for the 3xx rooms).
 area_names: dict[str, str] = {row["room_identifier"][0]: row["region"] for row in open_csv(
     __name__, "friendly_location_names.csv")}
 

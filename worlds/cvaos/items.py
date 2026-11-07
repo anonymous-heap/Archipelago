@@ -121,10 +121,10 @@ item_table[PROGRESSIVE_MOVEMENT] = ItemData(
     ItemClassification.progression, pack(TransferCategory.PROGRESSIVE, 0))
 
 # --- Enemy check items (enemy_checks.py) ---
-# Each defeat location adds one cheap item to the pool, which check_item_names chooses from the
-# enemy's common drop. The item has its usual name and code, so an enemy's Potion is the same item
-# as a pickup's Potion. A drop that is normally progression counts only as useful here
-# (create_enemy_item), so enemy checks never add progression.
+# Each defeat location adds one item to the pool, which check_item_names chooses: usually the
+# enemy's common drop, and otherwise a cheap stand-in. The item has its usual name and code, so an
+# enemy's Potion is the same item as a pickup's Potion. A drop that is normally progression counts
+# only as useful here (create_enemy_item), so enemy checks never add progression.
 # ENEMY_GOLD is an amount that gold pickups hold, so the ROM can show the gold on a pickup too.
 ENEMY_GOLD = 100
 ENEMY_GOLD_NAME = f"{ENEMY_GOLD} Gold"
@@ -137,8 +137,8 @@ CONSUMABLE_CAP = 9
 ENEMY_DROP: Dict[str, str] = {enemy.name: enemy.drops[0] or enemy.drops[1]
                               for enemy in checkable_types()}
 
-# The HP restoratives worth worth.CHEAP_WORTH or less, cheapest first. A check whose enemy's drop
-# is worth more adds one of these instead.
+# The HP restoratives worth CHEAP_WORTH or less (worth.py), cheapest first. A check whose enemy's
+# drop is worth more adds one of these instead.
 HP_RESTORATIVES: tuple[str, ...] = tuple(
     row.name for row in sorted(worth.rows, key=lambda row: (row.worth, row.name))
     if row.item_class == "hp" and row.worth <= worth.CHEAP_WORTH)
@@ -199,10 +199,10 @@ def _cheap_consumable_or_gold(name: str) -> bool:
 
 
 # Plain filler that every seed can hold: the consumables and gold of the pickups that exist outside
-# Hard Mode, each worth no more than worth.CHEAP_WORTH. Core pads item links with this draw, so it
-# holds nothing better than what the castle's own pickups offer a quarter of the way in. An item
-# appears once for each such pickup, so CVAOSWorld.get_filler_item_name picks an item as often as
-# the castle holds it.
+# Hard Mode, each worth no more than worth.CHEAP_WORTH. Core pads item links with filler drawn from
+# here, so the list holds nothing better than what the castle's own pickups offer a quarter of the
+# way in. An item appears once for each such pickup, so CVAOSWorld.get_filler_item_name picks an
+# item as often as the castle holds it.
 FILLER_ITEM_NAMES: tuple[str, ...] = tuple(sorted(
     p.item_name for p in pickup_infos
     if not p.is_hard_mode_only and item_table[p.item_name].classification == ItemClassification.filler
@@ -237,8 +237,8 @@ def check_item_names(types: Sequence[EnemyType], pool: Iterable[Item],
     drop at the cap gives way to an HP restorative, and an HP restorative at the cap gives way to
     gold.
 
-    The choice depends only on its arguments, which the options decide. So Universal Tracker,
-    which rebuilds the pool from the slot data, arrives at the same items.
+    The choice depends only on its arguments, which the options decide, so Universal Tracker
+    arrives at the same items when it rebuilds the pool from the slot data.
     """
     held = Counter(item.name for item in pool)
     held.update(moved_drops.values())

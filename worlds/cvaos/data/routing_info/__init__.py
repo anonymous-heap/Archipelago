@@ -11,8 +11,8 @@ Each row keeps its CSV ability columns and combo cells, and ``get_requirement_bi
 them into :class:`AbilityCombo` masks.
 
 Where two doors connect the same pair of rooms, a door reference must carry the door's position
-tag. An untagged reference raises ``ValueError`` at import, except in the override file, whose
-rows are not checked.
+tag. An untagged reference raises ``ValueError`` at import. The one exception is a row of the
+override file that neither adds nor removes a crossing, because such a row has no effect.
 """
 
 from __future__ import annotations

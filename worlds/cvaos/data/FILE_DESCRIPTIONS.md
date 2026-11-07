@@ -7,7 +7,7 @@ See [PATHFINDING.md](PATHFINDING.md) for definitions of the terms used here.
 ## Top-level
 
 **`__init__.py`**
-Re-exports the public types from the submodules, and each table's `rows` tuple under a name that says which table it came from, such as `item_info_collection`. It is the single import point for the tables.
+Re-exports the public types from the submodules, a few lookups, and each table's `rows` tuple under a name that says which table it came from, such as `item_info_collection`. Everything else is imported from its own subpackage: the other lookups (such as `item_info.by_item_number`), the worth and soul tier tables in `item_balancing`, and `map_info`.
 
 **`_csv_resources.py`**
 `open_csv` and `open_csv_if_exists`, which read a CSV through the package loader so that loading also works from a zipped `.apworld`.
@@ -73,7 +73,7 @@ Merges the three CSVs by `name` into `ItemInfo` Pydantic models at module init, 
 
 ## `item_balancing/`
 
-Community desirability ratings for items, in `desirability.csv`, loaded into `DesirabilityInfo` rows. Each item's worth on the scale of a vanilla run, in `worth.csv`, which `build_worth.py` writes and `worth.py` loads. Each soul's rating and tier, in `soul_tiers.csv`, which `build_soul_tiers.py` writes from the soul tier lists in `soul_tier_lists/` and `soul_tiers.py` loads. See its [README.md](item_balancing/README.md).
+Three tables that rate items, and the scripts that build them. `aggregate_tiers.py` writes `desirability.csv`, the community desirability ratings, and `__init__.py` loads it into `DesirabilityInfo` rows. `build_worth.py` writes `worth.csv`, each item's worth on the scale of a vanilla run, and `worth.py` loads it. `build_soul_tiers.py` writes `soul_tiers.csv`, each soul's rating and tier, from the soul tier lists in `soul_tier_lists/`, and `soul_tiers.py` loads it. See its [README.md](item_balancing/README.md).
 
 ---
 
