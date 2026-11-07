@@ -21,7 +21,7 @@ mode. :func:`drop_rate_percents` returns the percents for ``rom_config.json``, a
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Dict, List, Mapping
+from typing import TYPE_CHECKING, Dict, List, Mapping, Optional
 
 from .data import enemy_type_collection
 from .data.item_balancing.soul_tiers import STRONG_RATING, soul_rating
@@ -47,18 +47,27 @@ def kind_percent(value: int, depth: float) -> int:
     return value
 
 
-def drop_rate_percents(world: CVAOSWorld, soul_plan: Mapping[int, int]) -> Dict[str, List[int]]:
+def drop_rate_percents(world: CVAOSWorld, soul_plan: Mapping[int, int],
+                       common_drops: Optional[Mapping[int, Optional[str]]] = None
+                       ) -> Dict[str, List[int]]:
     """Return ``rom_config.json``'s ``enemy_drop_rates`` for ``world``.
 
     That is ``{enemy id: [soul percent, common drop percent]}``, keyed by the id as a string, and
     leaving out each row whose two percents are both 100. ``soul_plan`` is the seed's soul shuffle
     plan, ``{target enemy: source enemy}``. Returns an empty dict when the option is 100.
 
+    ``common_drops`` names the item in each enemy's common slot, by enemy id, with None for an
+    empty slot. Without it, the slots hold their vanilla items. A seed that deals new drops must
+    pass the dealt items, because the exemption for items worth MID_GAME_WORTH or more reads the
+    item that the slot will hold.
+
     Reads the seed depths, so call it only after progression balancing.
     """
     value = world.options.enemy_drop_rate.value
     if value == 100:
         return {}
+    if common_drops is None:
+        common_drops = {enemy.id: enemy.drops[0] or None for enemy in enemy_type_collection}
     depths = enemy_seed_depths(world)
     percents: Dict[str, List[int]] = {}
     for enemy in enemy_type_collection:
@@ -67,8 +76,8 @@ def drop_rate_percents(world: CVAOSWorld, soul_plan: Mapping[int, int]) -> Dict[
         soul = vanilla_soul_name(soul_plan.get(enemy.id, enemy.id))
         keeps_soul_chance = soul is None or (soul_rating(soul) >= STRONG_RATING
                                              and depth < STRONG_SOUL_DEPTH)
-        common = enemy.drops[0]
-        keeps_item_chance = not common or item_worth(common) >= MID_GAME_WORTH
+        common = common_drops.get(enemy.id)
+        keeps_item_chance = common is None or item_worth(common) >= MID_GAME_WORTH
         row = [100 if keeps_soul_chance else kind, 100 if keeps_item_chance else kind]
         if row != [100, 100]:
             percents[str(enemy.id)] = row

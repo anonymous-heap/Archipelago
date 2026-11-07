@@ -46,11 +46,12 @@ SCRIPTED_BOSSES = (106, 107, 108, 109)  # Headhunter, Death, Legion, Balore
 TABLE_END = row_offset(ENEMY_COUNT - 1) + sizeof(EnemyDNA)
 
 
-def percents(value: int, depths: dict[int, float], plan: dict[int, int] | None = None) -> dict:
+def percents(value: int, depths: dict[int, float], plan: dict[int, int] | None = None,
+             common_drops: dict[int, str | None] | None = None) -> dict:
     """Return drop_rate_percents for a world with Enemy Drop Rate ``value`` and these depths."""
     world = SimpleNamespace(options=SimpleNamespace(enemy_drop_rate=SimpleNamespace(value=value)))
     with mock.patch.object(enemy_drop_rate, "enemy_seed_depths", return_value=depths):
-        return enemy_drop_rate.drop_rate_percents(world, plan or {})
+        return enemy_drop_rate.drop_rate_percents(world, plan or {}, common_drops)
 
 
 def at_depth(depth: float) -> dict[int, float]:
@@ -99,6 +100,15 @@ class RuleTest(unittest.TestCase):
                 self.assertEqual(row_percents(rows, enemy.id)[1], expected)
         minotaur = enemy_type_by_name["Minotaur"].id
         self.assertEqual(row_percents(rows, minotaur)[1], 100)  # its Battle Axe is worth 0.80
+
+    def test_the_item_exemption_reads_the_dealt_common_drop(self):
+        zombie, minotaur = enemy_type_by_name["Zombie"].id, enemy_type_by_name["Minotaur"].id
+        dealt = {zombie: "Battle Axe", minotaur: "Potion"}
+        rows = percents(350, at_depth(0.5), common_drops=dealt)
+        self.assertEqual(row_percents(rows, zombie)[1], 100)
+        self.assertEqual(row_percents(rows, minotaur)[1], 350)
+        # An enemy missing from the dealt table has an empty common slot.
+        self.assertEqual(row_percents(rows, enemy_type_by_name["Skeleton Knight"].id)[1], 100)
 
     def test_an_enemy_without_a_seed_depth_counts_as_depth_one(self):
         self.assertEqual(percents(350, {}), percents(350, at_depth(1.0)))
