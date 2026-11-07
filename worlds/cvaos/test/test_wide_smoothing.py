@@ -22,7 +22,7 @@ import Fill
 import Main
 from BaseClasses import ItemClassification, MultiWorld, PlandoOptions
 from test.general import setup_multiworld
-from worlds.AutoWorld import AutoWorldRegister
+from worlds.AutoWorld import AutoWorldRegister, World
 
 from .. import CVAOSWorld, wide_smoothing
 from ..data.item_balancing import worth
@@ -233,6 +233,25 @@ class BridgeTest(unittest.TestCase):
         self.assertFalse(wide_smoothing.host_skips_balancing())
         with mock.patch.object(wide_smoothing.sys, "argv", ["Generate.py", "--skip_prog"]):
             self.assertTrue(wide_smoothing.host_skips_balancing())
+
+
+class PostBalancingHookTest(unittest.TestCase):
+    """The path for a core that calls a hook on every world after progression balancing."""
+
+    def test_with_the_hook_wide_orders_once_there_and_never_balances(self):
+        balance = mock.Mock(wraps=Fill.balance_multiworld_progression)
+        with mock.patch.object(World, "post_balancing", lambda self, *args: None, create=True), \
+                mock.patch.object(Fill, "balance_multiworld_progression", balance):
+            multiworld = generate(5, BridgeTest.PLAYERS)
+            self.assertIsNone(getattr(multiworld.worlds[1], "wide_report", None))
+            CVAOSWorld.stage_post_balancing(multiworld, True)
+        self.assertEqual(balance.call_count, 0)
+        for world in multiworld.worlds.values():
+            self.assertEqual(len(world.wide_report.orders), 1)
+            self.assertIsNotNone(world.wide_report.floor)
+
+    def test_without_the_hook_wide_runs_in_stage_post_fill(self):
+        self.assertFalse(wide_smoothing.core_has_post_balancing())
 
 
 class WideScenario:

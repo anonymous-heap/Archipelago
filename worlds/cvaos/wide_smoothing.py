@@ -28,7 +28,8 @@ it gives cheap items to the scarce early locations.
 
 Core's progression balancing runs after every world's ``stage_post_fill``, so in a multiworld it
 could undo the order. Until core offers a hook after balancing, Wide runs balancing itself, as a
-bridge under the guards that ``_bridge`` lists.
+bridge under the guards that ``_bridge`` lists. Once core calls ``post_balancing`` on every world,
+Wide orders once from that hook instead, with no calls of its own.
 
 Positions run from 0 to 1 on the player's own clock: the share of their pickup locations that the
 seed's sphere order reaches first. The order reads the room clock, on which a defeat location counts
@@ -576,11 +577,39 @@ def _floor(multiworld: MultiWorld, worlds: List["CVAOSWorld"]) -> None:
 # --- entry point ------------------------------------------------------------------------------
 
 def run(multiworld: MultiWorld, game: str) -> None:
-    """Run Wide Item Smoothing for every world of ``game`` with the option on."""
-    worlds = [world for world in multiworld.get_game_worlds(game)
-              if world.options.wide_item_smoothing]
-    if worlds:
+    """Run Wide Item Smoothing for every world of ``game`` with the option on, from
+    ``stage_post_fill``.
+
+    When core calls a hook after progression balancing, this does nothing, and
+    ``order_after_balancing`` runs from that hook instead.
+    """
+    worlds = _wide_worlds(multiworld, game)
+    if worlds and not core_has_post_balancing():
         _smooth(multiworld, worlds, _bridge(multiworld, game, worlds))
+
+
+def order_after_balancing(multiworld: MultiWorld, game: str) -> None:
+    """Order every world of ``game`` with the option on once, then run the floor.
+
+    Core calls this through ``stage_post_balancing``, after its own progression balancing, when it
+    offers that hook. Nothing moves items after it, so the bridge's calls are not needed.
+    """
+    worlds = _wide_worlds(multiworld, game)
+    if worlds:
+        logging.info("%s: Wide Item Smoothing orders %s once, after progression balancing.", game,
+                     ", ".join(multiworld.player_name[world.player] for world in worlds))
+        _smooth(multiworld, worlds, None)
+
+
+def core_has_post_balancing() -> bool:
+    """Whether core calls a ``post_balancing`` hook on every world, after progression balancing."""
+    from worlds.AutoWorld import World
+    return callable(getattr(World, "post_balancing", None))
+
+
+def _wide_worlds(multiworld: MultiWorld, game: str) -> List["CVAOSWorld"]:
+    return [world for world in multiworld.get_game_worlds(game)
+            if world.options.wide_item_smoothing]
 
 
 def _smooth(multiworld: MultiWorld, worlds: List["CVAOSWorld"],

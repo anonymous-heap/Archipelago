@@ -411,6 +411,13 @@ class CVAOSWorld(World):
         smooth_placed_items(multiworld, cls.game)
         wide_smoothing.run(multiworld, cls.game)
 
+    @classmethod
+    def stage_post_balancing(cls, multiworld: MultiWorld, *_args) -> None:
+        # Core calls this only once it offers a post-balancing hook. Wide Item Smoothing then orders
+        # here, once, instead of balancing itself in stage_post_fill.
+        from . import wide_smoothing
+        wide_smoothing.order_after_balancing(multiworld, cls.game)
+
     def extend_hint_information(self, hint_data: dict[int, dict[int, str]]) -> None:
         # A hint for a defeat location names the rooms where its enemy appears. The text depends
         # only on the enemy, never on where items were placed.
