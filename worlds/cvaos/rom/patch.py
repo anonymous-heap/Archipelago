@@ -623,7 +623,7 @@ def build_rom_config(world: CVAOSWorld) -> Dict[str, object]:
     }
     # The drop table, when the seed changes it. Its common drops also decide which rows Enemy Drop
     # Rate exempts below.
-    from ..drop_sources import final_drop_table
+    from ..drop_shuffle import final_drop_table
     table = final_drop_table(world)
     common_drops = None
     if table is not None:

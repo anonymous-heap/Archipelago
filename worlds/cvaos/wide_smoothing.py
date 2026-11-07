@@ -28,8 +28,8 @@ After the order, the early floor makes sure each player holds early weapons and 
 the castle's own (see ``RUNGS`` and ``_floor_player``). The order alone cannot promise that, since
 it gives cheap items to the scarce early locations.
 
-The same band applies to the enemy drop table, through ``band_drop_table``, which the drop table's
-writer calls whether or not Item Drop Shuffle is on.
+The same band applies to the enemy drop table, through ``band_drop_table``, which
+``drop_shuffle.final_drop_table`` calls whether or not Item Drop Shuffle is on.
 
 Core's progression balancing runs after every world's ``stage_post_fill``, so in a multiworld it
 could undo the order. Until core offers a hook after balancing, Wide runs balancing itself, as a

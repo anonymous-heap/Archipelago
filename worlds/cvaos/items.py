@@ -292,8 +292,8 @@ def create_itempool(world: "CVAOSWorld") -> List[CVAOSItem]:
     if world.options.progressive_movement.value:
         pool = [create_item(world, PROGRESSIVE_MOVEMENT) if item.name in PROGRESSIVE_MOVEMENT_STAGES
                 else item for item in pool]
-    # Imported here, because drop_sources imports this module through seed_depth and item_smoothing.
-    from .drop_sources import travel_plan
+    # Imported here, because drop_shuffle imports this module through seed_depth and item_smoothing.
+    from .drop_shuffle import travel_plan
     travel = travel_plan(world)
     if travel is not None:
         pool = _with_moved_drops(world, pool, travel)

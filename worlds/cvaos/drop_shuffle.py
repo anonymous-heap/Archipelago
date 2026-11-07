@@ -16,11 +16,11 @@ item pool is built long before the seed's depths are known:
 Worth comes from ``worth.csv`` throughout. Equipment means weapons, armor and accessories, and
 every other item is a consumable.
 
-Wide Item Smoothing's band swap belongs after the progression, as a step that reads
-``plan.table`` and the seed depths and returns a new table. Any content worth more than its
-enemy's seed depth plus 0.25 trades places with a weaker one, and ``plan.travel.supply`` provides
-a fallback when no trade fits. With Item Drop Shuffle off, the band starts from
-:func:`vanilla_drop_table` instead.
+For one world, :func:`travel_plan` reads the options that decide which drops move into the item
+pool, and :func:`final_drop_table` decides the table that the patch writes. With Wide Item
+Smoothing on, that table then passes through Wide's band (``wide_smoothing.band_drop_table``),
+which starts from :func:`vanilla_drop_table` when Item Drop Shuffle is off. ``drop_sources``
+prints the table for the spoiler and the /drops command.
 """
 
 from __future__ import annotations
@@ -29,13 +29,16 @@ from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
 from types import MappingProxyType, SimpleNamespace
-from typing import Dict, List, Mapping, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Mapping, Optional, Tuple
 
 from .data import enemy_type_collection
 from .data.item_balancing import worth
 from .enemy_checks import enemy_check_types
 from .options import EnemyChecks, Goal
-from .seed_depth import UNREACHED
+from .seed_depth import UNREACHED, enemy_seed_depths
+
+if TYPE_CHECKING:
+    from . import CVAOSWorld
 
 __all__ = [
     "BASE_RESTORATIVES",
@@ -45,12 +48,15 @@ __all__ = [
     "REPLACEMENT_WINDOW",
     "DropShufflePlan",
     "DropSlot",
+    "DropTable",
     "SlotKey",
     "TravelPlan",
     "TravellingDrop",
     "deal",
+    "final_drop_table",
     "plan_drop_shuffle",
     "plan_travel",
+    "travel_plan",
     "vanilla_drop_table",
 ]
 
@@ -325,3 +331,53 @@ def plan_drop_shuffle(enemy_checks: int, goal: int, wide: bool,
     """
     travel = plan_travel(enemy_checks, goal, wide)
     return DropShufflePlan(travel, deal(travel.contents, depths))
+
+
+# Each enemy id's two drop slots, common first.
+DropTable = Mapping[int, Tuple[DropSlot, DropSlot]]
+
+
+def _wide_item_smoothing(world: CVAOSWorld) -> bool:
+    """Whether Wide Item Smoothing is on, which moves more drops into the pool and bands the
+    table."""
+    return bool(world.options.wide_item_smoothing)
+
+
+def travel_plan(world: CVAOSWorld) -> Optional[TravelPlan]:
+    """Return which drops move into ``world``'s item pool, or None with Item Drop Shuffle off.
+
+    The plan depends only on options that the slot data carries, so Universal Tracker's rebuild of
+    the world gets the same pool.
+    """
+    options = world.options
+    if not options.item_drop_shuffle:
+        return None
+    return plan_travel(options.enemy_checks.value, options.goal.value, _wide_item_smoothing(world))
+
+
+def final_drop_table(world: CVAOSWorld) -> Optional[DropTable]:
+    """Return the drop table that ``world``'s patch writes, or None to keep the game's own.
+
+    With Item Drop Shuffle on, it is the table that the shuffle deals by seed depth. With Wide Item
+    Smoothing on, the band then moves each drop too good for its enemy's place in the seed (see
+    ``wide_smoothing.band_drop_table``), starting from the game's own table when Item Drop Shuffle
+    is off. This is the one place that decides the final table, so any later step that changes
+    drops belongs here.
+
+    Reads the seed depths, so call it only after progression balancing.
+    """
+    options = world.options
+    wide = _wide_item_smoothing(world)
+    if not options.item_drop_shuffle and not wide:
+        return None
+    depths = enemy_seed_depths(world)
+    if options.item_drop_shuffle:
+        plan = plan_drop_shuffle(options.enemy_checks.value, options.goal.value, wide, depths)
+        table, supply = plan.table, plan.travel.supply
+    else:
+        # No drop travels, so the supply holds every item a drop slot may take.
+        table, supply = vanilla_drop_table(), _supply(frozenset())
+    if not wide:
+        return table
+    from .wide_smoothing import band_drop_table
+    return band_drop_table(table, depths, supply).table

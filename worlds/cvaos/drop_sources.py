@@ -1,9 +1,8 @@
 """
 Which enemy drops which item in one player's seed, and how often.
 
-Item Drop Shuffle's rules live in ``drop_shuffle.py``. This module applies them to a world.
-:func:`travel_plan` reads the options that decide which drops move into the item pool, and
-:func:`final_drop_table` decides the table that the patch writes (``rom/drop_table.py``).
+``drop_shuffle.final_drop_table`` decides the table that the patch writes
+(``rom/drop_table.py``), and this module prints it.
 
 The spoiler and the clients' /drops command print the same table, from :func:`drop_table_lines`.
 /drops reads the enemy table from the ROM in the game's memory, so it shows what the installed
@@ -12,34 +11,25 @@ edits on a stand-in that holds only the vanilla drop fields, as ``soul_sources``
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, List, Mapping, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List
 
 from .data import enemy_type_collection
 from .data.item_info import by_item_number
-from .drop_shuffle import (DropSlot, TravelPlan, _supply, plan_drop_shuffle, plan_travel,
-                           vanilla_drop_table)
+from .ram.addresses import ROM
 from .rom.drop_table import MAX_VALUE, vanilla_bytes
 from .rom.enemy_table import TABLE_OFFSET, TABLE_SIZE, parse_table
-from .ram.addresses import ROM
-from .seed_depth import enemy_seed_depths
 
 if TYPE_CHECKING:
     from . import CVAOSWorld
     from .ram import AoSRAM
 
 __all__ = [
-    "DropTable",
     "drop_table_lines",
-    "final_drop_table",
     "planned_drop_table_lines",
     "read_drop_table_report",
     "rom_drop_table_lines",
     "spoiler_drop_table_lines",
-    "travel_plan",
 ]
-
-# Each enemy id's two drop slots, common first.
-DropTable = Mapping[int, Tuple[DropSlot, DropSlot]]
 
 # The item roll runs on a kill that drops no soul. It picks the common slot three times in four
 # and the rare slot otherwise, then drops the slot's item with chance
@@ -48,52 +38,6 @@ _SLOT_SHARES = (3 / 4, 1 / 4)
 _ITEM_NUMERATOR = 4
 
 TABLE_NOTE = "Chances are per kill that drops no soul, before luck and the Rare Ring."
-
-
-def _wide_item_smoothing(world: CVAOSWorld) -> bool:
-    """Whether Wide Item Smoothing is on, which moves more drops into the pool and bands the
-    table."""
-    return bool(world.options.wide_item_smoothing)
-
-
-def travel_plan(world: CVAOSWorld) -> Optional[TravelPlan]:
-    """Return which drops move into ``world``'s item pool, or None with Item Drop Shuffle off.
-
-    The plan depends only on options that the slot data carries, so Universal Tracker's rebuild of
-    the world gets the same pool.
-    """
-    options = world.options
-    if not options.item_drop_shuffle:
-        return None
-    return plan_travel(options.enemy_checks.value, options.goal.value, _wide_item_smoothing(world))
-
-
-def final_drop_table(world: CVAOSWorld) -> Optional[DropTable]:
-    """Return the drop table that ``world``'s patch writes, or None to keep the game's own.
-
-    With Item Drop Shuffle on, it is the table that the shuffle deals by seed depth. With Wide Item
-    Smoothing on, the band then moves each drop too good for its enemy's place in the seed (see
-    ``wide_smoothing.band_drop_table``), starting from the game's own table when Item Drop Shuffle
-    is off. This is the one place that decides the final table, so any later step that changes
-    drops belongs here.
-
-    Reads the seed depths, so call it only after progression balancing.
-    """
-    options = world.options
-    wide = _wide_item_smoothing(world)
-    if not options.item_drop_shuffle and not wide:
-        return None
-    depths = enemy_seed_depths(world)
-    if options.item_drop_shuffle:
-        plan = plan_drop_shuffle(options.enemy_checks.value, options.goal.value, wide, depths)
-        table, supply = plan.table, plan.travel.supply
-    else:
-        # No drop travels, so the supply holds every item a drop slot may take.
-        table, supply = vanilla_drop_table(), _supply(frozenset())
-    if not wide:
-        return table
-    from .wide_smoothing import band_drop_table
-    return band_drop_table(table, depths, supply).table
 
 
 def _item_name(value: int) -> str:

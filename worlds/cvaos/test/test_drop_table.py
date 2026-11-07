@@ -25,8 +25,8 @@ from .. import CVAOSWorld
 from ..data import (enemy_type_by_name, enemy_type_collection, item_info_collection,
                     pickup_info_collection)
 from ..data.item_info import by_category_id, by_name as item_info_by_name
-from ..drop_shuffle import HAMMER_STOCK, DropSlot, plan_drop_shuffle, vanilla_drop_table
-from ..drop_sources import final_drop_table, travel_plan
+from ..drop_shuffle import (HAMMER_STOCK, DropSlot, final_drop_table, plan_drop_shuffle,
+                            travel_plan, vanilla_drop_table)
 from ..enemy_checks import enemy_check_types
 from ..item_granting import TransferCategory, pack
 from ..items import (CONSUMABLE_CAP, DROP_ITEMS, HP_RESTORATIVES, check_item_names,

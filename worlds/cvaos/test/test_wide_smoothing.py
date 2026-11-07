@@ -26,9 +26,8 @@ from worlds.AutoWorld import AutoWorldRegister, World
 
 from .. import CVAOSWorld, seed_depth, wide_smoothing
 from ..data.item_balancing import worth
-from ..drop_shuffle import (DropSlot, _supply, plan_drop_shuffle, plan_travel,
-                            vanilla_drop_table)
-from ..drop_sources import final_drop_table, travel_plan
+from ..drop_shuffle import (DropSlot, _supply, final_drop_table, plan_drop_shuffle, plan_travel,
+                            travel_plan, vanilla_drop_table)
 from ..items import logic_only_progression_names
 from ..locations import CVAOSLocation
 from ..options import cvaos_options_presets
