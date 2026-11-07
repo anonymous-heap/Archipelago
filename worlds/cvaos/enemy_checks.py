@@ -67,13 +67,13 @@ ARENA_PLACEMENTS: frozenset[int] = frozenset({27, 193, 264, 331, 394, 422, 618, 
 # Room ids in the Boss Rush area, whose arenas never count as placements.
 BOSS_RUSH_AREA = "C"
 
-# Rooms whose placements spawn only once a boss elsewhere has been beaten, mapped to that boss's
-# room. Three of room 710's four placements appear only after Legion (room 725). The data doesn't
-# say which three, so logic requires beating Legion for all four. Alura Une, Biphron and Ripper
-# all appear in other rooms too, so each of their checks still has placements that don't need
-# Legion. A placement that spawns after the boss of its own room needs no entry, because logic
-# treats reaching a boss's room as beating that boss.
-SPAWNS_AFTER_BOSS_IN: dict[str, str] = {"710": "725"}
+# Placements that spawn only once a boss elsewhere has been beaten, by enemy number, mapped to that
+# boss's room. In room 710, Alura Une (#555) and both Rippers (#556 and #558) appear only after
+# Legion (room 725), while Biphron (#557) is always there. Alura Une and Ripper appear in other
+# rooms too, so each of their checks still has placements that don't need Legion. A placement that
+# spawns after the boss of its own room needs no entry, because logic treats reaching a boss's room
+# as beating that boss.
+SPAWNS_AFTER_BOSS_IN: dict[int, str] = {555: "725", 556: "725", 558: "725"}
 
 
 def defeat_location_name(enemy_name: str) -> str:

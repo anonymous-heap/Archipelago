@@ -13,7 +13,7 @@ from unittest import mock
 from BaseClasses import CollectionState, Entrance, MultiWorld
 from test.general import setup_multiworld
 
-from .. import CVAOSWorld, item_smoothing
+from .. import CVAOSWorld, item_smoothing, regions
 from ..client_logic import ITEMS_FROM_OTHER_WORLDS, ITEMS_INCLUDING_OWN, CVAOSClientLogic
 from ..data import (enemy_placements, enemy_type_by_name, enemy_type_collection,
                     item_info_collection, pickup_info_collection)
@@ -182,20 +182,35 @@ class LogicTest(unittest.TestCase):
         self.assertTrue(has_recorded_route("Zombie"))
         self.assertTrue(self.can_reach(CollectionState(self.multiworld), "Zombie"))
 
+    def placement_entrances(self, enemy_number: int) -> list[Entrance]:
+        """Return the entrances from a placement's doors into its type's defeat region."""
+        return [entrance for region in self.multiworld.get_regions(1) for entrance in region.exits
+                if entrance.connected_region.name.startswith("Defeat: ")
+                and entrance.name.endswith(f" #{enemy_number}")]
+
+    def test_in_room_710_only_alura_une_and_the_rippers_wait_for_legion(self):
+        # Every item is in hand, and Legion's room counts as out of reach.
+        def legion_unbeaten(state: CollectionState, world: CVAOSWorld, room: str) -> bool:
+            return room != "725"
+
+        everything = state_with_all_items_but(self.multiworld)
+        with mock.patch.object(regions, "can_reach_room", legion_unbeaten):
+            for enemy_number, waits in ((555, True), (556, True), (557, False), (558, True)):
+                entrances = self.placement_entrances(enemy_number)
+                with self.subTest(enemy_number=enemy_number):
+                    self.assertTrue(entrances)
+                    self.assertEqual({entrance.access_rule(everything) for entrance in entrances},
+                                     {not waits})
+
     def test_placements_that_wait_for_a_boss_elsewhere_recheck_when_its_room_opens(self):
         world = self.multiworld.worlds[1]
-        for room, boss_room in SPAWNS_AFTER_BOSS_IN.items():
+        for enemy_number, boss_room in SPAWNS_AFTER_BOSS_IN.items():
             boss_doors = [self.multiworld.get_region(name, 1)
                           for name in world.entrance_region_names_by_room[boss_room]]
             watched = set().union(*(self.multiworld.indirect_connections.get(door, set())
                                     for door in boss_doors))
-            numbers = {f"#{placement.enemy_number}" for placement in enemy_placements
-                       if placement.room == room}
-            entrances = [entrance for region in self.multiworld.get_regions(1)
-                         for entrance in region.exits
-                         if entrance.connected_region.name.startswith("Defeat: ")
-                         and entrance.name.rsplit(" ", 1)[-1] in numbers]
-            with self.subTest(room=room):
+            entrances = self.placement_entrances(enemy_number)
+            with self.subTest(enemy_number=enemy_number):
                 self.assertTrue(entrances)
                 self.assertEqual([entrance.name for entrance in entrances
                                   if entrance not in watched], [])
@@ -221,11 +236,8 @@ class LogicTest(unittest.TestCase):
         entrance = next(entrance for entrance in defeat_entrances
                         if entrance.connected_region.name == f"Defeat: {fallback_only}")
         self.assertEqual(tuple(entrance.access_rule.uses(state)), FALLBACK_SOULS)
-        room_710 = {f"#{placement.enemy_number}" for placement in enemy_placements
-                    if placement.room == "710"}
-        entrance = next(entrance for entrance in defeat_entrances
-                        if entrance.name.rsplit(" ", 1)[-1] in room_710)
-        self.assertIn("beating the boss in room 725", entrance.access_rule.uses(state))
+        alura_une_in_710 = self.placement_entrances(555)[0]
+        self.assertIn("beating the boss in room 725", alura_une_in_710.access_rule.uses(state))
 
 
 class PriorityCapTest(unittest.TestCase):

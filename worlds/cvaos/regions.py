@@ -422,7 +422,7 @@ def _create_enemy_checks(world: CVAOSWorld, entrance_regions_by_room: dict[str, 
         region.locations.append(
             CVAOSLocation(player, location_name, location_name_to_id[location_name], region))
         for placement in placements_of(enemy.name):
-            boss_room = SPAWNS_AFTER_BOSS_IN.get(placement.room)
+            boss_room = SPAWNS_AFTER_BOSS_IN.get(placement.enemy_number)
             routing = by_enemy_number_for_enemy_regions.get(placement.enemy_number)
             if placement.enemy_number in ARENA_PLACEMENTS:
                 ways = [(door, door.name, None, False)
