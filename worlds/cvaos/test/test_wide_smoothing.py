@@ -26,7 +26,9 @@ from worlds.AutoWorld import AutoWorldRegister, World
 
 from .. import CVAOSWorld, seed_depth, wide_smoothing
 from ..data.item_balancing import worth
-from ..drop_shuffle import DropSlot, plan_travel, vanilla_drop_table
+from ..drop_shuffle import (DropSlot, _supply, plan_drop_shuffle, plan_travel,
+                            vanilla_drop_table)
+from ..drop_sources import final_drop_table, travel_plan
 from ..items import logic_only_progression_names
 from ..locations import CVAOSLocation
 from ..wide_smoothing import (BAND, RUNGS, OrderResult, _is_defeat, promote_mid_game_gear,
@@ -289,6 +291,30 @@ class DropBandTest(unittest.TestCase):
         changed = sum(1 for enemy_id, row in band.table.items()
                       for slot, content in enumerate(row) if content != before[enemy_id][slot])
         self.assertLessEqual(changed, 2 * band.swaps + len(band.replaced))
+
+    def test_the_patch_writes_the_banded_table_with_or_without_item_drop_shuffle(self):
+        for shuffle in (False, True):
+            world = generate(1, [(GAME, {**PRESET, "item_drop_shuffle": shuffle})]).worlds[1]
+            depths = seed_depth.enemy_seed_depths(world)
+            if shuffle:
+                plan = plan_drop_shuffle(2, 0, True, depths)
+                start, supply = plan.table, plan.travel.supply
+            else:
+                start, supply = vanilla_drop_table(), _supply(frozenset())
+            table = final_drop_table(world)
+            with self.subTest(item_drop_shuffle=shuffle):
+                self.assertEqual(table, wide_smoothing.band_drop_table(start, depths, supply).table)
+                if not shuffle:
+                    # The game's own table has early drops above the band, so it changes.
+                    self.assertNotEqual(dict(table), dict(start))
+
+    def test_with_every_check_wide_moves_every_drop_but_the_strongest(self):
+        options = {"enemy_checks": "all", "item_drop_shuffle": True, "wide_item_smoothing": True}
+        world = setup_multiworld(CVAOSWorld, ("generate_early",), seed=1, options=options).worlds[1]
+        travelling = travel_plan(world).travelling
+        self.assertEqual(len(travelling), 85)
+        self.assertTrue(all(worth.item_worth(drop.item) < worth.STRONG_WORTH
+                            for drop in travelling))
 
     def test_a_drop_trades_with_the_earliest_slot_of_its_kind_that_admits_it(self):
         table = self.table({0: ("Battle Axe", ""), 1: ("Potion", ""), 2: ("Short Sword", ""),

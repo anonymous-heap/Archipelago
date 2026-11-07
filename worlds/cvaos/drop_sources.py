@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING, Dict, List, Mapping, Optional, Tuple
 
 from .data import enemy_type_collection
 from .data.item_info import by_item_number
-from .drop_shuffle import DropSlot, TravelPlan, plan_drop_shuffle, plan_travel
+from .drop_shuffle import (DropSlot, TravelPlan, _supply, plan_drop_shuffle, plan_travel,
+                           vanilla_drop_table)
 from .rom.drop_table import MAX_VALUE, vanilla_bytes
 from .rom.enemy_table import TABLE_OFFSET, TABLE_SIZE, parse_table
 from .seed_depth import enemy_seed_depths
@@ -50,9 +51,9 @@ TABLE_NOTE = "Chances are per kill that drops no soul, before luck and the Rare 
 
 
 def _wide_item_smoothing(world: CVAOSWorld) -> bool:
-    """Whether Wide Item Smoothing is on, which moves more drops into the pool."""
-    # Wide Item Smoothing has no option yet, so it is always off.
-    return False
+    """Whether Wide Item Smoothing is on, which moves more drops into the pool and bands the
+    table."""
+    return bool(world.options.wide_item_smoothing)
 
 
 def travel_plan(world: CVAOSWorld) -> Optional[TravelPlan]:
@@ -70,17 +71,29 @@ def travel_plan(world: CVAOSWorld) -> Optional[TravelPlan]:
 def final_drop_table(world: CVAOSWorld) -> Optional[DropTable]:
     """Return the drop table that ``world``'s patch writes, or None to keep the game's own.
 
-    With Item Drop Shuffle on, it is the table that the shuffle deals by seed depth. This is the
-    one place that decides the final table, so any later step that changes drops belongs here.
+    With Item Drop Shuffle on, it is the table that the shuffle deals by seed depth. With Wide Item
+    Smoothing on, the band then moves each drop too good for its enemy's place in the seed (see
+    ``wide_smoothing.band_drop_table``), starting from the game's own table when Item Drop Shuffle
+    is off. This is the one place that decides the final table, so any later step that changes
+    drops belongs here.
 
     Reads the seed depths, so call it only after progression balancing.
     """
     options = world.options
-    if not options.item_drop_shuffle:
+    wide = _wide_item_smoothing(world)
+    if not options.item_drop_shuffle and not wide:
         return None
-    plan = plan_drop_shuffle(options.enemy_checks.value, options.goal.value,
-                             _wide_item_smoothing(world), enemy_seed_depths(world))
-    return plan.table
+    depths = enemy_seed_depths(world)
+    if options.item_drop_shuffle:
+        plan = plan_drop_shuffle(options.enemy_checks.value, options.goal.value, wide, depths)
+        table, supply = plan.table, plan.travel.supply
+    else:
+        # No drop travels, so the supply holds every item a drop slot may take.
+        table, supply = vanilla_drop_table(), _supply(frozenset())
+    if not wide:
+        return table
+    from .wide_smoothing import band_drop_table
+    return band_drop_table(table, depths, supply).table
 
 
 def _item_name(value: int) -> str:

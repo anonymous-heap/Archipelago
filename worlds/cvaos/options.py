@@ -399,7 +399,8 @@ class ItemDropShuffle(Toggle):
     Each moved drop takes the place of a cheap item in your pool, so how many drops move depends
        on Enemy Checks:
     - all: every drop no better than what the castle's own pickups offer a quarter of the way in
-      (57 of the 96 drop slots).
+      (57 of the 96 drop slots). With Wide Item Smoothing on, every drop except the ten strongest
+      items moves instead (85).
     - bosses: the 26 cheapest drops (25 under the Graham goal).
     - off: the 16 cheapest drops, which are Mach Punch and 15 foods and potions.
 
@@ -730,6 +731,7 @@ LOGIC_OPTION_NAMES: tuple[str, ...] = (
     "oops_all_whips",
     "enemy_checks",
     "item_drop_shuffle",
+    "wide_item_smoothing",
     "logic_difficulty_preset",
     *(technique.option for technique in TECHNIQUES),
 )

@@ -45,13 +45,15 @@ PLAN_SETTINGS = list(itertools.product(
 EQUIPMENT = ("weapon", "armor", "accessory")
 ARMOR_COUNT = sum(1 for info in item_info_collection if info.item_category == "armor")
 
-# The rows of the design's table of option combinations that this version can generate: each
-# Enemy Checks setting, with the Graham goal where it changes what moves, and Item Drop Shuffle
-# off and on.
+# The rows of the design's table of option combinations: each Enemy Checks setting, with the Graham
+# goal where it changes what moves, and Item Drop Shuffle off and on. Wide Item Smoothing changes
+# what moves only with every check, so its rows use that setting.
 ROWS = [{"enemy_checks": checks, "goal": goal, "item_drop_shuffle": on}
         for checks, goal in (("off", "chaos"), ("bosses", "chaos"), ("bosses", "graham"),
                              ("all", "chaos"))
         for on in (False, True)]
+ROWS += [{"enemy_checks": "all", "goal": "chaos", "item_drop_shuffle": on,
+          "wide_item_smoothing": True} for on in (False, True)]
 
 CONSUMABLES = frozenset(info.name for info in item_info_collection
                         if info.item_category == "consumable")
