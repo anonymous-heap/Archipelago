@@ -22,8 +22,14 @@ Utility functions `parse_int`, `parse_dec`, `parse_hex` for converting CSV strin
 **`enemy_types.csv`**
 The game's 113 enemy types. Columns: `enemy_id` (the type's row in the enemy stat table), `name`, and `drop_1` / `drop_2` (the item names in the two drop slots, blank for an empty slot).
 
+**`enemy_stats.csv`**
+Each type's HP and the rarity byte of each drop slot, for the item drop shuffle. Columns: `enemy_id`, `name`, `hp` (+0x0C of the type's row), `drop_1_rarity` (+0x15) and `drop_2_rarity` (+0x16). A higher rarity byte makes the slot drop less often.
+
+**`build_enemy_stats.py`**
+Writes `enemy_stats.csv` from the USA ROM, and says where the game's code reads each field. It checks each row's drops against `enemy_types.csv` first. Run by hand: `python build_enemy_stats.py <path to the USA ROM>`.
+
 **`__init__.py`**
-Loads `enemy_types.csv` into `EnemyType` tuples and checks that the ids run from 0 in order. Builds lookup dicts by `name` and `id`. Exports the `rows` tuple.
+Loads `enemy_types.csv` and `enemy_stats.csv` into `EnemyType` tuples and checks that the ids run from 0 in order. Builds lookup dicts by `name` and `id`. Exports the `rows` tuple.
 
 ---
 
