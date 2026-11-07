@@ -333,7 +333,8 @@ class DeathLinkTickTest(unittest.IsolatedAsyncioTestCase):
         client = _new_client()
         # Other tests cover the save-block concerns, so here they are stubs that touch no RAM.
         for concern in ("_send_location_checks", "_report_position", "_report_exploration",
-                        "_receive_items", "_grant_progressive_movement", "_report_goal"):
+                        "_receive_items", "_grant_progressive_movement", "_report_goal",
+                        "_record_play_data"):
             setattr(client, concern, mock.AsyncMock())
         client._save_from_another_seed = mock.AsyncMock(return_value=False)
         return client

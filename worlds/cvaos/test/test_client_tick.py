@@ -73,6 +73,7 @@ class TickSaveBlockGateTest(unittest.IsolatedAsyncioTestCase):
         self.client._receive_items = recorder("items")
         self.client._grant_progressive_movement = recorder("progressive")
         self.client._report_goal = recorder("goal")
+        self.client._record_play_data = recorder("play data")
 
     async def tick(self, game_state: int, menu_state: int, max_hp: int) -> FakeRam:
         ram = FakeRam(game_state, menu_state, max_hp)
@@ -81,9 +82,9 @@ class TickSaveBlockGateTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_loaded_file_in_normal_play_runs_everything(self) -> None:
         await self.tick(INGAME, NORMAL, max_hp=250)
-        self.assertEqual(self.ran, ["checks", "items", "progressive", "goal"])
+        self.assertEqual(self.ran, ["checks", "items", "progressive", "goal", "play data"])
 
-    async def test_a_save_from_another_seed_sends_no_checks_and_no_goal(self) -> None:
+    async def test_a_save_from_another_seed_skips_checks_goal_and_play_data(self) -> None:
         self.from_another_seed = True
         await self.tick(INGAME, NORMAL, max_hp=250)
         self.assertEqual(self.ran, ["items", "progressive"])

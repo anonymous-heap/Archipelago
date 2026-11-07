@@ -654,6 +654,9 @@ class CVAOSCollectionContext(CommonContext):
         # True from noticing a different installed seed until the reconnect for it completes. The
         # watcher does not tick in between, because the connection still belongs to the old seed.
         self._seed_changed = False
+        # The server's seed name from RoomInfo, which names the play-data log, as in the BizHawk
+        # Client's context.
+        self.server_seed_name: str | None = None
 
     # -- AP plumbing --------------------------------------------------------
     async def server_auth(self, password_requested: bool = False) -> None:
@@ -674,7 +677,9 @@ class CVAOSCollectionContext(CommonContext):
         await self.send_connect()
 
     def on_package(self, cmd: str, args: dict) -> None:
-        if cmd == "Connected":
+        if cmd == "RoomInfo":
+            self.server_seed_name = args.get("seed_name")
+        elif cmd == "Connected":
             logger.info('Press "Open map" or type /map to open the map tracker for this slot in '
                         "your browser.")
             # A reconnect to the same seed starts a new server session, so the checks sent in the

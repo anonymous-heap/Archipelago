@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 
 from NetUtils import ClientStatus
 
-from . import exploration, item_granting, tracker_map
+from . import exploration, item_granting, play_data, tracker_map
 from .data import item_info_collection
 from .enemy_checks import defeat_location_id, enemy_id_for_location
 from .items import PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, item_table
@@ -45,6 +45,8 @@ _STAGE_INFOS = tuple(next(info for info in item_info_collection if info.name == 
 POSITION_INTERVAL = 0.5
 # The explored map is read this often, and sent when it has changed.
 EXPLORATION_INTERVAL = 2.0
+# The play-data log's values are read this often, or at once when new checks wait to be logged.
+PLAY_DATA_INTERVAL = 2.0
 
 # The items_handling a client connects with. Both ask for items from other worlds and for the
 # starting inventory. A seed with enemy checks also asks for the player's own items, because the
@@ -122,6 +124,11 @@ class CVAOSClientLogic:
         # The explored map last sent, and when it was last read.
         self.last_exploration = None
         self.last_exploration_time = 0.0
+        # The play-data log's writer for this session, the checks it has yet to log, and when
+        # its values were last read. A new writer starts the session's lines.
+        self.play_data_log = None
+        self.unlogged_checks = set()
+        self.last_play_data_time = 0.0
 
     def queue_deathlink_from_bounce(self, ctx: "CommonContext", cmd: str, args: dict) -> None:
         # Queue an incoming DeathLink's cause; _relay_deathlink applies the kill. Skip the echo of
@@ -190,7 +197,8 @@ class CVAOSClientLogic:
         # in the same block and is never 0 for a loaded file, so it tells the two apart.
         if in_gameplay and await ram.get_max_hp() > 0:
             # A save from another seed sends no checks and reports no goal, because either would
-            # count for this seed and could release other players' items for good.
+            # count for this seed and could release other players' items for good. Its play data
+            # is not this seed's either.
             from_another_seed = await self._save_from_another_seed(ctx, ram)
             if not from_another_seed:
                 await self._send_location_checks(ctx, ram)
@@ -200,6 +208,7 @@ class CVAOSClientLogic:
             await self._grant_progressive_movement(ctx, ram)
             if not from_another_seed:
                 await self._report_goal(ctx, ram)
+                await self._record_play_data(ctx, ram)
 
     async def _save_from_another_seed(self, ctx: "CommonContext", ram: AoSRAM) -> bool:
         """
@@ -273,6 +282,28 @@ class CVAOSClientLogic:
         await ctx.send_msgs([{"cmd": "Set", "key": key, "default": None, "want_reply": False,
                               "operations": [{"operation": "replace", "value": value}]}])
 
+    async def _record_play_data(self, ctx: "CommonContext", ram: AoSRAM) -> None:
+        # Keep this seed and slot's local play-data log (play_data.py). The seed's name comes from
+        # the server's RoomInfo, which both clients' contexts keep as server_seed_name.
+        now = time.monotonic()
+        if not self.unlogged_checks and now - self.last_play_data_time < PLAY_DATA_INTERVAL:
+            return
+        if self.play_data_log is None:
+            seed_name = getattr(ctx, "server_seed_name", None)
+            if not seed_name:
+                return
+            self.play_data_log = play_data.PlayDataLog(
+                play_data.log_path(seed_name, ctx.slot),
+                {"seed": seed_name, "slot": ctx.slot, "player": ctx.player_names.get(ctx.slot),
+                 "options": {key: value for key, value in ctx.slot_data.items()
+                             if isinstance(value, (bool, int, float, str))}})
+        self.last_play_data_time = now
+        state = await ram.read_play_data()
+        self.play_data_log.record(state)
+        if self.unlogged_checks:
+            self.play_data_log.checks(state.play_frames, self.unlogged_checks)
+            self.unlogged_checks = set()
+
     async def _send_location_checks(self, ctx: "CommonContext", ram: AoSRAM) -> None:
         # Collected-pickup save flags -> AP location checks. Each set bit's index is a pickup's
         # flag_offset. We map it to the AP location id and send it if the server tracks that
@@ -295,6 +326,9 @@ class CVAOSClientLogic:
         if new_checks:
             self.local_checked_locations |= new_checks
             await ctx.send_msgs([{"cmd": "LocationChecks", "locations": sorted(new_checks)}])
+            # The play-data log times each check once, so a check the server already has, which
+            # a new session sends again, is left out.
+            self.unlogged_checks |= new_checks - ctx.checked_locations
 
         # Collecting another world's pickup grants Soma a junk Skull Key (rom/patch.py
         # _AP_PLACEHOLDER). The game refuses a consumable pickup while its count is 9, but

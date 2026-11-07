@@ -83,6 +83,11 @@ PICKUP_FLAGS_LEN = PICKUP_FLAGS.size
 # death routine sets a type's bit the first time any enemy of that type is defeated, and the save
 # keeps it.
 ENEMY_DEFEATED = ewram.entry(0x020133A0, Buffer.of(nbytes=0x10), name="enemy_defeated")
+# The Enemy List's drop-seen bits, one field per drop slot, numbered like ENEMY_DEFEATED. When a
+# slot's item drops, the death routine sets that type's bit in the slot's field (0x080685F8),
+# whether or not Soma collects the item. The save keeps both fields.
+DROP_1_SEEN = ewram.entry(0x020133B0, Buffer.of(nbytes=0x10), name="drop_1_seen")
+DROP_2_SEEN = ewram.entry(0x020133C0, Buffer.of(nbytes=0x10), name="drop_2_seen")
 
 
 # --- Progress / goal flags ---
@@ -115,6 +120,11 @@ BOSS_FLAG_DEATH = 0x0002
 BOSS_FLAG_CHAOS = 0x0080           # true-ending final boss; does not persist, so the goal reads
                                    # GLOBAL_FLAG_GOOD_ENDING instead
 GLOBAL_FLAG_GOOD_ENDING = 0x00004000
+
+# --- Play timer ---
+# The decomp's unk_60.inGameTimer, saved with the file. UpdateInGameTimer (0x0800CADC) adds one
+# per frame of play and stops at 0x014996C4, about 100 hours at 60 to a second.
+PLAY_TIMER = ewram.entry(0x020000AC, u32, name="play_timer")
 
 
 # --- Player inventory / stats block ---

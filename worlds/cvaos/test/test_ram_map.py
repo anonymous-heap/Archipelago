@@ -35,6 +35,7 @@ DOCUMENTED = {
     "ABILITY_ENABLED": (0x13396, 2),
     "EVENT_FLAGS": (0x0033C, 4), "EXPLORED_MAP": (0x000B4, 0x280),
     "CASTLE_MAPS": (0x132B1, 3),  # consumables 29 to 31
+    "PLAY_TIMER": (0x000AC, 4), "DROP_1_SEEN": (0x133B0, 0x10), "DROP_2_SEEN": (0x133C0, 0x10),
 }
 
 # category -> (EWRAM-domain base, item count, nibble-packed)

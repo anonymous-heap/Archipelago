@@ -10,13 +10,23 @@ signedness.
 """
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any, NamedTuple, Sequence
 
 from . import addresses as addr
 from .._bytemaker_compat import Entry
 from .addresses import EWRAM
 from .backend import GuardedWrite, RamBackend
 from .structures import SoulPair
+
+
+class PlayState(NamedTuple):
+    """The values the play-data log records, as :meth:`AoSRAM.read_play_data` returns them."""
+
+    play_frames: int
+    weapon: int   # the equipped weapon's id within its category
+    armor: int    # the equipped armor's id within its category
+    souls: frozenset[tuple[str, int]]  # every soul owned, as (item_info category, id)
+    drops_seen: tuple[frozenset[int], frozenset[int]]  # enemy ids, for drop slot 1 and slot 2
 
 
 class AoSRAM:
@@ -219,6 +229,35 @@ class AoSRAM:
         The client tick reads it to tell a loaded file from one that is still loading.
         """
         return await self._fetch(addr.MAX_HP)
+
+    async def read_play_data(self) -> PlayState:
+        """
+        Return the play timer, the equipped weapon and armor, the souls owned and the drop-seen
+        bits, in one read.
+
+        A soul counts as owned when its total over both of its lists is above 0, the total
+        :meth:`owned_count` gives. The drop-seen fields number their bits like the defeated field.
+        """
+        arrays = [array for array in addr.INVENTORY.values() if array.nibble_packed]
+        lists = [entry for array in arrays for entry in (array.entry, array.second)
+                 if entry is not None]
+        frames, gear, seen_1, seen_2, *values = await self.read_group(
+            addr.PLAY_TIMER, addr.GEAR, addr.DROP_1_SEEN, addr.DROP_2_SEEN, *lists)
+        values = iter(values)
+        souls = set()
+        for array in arrays:
+            first = next(values)
+            second = next(values) if array.second is not None else None
+            for index in range(array.length):
+                which = "odd" if index % 2 else "even"
+                total = getattr(first[index // 2], which)
+                if second is not None:
+                    total += getattr(second[index // 2], which)
+                if total:
+                    souls.add((array.name, index))
+        return PlayState(frames, gear.weapon, gear.armor, frozenset(souls),
+                         (frozenset(self.defeated_enemy_ids(seen_1)),
+                          frozenset(self.defeated_enemy_ids(seen_2))))
 
     # --- DeathLink ----------------------------------------------------------
     async def request_kill(self) -> None:

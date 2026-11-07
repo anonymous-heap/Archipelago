@@ -306,8 +306,8 @@ class ClientTest(unittest.IsolatedAsyncioTestCase):
 
     def ctx(self, server_locations, items_handling: int = ITEMS_INCLUDING_OWN, items=(),
             slot_data=None):
-        return SimpleNamespace(server_locations=set(server_locations), slot=1,
-                               items_handling=items_handling, items_received=list(items),
+        return SimpleNamespace(server_locations=set(server_locations), checked_locations=set(),
+                               slot=1, items_handling=items_handling, items_received=list(items),
                                slot_data=slot_data or {}, send_msgs=mock.AsyncMock())
 
     async def test_each_first_defeat_the_server_tracks_is_sent(self):
