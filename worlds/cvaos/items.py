@@ -9,6 +9,7 @@ from typing import Dict, List, NamedTuple, TYPE_CHECKING
 from BaseClasses import Item, ItemClassification
 
 from .data import item_info_collection, pickup_info_collection as pickup_infos
+from .data.item_balancing import worth
 from .enemy_checks import checkable_types, enemy_check_types
 from .item_granting import ID_MAX, TransferCategory, pack
 from .options import ForbiddenAreaButton, hard_mode_pickups_included
@@ -172,12 +173,22 @@ _SEALSWITCH_DISPLACES: str = min(
     (p for p in pickup_infos if p.subtype_num == _MONEY_SUBTYPE and not p.is_hard_mode_only),
     key=lambda p: int(p.simple_name)).item_name
 
-# Plain filler that every seed can hold: the filler items of the pickups that exist outside Hard
-# Mode. An item appears once for each such pickup, so CVAOSWorld.get_filler_item_name picks an item
-# as often as the castle holds it.
+
+def _cheap_consumable_or_gold(name: str) -> bool:
+    row = worth.by_name.get(name)
+    return (row is not None and row.category in ("consumable", "money")
+            and row.worth <= worth.CHEAP_WORTH)
+
+
+# Plain filler that every seed can hold: the consumables and gold of the pickups that exist outside
+# Hard Mode, each worth no more than worth.CHEAP_WORTH. Core pads item links with this draw, so it
+# holds nothing better than what the castle's own pickups offer a quarter of the way in. An item
+# appears once for each such pickup, so CVAOSWorld.get_filler_item_name picks an item as often as
+# the castle holds it.
 FILLER_ITEM_NAMES: tuple[str, ...] = tuple(sorted(
     p.item_name for p in pickup_infos
-    if not p.is_hard_mode_only and item_table[p.item_name].classification == ItemClassification.filler))
+    if not p.is_hard_mode_only and item_table[p.item_name].classification == ItemClassification.filler
+    and _cheap_consumable_or_gold(p.item_name)))
 
 
 def create_item(world: "CVAOSWorld", name: str) -> CVAOSItem:
