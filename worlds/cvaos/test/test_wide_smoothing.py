@@ -174,6 +174,29 @@ class TradeTest(unittest.TestCase):
         self.assertEqual(placement_hash(multiworld), before)
 
 
+class RestoreTest(unittest.TestCase):
+    def test_a_round_that_fails_the_check_is_put_back_without_breaking_an_item_rule(self):
+        # Player 1 keeps its armor and accessories local, so player 2's locations reject them. The
+        # accessibility check is made to fail, so the round must be put back. On this seed, moving
+        # only the breakers back would put some of those items in player 2's world.
+        local = {**PRESET, "local_items": ["Armor", "Accessories"]}
+        multiworld = generate(5, [(GAME, local), (GAME, PRESET)], skip_balancing=True)
+        held = {location: location.item for location in multiworld.get_filled_locations()}
+        worlds = [multiworld.worlds[1], multiworld.worlds[2]]
+        for world in worlds:
+            world.wide_report = wide_smoothing.WideReport()
+        with mock.patch.object(wide_smoothing, "accessible", return_value=False):
+            wide_smoothing._order_round(multiworld, worlds)
+        self.assertTrue(any(held[location] is not item for world in worlds
+                            for location, item in world.wide_report.orders[0].placed.items()))
+        self.assertEqual([world.wide_report.restores for world in worlds], [1, 1])
+        broken = [f"{location.player}:{location.name} <- {location.item.name}"
+                  for location in multiworld.get_filled_locations()
+                  if not location.item_rule(location.item)]
+        self.assertEqual(broken, [])
+        self.assertTrue(all(location.item is item for location, item in held.items()))
+
+
 class BridgeTest(unittest.TestCase):
     """The bridge: Wide's own calls to core's progression balancing, and their guards."""
 

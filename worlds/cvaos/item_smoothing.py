@@ -18,7 +18,7 @@ Every pass here runs only when the ``item_smoothing`` option is on:
 
 A world with Wide Item Smoothing on skips ``smooth_placed_items``, because ``wide_smoothing``
 reorders its items instead. That module also uses several helpers from this one, such as
-``region_depth``, ``jittered`` and ``restore_breakers``.
+``region_depth`` and ``jittered``.
 
 ``take_smoothing_items`` holds the souls and books out of the multiworld pool in create_items.
 The pre_fill passes place them, and any they cannot place go into the pool for the main fill.

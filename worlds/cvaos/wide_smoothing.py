@@ -32,7 +32,7 @@ the order is undone for that player.
 Moving a breaker can change what logic reaches. So before anything else, the order keeps a breaker
 of each kind at the location where logic first reaches one (see ``_pin``). Logic then reaches every
 location no later than before, so the accessibility check after the order should never have to put
-the breakers back.
+the round's items back.
 
 After the order, the early floor makes sure each player holds early weapons and armor as good as
 the castle's own pickups offer at that point (see ``RUNGS`` and ``_floor_player``). The order alone
@@ -64,7 +64,7 @@ from .data.item_balancing import worth
 from .drop_shuffle import EQUIPMENT_CATEGORIES, DropSlot, SlotKey
 from .enemy_checks import enemy_id_for_location
 from .item_smoothing import (PARAMS_BY_KEY, UNREACHED_DEPTH, SmoothingParams, accessible,
-                             category, jittered, region_depth, restore_breakers)
+                             category, jittered, region_depth)
 from .items import logic_only_progression_names
 from .locations import CVAOSLocation, pickup_location_ids
 from .regions import breakers
@@ -234,8 +234,7 @@ class OrderResult:
     undone: bool = False               # some location had no remaining item and no trade, so
                                        # every item went back
     pinned: List[Location] = field(default_factory=list)  # the locations _pin gave a breaker
-    # Each breaker among the order's items, with the location that held it before the order.
-    breaker_homes: List[Tuple[Item, Location]] = field(default_factory=list)
+    before: Dict[Location, Item] = field(default_factory=dict)  # their items before the order
 
 
 @dataclass
@@ -243,7 +242,8 @@ class WideReport:
     """What Wide Item Smoothing did for one player."""
 
     orders: List[OrderResult] = field(default_factory=list)  # one per round, in order
-    restores: int = 0                  # rounds in which the breakers went back to their homes
+    restores: int = 0                  # rounds that failed the accessibility check and were
+                                       # put back as they were before the round
     floor: Optional["FloorResult"] = None
 
 
@@ -444,11 +444,9 @@ def _order_player(multiworld: MultiWorld, world: "CVAOSWorld", room: Walk,
     every location gets back the item it held before.
     """
     positions = _order_locations(multiworld, world.player, Clock(multiworld, world.player, room))
-    result = OrderResult(positions)
     locations = list(positions)
     before = {location: location.item for location in locations}
-    result.breaker_homes = [(item, location) for location, item in before.items()
-                            if _is_breaker(item)]
+    result = OrderResult(positions, before=before)
     items = list(before.values())
     params = PARAMS_BY_KEY[world.options.item_smoothing.current_key]
     targets = _targets(items, params, world.random)
@@ -473,18 +471,25 @@ def _order_round(multiworld: MultiWorld, worlds: List["CVAOSWorld"]) -> None:
 
     One walk on the room clock gives every player's positions, and one walk on the logic clock
     decides every player's pins. With the pins, logic reaches every location no later than before,
-    so the accessibility check that follows should always pass. If it fails, the breakers go back
-    to the locations they held before this round, and every player's report counts the restore.
+    so the accessibility check that follows should always pass. Only a breaker can change what
+    logic reaches, so the check runs only when the round's items include one.
+
+    If the check fails, every location in the round gets back the item it held before the round,
+    and every player's report counts the restore. Each order moves only its own player's items
+    among the locations that hold them, so this puts back exactly the placements from before the
+    round, and it breaks no item rule that those placements kept.
     """
     room = walk(multiworld, room_clock=True)
     logic = walk(multiworld, room_clock=False)
-    homes: List[Tuple[Item, Location]] = []
+    before: Dict[Location, Item] = {}
     for world in worlds:
         result = _order_player(multiworld, world, room, logic)
         world.wide_report.orders.append(result)
-        homes += result.breaker_homes
-    if homes and not accessible(multiworld):
-        restore_breakers(homes)
+        before.update(result.before)
+    if any(_is_breaker(item) for item in before.values()) and not accessible(multiworld):
+        for location, item in before.items():
+            location.item = item
+            item.location = location
         for world in worlds:
             world.wide_report.restores += 1
 
