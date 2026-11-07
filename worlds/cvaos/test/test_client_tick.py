@@ -58,6 +58,12 @@ class TickSaveBlockGateTest(unittest.IsolatedAsyncioTestCase):
             return run
 
         self.client._send_location_checks = recorder("checks")
+        self.from_another_seed = False
+
+        async def save_check(ctx, ram) -> bool:
+            return self.from_another_seed
+
+        self.client._save_from_another_seed = save_check  # tested in test_save_guard
 
         async def ignore(ctx, ram) -> None:
             pass
@@ -76,6 +82,11 @@ class TickSaveBlockGateTest(unittest.IsolatedAsyncioTestCase):
     async def test_loaded_file_in_normal_play_runs_everything(self) -> None:
         await self.tick(INGAME, NORMAL, max_hp=250)
         self.assertEqual(self.ran, ["checks", "items", "progressive", "goal"])
+
+    async def test_a_save_from_another_seed_sends_no_checks_and_no_goal(self) -> None:
+        self.from_another_seed = True
+        await self.tick(INGAME, NORMAL, max_hp=250)
+        self.assertEqual(self.ran, ["items", "progressive"])
 
     async def test_normal_play_with_an_unloaded_save_block_runs_nothing(self) -> None:
         # The live-observed trap: in-gameplay bytes, zeroed save block.

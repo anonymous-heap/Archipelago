@@ -335,6 +335,7 @@ class DeathLinkTickTest(unittest.IsolatedAsyncioTestCase):
         for concern in ("_send_location_checks", "_report_position", "_report_exploration",
                         "_receive_items", "_grant_progressive_movement", "_report_goal"):
             setattr(client, concern, mock.AsyncMock())
+        client._save_from_another_seed = mock.AsyncMock(return_value=False)
         return client
 
     def setUp(self) -> None:

@@ -6,7 +6,8 @@ Transport-neutral per-tick client logic for Castlevania: Aria of Sorrow.
 state, and its ``_tick`` runs one private helper per task. Those helpers send location checks,
 grant received items and Progressive Movement souls, relay DeathLink, and report the goal. They
 also keep Soma's position and the explored map in data storage, where the map tracker reads
-them; Universal Tracker's map reads the position too.
+them; Universal Tracker's map reads the position too. A save from another seed sends no checks
+and reports no goal.
 
 The logic reaches the game only through ``AoSRAM``, on whichever transport backend the caller
 chose, and reaches Archipelago only through ``CommonContext``. It therefore works the same in
@@ -63,6 +64,15 @@ def items_handling_for(identifier: bytes) -> int:
 # (each grant is a few emulator round-trips). Leftovers are picked up on the following ticks.
 MAX_ITEMS_PER_TICK = 10
 
+# The field that marks the client's received-items probe, a Get the server echoes in its
+# Retrieved reply (see _save_from_another_seed).
+RECEIVED_ITEMS_PROBE = "cvaos_received_items_probe"
+
+FOREIGN_SAVE_WARNING = (
+    "This save belongs to another seed, or is New Game+ started from one: it has received more "
+    "items than this seed has sent. The client sends no checks from this save, so load this "
+    "seed's save or start a new game.")
+
 
 class CVAOSClientLogic:
     """Per-session state and per-tick game logic, shared by both clients."""
@@ -73,6 +83,12 @@ class CVAOSClientLogic:
     currently_dead: bool | None
     time_of_sent_death: float | None
     goaled: bool
+    warned_foreign_save: bool
+
+    # The server connections (``ctx.server``) that the received-items probe was sent on and
+    # answered on. A new connection is a new object, so neither carries over to it.
+    items_probe_sent_on: object = None
+    items_complete_on: object = None
 
     def _reset_session_state(self, *, same_seed: bool = False) -> None:
         # Reset per-session state so swapping ROMs/games without restarting the client can't
@@ -96,6 +112,8 @@ class CVAOSClientLogic:
         self.time_of_sent_death = None
         # Goal: latched True once we've reported completion, so we report it only once.
         self.goaled = False
+        # Whether the warning about a save from another seed is showing, so it is printed once.
+        self.warned_foreign_save = False
         # The position and the map cell last sent, and when the position was sent, so a new
         # session sends both again.
         self.last_position = None
@@ -121,6 +139,22 @@ class CVAOSClientLogic:
             # in a menu) kill him once, not once each after every respawn.
             source = data.get("source", "Another world")
             self.death_causes = [data.get("cause") or f"{source} killed you without a word!"]
+
+    def track_received_items(self, ctx: "CommonContext", cmd: str, args: dict) -> None:
+        """
+        Note when the client holds every item the server has sent, for _save_from_another_seed.
+
+        The server answers the received-items probe only after the items it sent before, so the
+        answer marks the list as complete on this connection. A ReceivedItems packet whose index
+        does not match the list's length makes CommonClient discard it and ask the server for
+        every item again. Until a new probe is answered after that, the list is not known to be
+        complete.
+        """
+        if cmd == "Retrieved" and args.get(RECEIVED_ITEMS_PROBE):
+            self.items_complete_on = ctx.server
+        elif cmd == "ReceivedItems" and len(ctx.items_received) != (
+                args.get("index", 0) + len(args.get("items", ()))):
+            self.items_probe_sent_on = self.items_complete_on = None
 
     async def _tick(self, ctx: "CommonContext", ram: AoSRAM) -> None:
         # Read the run state and relay DeathLink every tick. The work that needs normal gameplay
@@ -155,12 +189,51 @@ class CVAOSClientLogic:
         # the load overwrites the advanced counter, the item is given again next tick. Max HP sits
         # in the same block and is never 0 for a loaded file, so it tells the two apart.
         if in_gameplay and await ram.get_max_hp() > 0:
-            await self._send_location_checks(ctx, ram)
+            # A save from another seed sends no checks and reports no goal, because either would
+            # count for this seed and could release other players' items for good.
+            from_another_seed = await self._save_from_another_seed(ctx, ram)
+            if not from_another_seed:
+                await self._send_location_checks(ctx, ram)
             await self._report_position(ctx, ram)
             await self._report_exploration(ctx, ram)
             await self._receive_items(ctx, ram)
             await self._grant_progressive_movement(ctx, ram)
-            await self._report_goal(ctx, ram)
+            if not from_another_seed:
+                await self._report_goal(ctx, ram)
+
+    async def _save_from_another_seed(self, ctx: "CommonContext", ram: AoSRAM) -> bool:
+        """
+        Return True while the save's received-item counter is ahead of the items the server sent.
+
+        Only this seed's items advance the counter, so a save whose counter is ahead belongs to
+        another seed. New Game+ keeps the counter and the Enemy List, so it carries a finished
+        seed's counter into a fresh-looking file. A brand-new save starts at 0 and is never ahead.
+
+        The counter is also ahead for a moment after connecting, while the server's items are
+        still arriving. Holding checks then is harmless, because they are sent once the items
+        arrive. The warning waits until the item list is known to be complete. For that, the
+        client sends a probe that the server answers after the items it has sent (see
+        track_received_items), and it warns only if the counter is still ahead then. As soon as
+        the counter is no longer ahead, checks are sent again.
+        """
+        from CommonClient import logger
+
+        if await ram.get_received_count() <= len(self._grantable_items(ctx)):
+            if self.warned_foreign_save:
+                self.warned_foreign_save = False
+                logger.info("The loaded save matches this seed, so the client sends its checks "
+                            "again.")
+            return False
+        # Ask once per connection whether the item list is complete, and warn once it is.
+        complete = self.items_complete_on is not None and self.items_complete_on is ctx.server
+        if not complete:
+            if self.items_probe_sent_on is not ctx.server:
+                self.items_probe_sent_on = ctx.server
+                await ctx.send_msgs([{"cmd": "Get", "keys": [], RECEIVED_ITEMS_PROBE: True}])
+        elif not self.warned_foreign_save:
+            self.warned_foreign_save = True
+            logger.warning(FOREIGN_SAVE_WARNING)
+        return True
 
     async def _report_position(self, ctx: "CommonContext", ram: AoSRAM) -> None:
         # Keep Soma's room and position in data storage for the trackers' maps. The tracker's map
@@ -242,8 +315,8 @@ class CVAOSClientLogic:
 
         items = self._grantable_items(ctx)
         received = await ram.get_received_count()
-        # Defensive: a counter ahead of everything the server has ever sent could only come from a
-        # corrupt save; clamp so we never index past the items (a real grant rewrites it).
+        # A counter ahead of everything the server has sent marks a save from another seed
+        # (_save_from_another_seed). Clamp it so we never index past the items.
         received = min(received, len(items))
         granted_this_tick = 0
         while received < len(items) and granted_this_tick < MAX_ITEMS_PER_TICK:

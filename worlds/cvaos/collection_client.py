@@ -690,6 +690,7 @@ class CVAOSCollectionContext(CommonContext):
                     "This seed's target platform is GBA (BizHawk). You can play it in the Advance "
                     "Collection, but the intended client is the BizHawk Client.")
         self.brain.queue_deathlink_from_bounce(self, cmd, args)
+        self.brain.track_received_items(self, cmd, args)
 
     def run_gui(self) -> None:
         from kvui import GameManager

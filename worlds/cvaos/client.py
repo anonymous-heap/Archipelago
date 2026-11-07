@@ -118,6 +118,7 @@ class CVAOSClient(CVAOSClientLogic, BizHawkClient):
                     "This seed's target platform is the Steam Advance Collection. You can play it "
                     "in BizHawk, but the intended client is the CVAoS Collection Client.")
         self.queue_deathlink_from_bounce(ctx, cmd, args)
+        self.track_received_items(ctx, cmd, args)
 
     async def game_watcher(self, ctx: "BizHawkClientContext") -> None:
         if ctx.server is None or ctx.slot is None:
