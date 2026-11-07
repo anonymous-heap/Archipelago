@@ -1,6 +1,6 @@
 """
-The transdoor override file: a row that removes or adds a crossing must name its doors exactly,
-and a removal must match a crossing in the default table.
+Tests for the transdoor override file. A row that removes or adds a crossing must name its doors
+exactly, and a removal must match a crossing in the default table.
 
     python -m pytest worlds/cvaos/test/test_transdoor_overrides.py -v
 """

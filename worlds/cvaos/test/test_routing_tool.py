@@ -2,7 +2,7 @@
 Tests for the offline route solver in ``tools/routing``.
 
 The solver's graph must have the same nodes and edges as the regions that generation builds, so
-the last test compares what each can reach from the start.
+GenerationAgreementTest compares which pickups each one reaches from the start.
 
     python -m pytest worlds/cvaos/test/test_routing_tool.py -v
 """
@@ -146,7 +146,7 @@ class QueryTest(unittest.TestCase):
 
 
 class SphereTest(unittest.TestCase):
-    def test_every_soul_in_the_map_is_a_pickup_and_matches_generation(self) -> None:
+    def test_every_soul_the_solver_grants_is_a_pickup_and_matches_generation(self) -> None:
         pickup_names = {pickup.simple_name for pickup in pickup_info_collection}
         for name, ability in _SOUL_NAME_TO_ABILITY.items():
             self.assertIn(name, pickup_names)
@@ -185,8 +185,8 @@ class GenerationAgreementTest(unittest.TestCase):
     location.
 
     Each item set becomes the solver's ``have_mask`` through ``ability_mask_for_item``. Kick and
-    Chronomage have no item, so generation never meets them, and the mask leaves them out.
-    Generation meets Tform by reaching a Devil or Manticore, so the solver adds Tform once its
+    Chronomage have no item, so generation never satisfies them, and the mask leaves them out.
+    Generation satisfies Tform by reaching a Devil or Manticore, so the solver adds Tform once its
     search reaches one of their enemy nodes, and then searches again.
 
     The true-ending gate stays closed in generation without the Ancient Books, and the solver's

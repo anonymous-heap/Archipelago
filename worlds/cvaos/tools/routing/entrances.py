@@ -26,9 +26,9 @@ The graph has three kinds of edge:
   off.
 
 The searches compare masks bit by bit and do not resolve them against options. A technique bit
-such as Enemy is met only when the searched ``have_mask`` holds it. The Tform bit is the same,
-while generation meets Tform by reaching a Devil or Manticore. Generation never meets Kick or
-Chronomage, because neither soul is an item.
+such as Enemy is satisfied only when the searched ``have_mask`` holds it. The same goes for the
+Tform bit, although generation satisfies Tform by reaching a Devil or Manticore. Generation never
+satisfies Kick or Chronomage, because neither soul is an item.
 
 :class:`RoutingQueries` searches the graph. It finds the nodes reachable with a given set of
 abilities, and the subset-minimal sets of abilities for reaching each node.

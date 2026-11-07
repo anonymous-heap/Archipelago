@@ -9,7 +9,7 @@ when a round reaches no new pickup.
 Each pickup grants the abilities of its item in the unrandomized game, so the spheres describe
 the vanilla item placement. An ability soul such as Malphas grants its ability, which is DJump
 for Malphas. An item that breaks ceilings or floors, such as Balmung, grants Ceil or Floor,
-because generation meets those bits with such an item.
+because generation satisfies those bits with such an item.
 
 The Kick and Tform souls come only from enemies, and the Chronomage soul has no pickup, so no
 pickup grants Kick, Tform or Chronomage. Pass them in ``initial_have_mask`` to assume them.
@@ -53,7 +53,7 @@ _SOUL_NAME_TO_ABILITY: dict[str, AbilityCombo] = {
     "Galamoth":        AbilityCombo.Galamoth,
 }
 
-# Ceil and Floor for each item that breaks ceilings or floors, which is how regions.py meets them.
+# Ceil and Floor for each item that breaks ceilings or floors, as regions.py satisfies those bits.
 _BREAKER_ABILITIES: dict[str, ReqMask] = {
     info.name: (int(AbilityCombo.Ceil) if info.breaks_ceilings else 0)
     | (int(AbilityCombo.Floor) if info.breaks_floors else 0)
