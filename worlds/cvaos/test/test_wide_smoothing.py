@@ -12,19 +12,26 @@ Sorrow slot keeps weapons local and armor non-local.
 from __future__ import annotations
 
 import hashlib
+import os
 import unittest
 from argparse import Namespace
 
 import Main
-from BaseClasses import MultiWorld, PlandoOptions
+from BaseClasses import ItemClassification, MultiWorld, PlandoOptions
 from worlds.AutoWorld import AutoWorldRegister
 
 from .. import CVAOSWorld
+from ..data.item_balancing import worth
+from ..wide_smoothing import BAND, _is_defeat, promote_mid_game_gear
 
 GAME = CVAOSWorld.game
+PRESET = {"enemy_checks": "all", "soul_shuffle": "matched", "enemy_drop_rate": 350,
+          "wide_item_smoothing": True}
+SCENARIOS = bool(os.environ.get("CVAOS_WIDE_SCENARIOS"))
 
 
-def generate(seed: int, players: list[tuple[str, dict]], skip_balancing: bool = False) -> MultiWorld:
+def generate(seed: int, players: list[tuple[str, dict]],
+             skip_balancing: bool = False) -> MultiWorld:
     """Generate a multiworld through Main.main, without output, and return it.
 
     Each player is a game name and that player's options. Options left out take their defaults.
@@ -55,14 +62,73 @@ class WideOffTest(unittest.TestCase):
     # Placement hashes from the world as it was before Wide Item Smoothing existed. With the option
     # off, the same seed and options place every item as they did then.
     BEFORE_WIDE = (
-        (2, [(GAME, {"enemy_checks": "all", "item_smoothing_order": "spheres"})], "b344c1c3fcf61cdc"),
-        (4, [(GAME, {"enemy_checks": "all"}), (GAME, {"item_smoothing": "loose"})], "a4b0d8ade57b654c"),
+        (2, [(GAME, {"enemy_checks": "all", "item_smoothing_order": "spheres"})],
+         "b344c1c3fcf61cdc"),
+        (4, [(GAME, {"enemy_checks": "all"}), (GAME, {"item_smoothing": "loose"})],
+         "a4b0d8ade57b654c"),
     )
 
     def test_seeds_with_wide_off_place_items_as_before(self):
         for seed, players, expected in self.BEFORE_WIDE:
             with self.subTest(seed=seed):
                 self.assertEqual(placement_hash(generate(seed, players)), expected)
+
+
+class PoolTest(unittest.TestCase):
+    def test_mid_game_filler_gear_becomes_useful(self):
+        world = generate(1, [(GAME, {})]).worlds[1]
+        pool = [world.create_item(name) for name in ("Samurai Armor", "Gungner", "Copper Plate",
+                                                     "Potion")]
+        promote_mid_game_gear(pool)
+        self.assertEqual([item.classification for item in pool],
+                         [ItemClassification.useful, ItemClassification.useful,
+                          world.create_item("Copper Plate").classification,
+                          ItemClassification.filler])
+
+
+class WideScenario:
+    """The mechanisms every scenario asserts. A subclass names its players and seeds."""
+
+    PLAYERS: list[tuple[str, dict]] = []
+    SEEDS: tuple[int, ...] = ()
+    runs: list[MultiWorld]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.runs = [generate(seed, cls.PLAYERS) for seed in cls.SEEDS]
+
+    def wide_worlds(self):
+        for multiworld in self.runs:
+            for world in multiworld.get_game_worlds(GAME):
+                if world.options.wide_item_smoothing:
+                    yield multiworld, world
+
+    def test_every_unlocked_location_accepts_its_item(self):
+        for multiworld in self.runs:
+            broken = [f"{loc.player}:{loc.name} <- {loc.item.name}"
+                      for loc in multiworld.get_filled_locations()
+                      if not loc.locked and not loc.can_fill(multiworld.state, loc.item, False)]
+            self.assertEqual(broken, [], multiworld.seed)
+
+    def test_nothing_sits_above_the_band_except_counted_placements(self):
+        for multiworld, world in self.wide_worlds():
+            for order in world.wide_report.orders:
+                above = [loc.name for loc, item in order.placed.items()
+                         if worth.item_worth(item.name) > order.positions[loc] + BAND]
+                self.assertLessEqual(len(above), order.over_band, (multiworld.seed, above))
+
+
+class WideDuoTest(WideScenario, unittest.TestCase):
+    PLAYERS = [(GAME, PRESET), (GAME, PRESET)]
+    SEEDS = (1,)
+
+    def test_the_order_covers_pickups_defeats_and_items_abroad(self):
+        for _multiworld, world in self.wide_worlds():
+            dealt = world.wide_report.orders[-1].positions
+            self.assertTrue(any(loc.player == world.player and _is_defeat(loc) for loc in dealt))
+            self.assertTrue(any(loc.player == world.player and not _is_defeat(loc)
+                                for loc in dealt))
+            self.assertTrue(any(loc.player != world.player for loc in dealt))
 
 
 if __name__ == "__main__":

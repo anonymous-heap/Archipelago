@@ -943,6 +943,7 @@ def _place_in_band(book: Item, bands: List[List[Location]], index: int,
 def smooth_placed_items(multiworld: MultiWorld, game: str) -> None:
     """
     Reorder the placed items of every ``game`` world with smoothing on, after the main fill.
+    Worlds with Wide Item Smoothing on are left to ``wide_smoothing``.
 
     For each world, ``smoothable_locations_in_order`` gives the locations whose items may move,
     earliest first, and ``_assign_targets`` gives each of their items a target. The items are then
@@ -954,7 +955,8 @@ def smooth_placed_items(multiworld: MultiWorld, game: str) -> None:
     gave them, and the other items keep their new locations.
     """
     worlds = [world for world in multiworld.get_game_worlds(game)
-              if world.options.item_smoothing.current_key != "off"]
+              if world.options.item_smoothing.current_key != "off"
+              and not world.options.wide_item_smoothing]
     if not worlds:
         return
     spheres = list(multiworld.get_spheres())

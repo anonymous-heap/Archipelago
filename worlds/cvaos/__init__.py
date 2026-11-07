@@ -327,6 +327,9 @@ class CVAOSWorld(World):
     def create_items(self) -> None:
         from .item_smoothing import take_smoothing_items
         itempool = create_itempool(self)
+        if self.options.wide_item_smoothing:
+            from .wide_smoothing import promote_mid_game_gear
+            promote_mid_game_gear(itempool)
         # Hold back the items smoothing places in pre_fill, because the pool must not change after
         # create_items.
         self._smoothing_items = take_smoothing_items(self, itempool)
@@ -388,14 +391,17 @@ class CVAOSWorld(World):
         # the run, keeping only the swaps that leave the multiworld's accessibility intact. It then
         # reorders the placed non-progression items and the ceiling and floor breakers, so weaker
         # items come earlier and stronger ones later. If that order breaks accessibility,
-        # smooth_placed_items puts the breakers back where the main fill placed them.
+        # smooth_placed_items puts the breakers back where the main fill placed them. Slots with
+        # Wide Item Smoothing on get its wider order instead.
         from .item_smoothing import (refine_ancient_books, refine_soul_positions,
                                      smooth_placed_items)
+        from . import wide_smoothing
         for world in multiworld.get_game_worlds(cls.game):
             if world.options.item_smoothing.current_key != "off":
                 refine_soul_positions(world)
                 refine_ancient_books(world)
         smooth_placed_items(multiworld, cls.game)
+        wide_smoothing.run(multiworld, cls.game)
 
     def extend_hint_information(self, hint_data: dict[int, dict[int, str]]) -> None:
         # A hint for a defeat location names the rooms where its enemy appears. The text depends
