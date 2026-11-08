@@ -11,7 +11,7 @@ from __future__ import annotations
 from ..data import area_names, map_info, pickup_info_collection
 from ..data.room_info import by_identifier as rooms_by_identifier
 from ..locations import location_name_to_id
-from ..tracker_map import REALM_AREA, ROOM_CELL, cell_position, defeat_pins
+from ..tracker_map import REALM_AREA, ROOM_CELL, cell_position, defeat_pins, defeat_spawn_spots
 
 EDGE_KINDS = {map_info.HIDDEN_DOOR: "hidden", map_info.DOOR: "door", map_info.WALL: "wall"}
 
@@ -61,7 +61,10 @@ def _locations() -> list[dict]:
     """Return each location with the spots where its pins go.
 
     A pickup has one spot. A defeat location has one in each room where its enemy appears, as
-    tracker_map.defeat_pins places them. A location's own room, area, x and y are its first spot's.
+    tracker_map.defeat_pins places them. A defeat spot also lists ``spawns``: every place in that
+    room where its pin can go, its own place first (tracker_map.defeat_spawn_spots). The page draws
+    the pin at the first of those that Soma has explored. A location's own room, area, x and y are
+    its first spot's.
 
     The list is the same for every seed. The page hides each location that the seed lacks, such as
     every defeat location when enemy checks are off.
@@ -72,11 +75,16 @@ def _locations() -> list[dict]:
         locations.append({"id": location_name_to_id[pickup.location_name],
                           "name": pickup.location_name,
                           "spots": [_spot(pickup.room_identifier, cell)]})
+    spawns = defeat_spawn_spots()
     for name, spots in defeat_pins():
         locations.append({"id": location_name_to_id[name], "name": name,
-                          "spots": [_spot(room, cell) for room, cell in spots]})
+                          "spots": [dict(_spot(room, cell),
+                                         spawns=[[round(x, 3), round(y, 3)]
+                                                 for x, y in spawns[(name, room)]])
+                                    for room, cell in spots]})
     for location in locations:
-        location.update(location["spots"][0])
+        first = location["spots"][0]
+        location.update(room=first["room"], area=first["area"], x=first["x"], y=first["y"])
     return locations
 
 

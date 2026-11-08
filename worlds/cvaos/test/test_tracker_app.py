@@ -24,6 +24,7 @@ from NetUtils import HintStatus, NetworkItem, NetworkSlot, SlotType
 from websockets.exceptions import InvalidStatus
 
 from .. import CVAOSWorld, exploration, tracker_app
+from ..data import map_info
 from ..data.room_info import by_identifier as rooms_by_identifier
 from ..exploration import Exploration
 from ..locations import location_name_to_id
@@ -58,6 +59,22 @@ class MapDataTest(unittest.TestCase):
     def test_every_location_has_a_pin(self):
         self.assertEqual(sorted(location["id"] for location in self.data["locations"]),
                          sorted(location_name_to_id.values()))
+
+    def test_a_defeat_pin_can_go_wherever_its_enemy_appears_in_the_room(self):
+        # Axe Armor appears three times in room 009. Its pin's own place is up the stairs, and the
+        # other two are on the bottom floor, where a player meets one first.
+        location = next(each for each in self.data["locations"]
+                        if each["name"] == "Defeat Axe Armor")
+        spot = next(each for each in location["spots"] if each["room"] == "009")
+        self.assertEqual(spot["spawns"][0], [spot["x"], spot["y"]])
+        self.assertIn((13, 21), {(int(x), int(y)) for x, y in spot["spawns"]})
+
+    def test_every_place_a_defeat_pin_can_go_is_in_its_own_room(self):
+        for location in self.data["locations"]:
+            for spot in location["spots"]:
+                for x, y in spot.get("spawns", []):
+                    with self.subTest(location=location["name"], room=spot["room"], spawn=(x, y)):
+                        self.assertEqual(map_info.room_at(int(x), int(y)), spot["room"])
 
     def test_the_chaotic_realm_comes_last(self):
         self.assertEqual([area["realm"] for area in self.data["areas"]][-1:], [True])

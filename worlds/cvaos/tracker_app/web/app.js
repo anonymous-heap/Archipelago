@@ -145,10 +145,11 @@ function keepFocusOnAKnownArea() {
 // A location's title and subtitle. A name such as "Terrace [503 CASTLE MAP 3]" is a place, then
 // the room and the item the game originally has there. The title is the place, and the subtitle
 // gives the area, the room and that item. Any other name, such as a defeat location's, becomes the
-// whole title, and the subtitle lists the areas of the location's spots.
-function describeLocation(location) {
+// whole title, and the subtitle lists the areas of the location's spots, or of just the spots
+// passed in.
+function describeLocation(location, spots = location.spots) {
   const match = /^(.*?) \[(\S+) (.*)\]$/.exec(location.name);
-  const area = [...new Set(location.spots.map((spot) => areaName(spot.area)))].join(", ");
+  const area = [...new Set(spots.map((spot) => areaName(spot.area)))].join(", ");
   if (!match) return { title: location.name, subtitle: area };
   return {
     title: match[1],
@@ -378,12 +379,25 @@ function drawnInFull(cellKey, visited) {
   return !visited || page.reveal || (rect && rect.dataset.area === REALM) || visited.has(cellKey);
 }
 
-// Whether a spot's pin shows on the map. It shows only if its cell is shown and drawn in full. A
-// greyed-out cell is one Soma hasn't visited, so its pins stay hidden even when a Castle Map shows
-// the cell.
+// Where a spot's pin goes, or null when it doesn't show. A pin shows only in a cell that is shown
+// and drawn in full. A greyed-out cell is one Soma hasn't visited, so its pins stay hidden even when
+// a Castle Map shows the cell. A defeat spot lists every place in its room where the enemy appears
+// (spawns, its own place first), so its pin shows at the first of those that Soma has explored.
+function shownPoint(spot, visible, visited) {
+  for (const [x, y] of spot.spawns || [[spot.x, spot.y]]) {
+    const cell = key(Math.floor(x), Math.floor(y));
+    if ((!visible || visible.has(cell)) && drawnInFull(cell, visited)) return { x, y };
+  }
+  return null;
+}
+
 function spotShown(spot, visible, visited) {
-  const cell = key(Math.floor(spot.x), Math.floor(spot.y));
-  return (!visible || visible.has(cell)) && drawnInFull(cell, visited);
+  return shownPoint(spot, visible, visited) !== null;
+}
+
+// Where a spot's pin is drawn: where it shows, or its own place while it is hidden.
+function drawnPoint(spot, visible, visited) {
+  return shownPoint(spot, visible, visited) || { x: spot.x, y: spot.y };
 }
 
 // The spots of a location that show, among those in an area that inArea accepts. The sidebar and
@@ -464,9 +478,14 @@ function renderPins(visible = visibleCells()) {
     const location = locationsById.get(id);
     const hint = hinted.has(id) ? " hinted" : "";
     location.spots.forEach((spot, index) => {
-      const shown = status !== undefined && spotShown(spot, visible, visited)
+      const point = shownPoint(spot, visible, visited);
+      const shown = status !== undefined && point !== null
                     && (status !== "checked" || page.showChecked);
       pins[index].style.display = shown ? "" : "none";
+      if (point) {
+        pins[index].setAttribute("cx", point.x);
+        pins[index].setAttribute("cy", point.y);
+      }
       const focus = inFocus(spot.area) ? "" : " unfocused";
       pins[index].setAttribute("class", `pin ${spotStatus(location, spot) || ""}${hint}${focus}`);
     });
@@ -548,7 +567,11 @@ function renderRoute() {
   const target = locationsById.get(route.target);
   const endRoom = route.steps.length ? route.steps[route.steps.length - 1].room : null;
   const inEndRoom = target ? target.spots.filter((spot) => spot.room === endRoom) : [];
-  const spots = inEndRoom.length ? inEndRoom : target ? target.spots : [];
+  const visible = visibleCells();
+  const visited = visitedCells();
+  // Each spot counts where its pin is drawn, which can be another of its spawns.
+  const spots = (inEndRoom.length ? inEndRoom : target ? target.spots : [])
+    .map((spot) => drawnPoint(spot, visible, visited));
   const last = points[points.length - 1];
   const end = spots.length ? (last ? nearestSpot(spots, last) : spots[0]) : null;
   if (end) points.push([end.x, end.y]);
@@ -570,7 +593,9 @@ function renderSelectionRing() {
   if (!location || !pins) return;
   location.spots.forEach((spot, index) => {
     if (pins[index].style.display === "none") return;  // no ring around a hidden pin
-    svg("circle", { cx: spot.x, cy: spot.y, r: 0.4, class: "selection-ring" }, $("layer-pins"));
+    // The ring goes where the pin is drawn, which can be another of the spot's spawns.
+    svg("circle", { cx: pins[index].getAttribute("cx"), cy: pins[index].getAttribute("cy"),
+                    r: 0.4, class: "selection-ring" }, $("layer-pins"));
   });
 }
 
@@ -719,7 +744,10 @@ function renderSelection() {
   $("find-route").disabled = race || !location || !page.snapshot.tracking || status === undefined || status === "checked";
   $("find-route").title = race ? "Routes are off in a race room, as in Universal Tracker" : "";
   if (location) {
-    const { title, subtitle } = describeLocation(location);
+    // While unexplored cells are hidden, the subtitle names only the areas where the pin shows, so
+    // it doesn't give away where else the enemy appears.
+    const shown = shownSpots(location, visibleCells({ countRealm: true }), visitedCells());
+    const { title, subtitle } = describeLocation(location, shown.length ? shown : location.spots);
     $("sel-title").textContent = title;
     $("sel-subtitle").textContent = subtitle;
     // Until the tracker tracks a slot, it has no statuses, so the card shows none.
@@ -819,13 +847,17 @@ function renderLocationList() {
     name.textContent = describeLocation(location).title;
     const room = document.createElement("span");
     room.className = "room-id";
-    room.textContent = location.spots.length > 1 ? `${location.spots.length} rooms` : location.room;
+    // While unexplored cells are hidden, count only the rooms where the pin shows, so the list
+    // doesn't give away where else the enemy appears.
+    const counted = shownSpots(location, visible, visited);
+    room.textContent = counted.length > 1 ? `${counted.length} rooms` : counted[0].room;
     button.append(dot, name, room);
     const [spot] = shownSpots(location, visible, visited, inFocus)
       .filter((each) => spotStatus(location, each) === listed.get(location));
+    const point = drawnPoint(spot, visible, visited);
     button.addEventListener("click", () => {
       select(location.id);
-      centerOn(spot.x, spot.y);
+      centerOn(point.x, point.y);
     });
     item.appendChild(button);
     list.appendChild(item);

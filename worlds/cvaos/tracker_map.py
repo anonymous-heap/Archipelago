@@ -34,7 +34,7 @@ from typing import NamedTuple
 
 from . import tracker_png
 from .data import area_names, map_info, pickup_info_collection
-from .enemy_checks import checkable_types, defeat_location_name, pin_rooms
+from .enemy_checks import checkable_types, defeat_location_name, pin_rooms, placements_of
 from .data.room_info import by_identifier as rooms_by_identifier
 
 CELL_PIXELS = 24                 # image pixels per map cell
@@ -278,6 +278,43 @@ def defeat_pins() -> tuple[tuple[str, tuple[tuple[str, tuple[float, float]], ...
         placed.append(cell)
         pins.setdefault(name, []).append((room, cell))
     return tuple((name, tuple(spots)) for name, spots in pins.items())
+
+
+@functools.cache
+def defeat_spawn_spots() -> dict[tuple[str, str], tuple[tuple[float, float], ...]]:
+    """Return every place a defeat pin can go in its room, by location name and room.
+
+    The first place is the pin's own, from :func:`defeat_pins`. The others are the enemy's other
+    placements in that room that have a recorded position, in placement order. Each moves clear of
+    the other pins in the way :func:`defeat_pins` moves a pin. The location's own pins don't count
+    as others, because only one of a room's places is drawn at a time. A place outside the room's
+    map cells is left out, because exploring the room never reveals it.
+
+    The browser tracker draws a defeat pin at the first of these places that Soma has explored, so
+    the pin shows wherever he has seen the enemy. Universal Tracker's map uses only the first.
+    """
+    pins = defeat_pins()
+    pickups = [cell_position(pickup.room_identifier, pickup.x, pickup.y)
+               for pickup in pickup_info_collection]
+    spots: dict[tuple[str, str], tuple[tuple[float, float], ...]] = {}
+    for enemy in checkable_types():
+        name = defeat_location_name(enemy.name)
+        own = dict(next(rooms for pin_name, rooms in pins if pin_name == name))
+        others = pickups + [cell for pin_name, rooms in pins if pin_name != name for _, cell in rooms]
+        for room, first in pin_rooms(enemy.name):
+            places = [own[room]]
+            for placement in sorted(placements_of(enemy.name), key=lambda p: p.enemy_number):
+                if (placement.room != room or placement is first
+                        or (placement.x, placement.y) == (0, 0)):
+                    continue
+                start = cell_position(room, placement.x, placement.y)
+                nearby = [cell for cell in others if math.dist(start, cell) < _MAX_MOVE + PIN_SPACING]
+                place = _free_spot(room, start, nearby)
+                if (map_info.room_at(math.floor(place[0]), math.floor(place[1])) == room
+                        and place not in places):
+                    places.append(place)
+            spots[(name, room)] = tuple(places)
+    return spots
 
 
 @functools.cache
