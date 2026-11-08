@@ -394,7 +394,7 @@ the repository).
 - **Matched groups.** Under Soul Shuffle's `matched`, a soul trades places only with souls of the
   same color and tier, which `matched_group` returns.
 
-The table's columns are `soul`, `colour` (`red`, `blue`, `yellow` or `ability`), `rating`,
+The table's columns are `soul`, `color` (`red`, `blue`, `yellow` or `ability`), `rating`,
 `tier`, `raters` (how many soul lists rank it) and `rating_source`. The red soul Cagnazzo in
 `item_info.csv` has no source in the game, so it has no row. The lists' Cagnazzo is the blue
 soul.

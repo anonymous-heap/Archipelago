@@ -26,7 +26,7 @@ STRONG_RATING = 0.6
 
 class SoulTier(NamedTuple):
     soul: str
-    colour: str          # "red", "blue", "yellow" or "ability"
+    color: str          # "red", "blue", "yellow" or "ability"
     rating: float
     tier: str            # "D", "C", "B", "A" or "S"
     raters: int          # how many of the soul tier lists rank the soul
@@ -34,7 +34,7 @@ class SoulTier(NamedTuple):
 
 
 def _load() -> tuple[SoulTier, ...]:
-    return tuple(SoulTier(row["soul"], row["colour"], float(row["rating"]), row["tier"],
+    return tuple(SoulTier(row["soul"], row["color"], float(row["rating"]), row["tier"],
                           int(row["raters"]), row["rating_source"])
                  for row in open_csv(__package__, "soul_tiers.csv"))
 
@@ -52,4 +52,4 @@ def matched_group(name: str) -> tuple[str, str]:
     """Return the group that the soul named ``name`` trades places within under Soul Shuffle's
     ``matched``: its color and its tier, such as ``("red", "B")``."""
     row = by_name[name]
-    return row.colour, row.tier
+    return row.color, row.tier

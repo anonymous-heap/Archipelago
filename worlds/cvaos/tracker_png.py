@@ -38,8 +38,8 @@ def decode(data: bytes) -> tuple[int, int, bytes]:
         kind = data[position + 4:position + 8]
         body = data[position + 8:position + 8 + length]
         if kind == b"IHDR":
-            width, height, _depth, colour = struct.unpack_from(">IIBB", body)
-            channels = 4 if colour == 6 else 3
+            width, height, _depth, color = struct.unpack_from(">IIBB", body)
+            channels = 4 if color == 6 else 3
         elif kind == b"IDAT":
             compressed += body
         position += 12 + length

@@ -76,8 +76,8 @@ def scaled_rate(rate: int, percent: int) -> int:
     candidates = {max(1, min(0xFF, math.floor(ideal))), max(1, min(0xFF, math.ceil(ideal)))}
 
     def error(candidate: int) -> tuple[float, int]:
-        realised = (rate + RATE_CHANCE_BIAS) / (candidate + RATE_CHANCE_BIAS)
-        return abs(realised - wanted), candidate
+        realized = (rate + RATE_CHANCE_BIAS) / (candidate + RATE_CHANCE_BIAS)
+        return abs(realized - wanted), candidate
 
     return min(candidates, key=error)
 

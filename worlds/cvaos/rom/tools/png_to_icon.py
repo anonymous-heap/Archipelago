@@ -64,8 +64,8 @@ def decode_png_rgba(data: bytes) -> tuple[int, int, list[tuple[int, int, int, in
             break
         pos += 12 + ln
     if ct != 6 or bd != 8:
-        raise ValueError(f"expected an 8-bit RGBA PNG (colour type 6, bit depth 8), "
-                         f"got colour type {ct} with bit depth {bd}")
+        raise ValueError(f"expected an 8-bit RGBA PNG (color type 6, bit depth 8), "
+                         f"got color type {ct} with bit depth {bd}")
     if interlace != 0:
         raise ValueError("the PNG is interlaced, which is not supported; "
                          "save it again with interlacing turned off")
@@ -116,7 +116,7 @@ def derive_palette(px) -> list[int]:
         if c not in seen:
             seen.append(c)
     if len(seen) > 15:
-        raise ValueError(f"image has {len(seen)} opaque colours; 4bpp allows 15 (+transparent)")
+        raise ValueError(f"image has {len(seen)} opaque colors; 4bpp allows 15 (+transparent)")
     return [0] + seen + [0] * (15 - len(seen))
 
 

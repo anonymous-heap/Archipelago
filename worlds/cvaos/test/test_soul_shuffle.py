@@ -233,7 +233,7 @@ class TestMatched(unittest.TestCase):
         cls.plans = [ss.plan_shuffle(Random(seed), ss.MODE_MATCHED, cls.groups)
                      for seed in range(20)]
 
-    def test_souls_trade_places_only_within_their_colour_and_tier(self):
+    def test_souls_trade_places_only_within_their_color_and_tier(self):
         self.assertEqual(sorted(self.groups), ss.shuffleable_enemies(ss.MODE_MATCHED))
         for seed, plan in enumerate(self.plans):
             with self.subTest(seed=seed):

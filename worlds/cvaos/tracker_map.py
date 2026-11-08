@@ -142,8 +142,8 @@ def render(tracker: TrackerMap) -> bytes:
     width, height = tracker.size
     canvas = bytearray(bytes(BACKGROUND) * (width * height))
 
-    def fill(left: int, top: int, right: int, bottom: int, colour: tuple[int, int, int]) -> None:
-        row = bytes(colour) * (right - left)
+    def fill(left: int, top: int, right: int, bottom: int, color: tuple[int, int, int]) -> None:
+        row = bytes(color) * (right - left)
         for y in range(top, bottom):
             start = (y * width + left) * 3
             canvas[start:start + len(row)] = row
@@ -173,10 +173,10 @@ def render(tracker: TrackerMap) -> bytes:
                 continue
             palette = BRIGHT if room in tracker.rooms else DIM
             value = map_info.cell(x, y)
-            colour = (palette.save if value & map_info.SAVE_ROOM else
+            color = (palette.save if value & map_info.SAVE_ROOM else
                       palette.warp if value & map_info.WARP_ROOM else palette.room)
             left, top = origin_x + x * CELL_PIXELS, origin_y + y * CELL_PIXELS
-            fill(left, top, left + CELL_PIXELS, top + CELL_PIXELS, colour)
+            fill(left, top, left + CELL_PIXELS, top + CELL_PIXELS, color)
 
     # Point (x, y) is the top-left corner of cell (x, y). The edge to its right is that cell's top,
     # and the edge below it is that cell's left.
@@ -206,8 +206,8 @@ def render(tracker: TrackerMap) -> bytes:
                       edge_palette(map_info.left_edge(x, y - 1), (x - 1, y - 1), (x, y - 1))}
             corner.discard(None)
             if corner:
-                colour = BRIGHT.wall if BRIGHT in corner else DIM.wall
-                fill(line_x - half, line_y - half, line_x + half, line_y + half, colour)
+                color = BRIGHT.wall if BRIGHT in corner else DIM.wall
+                fill(line_x - half, line_y - half, line_x + half, line_y + half, color)
     return tracker_png.encode(width, height, bytes(canvas))
 
 
@@ -348,8 +348,8 @@ def position_icon(map_id, value):
         room = rooms_by_identifier[room_identifier]
         # As in the game's map-cell routine, Soma's cell is the room's top-left cell offset by his
         # position in the room, counted in whole cells.
-        centre = (int(room.x) + cell_x + 0.5, int(room.y) + cell_y + 0.5)
-        return (*pin(tracker.origin, centre), MARKER_FILE)
+        center = (int(room.x) + cell_x + 0.5, int(room.y) + cell_y + 0.5)
+        return (*pin(tracker.origin, center), MARKER_FILE)
     except (TypeError, ValueError, KeyError):
         return None
 

@@ -26,7 +26,7 @@ DESIRABILITY_CSV = HERE / "desirability.csv"
 ITEM_INFO_CSV = HERE.parent / "item_info" / "item_info.csv"
 OUT_CSV = HERE / "soul_tiers.csv"
 
-COLOURS = {"red_soul": "red", "blue_soul": "blue", "yellow_soul": "yellow",
+COLORS = {"red_soul": "red", "blue_soul": "blue", "yellow_soul": "yellow",
            "ability_soul": "ability"}
 # item_info.csv names a red soul Cagnazzo (id 55) that no enemy or pickup holds. The tier lists'
 # Cagnazzo is the blue soul.
@@ -45,8 +45,8 @@ def tier_of(rating: float) -> str:
 def _souls() -> Dict[str, str]:
     """Return each soul's color by its name, in item number order."""
     with ITEM_INFO_CSV.open(encoding="utf-8", newline="") as fh:
-        return {row["name"]: COLOURS[row["item_category"]] for row in csv.DictReader(fh)
-                if row["item_category"] in COLOURS
+        return {row["name"]: COLORS[row["item_category"]] for row in csv.DictReader(fh)
+                if row["item_category"] in COLORS
                 and (row["item_category"], int(row["id"])) not in UNUSED_SOULS}
 
 
@@ -76,7 +76,7 @@ def build() -> List[dict]:
     with DESIRABILITY_CSV.open(encoding="utf-8", newline="") as fh:
         desirability = {row["name"]: float(row["desirability"]) for row in csv.DictReader(fh)}
     rows = []
-    for name, colour in souls.items():
+    for name, color in souls.items():
         values = scores.get(name, [])
         if len(values) >= MIN_RATERS or (values and name not in desirability):
             rating, source = round(statistics.mean(values), DECIMALS), "soul tier lists"
@@ -84,7 +84,7 @@ def build() -> List[dict]:
             rating, source = desirability[name], "desirability"
         else:
             raise ValueError(f"no tier list rates {name}")
-        rows.append(dict(soul=name, colour=colour, rating=rating, tier=tier_of(rating),
+        rows.append(dict(soul=name, color=color, rating=rating, tier=tier_of(rating),
                          raters=len(values), rating_source=source))
     return rows
 

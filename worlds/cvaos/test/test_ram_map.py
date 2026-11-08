@@ -116,7 +116,7 @@ class FakeBackend:
         return True
 
 
-class AccessorBehaviourTest(unittest.TestCase):
+class AccessorBehaviorTest(unittest.TestCase):
     def setUp(self) -> None:
         self.mem = bytearray(0x40000)
         self.mem[0x10] = 0x04                                    # INGAME
@@ -202,7 +202,7 @@ class AccessorBehaviourTest(unittest.TestCase):
     def test_max_hp_reads_its_field_in_the_vitals_block(self):
         self.assertEqual(self.run_(self.ram.get_max_hp()), 500)
 
-    def test_nibble_give_bumps_one_soul_and_keeps_its_neighbour(self):
+    def test_nibble_give_bumps_one_soul_and_keeps_its_neighbor(self):
         self.assertTrue(self.run_(self.ram.give_item("red_soul", 4)))
         self.assertEqual(self.mem[0x1331C + 2], 0x26)
         self.assertTrue(self.run_(self.ram.give_item("red_soul", 5)))

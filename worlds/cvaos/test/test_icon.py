@@ -27,18 +27,18 @@ def _lz77_literals(data: bytes) -> bytes:
     return bytes(out)
 
 
-def _png(w: int, h: int, pixels: dict, *, colour_type: int = 6, interlace: int = 0) -> bytes:
+def _png(w: int, h: int, pixels: dict, *, color_type: int = 6, interlace: int = 0) -> bytes:
     """Encode a w x h PNG in memory, with 8-bit RGBA pixel data.
 
     ``pixels`` maps ``(x, y)`` to an RGBA tuple, and every other pixel is transparent. The
-    ``colour_type`` and ``interlace`` arguments change only the IHDR header, while the pixel data
+    ``color_type`` and ``interlace`` arguments change only the IHDR header, while the pixel data
     stays non-interlaced RGBA. That is enough for tests that expect the header to be rejected."""
     def chunk(tag: bytes, body: bytes) -> bytes:
         return struct.pack(">I", len(body)) + tag + body + struct.pack(">I", zlib.crc32(tag + body))
 
     rows = (b"\x00" + b"".join(bytes(pixels.get((x, y), (0, 0, 0, 0))) for x in range(w))
             for y in range(h))
-    ihdr = struct.pack(">IIBBBBB", w, h, 8, colour_type, 0, 0, interlace)
+    ihdr = struct.pack(">IIBBBBB", w, h, 8, color_type, 0, 0, interlace)
     return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
             + chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b""))
 
@@ -84,14 +84,14 @@ class TestIcon(unittest.TestCase):
         # With cropping, the same region is accepted, because only its opaque content must fit.
         ic.RomSprite(gfx_addr=ic.GBA_ROM_BASE, part=(32, 5, 16, 11), remap={}, crop=True)
 
-    def test_crop_centres_opaque(self):
+    def test_crop_centers_opaque(self):
         grid = [[0] * 16 for _ in range(16)]
         grid[1][1] = 5                                              # single opaque pixel near a corner
         out = fit_16x16(grid)
         self.assertEqual(sum(v != 0 for row in out for v in row), 1)
         self.assertEqual(out[7][7], 5)                              # 1x1 content centers to (7,7)
 
-    def test_image_file_quantises_and_centres(self):
+    def test_image_file_quantizes_and_centers(self):
         # Two pixels of exact bank-6 colors in a 32x32 image: gold (index 7) then white (15).
         gold, white = (bgr555_to_rgb(BANK6_PALETTE[i]) + (255,) for i in (7, 15))
         with _icon_file(_png(32, 32, {(20, 3): gold, (21, 3): white})):
@@ -106,8 +106,8 @@ class TestIcon(unittest.TestCase):
             ic.build_icon_tiles(b"", ic.ImageFile("test.png"))
 
     def test_image_file_rejects_non_rgba_png(self):
-        png = _png(16, 16, {}, colour_type=2)                       # color type 2 is RGB
-        with _icon_file(png), self.assertRaisesRegex(ValueError, "colour type 2"):
+        png = _png(16, 16, {}, color_type=2)                       # color type 2 is RGB
+        with _icon_file(png), self.assertRaisesRegex(ValueError, "color type 2"):
             ic.build_icon_tiles(b"", ic.ImageFile("test.png"))
 
     def test_image_file_rejects_content_larger_than_16x16(self):

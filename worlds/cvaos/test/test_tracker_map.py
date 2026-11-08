@@ -152,7 +152,7 @@ class TrackerMapTest(unittest.TestCase):
         self.assertEqual((castle["x"], castle["y"]), (origin_x + round(24 * (0 + 384 / 256)),
                                                       origin_y + round(24 * (19 + 184 / 256))))
 
-    def test_soma_is_marked_at_the_centre_of_his_map_cell(self):
+    def test_soma_is_marked_at_the_center_of_his_map_cell(self):
         # A point 384 by 184 pixels into room 000, which starts at cell (0, 19), lies in cell
         # (1, 19).
         castle, realm = 0, 1
@@ -236,7 +236,7 @@ class TrackerMapTest(unittest.TestCase):
         width, _, pixels = tracker_png.decode(ut_bytes(castle.img))
         origin_x, origin_y = castle.origin
         half = tracker_map.WALL_PIXELS // 2
-        for kind, colour in ((map_info.WALL, BRIGHT.wall), (map_info.DOOR, BRIGHT.door)):
+        for kind, color in ((map_info.WALL, BRIGHT.wall), (map_info.DOOR, BRIGHT.door)):
             # Find two plain cells of different rooms, side by side, with this kind of edge
             # between them.
             x, y = next((x, y) for y in range(map_info.ROWS) for x in range(map_info.COLUMNS)
@@ -249,7 +249,7 @@ class TrackerMapTest(unittest.TestCase):
                       for px in range(line_x - half - 1, line_x + half + 1)]
             with self.subTest(kind=kind, cell=(x, y)):
                 self.assertEqual(across, [bytes(BRIGHT.room)]
-                                 + [bytes(colour)] * tracker_map.WALL_PIXELS + [bytes(BRIGHT.room)])
+                                 + [bytes(color)] * tracker_map.WALL_PIXELS + [bytes(BRIGHT.room)])
 
     def test_the_map_data_matches_the_rom(self):
         rom_path = find_rom()

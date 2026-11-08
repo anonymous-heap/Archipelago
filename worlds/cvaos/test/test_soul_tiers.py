@@ -45,7 +45,7 @@ class SoulTiersTest(unittest.TestCase):
         for row in soul_tiers.rows:
             self.assertEqual(row.tier, build_soul_tiers.tier_of(row.rating), row.soul)
 
-    def test_matched_groups_by_colour_and_tier(self):
+    def test_matched_groups_by_color_and_tier(self):
         self.assertEqual(soul_tiers.matched_group("Winged Skeleton"), ("red", "B"))
         eligible = soul_shuffle.shuffleable_enemies(soul_shuffle.MODE_WITHIN_TYPE)
         groups = Counter(soul_tiers.matched_group(enemy_soul(eid)) for eid in eligible)

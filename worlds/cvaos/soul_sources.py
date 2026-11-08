@@ -73,7 +73,7 @@ def vanilla_soul_name(enemy_id: int) -> str | None:
     return soul_name(soul_type, soul_index) if soul_index else None
 
 
-def _colour(soul_type: int) -> str:
+def _color(soul_type: int) -> str:
     return SOUL_CATEGORIES[soul_type].removesuffix("_soul")
 
 
@@ -98,11 +98,11 @@ def soul_table_lines(table: bytes, grant: bytes) -> List[str]:
     for enemy, row in zip(enemy_type_collection, parse_table(table)):
         if row.soul_index:
             soul = soul_name(row.soul_type, row.soul_index)
-            lines.append(f"{enemy.name}: {soul} soul ({_colour(row.soul_type)}), "
+            lines.append(f"{enemy.name}: {soul} soul ({_color(row.soul_type)}), "
                          f"{_chance(row.soul_rate)}")
     start_type, start_index = grant[0], grant[GRANT_SIZE - 1] + 1
     lines.append(f"Starting soul: {soul_name(start_type, start_index)} soul "
-                 f"({_colour(start_type)})")
+                 f"({_color(start_type)})")
     return lines
 
 
