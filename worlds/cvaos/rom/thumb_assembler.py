@@ -11,7 +11,7 @@ Deliberately NOT a general assembler. It implements the idioms these files use a
 branches, and ``.word`` / ``.hword`` / ``.align`` / ``.pool``. This module resolves symbols, lays
 out the pool, and encodes the instructions that need a resolved address: ``b``, ``b<cond>`` and
 ``bl`` to a named target, and ``ldr rN, =expr``. keystone encodes every other instruction.
-Anything unrecognised raises :class:`AsmError` rather than being skipped, because a silently
+Anything unrecognized raises :class:`AsmError` rather than being skipped, because a silently
 dropped line would assemble into a blob that looks plausible and is wrong.
 
 keystone is a dev-time dependency, imported lazily. Nothing at run time needs it. The tests that

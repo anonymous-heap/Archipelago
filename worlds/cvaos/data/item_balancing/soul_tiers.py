@@ -50,6 +50,6 @@ def soul_rating(name: str) -> float:
 
 def matched_group(name: str) -> tuple[str, str]:
     """Return the group that the soul named ``name`` trades places within under Soul Shuffle's
-    ``matched``: its colour and its tier, such as ``("red", "B")``."""
+    ``matched``: its color and its tier, such as ``("red", "B")``."""
     row = by_name[name]
     return row.colour, row.tier

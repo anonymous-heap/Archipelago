@@ -5,7 +5,7 @@ Each Ancient Book describes one of the true-ending souls, in the game's own word
 from hell fires" (Flame Demon), Book 2 "the King of Bats" (Giant Bat), Book 3 "a beautiful
 nightmare" (Succubus). With this hook installed, whichever enemy drops one of those souls always
 drops it while the matching book is in the inventory. The check runs entirely in the ROM, so no
-client is involved and the behaviour is the same in any emulator.
+client is involved and the behavior is the same in any emulator.
 
 The enemy-death routine decides a soul drop at 0x080684C8..0x080684F0: it rolls
 ``(Random() >> 2) mod max(16, rate*8 + 32 - LCK/16)`` and drops when the roll is below the

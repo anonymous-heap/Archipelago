@@ -1,7 +1,7 @@
 """
 Custom-pickup framework for Castlevania: Aria of Sorrow.
 
-A custom pickup is a floor pickup whose collection runs its own behaviour instead of granting an
+A custom pickup is a floor pickup whose collection runs its own behavior instead of granting an
 item: it sets a memory flag and plays a sound, and one with an ``inventory_name`` also shows a
 "Got <name>" textbox. No existing item changes. Each custom item is one ``CustomPickup`` row in
 custom_pickup_content.py, so adding another takes only data: a row, a 16x16 icon and a placement.
@@ -28,7 +28,7 @@ How it fits together (all verified against the USA ROM):
   ``ImageFile`` is original art vendored with the apworld. build_writes_from_rom resolves both to
   bank-6 tiles, so the apworld itself contains no ROM-derived graphics.
 
-* Table-driven behaviour. The collect hook (custom_pickups.s, installed over sub_080441F8) checks
+* Table-driven behavior. The collect hook (custom_pickups.s, installed over sub_080441F8) checks
   that the pickup is a consumable, then scans DESC_TABLE for the pickup's var_b. On a match it
   queues the "Got <name>" textbox for an inventory item, sets the row's flag, plays its sound and
   despawns the pickup. It then jumps to the vanilla finish, which writes the 0x360 "collected" flag
@@ -41,12 +41,12 @@ How it fits together (all verified against the USA ROM):
   ``sub_0803C7B4(0x082099FC, sUnk_084F0DD8[bank], 1, bank)``, which copies from
   ``0x082099FC + 4 + sub*0x20`` (a 4-byte header precedes the data), and sUnk_084F0DD8[6] == 2.
   DSVEdit agrees: an item's packed "Icon" field is ``(palette_bank<<8)|icon``, and it renders with
-  sub-palette ``bank-4``, which is 2. Sub-palette 2 has a wide range of 16 colours (gold #F8D848,
+  sub-palette ``bank-4``, which is 2. Sub-palette 2 has a wide range of 16 colors (gold #F8D848,
   tan #F8B070, orange and red, blues and greens, greys #A0A0A8 and #E8D8D0, near-black), so most
-  icons can be drawn in it directly by quantising their tiles against BANK6_PALETTE below. No
+  icons can be drawn in it directly by quantizing their tiles against BANK6_PALETTE below. No
   per-item palette is written, and each item entry's +3 byte stays 6. A spare OBJ bank (10-15)
   cannot hold a per-item palette, because enemy and effect sprites reuse those banks and the
-  colours break in busy rooms.
+  colors break in busy rooms.
 
 rom/patch.py applies these writes in every seed, and this module only builds the bytes. A location
 spawns a custom pickup only when patch.py encodes it with ``get_encoding``.
@@ -101,8 +101,8 @@ ITEM_ENTRY_PAL_OFF = 0x3
 ITEMS_PALETTE_BANK = 6                   # shared item-pickup OBJ palette (loaded for every floor pickup)
 ITEMS_PALETTE_GBA = 0x082099FC           # items-palette block (16 sub-palettes; +4 header, then sub*0x20)
 
-# OBJ bank 6's actual 16 colours (items-palette sub-palette 2 of 0x082099FC; see the module docstring).
-# Quantise custom icon tiles against these. Index 0 is transparent in a 4bpp icon (the colour here is
+# OBJ bank 6's actual 16 colors (items-palette sub-palette 2 of 0x082099FC; see the module docstring).
+# Quantize custom icon tiles against these. Index 0 is transparent in a 4bpp icon (the color here is
 # only what bank-6 slot 0 happens to hold). Dump from the USA ROM:
 #   sub_0803C7B4 reads 0x082099FC + 4 + 2*0x20 = 0x08209A40, 16 BGR555 hwords.
 BANK6_PALETTE = (0x2145, 0x0463, 0x138c, 0x456c, 0x5694, 0x6b7d, 0x01e6, 0x277f,   # incl. #F8D848 gold (idx7)
@@ -137,7 +137,7 @@ DESC_TERMINATOR = b"\xff\xff\x00\x00\x00\x00\x00\x00"
 # struct. The struct ends at 0x02025554 and EWRAM ends at 0x02040000, and game code never touches
 # that tail after the boot zero-fill. The array is NOT SRAM-saved. Instead, the menu trampolines
 # (inventory_menu.py) rebuild it on every build and recount: slots 0..31 mirror the real
-# consumables, and each custom slot is derived from that item's saved behaviour flag (its DESC_TABLE
+# consumables, and each custom slot is derived from that item's saved behavior flag (its DESC_TABLE
 # row's flag_field/flag_number). The saved flag is therefore the only record of ownership.
 # pad_133A0 (0x133A0..0x133EB) MUST NOT hold the shadow, because all of it is soul-system storage:
 # the bestiary bitfield at 0x133A0..0x133BF and the equip and sorted-soul lists at 0x133D0..0x133E7.
@@ -254,7 +254,7 @@ def desc_text_id(i: int) -> int:
 
 
 def _name_text_id_for(pickup: CustomPickup) -> int:
-    """The name text-id for a pickup (0 = behaviour-only, no inventory row / textbox)."""
+    """The name text-id for a pickup (0 = behavior-only, no inventory row / textbox)."""
     inv = inventory_pickups()
     return name_text_id(inv.index(pickup)) if pickup in inv else 0
 
@@ -291,7 +291,7 @@ def _trampoline_bytes(target_gba: int) -> bytes:
 
 
 def _desc_table(pickups: List[CustomPickup]) -> bytes:
-    # 12-byte rows: var_b, flag_field, flag_number, sfx, name_text_id (0 = behaviour-only), reserved.
+    # 12-byte rows: var_b, flag_field, flag_number, sfx, name_text_id (0 = behavior-only), reserved.
     rows = bytearray()
     for p in pickups:
         rows += struct.pack("<HHHHHH", p.item_offset, p.flag_field, p.flag_number, p.sfx,

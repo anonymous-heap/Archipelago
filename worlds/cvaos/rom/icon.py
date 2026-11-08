@@ -11,8 +11,8 @@ half. The icon comes from one of two sources:
   palette-index remap, none of which is copyrightable.
 
 * ``ImageFile`` names an **original** PNG (the modder's own art) vendored under ``rom/icons/``. It
-  is quantised to the shared items palette (bank 6) at build time. Palettes are not copyrighted, so
-  the apworld can ship bank 6's colours itself. They are hardcoded in
+  is quantized to the shared items palette (bank 6) at build time. Palettes are not copyrighted, so
+  the apworld can ship bank 6's colors itself. They are hardcoded in
   ``custom_pickups.BANK6_PALETTE`` rather than read from the ROM.
 
 Both sources produce a 16x16 grid of **bank-6 palette indices**, which :func:`pack_icon` packs into
@@ -47,7 +47,7 @@ class RomSprite:
     ``(x, y, w, h)`` pixel region on the decompressed page. ``remap`` maps each source 4bpp index to
     a bank-6 index. A source index missing from ``remap`` becomes 0, which is transparent.
 
-    With ``crop`` set, the region's opaque content is cropped and centred in 16x16, so the region
+    With ``crop`` set, the region's opaque content is cropped and centered in 16x16, so the region
     can be any size whose opaque content fits. Without it, the region must be exactly 16x16, and
     any other size raises ValueError."""
     gfx_addr: int
@@ -64,10 +64,10 @@ class RomSprite:
 
 @dataclass(frozen=True)
 class ImageFile:
-    """An original PNG under rom/icons/, quantised to bank 6 at build time.
+    """An original PNG under rom/icons/, quantized to bank 6 at build time.
 
     The PNG must be 8-bit RGBA and not interlaced. An image that is not 16x16 is cropped to its
-    opaque content and centred, so that content must fit in 16x16."""
+    opaque content and centered, so that content must fit in 16x16."""
     filename: str
 
 
@@ -120,8 +120,8 @@ def rom_sprite_indices(base_rom: bytes, sprite: RomSprite) -> list:
 def image_file_indices(source: ImageFile) -> list:
     """Read the PNG at rom/icons/<filename>, and return it as a 16x16 grid of bank-6 indices.
 
-    Each opaque pixel becomes the index of its nearest bank-6 colour, and each pixel with alpha 0
-    becomes index 0. An image that is not 16x16 is cropped to its opaque content and centred.
+    Each opaque pixel becomes the index of its nearest bank-6 color, and each pixel with alpha 0
+    becomes index 0. An image that is not 16x16 is cropped to its opaque content and centered.
     Raises ValueError, with the file name in the message, for a PNG that is not 8-bit RGBA, for an
     interlaced PNG, and for an image whose opaque content does not fit in 16x16."""
     from .custom_pickups import BANK6_PALETTE  # local import to avoid a cycle at module load

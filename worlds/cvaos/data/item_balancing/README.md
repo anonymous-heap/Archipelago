@@ -239,7 +239,7 @@ non-progression items, so the books get two passes of their own.
   lands in another band. A book goes only where it is reachable without any of the books. Map
   depth stands in for run order here because the spheres don't exist yet.
 - **After the main fill**, `refine_ancient_books` draws one target from each of `[0, 1/3]`,
-  `[1/3, 2/3]` and `[1/2, 3/4]` of the run in sphere order. It moves each book toward its target
+  `[1/3, 2/3]` and `[1/2, 3/4]` of the run in sphere order. It moves each book towards its target
   by swapping it with a non-progression item at a location reachable without that book. A swap is
   kept only if the whole multiworld still fulfills accessibility.
 
@@ -263,7 +263,7 @@ placed by lateness targets of their own rather than by desirability, which rates
 - Before the main fill, `bias_progression_souls` puts each soul at the reachable location whose
   lateness is nearest its target. Lateness comes from ability tiers: the step at which a location
   first becomes reachable when the movement souls are collected one at a time, most useful first.
-  After the main fill, `refine_soul_positions` moves each soul toward its target in sphere order,
+  After the main fill, `refine_soul_positions` moves each soul towards its target in sphere order,
   with the same safety checks as the books.
 
 With Progressive Movement on, two of the Progressive Movement copies are aimed like Malphas and the
@@ -392,7 +392,7 @@ the repository).
 - **Tier.** Ratings are cut at 0.2, 0.4, 0.6 and 0.8 into the tiers D, C, B, A and S. A soul in
   tier A or S, rated 0.6 or more, is strong: 23 of the 110 souls that enemies drop are.
 - **Matched groups.** Under Soul Shuffle's `matched`, a soul trades places only with souls of the
-  same colour and tier, which `matched_group` returns.
+  same color and tier, which `matched_group` returns.
 
 The table's columns are `soul`, `colour` (`red`, `blue`, `yellow` or `ability`), `rating`,
 `tier`, `raters` (how many soul lists rank it) and `rating_source`. The red soul Cagnazzo in

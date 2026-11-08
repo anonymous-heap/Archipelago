@@ -8,7 +8,7 @@ that respawns, so its soul can be farmed.
 
 Each routing row for a pickup or an enemy becomes one edge, from the door that the row names to
 the pickup or enemy node, with the row's requirement masks. As in ``regions.py``, the edge leads
-only toward the pickup or enemy. The CSVs call these rows symmetric, but an edge back to the door
+only towards the pickup or enemy. The CSVs call these rows symmetric, but an edge back to the door
 would let a search walk from one door of a room to another through a pickup, which generation
 does not allow.
 

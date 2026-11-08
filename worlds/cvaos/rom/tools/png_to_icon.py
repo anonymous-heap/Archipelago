@@ -2,34 +2,34 @@
 """
 Convert an RGBA PNG into an AoS "common item icon", and print its bytes as Python source.
 
-The icon is four 4bpp GBA tiles, with each pixel mapped to the nearest colour of a 16-colour OBJ
+The icon is four 4bpp GBA tiles, with each pixel mapped to the nearest color of a 16-color OBJ
 palette. The engine loads a pickup icon on demand with two DMAs: 0x40 bytes for the top half
 (tiles 0 and 1) from sheet_base+off, and 0x40 bytes for the bottom half (tiles 2 and 3) from
 sheet_base+off+0x200. This tool prints the two halves together as one 0x80-byte blob. A source
-image that is not 16x16 is cropped to its opaque content and centred, so that content must fit in
+image that is not 16x16 is cropped to its opaque content and centered, so that content must fit in
 16x16.
 
-rom/icon.py also imports this module's PNG decoder, quantiser, 16x16 fit and tile packer to build
+rom/icon.py also imports this module's PNG decoder, quantizer, 16x16 fit and tile packer to build
 icons, so this module is imported during a build, not only run by hand. Those functions raise
 ValueError for unusable input, and the command-line entry point turns that error into an exit
 message.
 
 Palette: floor pickups all render through OBJ palette bank 6, the shared items palette. Because it
-is loaded for every pickup in every room, it holds the same colours wherever a pickup appears. Bank
-6 is items-palette sub-palette 2, and its 16 colours are static in the ROM at
+is loaded for every pickup in every room, it holds the same colors wherever a pickup appears. Bank
+6 is items-palette sub-palette 2, and its 16 colors are static in the ROM at
 0x082099FC + 4 + 2*0x20 = 0x08209A40. They form a rainbow that includes gold #F8D848, tan #F8B070,
 and greys #A0A0A8 and #E8D8D0. Pass them as BGR555 hwords with --palette. ``BANK6_PALETTE`` in
 rom/custom_pickups.py holds the same values. Index 0 is transparent.
 
-Without --palette, the tool derives a palette from the image's own colours. That output has the
-right tile structure, but its in-game colours are wrong until the tool is rerun with --palette.
+Without --palette, the tool derives a palette from the image's own colors. That output has the
+right tile structure, but its in-game colors are wrong until the tool is rerun with --palette.
 
-Nearest-colour matching can map a mid-tone to a different hue, so dark brass may come out brown or
-red. For a deliberate look, recolour the source to bank-6 colours before converting it.
+Nearest-color matching can map a mid-tone to a different hue, so dark brass may come out brown or
+red. For a deliberate look, recolor the source to bank-6 colors before converting it.
 
 Usage:
-  python png_to_icon.py button_pickup.png                       # provisional (image's own colours)
-  python png_to_icon.py button_pickup.png --palette "0,0x7fff,..."   # final (bank 6 colours)
+  python png_to_icon.py button_pickup.png                       # provisional (image's own colors)
+  python png_to_icon.py button_pickup.png --palette "0,0x7fff,..."   # final (bank 6 colors)
 """
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ def decode_png_rgba(data: bytes) -> tuple[int, int, list[tuple[int, int, int, in
         typ = data[pos + 4:pos + 8]
         chunk = data[pos + 8:pos + 8 + ln]
         if typ == b"IHDR":
-            # width, height, bit depth, colour type, compression, filter method, interlace method
+            # width, height, bit depth, color type, compression, filter method, interlace method
             w, h, bd, ct, _, _, interlace = struct.unpack(">IIBBBBB", chunk[:13])
         elif typ == b"IDAT":
             idat += chunk
@@ -107,7 +107,7 @@ def bgr555_to_rgb(v: int) -> tuple[int, int, int]:
 
 
 def derive_palette(px) -> list[int]:
-    """Provisional 16-colour palette from the opaque image colours (index 0 = transparent)."""
+    """Provisional 16-color palette from the opaque image colors (index 0 = transparent)."""
     seen: list[int] = []
     for (r, g, b, a) in px:
         if a == 0:
@@ -121,7 +121,7 @@ def derive_palette(px) -> list[int]:
 
 
 def nearest_index(r: int, g: int, b: int, pal_rgb: list[tuple[int, int, int]]) -> int:
-    """Return the index from 1 to 15 whose palette colour is nearest to ``(r, g, b)``."""
+    """Return the index from 1 to 15 whose palette color is nearest to ``(r, g, b)``."""
     best, bi = 1 << 30, 1
     for idx in range(1, 16):  # never map opaque pixels to index 0 (transparent)
         pr, pg, pb = pal_rgb[idx]
@@ -132,10 +132,10 @@ def nearest_index(r: int, g: int, b: int, pal_rgb: list[tuple[int, int, int]]) -
 
 
 def to_indices(px, w, h, pal: list[int]) -> list[list[int]]:
-    """Quantise RGBA pixels to a grid of indices into ``pal``, a list of 16 BGR555 colours.
+    """Quantize RGBA pixels to a grid of indices into ``pal``, a list of 16 BGR555 colors.
 
     A pixel with alpha 0 becomes index 0, which is transparent. Every other pixel becomes the
-    index of its nearest palette colour, so it is never index 0."""
+    index of its nearest palette color, so it is never index 0."""
     pal_rgb = [bgr555_to_rgb(c) for c in pal]
     grid = [[0] * w for _ in range(h)]
     for y in range(h):
@@ -157,7 +157,7 @@ def tile_4bpp(grid, tx: int, ty: int) -> bytes:
 
 
 def fit_16x16(grid: list[list[int]]) -> list[list[int]]:
-    """Crop an index grid to its opaque content, and centre that content in a 16x16 grid.
+    """Crop an index grid to its opaque content, and center that content in a 16x16 grid.
 
     Index 0 is transparent and every other index is opaque. The source can be any size, such as a
     32x48 object frame exported from DSVEdit, as long as its opaque content fits in 16x16. Raises
@@ -200,7 +200,7 @@ def main() -> None:
 
     grid = to_indices(px, w, h, pal)
     if (w, h) != (16, 16):
-        grid = fit_16x16(grid)   # crop transparent edges + centre into 16x16
+        grid = fit_16x16(grid)   # crop transparent edges + center into 16x16
     t0, t1 = tile_4bpp(grid, 0, 0), tile_4bpp(grid, 1, 0)   # top-left, top-right
     t2, t3 = tile_4bpp(grid, 0, 1), tile_4bpp(grid, 1, 1)   # bottom-left, bottom-right
     top, bottom = t0 + t1, t2 + t3                          # two 0x40 halves

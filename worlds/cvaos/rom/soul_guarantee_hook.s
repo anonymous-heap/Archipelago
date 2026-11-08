@@ -26,7 +26,7 @@
 @   (0x080684F8) or the no-drop path (0x0806852C) exactly as the original code would.
 @   Matching on the soul rather than the enemy means Soul Shuffle needs no special handling:
 @   whichever enemy carries the soul now is the one that always drops it. Everything is read
-@   from the game's own memory, so no client is involved and the behaviour is the same in any
+@   from the game's own memory, so no client is involved and the behavior is the same in any
 @   emulator.
 
         .syntax unified

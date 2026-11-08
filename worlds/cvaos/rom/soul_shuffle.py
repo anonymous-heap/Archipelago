@@ -27,7 +27,7 @@ enemies are permuted in groups that depend on the ``soul_shuffle`` option:
 * ``within_type``: one group per soul type.
 * ``any_type``: one group of all 103.
 * ``matched``: one group per soul type and strength tier, so a soul trades places only with a
-  soul of the same colour and tier. ``rom/patch.py`` passes in each enemy's group, because the
+  soul of the same color and tier. ``rom/patch.py`` passes in each enemy's group, because the
   tiers come from the soul ratings in ``data/item_balancing``, which the rom/ feature modules do
   not import.
 
@@ -113,7 +113,7 @@ STARTING_EQUIP_LOAD_OFF = 0x05D00E
 STARTING_EQUIP_OFF = 0x05D014
 STARTING_EQUIP_STORE_OFF = 0x05D016
 
-# equipped<colour>Soul displacements within the 0x1325C player struct
+# equipped<color>Soul displacements within the 0x1325C player struct
 # (EWRAM 0x13269/0x1326A/0x1326B).
 EQUIP_SLOT_DISPLACEMENT = {
     SOUL_TYPE_RED: 0xD,
@@ -296,7 +296,7 @@ def plan_shuffle(random: Random, mode: str,
     that keep their own soul are omitted, so the result is a permutation of its own key set.
 
     ``matched_groups`` maps every enemy that ``matched`` can shuffle to its group, such as the
-    colour and tier of its vanilla soul. Souls trade places only within a group. The other
+    color and tier of its vanilla soul. Souls trade places only within a group. The other
     modes ignore it, and ``matched`` raises ValueError without it.
     """
     eligible = shuffleable_enemies(mode)

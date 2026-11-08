@@ -4,7 +4,7 @@ These do not run the game. They check the committed vanilla table's shape, that 
 is always a soul-preserving permutation that leaves progression souls alone, and that the emitted
 writes say what the plan says. When rates move with their souls, a scripted boss still keeps its
 rate of 0, and an ordinary enemy that receives a boss's soul keeps its own rate. Under matched, a
-soul trades places only within its colour and tier, and every rate byte stays on its row.
+soul trades places only within its color and tier, and every rate byte stays on its row.
 
 These tests cannot confirm what the table's fields mean in the game. rom/soul_shuffle.py says
 where those meanings come from.
@@ -224,7 +224,7 @@ class TestBuildWrites(unittest.TestCase):
 
 
 class TestMatched(unittest.TestCase):
-    """matched trades souls only within a colour and tier, and every rate byte stays on its row."""
+    """matched trades souls only within a color and tier, and every rate byte stays on its row."""
 
     @classmethod
     def setUpClass(cls) -> None:

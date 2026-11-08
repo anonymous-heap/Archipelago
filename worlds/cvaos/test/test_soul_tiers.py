@@ -2,7 +2,7 @@
 Tests for the soul ratings table (data/item_balancing/soul_tiers.csv).
 
 Each soul's rating comes from the community soul tier lists, and its tier from cuts at 0.2, 0.4,
-0.6 and 0.8. Soul Shuffle's matched value trades souls within groups of one colour and one tier.
+0.6 and 0.8. Soul Shuffle's matched value trades souls within groups of one color and one tier.
 
     python -m pytest worlds/cvaos/test/test_soul_tiers.py -v
 """

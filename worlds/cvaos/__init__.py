@@ -122,7 +122,7 @@ class CVAOSSettings(settings.Group):
     class WideSmoothingRunsBalancing(settings.Bool):
         """Whether Wide Item Smoothing runs Archipelago's progression balancing itself in a
         multiworld. When on, Wide runs balancing and then orders its players' items, three times in
-        a row, so the balancing that Archipelago runs afterward seldom brings their mid-game gear
+        a row, so the balancing that Archipelago runs afterwards seldom brings their mid-game gear
         into the first fifth of the run. When off, Wide orders once, and about a quarter of its
         players then get such gear that early. Wide never runs balancing itself in a solo seed,
         when no player has progression balancing on, or when generation skips balancing."""

@@ -145,7 +145,7 @@ def _disambiguation_suffixes(door_id: str, group: list[dict]) -> list[str]:
     """
     Return the suffix for each row that shares one ``door_identifier``, in the order given.
 
-    A room usually connects to a neighbour through one door, and that door gets no suffix because
+    A room usually connects to a neighbor through one door, and that door gets no suffix because
     naming it cannot be ambiguous. Where two doors share a room pair, they always sit one map
     cell apart along a single axis, so both are named by that geometry: ``"(upper)"`` and
     ``"(lower)"``, or ``"(left)"`` and ``"(right)"``.

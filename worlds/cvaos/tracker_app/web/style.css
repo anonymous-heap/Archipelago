@@ -203,7 +203,7 @@ h2 {
 .edge.wall { stroke: var(--wall); }
 .edge.door { stroke: var(--door); stroke-linecap: butt; }
 /* Walls and doors outside the focused area, and those of greyed-out rooms, are drawn in solid
-   darker colours. */
+   darker colors. */
 .edge.wall.unfocused { stroke: var(--wall-dim); }
 .edge.door.unfocused { stroke: var(--door-dim); }
 

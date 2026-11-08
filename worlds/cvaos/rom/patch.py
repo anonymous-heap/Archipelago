@@ -49,7 +49,7 @@ _SOUL_SHUFFLE_MODES = {
 
 
 def matched_groups() -> Dict[int, tuple[str, str]]:
-    """Return the group of each enemy that Soul Shuffle's matched may shuffle: the colour and
+    """Return the group of each enemy that Soul Shuffle's matched may shuffle: the color and
     strength tier of its vanilla soul, such as ``("red", "B")``."""
     from ..data.item_balancing.soul_tiers import matched_group
     from ..soul_sources import vanilla_soul_name
@@ -125,11 +125,11 @@ def get_item_encoding(item_code: int) -> tuple[int, int, int]:
 # The location check does not depend on what the pickup grants, because the client reads the
 # collected-pickup save flags (PICKUP_FLAGS). The type stays 4 so that the entity still sets its
 # save flag. Granting nothing and showing a "sent X to Player Y" textbox instead would need the
-# collect path to recognise the placeholder, and the collect hook in rom/custom_pickups.py
+# collect path to recognize the placeholder, and the collect hook in rom/custom_pickups.py
 # handles only custom pickups.
 _AP_PLACEHOLDER = (4, 2, 25)  # Skull Key
 
-# Synthetic items (no ground pickup) that appear in the local world as a custom behaviour-pickup.
+# Synthetic items (no ground pickup) that appear in the local world as a custom behavior-pickup.
 # The Study Sealswitch AP item spawns the in-game Study Sealswitch custom pickup, which sets misc
 # #48 on collection. Its FLAG_ONLY receive path sets the same flag, so the unlock works whether the
 # item is collected locally or received from elsewhere. Keyed by item name (codes are packed, not

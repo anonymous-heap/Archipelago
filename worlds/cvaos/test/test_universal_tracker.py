@@ -237,7 +237,7 @@ class UnlistedOptionsTest(unittest.TestCase):
 class TricksTierTest(unittest.TestCase):
     """The tricks item, which UT collects to find the locations only out-of-logic tricks reach.
 
-    UT shows those locations in its second colour.
+    UT shows those locations in its second color.
     """
 
     ITEM_SETS = ([], ["Malphas"], ["Malphas", "Hippogryph"], ["Malphas", "Skula"])

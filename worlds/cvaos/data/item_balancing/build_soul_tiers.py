@@ -43,7 +43,7 @@ def tier_of(rating: float) -> str:
 
 
 def _souls() -> Dict[str, str]:
-    """Return each soul's colour by its name, in item number order."""
+    """Return each soul's color by its name, in item number order."""
     with ITEM_INFO_CSV.open(encoding="utf-8", newline="") as fh:
         return {row["name"]: COLOURS[row["item_category"]] for row in csv.DictReader(fh)
                 if row["item_category"] in COLOURS

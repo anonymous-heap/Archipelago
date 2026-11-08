@@ -380,7 +380,7 @@ class AoSRAM:
 
         if array.nibble_packed:
             # Two counts share the byte: read the pair, bump one nibble, and guard on the whole
-            # byte so the neighbour's count is preserved. At the cap the byte is written back
+            # byte so the neighbor's count is preserved. At the cap the byte is written back
             # unchanged, as in the byte-array case below.
             # The cap applies to the soul's total over both lists, and the soul goes into the
             # first list, as the game's own add does.

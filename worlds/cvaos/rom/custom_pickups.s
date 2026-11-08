@@ -1,6 +1,6 @@
 @ Custom-pickup dispatcher for Castlevania: Aria of Sorrow.
 @
-@ A small, extensible framework for pickups that run their own behaviour on collection, such as
+@ A small, extensible framework for pickups that run their own behavior on collection, such as
 @ setting a memory flag and playing a sound, instead of granting an item. No existing item
 @ changes. The first user is the Study Sealswitch. Collecting it has the same effect as pressing
 @ the A01 Forbidden-Area press-button, since it sets MISC flag #48 and the paired barrier opens.
@@ -37,7 +37,7 @@
 @ icon-table literal at file 0x440B4 to an extended table, which leaves consumables 0..31
 @ untouched. An "inventory" item also appears at Item-Use menu slot == var_b through the relocated
 @ item, name and description tables. This hook writes no owned-state for it. Instead, the menu
-@ trampolines (inventory_menu.py) derive it from the item's behaviour flag into a transient shadow
+@ trampolines (inventory_menu.py) derive it from the item's behavior flag into a transient shadow
 @ array, so no per-item saved storage is used.
 @
 @ ---- DESC_TABLE (built + written by custom_pickups.py at CUSTOM_DESC_TABLE_GBA) ----
@@ -47,7 +47,7 @@
 @                             / 0x360 pickup / 0x37E boss)
 @     +4 u16 flag_number    = flag bit index within that field
 @     +6 u16 sfx            = song id for PlaySong (0 = silent)
-@     +8 u16 name_text_id   = string id for the "Got <name>" textbox + Item-Use row; 0 = behaviour-only
+@     +8 u16 name_text_id   = string id for the "Got <name>" textbox + Item-Use row; 0 = behavior-only
 @                             (no inventory row, no textbox)
 @     +10 u16 (reserved)
 @
@@ -105,7 +105,7 @@ CustomPickupHook:
 .Lfound:
     @ r6 -> matched row, r4 = entity, r5 = var_b. For an inventory item (name_text_id != 0), queue
     @ the "Got <name>" textbox. Owned-state is NOT stored here. The Item-Use menu trampolines derive
-    @ it into a transient shadow from this item's behaviour flag, which .Lflag sets just below, so
+    @ it into a transient shadow from this item's behavior flag, which .Lflag sets just below, so
     @ the saved flag is the only record and collection writes no inventory array.
     ldrh r0, [r6, #8]             @ name_text_id
     cmp  r0, #0

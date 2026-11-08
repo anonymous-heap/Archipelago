@@ -89,15 +89,15 @@ class TestIcon(unittest.TestCase):
         grid[1][1] = 5                                              # single opaque pixel near a corner
         out = fit_16x16(grid)
         self.assertEqual(sum(v != 0 for row in out for v in row), 1)
-        self.assertEqual(out[7][7], 5)                              # 1x1 content centres to (7,7)
+        self.assertEqual(out[7][7], 5)                              # 1x1 content centers to (7,7)
 
     def test_image_file_quantises_and_centres(self):
-        # Two pixels of exact bank-6 colours in a 32x32 image: gold (index 7) then white (15).
+        # Two pixels of exact bank-6 colors in a 32x32 image: gold (index 7) then white (15).
         gold, white = (bgr555_to_rgb(BANK6_PALETTE[i]) + (255,) for i in (7, 15))
         with _icon_file(_png(32, 32, {(20, 3): gold, (21, 3): white})):
             grid = ic.image_file_indices(ic.ImageFile("test.png"))
         expected = [[0] * 16 for _ in range(16)]
-        expected[7][7], expected[7][8] = 7, 15                      # 2x1 content centres at (7,7)
+        expected[7][7], expected[7][8] = 7, 15                      # 2x1 content centers at (7,7)
         self.assertEqual(grid, expected)
 
     def test_image_file_rejects_interlaced_png(self):
@@ -106,7 +106,7 @@ class TestIcon(unittest.TestCase):
             ic.build_icon_tiles(b"", ic.ImageFile("test.png"))
 
     def test_image_file_rejects_non_rgba_png(self):
-        png = _png(16, 16, {}, colour_type=2)                       # colour type 2 is RGB
+        png = _png(16, 16, {}, colour_type=2)                       # color type 2 is RGB
         with _icon_file(png), self.assertRaisesRegex(ValueError, "colour type 2"):
             ic.build_icon_tiles(b"", ic.ImageFile("test.png"))
 

@@ -11,7 +11,7 @@ How it works (all verified against the USA ROM):
 * Storage: a TRANSIENT shadow count-array in free high EWRAM at 0x02030000, above the gEwramData
   struct, which ends at 0x02025554. Game code never touches that region after the boot zero-fill.
   The shadow is NOT saved, and it is rebuilt on every menu build and recount. A custom item's
-  owned-state persists instead through the saved behaviour flag it sets on collection (its
+  owned-state persists instead through the saved behavior flag it sets on collection (its
   DESC_TABLE row's flag_field/flag_number), and the collect hook writes NO inventory byte.
   pad_133A0 cannot hold the shadow, because 0x133A0..0x133EB is entirely soul state (the bestiary
   bitfield and the equip and sorted-soul lists), so a shadow there would corrupt souls.

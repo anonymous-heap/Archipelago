@@ -440,7 +440,7 @@ def _order_player(multiworld: MultiWorld, world: "CVAOSWorld", room: Walk,
     did.
 
     The items are sorted by their targets. ``_pin`` places its breakers first, and ``_deal`` places
-    the rest. A pinned breaker above the band counts toward ``over_band``. When the deal fails,
+    the rest. A pinned breaker above the band counts towards ``over_band``. When the deal fails,
     every location gets back the item it held before.
     """
     positions = _order_locations(multiworld, world.player, Clock(multiworld, world.player, room))
@@ -508,7 +508,7 @@ class Rung:
 # A weapon as good for its class as the castle's Rapier, then a weapon as good for its class as the
 # castle's Lance, and an armor as good as its Copper Plate. The player should hold the first by a
 # fifth of the run and the other two by about a third. Each bound is a little earlier than that, so
-# that core's balancing afterward seldom undoes a rung.
+# that core's balancing afterwards seldom undoes a rung.
 RUNGS = (Rung("weapon", 0.15, 0.15), Rung("weapon", 0.24, 0.30), Rung("armor", 0.24, 0.30))
 
 
@@ -781,9 +781,9 @@ def _bridge(multiworld: MultiWorld, game: str,
 
     Core balances after every world's ``stage_post_fill``, and it can move a location into an
     earlier sphere, which brings an item earlier. So in a multiworld Wide runs ROUNDS rounds of
-    balancing and ordering itself, and core's balancing afterward has little left to move.
+    balancing and ordering itself, and core's balancing afterwards has little left to move.
 
-    Wide skips the calls when nothing balances afterward: in a solo seed, when no player has
+    Wide skips the calls when nothing balances afterwards: in a solo seed, when no player has
     progression balancing on, and when the host skips balancing. Wide also orders only once when
     the host setting ``wide_smoothing_runs_balancing`` is off or the import fails, and core's
     balancing may then still bring mid-game gear early.
@@ -802,7 +802,7 @@ def _bridge(multiworld: MultiWorld, game: str,
         quiet = None
     if quiet is not None:
         logging.info("%s: Wide Item Smoothing orders %s once, because %s, so nothing moves the "
-                     "order afterward.", game, names, quiet)
+                     "order afterwards.", game, names, quiet)
         return None
     balance, reason = None, "the host setting wide_smoothing_runs_balancing is off"
     if _host_allows_balancing():
@@ -812,8 +812,8 @@ def _bridge(multiworld: MultiWorld, game: str,
             reason = "it could not import progression balancing"
     if balance is None:
         logging.info("%s: Wide Item Smoothing orders %s once, because %s. Core's progression "
-                     "balancing afterward may bring mid-game gear into the first fifth of their "
-                     "runs.", game, names, reason)
+                     "balancing afterwards may bring mid-game gear into the first fifth of "
+                     "their runs.", game, names, reason)
         return None
     logging.info("%s: Wide Item Smoothing runs progression balancing %d times for %s, ordering "
                  "after each, so core's own balancing seldom undoes the order.",

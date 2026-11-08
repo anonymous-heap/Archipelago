@@ -1,5 +1,5 @@
 """
-Neutralise the Forbidden Area press-button so the barrier can only be opened via the shuffled
+Neutralize the Forbidden Area press-button so the barrier can only be opened via the shuffled
 "Study Sealswitch" item (the ForbiddenAreaButton == pickup option). The barrier object is untouched.
 
 Background (verified against the USA ROM): room A01's object list is a flat array of 12-byte

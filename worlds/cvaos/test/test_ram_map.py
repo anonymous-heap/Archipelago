@@ -6,7 +6,7 @@ The EWRAM-domain offsets below are written out by hand on purpose. The map deriv
 from its declaration, so a wrong declaration fails here rather than as a misread byte in a live
 game.
 
-The behaviour tests drive ``AoSRAM`` over a fake backend with dict-of-bytearray memory, so they
+The behavior tests drive ``AoSRAM`` over a fake backend with dict-of-bytearray memory, so they
 need no emulator. The BizHawk backend itself is checked against a recording stand-in for the
 connector module.
 """
@@ -79,7 +79,7 @@ class FakeBackend:
     """A ``RamBackend`` over dict-of-bytearray memory.
 
     Reads are batched and writes are plain. A guarded write or batch checks every guard before
-    applying anything, which matches the connector's frame-atomic behaviour.
+    applying anything, which matches the connector's frame-atomic behavior.
 
     ``read_batches`` and ``write_batches`` record the requests of each ``read_many`` and
     ``guarded_write_many`` call, in order, so a test can check what went into one round-trip.

@@ -192,7 +192,7 @@ def create_regions(world: CVAOSWorld) -> None:
             continue
 
         # A few door crossings have a bespoke requirement that is not an ability, such as the
-        # 507 -> 506 gate toward the Chaotic Realm. The rule applies in one direction only, so
+        # 507 -> 506 gate towards the Chaotic Realm. The rule applies in one direction only, so
         # the reverse crossing is free.
         rule_factory = SPECIAL_TRANSDOOR_RULES.get(key)
         access_rule = rule_factory(world) if rule_factory else None
@@ -739,7 +739,7 @@ def _chaotic_realm_gate_deps(world: CVAOSWorld) -> list[str]:
 # that rule reads, for indirect-condition registration. Like the CSV rules, each access rule has a
 # ``uses`` attribute, so Universal Tracker's routes name what the crossing needs (tracker_route).
 SPECIAL_TRANSDOOR_RULES: dict[tuple[str, str], object] = {
-    ("507:506", "506:507"): _chaotic_realm_gate,   # 507 -> 506: toward Chaos (B14)
+    ("507:506", "506:507"): _chaotic_realm_gate,   # 507 -> 506: towards Chaos (B14)
     ("904:900", "900:904"): _chaotic_realm_gate,   # 904 -> 900: from Graham's room onto the Balcony
 }
 SPECIAL_TRANSDOOR_DEPS: dict[tuple[str, str], object] = {

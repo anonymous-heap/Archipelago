@@ -81,7 +81,7 @@ A directed connection between two graph nodes. Carries:
 Adjacency-list graph where every node is an entrance node, built by `RoutingGraphBuilder.from_requirements()` with the same nodes and edges as `regions.py`. Each transdoor crossing becomes an edge with no requirement, from `from_entrance` to `to_entrance`. The two crossings into the true ending are left out unless `open_gates` is set, because their gates need more than abilities. Each `RoutingInfo` row becomes one directed edge within `room_id`, `"room_id:from_room" → "room_id:to_room"`, and a row with no ReqMask is open. A row is skipped when either door is not a node. The routes in `regions.SPECIAL_ROOM_ROUTING` add the edges between portal nodes and doors.
 
 **Extended graph** (`../tools/routing/entrances_to_items.py`)
-The entrance graph plus pickup and enemy nodes. Constructed by copying the entrance graph, then adding one edge from each entrance node that a pickup or enemy row names to that pickup's or enemy's node (from `EntranceToPickupRegionInfo` and `EntranceToEnemyRegionInfo`). As in `regions.py`, the edge leads only toward the pickup or enemy, so a search cannot walk from one door to another through one. Used for answering "can I reach item X, and what do I need?"
+The entrance graph plus pickup and enemy nodes. Constructed by copying the entrance graph, then adding one edge from each entrance node that a pickup or enemy row names to that pickup's or enemy's node (from `EntranceToPickupRegionInfo` and `EntranceToEnemyRegionInfo`). As in `regions.py`, the edge leads only towards the pickup or enemy, so a search cannot walk from one door to another through one. Used for answering "can I reach item X, and what do I need?"
 
 ---
 

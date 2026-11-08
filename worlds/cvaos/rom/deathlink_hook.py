@@ -30,7 +30,7 @@ with the command in that .s file if you edit it; test_thumb_assembler checks tha
 
 Placement is declared as two ``Entry`` objects. The hook site is bounded to the 8 stolen bytes and
 the trampoline to its free-ROM reservation, so a blob that outgrows its slot fails to build
-instead of silently overwriting its neighbour. The veneer's jump target is also read from the
+instead of silently overwriting its neighbor. The veneer's jump target is also read from the
 trampoline's own declaration, rather than kept as a second copy of the address.
 """
 from __future__ import annotations

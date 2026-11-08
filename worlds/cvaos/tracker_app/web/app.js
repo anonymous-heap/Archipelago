@@ -57,7 +57,7 @@ const page = {
   follow: prefs.get("follow", true),
   centerMarker: prefs.get("centerMarker", false),  // draw Soma's dot in the middle of his cell
   showChecked: prefs.get("showChecked", false),
-  gameLook: prefs.get("gameLook", false),  // draw the map in the game's colours and wall width
+  gameLook: prefs.get("gameLook", false),  // draw the map in the game's colors and wall width
 };
 
 const els = {
@@ -433,7 +433,7 @@ function renderEdges(visible = visibleCells()) {
   const passed = new Set(cells ? cells.hidden_doors : []);
   const paths = Object.fromEntries(EDGE_LOOKS.map((look) => [look, []]));
   // As on the game's map, a door fills its edge between the two corners, which stay in the wall
-  // colour. So it stops half a wall's width short of each end.
+  // color. So it stops half a wall's width short of each end.
   const inset = wallWidth() / 2;
   for (const edge of els.edges) {
     if (visible && !edge.cells.some((cell) => visible.has(cell))) continue;
@@ -955,7 +955,7 @@ function renderDialog() {
   $("quit").disabled = !live;
 }
 
-// Switch the map between the tracker's own colours and the game's colours and wall width.
+// Switch the map between the tracker's own colors and the game's colors and wall width.
 function applyLook() {
   $("map-pane").classList.toggle("game-look", page.gameLook);
 }

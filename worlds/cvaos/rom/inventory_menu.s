@@ -21,7 +21,7 @@
 @ end of the gEwramData struct (0x02025554) and the end of EWRAM (0x02040000). The boot-time
 @ zero-fill is the only game code that touches that region, and the shadow is not saved.
 @
-@ A custom item's owned state persists through its behaviour flag instead. custom_pickups.s sets
+@ A custom item's owned state persists through its behavior flag instead. custom_pickups.s sets
 @ that saved flag when the item is collected, using the flag_field and flag_number in the item's
 @ DESC_TABLE row. The trampolines read the flag again every time they rebuild the shadow.
 @
@@ -109,7 +109,7 @@ MenuListHook:
     beq  .Llist_rebuilt          @ the terminator row ends the table
     ldrh r2, [r4, #8]            @ name_text_id
     cmp  r2, #0
-    beq  .Llist_next             @ 0 means a behaviour-only row with no menu slot
+    beq  .Llist_next             @ 0 means a behavior-only row with no menu slot
     ldrh r2, [r4, #2]            @ flag_field: a byte offset from gEwramData
     ldrh r3, [r4, #4]            @ flag_number
     adds r2, r6, r2              @ r2 = gEwramData + flag_field
@@ -165,7 +165,7 @@ MenuRecountHook:
     beq  .Lrecount_rebuilt       @ the terminator row ends the table
     ldrh r2, [r4, #8]            @ name_text_id
     cmp  r2, #0
-    beq  .Lrecount_next          @ 0 means a behaviour-only row with no menu slot
+    beq  .Lrecount_next          @ 0 means a behavior-only row with no menu slot
     ldrh r2, [r4, #2]            @ flag_field: a byte offset from gEwramData
     ldrh r3, [r4, #4]            @ flag_number
     adds r2, r6, r2              @ r2 = gEwramData + flag_field

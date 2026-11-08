@@ -7,7 +7,7 @@ inventory_menu.py and rom/icon.py, and adding a pickup should not require changi
 
 To add one:
   1. Choose an icon source (see rom/icon.py):
-       * ImageFile("my_icon.png"): your own ORIGINAL 16x16 art under rom/icons/, quantised to
+       * ImageFile("my_icon.png"): your own ORIGINAL 16x16 art under rom/icons/, quantized to
          bank 6.
        * RomSprite(gfx_addr=..., part=(x, y, w, h), remap={src: bank6, ...}): the pixel pattern is
          extracted from the PLAYER's own ROM at build time, for art already in the game, so no
@@ -36,7 +36,7 @@ from .icon import RomSprite, ImageFile
 # --- Study Sealswitch (the first custom pickup) -----------------------------------------------------
 # Icon: the in-game metal-gate button (special object 0x35). Its sprite GFX is LZ77-compressed at
 # 0x08604428 (a 1D page, 16 tiles/row), and frame 2's button is the 16x11 region at page pixel
-# (32, 5). crop=True trims that region to its opaque pixels and centres them in a 16x16 icon.
+# (32, 5). crop=True trims that region to its opaque pixels and centers them in a 16x16 icon.
 # rom/icon.py extracts that pattern from the PLAYER's ROM at build time, so no copyrighted pixels
 # ship. What ships is this address, the part rectangle and the source-index -> bank-6 remap below
 # (gold ramp src 2-7 -> tan #F8B070(14)/gold #F8D848(7); white 8 -> #F8F8F8(15); blue-grey 10-14

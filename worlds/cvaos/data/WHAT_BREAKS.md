@@ -20,9 +20,9 @@ carry different requirements or be absent entirely. The current data relies on t
 example, crossing room `003` from the `000` side to the `002` exit requires `DJump`, `HJump`, or
 `Bat` (or a combo), while the reverse from `002` to `000` requires nothing.
 
-### Pickup and enemy rows naming a specific neighbour
+### Pickup and enemy rows naming a specific neighbor
 
-When the `dest_room_identifier` column names one or more neighbouring rooms,
+When the `dest_room_identifier` column names one or more neighboring rooms,
 `_entrance_identifiers_from_cell` builds `f"{room_id}:{neighbor}"` directly. That is already the
 directional node (the door on the pickup's own side), so no direction information is lost.
 
@@ -44,16 +44,16 @@ gates the crossing into 009.
 ### Expanding `"Any"` from the `from_entrance` side
 
 Building `_arrivals_by_room` from `from_entrance` instead of `to_entrance` would attach a room's
-pickups to the *neighbour's* side of each door, placing them in front of any gate on the crossing.
+pickups to the *neighbor's* side of each door, placing them in front of any gate on the crossing.
 
-Generation and the route solvers both give a pickup edges that lead only toward it, so a pickup
+Generation and the route solvers both give a pickup edges that lead only towards it, so a pickup
 attached to the wrong side cannot connect two doors. The harm is the misplaced gate: the pickup
-would count as reachable from the neighbour's side, without crossing the door into its room.
+would count as reachable from the neighbor's side, without crossing the door into its room.
 
 ### A direction-insensitive door identifier
 
 A door identifier could sort its two room IDs into one canonical form, so that `("009", "006")`
 and `("006", "009")` both resolve to `"006:009"`. That is sound only when traversal is symmetric.
 A sorted identifier cannot express "this pickup is reachable only when approached from one side",
-so any helper that sorts or otherwise normalises the two halves of an entrance identifier loses
+so any helper that sorts or otherwise normalizes the two halves of an entrance identifier loses
 that information.

@@ -40,7 +40,7 @@ from .data.room_info import by_identifier as rooms_by_identifier
 CELL_PIXELS = 24                 # image pixels per map cell
 ROOM_CELL = (256, 256)           # room pixels per map cell, horizontally and vertically
 MARGIN = 1                       # cells of background around each map
-WALL_PIXELS = 4                  # a wall's thickness, centred on the line between two cells
+WALL_PIXELS = 4                  # a wall's thickness, centered on the line between two cells
 MARKER_PIXELS = 3                # the thickness of Soma's marker
 REALM_AREA = "B"                 # the area digit of the Chaotic Realm's rooms
 
@@ -79,7 +79,7 @@ class TrackerMap(NamedTuple):
     name: str
     img: str
     bounds: tuple[int, int, int, int]  # first column and row drawn, then last, inclusive
-    rooms: frozenset[str]              # rooms drawn in full colour, with pins and Soma's marker
+    rooms: frozenset[str]              # rooms drawn in full color, with pins and Soma's marker
     context: frozenset[str]            # other rooms drawn dimmed around them
 
     @property
@@ -134,8 +134,8 @@ MAP_GROUPS = [MAPS[0].name, MAPS[1].name, ("Areas", [MAPS[index].name for index 
 def render(tracker: TrackerMap) -> bytes:
     """Return the PNG image of ``tracker``.
 
-    Each cell is filled in its room's colour. The walls and doors come from the game's edge table.
-    Every wall and door is centred on the line between two cells, so a wall that two rooms share is
+    Each cell is filled in its room's color. The walls and doors come from the game's edge table.
+    Every wall and door is centered on the line between two cells, so a wall that two rooms share is
     drawn once. A hidden door is drawn as a door, which is how the game's map shows it once Soma has
     gone through it.
     """
@@ -311,7 +311,7 @@ def _free_spot(room: str, start: tuple[float, float],
 
 
 def _pin_inside(room: str, spot: tuple[float, float]) -> bool:
-    """Whether a pin centred at ``spot`` lies wholly in map cells of ``room``."""
+    """Whether a pin centered at ``spot`` lies wholly in map cells of ``room``."""
     half = PIN_SPACING / 2
     return all(map_info.room_at(math.floor(spot[0] + dx), math.floor(spot[1] + dy)) == room
                for dx in (-half, half) for dy in (-half, half))
@@ -334,7 +334,7 @@ def cell_of(value) -> tuple:
 def position_icon(map_id, value):
     """Return Soma's marker on map ``map_id`` as ``(x, y, image)``, or None when there is none.
 
-    A map marks Soma only in a room it draws in full colour. UT calls this with "" or None before
+    A map marks Soma only in a room it draws in full color. UT calls this with "" or None before
     the client has written a position, and with a map_id of None before a map has loaded. An
     exception here would disconnect UT, so this returns None for any value it cannot place.
     """

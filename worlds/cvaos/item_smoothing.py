@@ -6,10 +6,10 @@ Every pass here runs only when the ``item_smoothing`` option is on:
 * The gating mobility souls (Malphas, Hippogryph and Giant Bat) and Black Panther get lateness
   targets, set by the ``early_mobility_souls`` and ``black_panther_bias`` options.
   ``bias_progression_souls`` places them near those targets before the main fill, and
-  ``refine_soul_positions`` moves them closer afterward.
+  ``refine_soul_positions`` moves them closer afterwards.
 * The three Ancient Books are spread over the run. ``spread_ancient_books`` places them in early,
   middle and late bands of map depth before the main fill. ``refine_ancient_books`` then moves
-  them toward an early, a middle and a mid-late target in sphere order.
+  them towards an early, a middle and a mid-late target in sphere order.
 * ``smooth_placed_items`` reorders items after the main fill. It moves non-progression items, and
   the weapons whose only progression use is breaking floors or ceilings, among the locations that
   already hold them. Less desirable items go to earlier locations, with long-tailed random jitter
@@ -98,7 +98,7 @@ SOUL_LATE_TARGETS = {
 }
 # Under bias_early, each run has an EARLY_GUARANTEE chance that Malphas or Hippogryph is pulled
 # early, so you have basic mobility in the first third. In the other ~7% of runs, all three keep
-# their late targets. guarantee_early uses a chance of 1 instead. The early pick is weighted toward
+# their late targets. guarantee_early uses a chance of 1 instead. The early pick is weighted towards
 # double jump. Giant Bat is never the early pick, because its flight reaches nearly everything the
 # other two souls do. An early Giant Bat would open most of the castle at once.
 EARLY_GUARANTEE = 0.93
@@ -663,7 +663,7 @@ def bias_progression_souls(world: "CVAOSWorld") -> None:
     depth = region_depth(multiworld, player)
     lateness = _lateness_ranking(multiworld, player, depth)
     # The placement below compares each target with the pre-fill lateness. The post-fill refine
-    # pass later moves each item toward the same target in sphere order, so the targets are stored.
+    # pass later moves each item towards the same target in sphere order, so the targets are stored.
     # _soul_targets is keyed by item name and the copies share a name, so the refine pass skips
     # them and their pre-fill placement stands.
     world._soul_targets = {item.name: target for item, target in targets
@@ -816,7 +816,7 @@ BOOK_REFINE_TRIES = 12  # post-fill swap candidates to try per book before leavi
 
 def refine_ancient_books(world: "CVAOSWorld") -> None:
     """
-    Move the three Ancient Books toward an early, a middle and a mid-late target, after the main
+    Move the three Ancient Books towards an early, a middle and a mid-late target, after the main
     fill.
 
     The targets are drawn from the first third, the middle third, and the band from 1/2 to 3/4 of
@@ -880,7 +880,7 @@ def spread_ancient_books(world: "CVAOSWorld") -> None:
     the main fill.
 
     Map depth stands in for run order because the spheres don't exist yet. ``refine_ancient_books``
-    moves the books toward their final targets after the main fill.
+    moves the books towards their final targets after the main fill.
     """
     multiworld = world.multiworld
     player = world.player

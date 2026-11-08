@@ -290,7 +290,7 @@ class WideItemSmoothing(Toggle):
 
     In a multiworld it runs Archipelago's progression balancing itself, so that the host's own
        balancing seldom undoes its ordering. When the host skips balancing, nothing runs
-       afterward that could undo the ordering, so it skips this step too. A host can also turn
+       afterwards that could undo the ordering, so it skips this step too. A host can also turn
        the step off in the host settings, and then about a quarter of players in a multiworld hold
        mid-game gear by a fifth of the run. Another player's release, item links and plando still
        bypass the ordering.
@@ -375,7 +375,7 @@ class EnemyChecks(Choice):
        Panther and Giant Bat before those enemies' checks. As a result, many of these checks come
        late in logic although you usually make them early, and another game's item placed on one
        may arrive sooner than that game expects. Universal Tracker shows them in its "reachable
-       with tricks" colour. The location group "Unrouted Enemy Defeats" holds them, and "Boss Defeats"
+       with tricks" color. The location group "Unrouted Enemy Defeats" holds them, and "Boss Defeats"
        holds the bosses.
 
     Experimental: its balance is measured but not play-tested, and it may change between versions.
