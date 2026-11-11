@@ -204,7 +204,7 @@ class Session:
                 return frames
         raise GameError(f"Soma didn't arrive in room {room_address:#010x} in {limit} frames.")
 
-    def enter(self, door: str) -> dict:
+    def enter(self, door: str, walls_gone: bool = False) -> dict:
         """Put Soma just inside ``door``, and return the landing that ``teleport_args`` gave.
 
         ``door`` is a door's unique identifier, such as ``"009:008"``. Soma arrives standing
@@ -212,13 +212,14 @@ class Session:
 
         The flags that follow from coming in by that door are set first (see
         ``landing.door_flags``). So a boss door or a wall that Soma has passed to get there
-        is open, and the room's other walls are whole.
+        is open, and the room's other walls are whole. With ``walls_gone``, every wall of the
+        room that a flag removes is gone instead.
         """
         # Imported here because reading collision needs Pillow, which nothing else here does.
         from ..annotator import landing
 
         args = landing.teleport_args(door, self.rom)
-        for address, number, on in landing.door_flags(door, self.rom):
+        for address, number, on in landing.door_flags(door, self.rom, walls_gone):
             self.set_flag(address, number, on)
         self.teleport(args["room_address"], args["camera_x"], args["camera_y"], args["soma_x"],
                       args["soma_y"])

@@ -184,6 +184,18 @@ class TestArrive(unittest.TestCase):
         self.assertFalse(entry.boss)
         self.assertEqual(session.emulator.read(annotator.BOSS_FLAGS + 1, 1), b"\x08")
 
+    def test_arrive_asks_for_the_door_flags_with_the_walls_as_the_caller_wants_them(self):
+        for walls_gone in (False, True):
+            session = Session(fake_game(), rom=b"a ROM")
+            session.boot()
+            with mock.patch.object(success, "room", return_value=TARGET), \
+                    mock.patch.object(landing, "teleport_args", return_value=dict(ARGS)), \
+                    mock.patch.object(landing, "door_flags", return_value=[]) as flags:
+                entry = entries.arrive(session, DOOR, walls_gone=walls_gone)
+            with self.subTest(walls_gone=walls_gone):
+                flags.assert_called_once_with(DOOR, b"a ROM", walls_gone)
+                self.assertEqual(entry, Entry(DOOR, False, "", "settles", *START, 0))
+
     def test_arrive_raises_game_error_outside_normal_play(self):
         session = Session(fake_game(boot_frames=10_000), rom=b"a ROM")
         session.emulator.reset()

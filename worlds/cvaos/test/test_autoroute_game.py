@@ -482,7 +482,7 @@ class TestEnter(unittest.TestCase):
                 mock.patch.object(landing, "door_flags", return_value=self.FLAGS) as flags:
             got = session.enter("305:301")
         args.assert_called_once_with("305:301", b"a ROM")
-        flags.assert_called_once_with("305:301", b"a ROM")
+        flags.assert_called_once_with("305:301", b"a ROM", False)
         self.assertEqual(got, self.ARGS)
         fake = recording.emulator
         self.assertEqual(fake.read(annotator.MISC_FLAGS + 4, 1), b"\x08")
@@ -509,6 +509,27 @@ class TestEnter(unittest.TestCase):
         state = session.state()
         self.assertEqual(state.room_pointer, args["room_address"])
         self.assertEqual(state.soma, (args["feet_x"], args["feet_y"]))
+
+    def test_enter_with_walls_gone_asks_for_the_flags_of_the_room_without_its_walls(self):
+        session = booted(fake_game())
+        session.rom = b"a ROM"
+        with mock.patch.object(landing, "teleport_args", return_value=dict(self.ARGS)), \
+                mock.patch.object(landing, "door_flags", return_value=self.FLAGS) as flags:
+            session.enter("305:301", walls_gone=True)
+        flags.assert_called_once_with("305:301", b"a ROM", True)
+
+    def test_enter_on_the_rom_leaves_the_wall_of_109_108_whole_unless_the_walls_are_gone(self):
+        rom = read_rom()
+        # Flag 33 of the misc flags is bit 1 of their fifth byte. It starts as the opposite of
+        # what each visit should leave.
+        for walls_gone, before, after in ((False, b"\x02", 0x00), (True, b"\x00", 0x02)):
+            with self.subTest(walls_gone=walls_gone):
+                fake = fake_game()
+                session = booted(fake)
+                session.rom = rom
+                fake.write(annotator.MISC_FLAGS + 4, before)
+                session.enter("109:108", walls_gone)
+                self.assertEqual(fake.read(annotator.MISC_FLAGS + 4, 1)[0] & 0x02, after)
 
 
 if __name__ == "__main__":

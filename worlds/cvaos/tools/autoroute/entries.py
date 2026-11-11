@@ -88,13 +88,18 @@ def equipped_enchant(tokens: Iterable[str]) -> str:
 
 
 def arrive(session: game.Session, door: str, boss: bool = False,
-           tokens: Iterable[str] = ()) -> Entry:
+           tokens: Iterable[str] = (), walls_gone: bool = False) -> Entry:
     """Bring Soma into a room by ``door`` with a loadout, and wait until he stops moving.
 
     The room's flags are prepared first, with ``boss`` as ``success.prepare`` takes it, and
     ``tokens`` are the movement tokens that the loadout has. No button is pressed. The call
     returns when Soma has not changed for ``SETTLE`` frames, when he has left the room, or after
     ``LIMIT`` frames.
+
+    ``walls_gone`` is as ``Session.enter`` takes it. An :class:`Entry` doesn't record it, and
+    every stored entry was measured without it. On EmuHawk it moves the end of one arrival: by
+    ``109:108`` Soma comes to rest at (112, 95), which is 32 px below his stored entry, because
+    the wall that he otherwise stands on is gone.
 
     The game is left as the returned entry describes it. After ``"settles"`` Soma is at rest in
     the room, ``SETTLE`` frames after his last change. After ``"leaves"`` he is in another room,
@@ -107,7 +112,7 @@ def arrive(session: game.Session, door: str, boss: bool = False,
     target = success.room(door.partition(":")[0], session.rom)
     success.prepare(session, target, boss)
     session.set_loadout(tokens)
-    session.enter(door)
+    session.enter(door, walls_gone)
     state = session.state()
     seen = (state.soma, state.camera, state.hp[0], state.menu_state)
     # Where Soma was on the last frame of normal play. The game moves him during a door

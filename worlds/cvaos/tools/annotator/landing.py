@@ -924,12 +924,13 @@ def _in_doorway(line: Optional[tuple[int, int, int, int]], x: int, y: int) -> bo
     return abs(y - y0) <= DOORWAY_DEPTH and x0 <= x < x1
 
 
-def door_flags(door_identifier: str, rom: Optional[bytes] = None) -> list[tuple[int, int, bool]]:
+def door_flags(door_identifier: str, rom: Optional[bytes] = None,
+               walls_gone: bool = False) -> list[tuple[int, int, bool]]:
     """Return the game flags that follow from Soma coming into a room by door ``"R:N"``.
 
-    The arguments are those of :func:`teleport_args`. Each flag is an (address of the flag block,
-    flag number, value) triple, and a caller sets them all before it puts Soma at the door's
-    landing.
+    The first two arguments are those of :func:`teleport_args`. Each flag is an (address of the
+    flag block, flag number, value) triple, and a caller sets them all before it puts Soma at the
+    door's landing.
 
     Two kinds of object in the doorway decide a flag:
 
@@ -941,6 +942,9 @@ def door_flags(door_identifier: str, rom: Optional[bytes] = None) -> list[tuple[
 
     Every other wall of R that a flag removes has its flag cleared, which is its state in a new
     game. So R's walls are the same on every visit by this door, whatever an earlier visit broke.
+
+    With ``walls_gone``, the flag of every such wall of R is set instead, so that R is as it is
+    once a player has broken all of them. The boss flags are the same either way.
     """
     door = _door(door_identifier)
     rom = rom if rom is not None else _default_rom()
@@ -952,7 +956,7 @@ def door_flags(door_identifier: str, rom: Optional[bytes] = None) -> list[tuple[
         here = _in_doorway(line, entry.x, entry.y)
         if entry.subtype in emulator.WALLS and entry.var_b:
             key = (emulator.MISC_FLAGS, entry.var_b)
-            flags[key] = flags.get(key, False) or (here and _only_through(door))
+            flags[key] = walls_gone or flags.get(key, False) or (here and _only_through(door))
         elif entry.subtype in emulator.BOSS_DOORS and entry.var_a == 0 and here:
             flags[(emulator.BOSS_FLAGS, entry.var_b)] = True
     return [(address, number, on) for (address, number), on in sorted(flags.items())]

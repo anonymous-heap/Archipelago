@@ -577,6 +577,24 @@ class TestDoorFlagsOnTheRom(unittest.TestCase):
                 self.assertEqual(len({(address, number) for address, number, _ in flags}),
                                  len(flags))
 
+    def test_with_walls_gone_every_wall_flag_is_set_and_the_boss_bits_stay_as_they_were(self):
+        for door, flags in self.flags.items():
+            with self.subTest(door=door):
+                self.assertEqual(landing.door_flags(door, self.rom, walls_gone=True),
+                                 [(address, number, on or address == MISC_FLAGS)
+                                  for address, number, on in flags])
+
+    def test_walls_gone_changes_the_flags_of_the_doors_whose_room_keeps_a_wall(self):
+        changed = {door for door, flags in self.flags.items()
+                   if landing.door_flags(door, self.rom, walls_gone=True) != flags}
+        keeping = {door for door, flags in self.flags.items()
+                   if any(address == MISC_FLAGS and not on for address, _, on in flags)}
+        self.assertEqual(changed, keeping)
+        self.assertEqual(self.flags["109:108"], [(MISC_FLAGS, 33, False)])
+        self.assertIn("109:108", changed)
+        # The wall of a dead end's doorway is gone on either visit.
+        self.assertTrue(changed.isdisjoint(self.OPENED_WALLS))
+
 
 class TestLandingLineOnTheRom(unittest.TestCase):
     @classmethod
