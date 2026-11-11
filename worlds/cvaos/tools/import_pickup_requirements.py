@@ -13,7 +13,8 @@ why. A pickup is held back when one of its sheet rows has:
 
 * a ``dest_room_identifier`` that names no door of the room, or names a room pair with two
   doors without saying which;
-* a combo with a part that has no ``(Token)``, or a token the loader doesn't know;
+* a combo with a part that has no ``(Token)`` (other than "No ability needed", which the loader
+  reads as free), or a token the loader doesn't know;
 * a TRUE in ``<alt 2>``, which the loader ignores;
 * a blank variant column.
 
@@ -120,7 +121,7 @@ def problems(row: dict) -> list[str]:
         if not name.startswith("Misc. combo") or not text.strip():
             continue
         untokened = [part.strip() for part in text.split(",") if part.strip()
-                     and not _TOKEN.search(part)]
+                     and part.strip() != routing_info.NO_ABILITY_LABEL and not _TOKEN.search(part)]
         if untokened:
             found.append(f"{name} has no (Token) for {', '.join(untokened)}: {text!r}")
         try:

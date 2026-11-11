@@ -188,30 +188,46 @@ def _minimize_req_masks(reqs: Iterable[int]) -> tuple[int, ...]:
 
 _PAREN_RE = re.compile(r"\(([^)]+)\)")
 
+# The sheet's dropdown label for a way through that needs nothing. It has no "(Token)", so it is
+# matched by its whole text.
+NO_ABILITY_LABEL = "No ability needed"
+
 
 def _parse_combo_text_to_mask(text: str, *, strict: bool) -> int | None:
     """
-    Return the mask for one ``Misc. combo`` cell, or None when the cell sets no flag.
+    Return the mask for one ``Misc. combo`` cell, or None when the cell names nothing it knows.
 
-    Only the flag names inside parentheses count, so ``"Malphas (DJump), Flying Armor (Glide)"``
-    gives ``DJump | Glide``. An unknown name raises when ``strict`` is set and is skipped
+    A cell holds dropdown labels separated by commas, and all of them together make one way
+    through. A label counts by the flag name inside its parentheses, so
+    ``"Malphas (DJump), Flying Armor (Glide)"`` gives ``DJump | Glide``. The label
+    ``No ability needed`` and the token ``(None)`` add no flag, but they still make the cell a way
+    through, so a cell holding only one of them gives 0 (free).
+
+    A label with no parentheses, other than ``No ability needed``, is skipped:
+    ``tools/import_enemy_requirements.py`` and ``tools/import_pickup_requirements.py`` hold such
+    rows back instead. An unknown name in parentheses raises when ``strict`` is set and is skipped
     otherwise.
     """
     if not text or not text.strip():
         return None
 
     mask = 0
-    for inside in _PAREN_RE.findall(text):
-        key = inside.strip()
-        flag = _ABILITY_BY_NAME.get(key)
-        if flag is None:
-            if strict:
-                raise ValueError(f"Unknown combo token: ({key}) in {text!r}")
+    named = False
+    for label in text.split(","):
+        if label.strip() == NO_ABILITY_LABEL:
+            named = True
             continue
-        if flag != AbilityCombo.None_:
+        for inside in _PAREN_RE.findall(label):
+            key = inside.strip()
+            flag = _ABILITY_BY_NAME.get(key)
+            if flag is None:
+                if strict:
+                    raise ValueError(f"Unknown combo token: ({key}) in {text!r}")
+                continue
+            named = True
             mask |= int(flag)
 
-    return mask or None
+    return mask if named else None
 
 
 def _ability_and_combo_headers(fieldnames: Iterable[str]) -> tuple[list[str], list[str]]:
@@ -698,7 +714,15 @@ class EntranceToEnemyRegionInfo(BaseModel):
 
 
 def _load_enemy_region_requirements() -> tuple[EntranceToEnemyRegionInfo, ...]:
+    """Return a routing row for each door of each annotated enemy row.
+
+    A row is skipped, leaving its placement to the fallback rule, when its doors are blank or name
+    no door, and also when it names doors but nothing is ticked and no combo is filled in. Such a
+    row says nothing about what the doors need, so it isn't read as free. A door and placement
+    that two rows both name raise ValueError, because the rows could disagree.
+    """
     skipped_unresolved = 0
+    skipped_empty = 0
     reader = open_csv(__name__, "symmetric_entrance_to_enemy_region_requirements.csv")
     ability_headers, combo_headers = _ability_and_combo_headers(reader.fieldnames or [])
 
@@ -716,11 +740,18 @@ def _load_enemy_region_requirements() -> tuple[EntranceToEnemyRegionInfo, ...]:
             # in the region graph, so skip it.
             skipped_unresolved += 1
             continue
+        abilities, combo_texts = _extract_abilities_and_combo_texts(row, ability_headers,
+                                                                    combo_headers)
+        if not abilities and not combo_texts:
+            skipped_empty += 1
+            continue
 
         for entrance_identifier in sorted(entrances):
             key = (entrance_identifier, int(row["enemy_number"]))
             if key in seen_keys:
-                continue
+                raise ValueError(
+                    f"symmetric_entrance_to_enemy_region_requirements.csv: enemy "
+                    f"{row['enemy_number']} has more than one row for door {entrance_identifier}")
             seen_keys.add(key)
             out.append(
                 EntranceToEnemyRegionInfo.from_row(
@@ -728,10 +759,10 @@ def _load_enemy_region_requirements() -> tuple[EntranceToEnemyRegionInfo, ...]:
                 )
             )
 
-    if skipped_unresolved:
+    if skipped_unresolved or skipped_empty:
         logging.info(
-            "cvaos: skipped %d enemy routing rows with unresolved dest_room_identifier",
-            skipped_unresolved,
+            "cvaos: skipped %d enemy routing rows with unresolved dest_room_identifier and %d "
+            "that name doors but no requirement", skipped_unresolved, skipped_empty,
         )
     return tuple(out)
 
