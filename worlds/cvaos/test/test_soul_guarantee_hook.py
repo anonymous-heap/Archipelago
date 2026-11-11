@@ -1,7 +1,10 @@
 """
-Pins for the soul guarantee hook (``rom/soul_guarantee_hook.py``): the book-to-soul table, the
-blob's layout, the veneer, the base-ROM check, and, when capstone is installed, a real
+Tests that pin the soul guarantee hook (``rom/soul_guarantee_hook.py``): the book-to-soul table,
+the blob's layout, the veneer, the base-ROM check, and, when capstone is installed, a real
 disassembly of the trampoline.
+
+The tests also cover the pause-menu descriptions: which books gain the note that their soul always
+drops, how the new strings are laid out, and whether and when the patch applies them.
 
     python -m pytest worlds/cvaos/test/test_soul_guarantee_hook.py -v
 """
@@ -10,10 +13,12 @@ from __future__ import annotations
 import unittest
 
 from ..ram import addresses as addr
+from ..rom import custom_pickups as cp
 from ..rom import soul_guarantee_hook as sgh
 from ..rom.address_space import m2_region_hit
 from ..rom.entity import GBA_ROM_BASE
 from ..rom.soul_shuffle import VANILLA
+from . import run_apply_rom_features
 
 try:
     import capstone
@@ -64,8 +69,12 @@ class PlacementTest(unittest.TestCase):
     def test_trampoline_fits_its_reservation_and_is_clear_of_m2(self):
         self.assertLessEqual(len(sgh._TRAMPOLINE), 0x80)
         self.assertIsNone(m2_region_hit(TRAMP, 0x80))
-        # the previous hook blob (inventory menu, 0x670500 + 212 bytes) ends before us
-        self.assertGreaterEqual(TRAMP, 0x670500 + 212)
+
+    def test_descriptions_sit_between_the_trampoline_and_the_icon_table(self):
+        trampoline_end = sgh.GUARANTEE_TRAMPOLINE.addr + sgh.GUARANTEE_TRAMPOLINE.size
+        self.assertGreaterEqual(sgh.BOOK_DESCRIPTIONS.addr, trampoline_end)
+        self.assertLessEqual(sgh.BOOK_DESCRIPTIONS.addr + sgh.BOOK_DESCRIPTIONS.size,
+                             cp.CUSTOM_ICON_TABLE_GBA)
 
 
 class BlobTest(unittest.TestCase):
@@ -131,3 +140,124 @@ class VeneerAndWritesTest(unittest.TestCase):
         rom[SITE] ^= 0xFF
         with self.assertRaisesRegex(ValueError, "ROM mismatch"):
             sgh.build_writes(bytes(rom))
+
+
+# Each fixture book has a made-up two-line description at these text-ids and addresses, shaped like
+# the vanilla ones. Each first line is padded to 33 characters, the length of a vanilla first line,
+# so the strings are as long as the real ones. Book 1's string is then not a multiple of 4 bytes
+# long, so alignment padding goes between it and Book 3's string.
+FIXTURE_TEXT_IDS = {26: 374, 27: 375, 28: 376}
+FIXTURE_STRINGS_GBA = 0x08500000
+FIXTURE_FIRST_LINE = "{:<33}"
+
+
+def menu_string(*lines: str) -> bytes:
+    return b"\x01\x00" + b"\x06".join(line.encode("ascii") for line in lines) + b"\x06\x0a"
+
+
+def first_line(slot: int) -> str:
+    return FIXTURE_FIRST_LINE.format(f"Book in slot {slot}")
+
+
+def rom_with_descriptions(last_line: str = "short") -> bytearray:
+    """A blank ROM whose three books each have a description text-id and a two-line string."""
+    rom = bytearray(ROM_SIZE)
+    address = FIXTURE_STRINGS_GBA
+    for slot, text_id in FIXTURE_TEXT_IDS.items():
+        put(rom, sgh.DESC_TIDS_GBA + 2 * slot, text_id.to_bytes(2, "little"))
+        put(rom, sgh.STRINGPTR_GBA + 4 * text_id, address.to_bytes(4, "little"))
+        put(rom, address, menu_string(first_line(slot), last_line))
+        address += 0x80
+    return rom
+
+
+def put(rom: bytearray, gba: int, data: bytes) -> None:
+    offset = gba - GBA_ROM_BASE
+    rom[offset:offset + len(data)] = data
+
+
+def pointer_offset(text_id: int) -> int:
+    """File offset of ``text_id``'s entry in the string-pointer array."""
+    return sgh.STRINGPTR_GBA - GBA_ROM_BASE + 4 * text_id
+
+
+def described_string(rom: bytes, slot: int) -> bytes:
+    """Return the menu string that the string pointer for ``slot``'s fixture text-id points to."""
+    at = pointer_offset(FIXTURE_TEXT_IDS[slot])
+    start = int.from_bytes(rom[at:at + 4], "little") - GBA_ROM_BASE
+    return bytes(rom[start:rom.index(b"\x06\x0a", start) + 2])
+
+
+class DescriptionTest(unittest.TestCase):
+    def test_only_books_whose_soul_an_enemy_drops_are_described(self):
+        # No enemy row carries the Giant Bat soul (blue 2), because it is an item in the multiworld
+        # pool.
+        self.assertEqual(sgh.DESCRIBED_BOOKS, (BOOK_1, BOOK_3))
+        self.assertNotIn((1, 2), {(t, i) for t, i, _rate in VANILLA.values()})
+
+    def test_described_books_gain_the_note_and_book_2_keeps_its_string(self):
+        rom = rom_with_descriptions()
+        for offset, data in sgh.build_description_writes(bytes(rom)).items():
+            rom[offset:offset + len(data)] = data
+        for book in (BOOK_1, BOOK_3):
+            self.assertEqual(described_string(rom, book.slot),
+                             menu_string(first_line(book.slot), "short Its soul always drops."))
+        self.assertEqual(described_string(rom, BOOK_2.slot), menu_string(first_line(27), "short"))
+
+    def test_only_the_two_pointers_and_the_strings_are_written(self):
+        writes = sgh.build_description_writes(bytes(rom_with_descriptions()))
+        self.assertEqual(set(writes), {pointer_offset(374), pointer_offset(376),
+                                       sgh.BOOK_DESCRIPTIONS.addr - GBA_ROM_BASE})
+
+    def test_strings_are_word_aligned_inside_the_reservation(self):
+        writes = sgh.build_description_writes(bytes(rom_with_descriptions()))
+        strings = writes[sgh.BOOK_DESCRIPTIONS.addr - GBA_ROM_BASE]
+        self.assertLessEqual(len(strings), sgh.BOOK_DESCRIPTIONS.size)
+        first, second = (int.from_bytes(writes[pointer_offset(FIXTURE_TEXT_IDS[b.slot])], "little")
+                         for b in sgh.DESCRIBED_BOOKS)
+        book_1_length = len(menu_string(first_line(26), "short Its soul always drops."))
+        self.assertNotEqual(book_1_length % 4, 0, "the fixture must need padding")
+        self.assertEqual(first, sgh.BOOK_DESCRIPTIONS.addr)
+        self.assertEqual(second, first + book_1_length + (-book_1_length % 4))
+
+    def test_a_last_line_may_reach_exactly_the_box_width(self):
+        # The real Book 1 line, "hell fires. Its soul always drops.", is exactly 34 characters.
+        sgh.build_description_writes(bytes(rom_with_descriptions(last_line="x" * 11)))  # 11 + 23
+
+    def test_a_line_too_long_for_the_box_is_refused(self):
+        rom = rom_with_descriptions(last_line="x" * 12)   # 12 + 23 > 34
+        with self.assertRaisesRegex(ValueError, "Ancient Book 1.*34 characters"):
+            sgh.build_description_writes(bytes(rom))
+
+    def test_a_pointer_to_no_string_is_a_rom_mismatch(self):
+        rom = rom_with_descriptions()
+        put(rom, sgh.STRINGPTR_GBA + 4 * FIXTURE_TEXT_IDS[26], (0x08600000).to_bytes(4, "little"))
+        with self.assertRaisesRegex(ValueError, "ROM mismatch"):
+            sgh.build_description_writes(bytes(rom))
+
+    def test_a_terminated_string_without_the_menu_header_is_a_rom_mismatch(self):
+        rom = rom_with_descriptions()
+        put(rom, 0x08600000, b"\x00\x00ab\x06\x0a")
+        put(rom, sgh.STRINGPTR_GBA + 4 * FIXTURE_TEXT_IDS[26], (0x08600000).to_bytes(4, "little"))
+        with self.assertRaisesRegex(ValueError, "ROM mismatch"):
+            sgh.build_description_writes(bytes(rom))
+
+
+class PatchPipelineTest(unittest.TestCase):
+    """apply_rom_features installs the book descriptions only when Ancient Book Soul Drops is on,
+    and installs them before the Item-Use menu extension copies the string-pointer array."""
+
+    def _rom_seen_by_the_menu_extension(self, books_on: bool) -> bytes:
+        stubs = run_apply_rom_features(self, bytes(rom_with_descriptions()),
+                                       ancient_book_soul_drops=books_on)
+        return stubs["inventory_menu"].call_args.args[0]
+
+    def test_the_menu_extension_copies_the_repointed_descriptions(self):
+        rom = self._rom_seen_by_the_menu_extension(books_on=True)
+        self.assertEqual(int.from_bytes(rom[pointer_offset(374):pointer_offset(374) + 4], "little"),
+                         sgh.BOOK_DESCRIPTIONS.addr)
+
+    def test_with_the_option_off_the_descriptions_stay_vanilla(self):
+        rom = self._rom_seen_by_the_menu_extension(books_on=False)
+        self.assertEqual(int.from_bytes(rom[pointer_offset(374):pointer_offset(374) + 4], "little"),
+                         FIXTURE_STRINGS_GBA)

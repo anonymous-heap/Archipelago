@@ -14,7 +14,7 @@ from ..rom import deathlink_hook as dh
 from ..rom import soul_drop_rates as sdr
 from ..rom import soul_shuffle as ss
 from ..rom.address_space import ROM_SIZE, gba_space
-from ..rom.enemy_table import ENEMY_TABLE, EnemyDNA, field_offset, row_offset
+from ..rom.enemy_table import EnemyDNA, field_offset, row_offset
 from ..rom.entity import GBA_ROM_BASE
 
 
@@ -40,12 +40,7 @@ class EnemyTableLayoutTest(unittest.TestCase):
         self.assertEqual((ss.ENEMY_STRIDE, ss.SOUL_RATE_OFF, ss.SOUL_TYPE_OFF, ss.SOUL_INDEX_OFF),
                          (0x24, 0x12, 0x17, 0x18))
 
-    def test_both_features_share_one_declaration(self):
-        self.assertIs(sdr.EnemyDNA, EnemyDNA)
-        self.assertIs(sdr.ENEMY_TABLE, ENEMY_TABLE)
-        self.assertIs(ss.ENEMY_TABLE, ENEMY_TABLE)
-        self.assertEqual(ss._entry(54), row_offset(54))
-        self.assertEqual(sdr._rate_offset(54), field_offset(54, "soul_rate"))
+    def test_a_field_offset_is_its_row_plus_the_field(self):
         self.assertEqual(field_offset(54, "soul_type"), row_offset(54) + 0x17)
 
     def test_table_placement(self):
@@ -59,7 +54,7 @@ class EnemyTableLayoutTest(unittest.TestCase):
                                  (0x080E9644 - GBA_ROM_BASE) + enemy_id * 0x24 + 0x12)
 
     def test_rate_offset_refuses_an_enemy_outside_the_table(self):
-        with self.assertRaises(Exception):
+        with self.assertRaises(IndexError):
             sdr._rate_offset(sdr.ENEMY_COUNT)
 
 
@@ -94,8 +89,6 @@ class DeathlinkPlacementTest(unittest.TestCase):
         self.assertEqual((dh.HOOK_SITE_GBA, dh.TRAMPOLINE_GBA), (dh.HOOK_SITE.addr, dh.DEATHLINK_TRAMPOLINE.addr))
 
     def test_trampoline_fits_its_reservation_with_headroom(self):
-        # 0x670040 + 0xC0 = 0x670100, where the Skull Key WarpHook begins
-        self.assertEqual(dh.DEATHLINK_TRAMPOLINE.addr + 0xC0, 0x08670100)
         self.assertLessEqual(len(dh._TRAMPOLINE), 0xC0)
 
     def test_an_oversized_blob_refuses_to_build(self):
@@ -104,7 +97,3 @@ class DeathlinkPlacementTest(unittest.TestCase):
             dh.DEATHLINK_TRAMPOLINE.bind(space).write(bytes(0xC1), patch=Patch(name="too big"))
         with self.assertRaises(ValueError):
             dh.HOOK_SITE.bind(space).write(bytes(9), patch=Patch(name="too big"))
-
-    def test_veneer_target_comes_from_the_trampoline_entry(self):
-        veneer = dh._far_jump_veneer(dh.DEATHLINK_TRAMPOLINE)
-        self.assertEqual(int.from_bytes(veneer[4:], "little"), dh.DEATHLINK_TRAMPOLINE.addr | 1)

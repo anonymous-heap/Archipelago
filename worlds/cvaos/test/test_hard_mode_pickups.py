@@ -1,0 +1,123 @@
+"""
+Tests for the Hard Mode Pickups option: which settings shuffle the five Hard Mode pickups, and how
+the patch lets them spawn outside Hard Mode.
+
+    python -m pytest worlds/cvaos/test/test_hard_mode_pickups.py -v
+"""
+from __future__ import annotations
+
+import unittest
+from collections import Counter
+
+from BaseClasses import MultiWorld
+from Fill import distribute_items_restrictive
+from test.general import gen_steps, setup_multiworld
+
+from .. import CVAOSWorld
+from ..data import pickup_info_collection
+from ..options import HardModePickups
+from ..rom.entity import ENTITY_SIZE, GBA_ROM_BASE, HARD_PICKUP, PICKUP
+from ..rom.patch import _TYPE_OFF, get_location_data
+
+STEPS = ("generate_early", "create_regions", "create_items")
+HARD_PICKUPS = [p for p in pickup_info_collection if p.is_hard_mode_only]
+HARD_LOCATIONS = {p.location_name for p in HARD_PICKUPS}
+HARD_ITEMS = Counter(p.item_name for p in HARD_PICKUPS)
+
+# (hard_mode, hard_mode_pickups) -> whether the five pickups are shuffled.
+EXPECTED = {
+    (False, "with_hard_mode"): False,
+    (True, "with_hard_mode"): True,
+    (False, "always"): True,
+    (True, "always"): True,
+    (False, "never"): False,
+    (True, "never"): False,
+}
+
+
+def build(hard_mode: bool, hard_mode_pickups: str, steps=STEPS, seed: int = 3) -> MultiWorld:
+    options = {"hard_mode": hard_mode, "hard_mode_pickups": hard_mode_pickups}
+    return setup_multiworld(CVAOSWorld, steps, seed=seed, options=options)
+
+
+def location_writes(multiworld: MultiWorld) -> tuple[list, dict]:
+    """Every filled location, and the writes the patch builds for them."""
+    locations = [loc for loc in multiworld.get_locations(1) if loc.address is not None]
+    return locations, get_location_data(multiworld.worlds[1], locations)
+
+
+def written_types(multiworld: MultiWorld) -> list[int]:
+    """The entity type byte that the patch writes at every filled location."""
+    locations, writes = location_writes(multiworld)
+    return [writes[loc.address - GBA_ROM_BASE + _TYPE_OFF][0] for loc in locations]
+
+
+class InclusionTest(unittest.TestCase):
+    def test_there_are_five_hard_mode_pickups(self):
+        self.assertEqual(len(HARD_PICKUPS), 5)
+
+    def test_with_hard_mode_is_the_default(self):
+        self.assertEqual(HardModePickups.default, HardModePickups.option_with_hard_mode)
+
+    def test_locations_and_items_follow_the_option(self):
+        for (hard_mode, setting), included in EXPECTED.items():
+            with self.subTest(hard_mode=hard_mode, hard_mode_pickups=setting):
+                multiworld = build(hard_mode, setting)
+                names = {loc.name for loc in multiworld.get_locations(1)}
+                items = [*multiworld.itempool, *multiworld.worlds[1].get_pre_fill_items()]
+                pool = Counter(item.name for item in items)
+                self.assertEqual(HARD_LOCATIONS & names, HARD_LOCATIONS if included else set())
+                self.assertEqual(pool & HARD_ITEMS, HARD_ITEMS if included else Counter())
+                self.assertEqual(len(items), len(names))
+
+
+class SpawnTypeTest(unittest.TestCase):
+    """A location holding a Hard Mode item is written as a PICKUP, so it spawns in normal mode too.
+
+    Whenever the item's own copy is in the pool, Hard Mode is on or Hard Mode Pickups is
+    ``always``, so its location spawns either way. A copy placed elsewhere, by a plando for example,
+    has the same code and has to spawn in normal mode. The entity type comes from the item rather
+    than the location, so these tests place the item at an ordinary location, which is where a
+    real fill nearly always puts it."""
+
+    def _written_type(self, hard_mode: bool, setting: str, item_name: str) -> int:
+        world = build(hard_mode, setting).worlds[1]
+        location = next(loc for loc in world.get_locations() if loc.name not in HARD_LOCATIONS)
+        location.place_locked_item(world.create_item(item_name))
+        writes = get_location_data(world, [location])
+        return writes[location.address - GBA_ROM_BASE + _TYPE_OFF][0]
+
+    def test_every_hard_mode_item_is_written_as_an_ordinary_pickup(self):
+        for pickup in HARD_PICKUPS:
+            with self.subTest(item=pickup.item_name):
+                self.assertEqual(self._written_type(False, "always", pickup.item_name), PICKUP)
+
+    def test_a_hard_mode_item_placed_in_a_normal_mode_seed_spawns_there(self):
+        self.assertEqual(self._written_type(False, "with_hard_mode", "Death's Sickle"), PICKUP)
+
+
+class FilledSeedTest(unittest.TestCase):
+    """End to end: fill a seed, then build the location writes for every location.
+
+    The writes depend only on the placed items, not on the hard mode options."""
+
+    def _filled(self, hard_mode: bool, setting: str, seed: int) -> MultiWorld:
+        multiworld = build(hard_mode, setting, steps=gen_steps, seed=seed)
+        distribute_items_restrictive(multiworld)
+        return multiworld
+
+    def test_a_filled_seed_writes_no_hard_pickup_anywhere(self):
+        # Normal mode with the five pickups shuffled in: a HARD_PICKUP written here would not spawn.
+        self.assertNotIn(HARD_PICKUP, written_types(self._filled(False, "always", 1)))
+
+    def test_never_leaves_the_vanilla_hard_pickups_untouched(self):
+        _locations, writes = location_writes(self._filled(True, "never", 1))
+        for pickup in HARD_PICKUPS:
+            record = range(pickup.ptr_address - GBA_ROM_BASE,
+                           pickup.ptr_address - GBA_ROM_BASE + ENTITY_SIZE)
+            with self.subTest(pickup=pickup.display_name):
+                self.assertFalse(any(offset in record for offset in writes))
+
+
+if __name__ == "__main__":
+    unittest.main()

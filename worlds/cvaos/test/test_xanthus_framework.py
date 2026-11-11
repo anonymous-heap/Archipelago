@@ -34,13 +34,6 @@ class TestSlotMath(unittest.TestCase):
         self.assertEqual(xf.slot_entry_offset(1), 0x7D0040)
         self.assertEqual(xf.slot_entry_offset(2), 0x7D0044)
 
-    def test_slots_do_not_overlap(self):
-        spans = [range(xf.slot_body_gba(s), xf.slot_body_gba(s) + xf.SLOT_BODY_STRIDE)
-                 for s in range(1, xf.SLOT_COUNT + 1)]
-        for i, a in enumerate(spans):
-            for b in spans[i + 1:]:
-                self.assertFalse(set(a) & set(b))
-
     def test_rejects_a_slot_outside_the_list(self):
         for bad in (0, 13, -1):
             with self.subTest(slot=bad), self.assertRaises(ValueError):

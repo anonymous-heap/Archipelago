@@ -1,60 +1,150 @@
 """
 Transport-neutral per-tick client logic for Castlevania: Aria of Sorrow.
 
-``CVAOSClientLogic`` is the game-side brain shared by both clients: the BizHawk client
-(``client.py``) and the Steam Advance Collection process-attach client
-(``collection_client.py``). It holds the per-session state and implements one private
-helper per concern -- location checks, item receipt, DeathLink relay, goal report --
-plus the ``_tick`` orchestrator. Everything here talks to the game only through
-``AoSRAM`` (whose transport backend the caller chose) and to Archipelago only through
-``CommonContext`` APIs, so it neither knows nor cares which emulator is on the other
-end. Transport exceptions are the caller's problem: each client wraps ``_tick`` in a
-try/except for its own backend's error type and retries/reconnects.
+``CVAOSClientLogic`` is the game logic that both clients share: the BizHawk Client
+(``client.py``) and the Collection Client (``collection_client.py``). It holds the per-session
+state, and its ``_tick`` runs one private helper per task. Those helpers send location checks,
+grant received items and Progressive Movement souls, relay DeathLink, and report the goal. They
+also keep Soma's position and the explored map in data storage for the map tracker, and
+Universal Tracker's map reads the position too. Another helper writes the local play-data log
+(play_data.py). The client sends no checks, reports no goal and records no play data from a save
+that has received more items than the server has sent, until the save catches up or the player
+types /trust_save.
 
-Mixed into ``CVAOSClient`` (so tests can keep driving ``client._relay_deathlink`` etc.
-directly) and held as a component by the collection client's context.
+The logic reaches the game only through ``AoSRAM``, on whichever transport backend the caller
+chose, and reaches Archipelago only through ``CommonContext``. It therefore works the same in
+either client. Each client wraps ``_tick`` in error handling for its own backend, and retries or
+reconnects when that backend fails.
+
+``CVAOSClient`` mixes this class in, so tests can call helpers such as
+``client._relay_deathlink`` directly. The Collection Client's context holds an instance instead.
 """
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 from NetUtils import ClientStatus
 
-from . import item_granting
+from . import exploration, item_granting, play_data, tracker_map
+from .data import item_info_collection
+from .enemy_checks import defeat_location_id, enemy_id_for_location
+from .items import PROGRESSIVE_MOVEMENT, PROGRESSIVE_MOVEMENT_STAGES, item_table
 from .locations import flag_offset_to_location_id
 from .options import Goal
 from .ram import AoSRAM, addresses as addr
+from .rom import RELEASED_IDENTIFIERS
 
 if TYPE_CHECKING:
     from CommonClient import CommonContext
+
+PROGRESSIVE_MOVEMENT_CODE = item_table[PROGRESSIVE_MOVEMENT].code
+STARTING_LOCATION = -2  # the location id the server gives starting-inventory items
+_STAGE_INFOS = tuple(next(info for info in item_info_collection if info.name == name)
+                     for name in PROGRESSIVE_MOVEMENT_STAGES)
+
+# Soma's position for the trackers' maps is sent when it changes, at most this often.
+POSITION_INTERVAL = 0.5
+# The explored map is read this often, and sent when it has changed.
+EXPLORATION_INTERVAL = 2.0
+# The play-data log's values are read this often, or at once when new checks wait to be logged.
+PLAY_DATA_INTERVAL = 2.0
+
+# The items_handling a client connects with. Both ask for items from other worlds and for the
+# starting inventory. For a seed from V0.5 on, the client also asks for the player's own items,
+# because the ROM never hands out the item at a defeat location (see items_handling_for).
+ITEMS_FROM_OTHER_WORLDS = 0b101
+ITEMS_INCLUDING_OWN = 0b111
+
+
+def items_handling_for(identifier: bytes) -> int:
+    """Return the items_handling for a ROM that carries ``identifier``.
+
+    For a released identifier (V0.3 or V0.4), the client asks only for other worlds' items and
+    the starting inventory, because those seeds' slot data does not list the pickups whose items
+    the ROM hands out. For every newer identifier, it asks for the player's own items too.
+    """
+    if identifier.decode("ascii", "replace") in RELEASED_IDENTIFIERS:
+        return ITEMS_FROM_OTHER_WORLDS
+    return ITEMS_INCLUDING_OWN
+
 
 # Max items to grant per tick, so a large backlog on connect can't stall the watcher
 # (each grant is a few emulator round-trips). Leftovers are picked up on the following ticks.
 MAX_ITEMS_PER_TICK = 10
 
+# The field that marks the client's received-items probe. The probe is a Get packet, and the
+# server copies this field into its Retrieved reply (see _checks_held).
+RECEIVED_ITEMS_PROBE = "cvaos_received_items_probe"
+
+SAVE_AHEAD_WARNING = (
+    "This save has received more items than the server has sent for this seed, so the client is "
+    "holding back its checks and goal. The save may belong to another seed, or be New Game+ "
+    "started from one. The server may also have lost its most recent checks, in a crash or a "
+    "restart from the seed file. If this is your own save for this seed, type /trust_save to "
+    "send its checks and goal. Otherwise, load this seed's save or start a new game.")
+
 
 class CVAOSClientLogic:
-    """Per-session state + the per-tick game logic, shared by every transport."""
+    """Per-session state and per-tick game logic, shared by both clients."""
 
     # Per-session state, (re)initialized in _reset_session_state.
     death_causes: list[str]
     local_checked_locations: set[int]
-    currently_dead: bool
+    currently_dead: bool | None
     time_of_sent_death: float | None
     goaled: bool
+    # The save guard's state (see _checks_held). They have defaults because /trust_save can be
+    # typed before the first connect resets them.
+    warned_save_ahead: bool = False
+    save_trusted: bool = False
 
-    def _reset_session_state(self) -> None:
+    # The server connections (``ctx.server``) that the received-items probe was sent on and
+    # answered on. A new connection is a new object, so neither carries over to it.
+    items_probe_sent_on: object = None
+    items_complete_on: object = None
+
+    def _reset_session_state(self, *, same_seed: bool = False) -> None:
         # Reset per-session state so swapping ROMs/games without restarting the client can't
-        # carry anything stale over.
-        self.death_causes = []
+        # carry anything stale over. Each client calls this on every connect or attach, with
+        # same_seed True when it is reconnecting to the seed it was already playing.
         self.local_checked_locations = set()
-        # DeathLink: whether we currently consider Soma dead: guards re-sending our own death and
-        # re-applying an incoming one until HP recovers.
-        self.currently_dead = False
-        # AP's timestamp on the death we last sent, so the bounce handler can recognize our own echo.
+        # DeathLink: the cause of an incoming death not applied yet. A reconnect to the same seed
+        # keeps it, so a death received while Soma could not be killed (paused, say) is still
+        # applied.
+        if not same_seed:
+            self.death_causes = []
+        # DeathLink: whether we currently consider Soma dead. It guards against re-sending our own
+        # death and re-applying an incoming one until HP recovers. A reconnect to the same seed
+        # keeps it, so a death sent before the disconnect is not sent again, while one that
+        # happened during the disconnect still is. On a first connect or a different seed, it is
+        # None until the first tick reads the game.
+        if not same_seed:
+            self.currently_dead = None
+        # AP's timestamp on the death we last sent, so the bounce handler can recognize that death
+        # when the server bounces it back.
         self.time_of_sent_death = None
         # Goal: latched True once we've reported completion, so we report it only once.
         self.goaled = False
+        # Whether the client has warned that the loaded save is ahead of the server, so the warning
+        # is printed once for that save.
+        self.warned_save_ahead = False
+        # Whether the player released the hold with /trust_save. Every reset ends the release,
+        # even for a reconnect to the same seed (see trust_save).
+        self.save_trusted = False
+        # The position and the map cell last sent, and when the position was sent, so a new
+        # session sends both again.
+        self.last_position = None
+        self.last_cell = None
+        self.last_position_time = 0.0
+        # The explored map last sent, and when it was last read.
+        self.last_exploration = None
+        self.last_exploration_time = 0.0
+        # The play-data log's writer for this session, the checks it has yet to log, and when
+        # its values were last read. A new writer starts the session's lines.
+        self.play_data_log = None
+        self.unlogged_checks = set()
+        self.last_play_data_time = 0.0
 
     def queue_deathlink_from_bounce(self, ctx: "CommonContext", cmd: str, args: dict) -> None:
         # Queue an incoming DeathLink's cause; _relay_deathlink applies the kill. Skip the echo of
@@ -66,41 +156,211 @@ class CVAOSClientLogic:
             data = args.get("data", {})
             if data.get("time") == self.time_of_sent_death:
                 return  # our own death, bounced back to us
+            if self.currently_dead:
+                return  # Soma is already dead or dying, so this death changes nothing
+            # Keep one pending death: several that arrive while Soma cannot be killed yet (paused,
+            # in a menu) kill him once, not once each after every respawn.
             source = data.get("source", "Another world")
-            self.death_causes.append(data.get("cause") or f"{source} killed you without a word!")
+            self.death_causes = [data.get("cause") or f"{source} killed you without a word!"]
+
+    def track_received_items(self, ctx: "CommonContext", cmd: str, args: dict) -> None:
+        """
+        Note when the client holds every item the server has sent, for _checks_held.
+
+        The server answers the received-items probe only after the items it sent before, so the
+        answer marks the list as complete on this connection. A ReceivedItems packet whose index
+        does not match the list's length makes CommonClient discard it and ask the server for
+        every item again. Until a new probe is answered after that, the list is not known to be
+        complete.
+        """
+        if cmd == "Retrieved" and args.get(RECEIVED_ITEMS_PROBE):
+            self.items_complete_on = ctx.server
+        elif cmd == "ReceivedItems" and len(ctx.items_received) != (
+                args.get("index", 0) + len(args.get("items", ()))):
+            self.items_probe_sent_on = self.items_complete_on = None
 
     async def _tick(self, ctx: "CommonContext", ram: AoSRAM) -> None:
-        # Per-tick orchestrator: read the run state once, relay DeathLink every tick, and run the
-        # in-gameplay-only concerns (checks/items/goal) when it is safe to read & write game memory.
+        # Read the run state and relay DeathLink every tick. The work that needs normal gameplay
+        # (checks, tracker data, items, goal) runs only when it is safe to read and write game
+        # memory.
         game_state, menu_state = await ram.get_run_state()
         in_gameplay = (game_state == addr.GameState.INGAME
                        and menu_state == addr.MENU_STATE_NORMAL)
-        # DeathLink must run even when NOT in gameplay: a death is, by definition, the game
-        # leaving normal gameplay (the death fade, then the game-over screen). Gating it behind
-        # is_in_gameplay() was the bug -- it could only catch the ~1-frame window where HP hit 0
-        # while still in normal play, which a 0.125s poll almost always skipped.
-        await self._relay_deathlink(ctx, ram, game_state, menu_state, in_gameplay)
-        # RAM state to keep forced while a game is loaded (any in-game sub-state, so it is set
-        # before room transitions load entities). The game writes these only at
-        # new-game/mode-select/completion, so a per-tick poke holds without fighting it.
+        # DeathLink runs even outside normal gameplay, because a death takes the game out of it
+        # (the death fade, then the game-over screen). Within normal play, HP is 0 for only about
+        # one frame, so a 0.125s poll limited to normal play would almost always miss the death.
+        # The relay reads the run state again itself, in the same request as HP and the
+        # kill-request flag.
+        await self._relay_deathlink(ctx, ram)
+        # Keep these values forced in any in-game sub-state, so they are already set when a room
+        # transition loads its entities. The game writes them only at new game, mode select and
+        # completion, so writing them each tick keeps them set.
         if game_state == addr.GameState.INGAME:
             # Mark every randomized ROM as cleared-data so cutscenes are Start-skippable.
             await ram.ensure_game_cleared()
             # Hard Mode: force the difficulty nibble so HARD_PICKUP entities spawn.
             if ctx.slot_data.get("hard_mode"):
                 await ram.ensure_hard_mode()
-        # Reading checks / injecting items is only safe in normal in-room gameplay (not paused,
-        # transitioning, in a menu, dying, or game-over), so we never read garbage or write at
-        # an unsafe time. Normal gameplay is not quite enough on its own: the pickup flags, the
-        # inventory and the received-counter all live in the save-data block, and that block reads
-        # as zeros while a file is still loading, with GAME_STATE and MENU_STATE already reporting
-        # normal play (seen live). A grant made then lands in memory the load is about to
-        # overwrite; if the load wins the counter write, the item is handed out again next tick.
-        # Max HP sits in the same block and is never 0 for a loaded file, so it tells the two apart.
+        # Reading checks and granting items is safe only in normal in-room gameplay (not paused,
+        # transitioning, in a menu, dying, or at game over), so we never read garbage or write at
+        # an unsafe time.
+        #
+        # Normal gameplay is not quite enough on its own. The pickup flags, the inventory and the
+        # received-counter all live in the save-data block, which reads as zeros while a file is
+        # still loading, even though GAME_STATE and MENU_STATE already report normal play
+        # (observed live). A grant made then lands in memory the load is about to overwrite. If
+        # the load overwrites the advanced counter, the item is given again next tick. Max HP sits
+        # in the same block and is never 0 for a loaded file, so it tells the two apart.
         if in_gameplay and await ram.get_max_hp() > 0:
-            await self._send_location_checks(ctx, ram)
+            # While the save guard holds the save's checks, the client sends no checks, reports no
+            # goal and records no play data. The save may be another seed's, and the server would
+            # count its checks and goal for this seed, which cannot be taken back.
+            held = await self._checks_held(ctx, ram)
+            if not held:
+                await self._send_location_checks(ctx, ram)
+            await self._report_position(ctx, ram)
+            await self._report_exploration(ctx, ram)
             await self._receive_items(ctx, ram)
-            await self._report_goal(ctx, ram)
+            await self._grant_progressive_movement(ctx, ram)
+            if not held:
+                await self._report_goal(ctx, ram)
+                await self._record_play_data(ctx, ram)
+
+    async def _checks_held(self, ctx: "CommonContext", ram: AoSRAM) -> bool:
+        """
+        Return True while the loaded save's checks and goal are held back.
+
+        They are held while the save's received-item counter is ahead of the items the server
+        has sent, unless the player has typed /trust_save. Two things put the counter ahead:
+
+        * A save from another seed counts that seed's items. New Game+ keeps the counter, so a
+          file that looks new can still hold a finished seed's count.
+        * The server can lose its most recent checks, in a crash between its autosaves or when a
+          room restarts from the seed file. From V0.5 on, the counter also counts the player's
+          own items that the server sends, such as an own item at a defeat location. Those items
+          are lost with the checks, so the player's own save is then ahead too.
+
+        The client cannot tell these cases apart, so the warning names both, and /trust_save
+        lets the player release the hold for their own save (see trust_save). In the second
+        case, the held checks are the ones that make the server send the lost items again.
+
+        The guard catches a save from another seed only when that save has received more items
+        than this seed has sent. A save whose counter is not ahead passes, and its pickups and
+        defeats are sent as this seed's checks. A brand-new save starts at 0 and is never ahead.
+
+        The counter is also ahead for a moment after connecting, while the server's items are
+        still arriving. Holding checks then is harmless, because they are sent once the items
+        arrive. So the client warns only once the item list is known to be complete. It sends a
+        probe that the server answers after every item it has already sent (see
+        track_received_items), and warns if the counter is still ahead when the answer arrives.
+
+        The hold lifts by itself as soon as the counter is no longer ahead. That also ends a
+        release, so a different save loaded later in the session is held if it is ahead.
+        """
+        from CommonClient import logger
+
+        if await ram.get_received_count() <= len(self._grantable_items(ctx)):
+            self.save_trusted = False
+            if self.warned_save_ahead:
+                self.warned_save_ahead = False
+                logger.info("The loaded save no longer has more items than the server has sent, "
+                            "so the client sends its checks and goal again.")
+            return False
+        if self.save_trusted:
+            return False
+        # Ask once per connection whether the item list is complete, and warn once it is.
+        complete = self.items_complete_on is not None and self.items_complete_on is ctx.server
+        if not complete:
+            if self.items_probe_sent_on is not ctx.server:
+                self.items_probe_sent_on = ctx.server
+                await ctx.send_msgs([{"cmd": "Get", "keys": [], RECEIVED_ITEMS_PROBE: True}])
+        elif not self.warned_save_ahead:
+            self.warned_save_ahead = True
+            logger.warning(SAVE_AHEAD_WARNING)
+        return True
+
+    def trust_save(self) -> None:
+        """
+        Release the hold on the loaded save's checks and goal, for the /trust_save command.
+
+        The command works only after the warning, because before it nothing is known to be held.
+
+        The release lasts until the client next resets its session state, which happens on every
+        connect. The Collection Client also resets it when it attaches to the game again. Loading
+        another save does not end the release, because the client cannot see a load happen. A
+        savestate, for example, replaces the save data in memory without passing through the
+        game's file select. A reconnect is a point the client can see, and the new connection
+        checks the counter against the server's items again anyway. The release also ends once
+        the save is no longer ahead (see _checks_held).
+        """
+        from CommonClient import logger
+
+        if not self.warned_save_ahead:
+            logger.info("The client isn't holding back this save's checks.")
+            return
+        self.warned_save_ahead = False
+        self.save_trusted = True
+        logger.info("The client now sends this save's checks and goal, until it reconnects.")
+
+    async def _report_position(self, ctx: "CommonContext", ram: AoSRAM) -> None:
+        # Keep Soma's room and position in data storage for the trackers' maps. The tracker's map
+        # reads POSITION_KEY, which follows him as he moves. Universal Tracker's map reads
+        # MAP_CELL_KEY, which changes only when he enters another cell, because UT marks only the
+        # cell and reloads its map whenever the key changes.
+        value = tracker_map.position_value(*await ram.get_player_room_position())
+        if value == self.last_position:
+            return
+        now = time.monotonic()
+        if now - self.last_position_time < POSITION_INTERVAL:
+            return
+        self.last_position, self.last_position_time = value, now
+        keys = [tracker_map.POSITION_KEY]
+        cell = tracker_map.cell_of(value)
+        if cell != self.last_cell:
+            self.last_cell = cell
+            keys.append(tracker_map.MAP_CELL_KEY)
+        await ctx.send_msgs([{"cmd": "Set", "key": key.format(team=ctx.team, player=ctx.slot),
+                              "default": None, "want_reply": False,
+                              "operations": [{"operation": "replace", "value": value}]}
+                             for key in keys])
+
+    async def _report_exploration(self, ctx: "CommonContext", ram: AoSRAM) -> None:
+        # Keep the explored map in data storage, where the tracker reads which parts of the castle
+        # to show (exploration.py). It changes only when Soma enters a new cell, goes through a
+        # hidden door or gets a Castle Map, so it is read every few seconds rather than every tick.
+        now = time.monotonic()
+        if now - self.last_exploration_time < EXPLORATION_INTERVAL:
+            return
+        self.last_exploration_time = now
+        value = exploration.value(*await ram.read_exploration())
+        if value == self.last_exploration:
+            return
+        self.last_exploration = value
+        key = exploration.EXPLORATION_KEY.format(team=ctx.team, player=ctx.slot)
+        await ctx.send_msgs([{"cmd": "Set", "key": key, "default": None, "want_reply": False,
+                              "operations": [{"operation": "replace", "value": value}]}])
+
+    async def _record_play_data(self, ctx: "CommonContext", ram: AoSRAM) -> None:
+        # Keep this seed and slot's local play-data log (play_data.py). The seed's name comes from
+        # the server's RoomInfo, which both clients' contexts keep as server_seed_name.
+        now = time.monotonic()
+        if not self.unlogged_checks and now - self.last_play_data_time < PLAY_DATA_INTERVAL:
+            return
+        if self.play_data_log is None:
+            seed_name = getattr(ctx, "server_seed_name", None)
+            if not seed_name:
+                return
+            self.play_data_log = play_data.PlayDataLog(
+                play_data.log_path(seed_name, ctx.slot),
+                {"seed": seed_name, "slot": ctx.slot, "player": ctx.player_names.get(ctx.slot),
+                 "options": {key: value for key, value in ctx.slot_data.items()
+                             if isinstance(value, (bool, int, float, str))}})
+        self.last_play_data_time = now
+        state = await ram.read_play_data()
+        self.play_data_log.record(state)
+        if self.unlogged_checks:
+            self.play_data_log.checks(state.play_frames, self.unlogged_checks)
+            self.unlogged_checks = set()
 
     async def _send_location_checks(self, ctx: "CommonContext", ram: AoSRAM) -> None:
         # Collected-pickup save flags -> AP location checks. Each set bit's index is a pickup's
@@ -113,88 +373,194 @@ class CVAOSClientLogic:
             if location_id is not None and location_id in ctx.server_locations:
                 checked.add(location_id)
 
+        # The first defeat of each kind of enemy, in a seed with enemy checks.
+        if any(enemy_id_for_location(location) is not None for location in ctx.server_locations):
+            for enemy_id in AoSRAM.defeated_enemy_ids(await ram.read_enemy_defeats()):
+                location_id = defeat_location_id(enemy_id)
+                if location_id in ctx.server_locations:
+                    checked.add(location_id)
+
         new_checks = checked - self.local_checked_locations
         if new_checks:
             self.local_checked_locations |= new_checks
             await ctx.send_msgs([{"cmd": "LocationChecks", "locations": sorted(new_checks)}])
+            # The play-data log times each check once. A new session resends the checks that the
+            # server already has, so those are left out.
+            self.unlogged_checks |= new_checks - ctx.checked_locations
 
         # Collecting another world's pickup grants Soma a junk Skull Key (rom/patch.py
-        # _AP_PLACEHOLDER). AoS caps consumables at 9 and stops allowing pickups past the cap, so a
-        # hoard of Skull Keys could stall pickup detection -- and stall sending out other worlds'
-        # items. Knock the count back down each tick so there's always room for the next pickup.
-        # With the Skull Key Warp option on, also floor it at 1 so the warp item is always available
-        # (the cap clamps from above, the floor from below -- they never fight).
+        # _AP_PLACEHOLDER). The game refuses a consumable pickup while its count is 9, but
+        # rom/skull_key_pickup.py exempts the Skull Key, so these pickups stay collectable at any
+        # count, even offline. Lowering the count each tick only keeps the junk keys from piling
+        # up. With the Skull Key Warp option on, the count is also kept at 1 or more, so the warp
+        # item is always available. The cap only lowers the count and the floor only raises it, so
+        # they never conflict.
         await ram.cap_skull_keys(floor=1 if ctx.slot_data.get("skull_key_warp") else 0)
 
     async def _receive_items(self, ctx: "CommonContext", ram: AoSRAM) -> None:
-        # Receive items from the server: grant each not-yet-given item, then advance the saved
-        # received-counter (guarded) so a reload doesn't re-give them. Stop on a lost guarded write
-        # (a race with the game's writes, or the counter changing underneath us) and retry.
+        # Receive items from the server: grant each not-yet-given item and advance the saved
+        # received-counter past it, so a reload doesn't re-give it. An item's transfer and the
+        # counter's advance go in one batch of guarded writes, so a connector failure can neither
+        # grant an item twice nor skip one. Stop on a lost guarded write (a race with the game's
+        # writes, or the counter changing underneath us) and retry next tick.
         from CommonClient import logger
 
+        items = self._grantable_items(ctx)
         received = await ram.get_received_count()
-        # Defensive: a counter ahead of everything the server has ever sent could only come from a
-        # corrupt save; clamp so we never index past items_received (a real grant rewrites it).
-        received = min(received, len(ctx.items_received))
+        # The counter can be ahead of everything the server has sent (see _checks_held). Clamp it
+        # so we never index past the items.
+        received = min(received, len(items))
         granted_this_tick = 0
-        while received < len(ctx.items_received) and granted_this_tick < MAX_ITEMS_PER_TICK:
-            code = ctx.items_received[received].item
+        while received < len(items) and granted_this_tick < MAX_ITEMS_PER_TICK:
+            code = items[received].item
             action = item_granting.resolve(code)
             if action is None:
-                # Unreachable today (every item is a pickup); log instead of silently dropping a
-                # received item if a non-pickup item is ever added to the pool.
+                # Unreachable today (every item code has a defined category); log instead of
+                # silently dropping a received item if an undefined one is ever added to the pool.
                 logger.warning("CVAoS: received item code %s has no grant mapping; skipping.", code)
-            elif not await item_granting.grant(
-                    ram, action, new_soul_pause=bool(ctx.slot_data.get("new_soul_pause", True))):
-                break  # lost a guarded write on the grant; retry next tick without advancing
-            # Advance the saved counter, guarded on its prior value so we never blind-stomp it.
-            if not await ram.set_received_count(received + 1, expected=received):
-                break  # counter changed underneath us; re-read and retry next tick
+                done = await ram.set_received_count(received + 1, expected=received)
+            else:
+                done = await item_granting.grant(
+                    ram, action, new_soul_pause=bool(ctx.slot_data.get("new_soul_pause", True)),
+                    together_with=[ram.received_count_write(received + 1, expected=received)])
+            if not done:
+                break  # lost a guarded write, so the counter was not advanced; retry next tick
             received += 1
             granted_this_tick += 1
 
-    async def _relay_deathlink(self, ctx: "CommonContext", ram: AoSRAM,
-                               game_state: int, menu_state: int, in_gameplay: bool) -> None:
-        # DeathLink: enable from slot_data, broadcast Soma's death the moment the engine enters its
-        # death sub-state or the game-over screen, apply an incoming death by asking the ROM hook to
-        # run the real death routine (request_kill) during gameplay, and re-arm once Soma is alive.
+    async def _grant_progressive_movement(self, ctx: "CommonContext", ram: AoSRAM) -> None:
+        # Grant one stage soul per Progressive Movement copy obtained so far. The count adds the
+        # copies in the starting inventory, the copies received from other worlds, and the copies
+        # found at this world's own checked locations. Souls already owned are skipped, so repeating
+        # this every tick is safe. When the player reloads an older save, it also restores the
+        # souls that save lacks. Only one soul is granted per tick, and only once the announcement
+        # slot is free, so that every granted soul gets its own banner.
+        from . import announce
+        if not ctx.slot_data.get("progressive_movement"):
+            return
+        starting = ctx.slot_data.get("progressive_movement_starting", 0)
+        # Starting items arrive with location -2 when the client asks for them; slot_data already
+        # counts those, so they are left out here.
+        received = sum(1 for item in ctx.items_received
+                       if item.item == PROGRESSIVE_MOVEMENT_CODE
+                       and item.location != STARTING_LOCATION)
+        checked = ctx.checked_locations | self.local_checked_locations
+        found = sum(1 for location in ctx.slot_data.get("progressive_movement_locations", ())
+                    if location in checked)
+        if ctx.items_handling & 0b010:
+            # The server sends this world's own copies too, so they are already in ``received``.
+            found = 0
+        for info in _STAGE_INFOS[:starting + received + found]:
+            if await ram.owned_count(info.item_category, info.id) > 0:
+                continue
+            if not await announce.is_ready(ram):
+                return
+            if await ram.give_item(info.item_category, info.id):
+                await announce.announce_item_number(
+                    ram, info.item_number,
+                    new_soul_pause=bool(ctx.slot_data.get("new_soul_pause", True)))
+            return
+
+    @staticmethod
+    def _grantable_items(ctx: "CommonContext") -> list:
+        """
+        Return the received items that the saved received-counter counts, in server order.
+
+        The server puts the starting inventory at the front of the list. A seed whose slot data
+        has ``starting_inventory_from_server`` counts those items in its saves. An older seed's
+        saves count only the items from other worlds. For such a seed this leaves the starting
+        inventory out, so the client does not give it.
+
+        For a seed from V0.5 on, the client asks the server for the player's own items too. The
+        ones at the slot data's ``rom_given_locations`` were already handed out by the ROM, so
+        they are left out. The rest, such as an own item at a defeat location, are given like any
+        other.
+        """
+        items = ctx.items_received
+        if ctx.items_handling & 0b010:
+            rom_given = set(ctx.slot_data.get("rom_given_locations", ()))
+            items = [item for item in items
+                     if not (item.player == ctx.slot and item.location in rom_given)]
+        if ctx.slot_data.get("starting_inventory_from_server"):
+            return items
+        return [item for item in items if item.location != STARTING_LOCATION]
+
+    async def _relay_deathlink(self, ctx: "CommonContext", ram: AoSRAM) -> None:
+        # DeathLink: follow the setting in slot_data, and broadcast Soma's death as soon as the
+        # game enters its death sub-state or the game-over screen. Apply an incoming death during
+        # gameplay by asking the ROM hook to run the real death routine (request_kill). Once Soma
+        # is alive again, re-arm.
         #
-        # We key off the death STATE, not HP==0: every death (combat, spikes, overkill laser) routes
-        # through one damage routine that clamps HP to exactly 0 and then the player-death handler
-        # sets MENU_STATE=2 the same frame, holding it through the multi-frame fade before GAME_STATE
-        # flips to GAME_OVER. That state persists for many frames, so a 0.125s poll reliably sees it;
-        # the old HP==0-during-normal-gameplay test only had a ~1-frame window and usually missed it.
+        # Detection reads the death STATE, not HP == 0. Every death from damage (combat, spikes, an
+        # overkill laser) goes through one damage routine that clamps HP to exactly 0. In the same
+        # frame, the player-death handler sets MENU_STATE to 2, and MENU_STATE keeps that value
+        # through the multi-frame fade until GAME_STATE changes to GAME_OVER. That state lasts many
+        # frames, so a 0.125s poll reliably sees it, while HP == 0 lasts about one frame in normal
+        # gameplay.
         from CommonClient import logger
 
-        # Enable DeathLink once if the seed wants it; update_death_link adds the "DeathLink" tag, so
-        # this won't re-fire on later ticks.
-        if ctx.slot_data.get("death_link") and "DeathLink" not in ctx.tags:
-            await ctx.update_death_link(True)
+        # Follow the seed's DeathLink setting. update_death_link adds or removes the "DeathLink"
+        # tag, so once the tag matches the setting this does nothing. Removing the tag matters when
+        # the client moves on to a seed without DeathLink, which also has no kill hook to run a
+        # requested death.
+        wanted = bool(ctx.slot_data.get("death_link"))
+        if wanted != ("DeathLink" in ctx.tags):
+            await ctx.update_death_link(wanted)
+
+        # Read the run state, HP and the kill-request flag in one request, so every decision below
+        # sees the same frame. Separate reads can land on different frames, and the ROM hook can
+        # run a requested kill between them. Normal play read before that kill, together with a
+        # clear flag read after it, would re-arm the latch. The next tick would then broadcast the
+        # kill as Soma's own death.
+        game_state, menu_state, current_hp, kill_request = await ram.get_deathlink_state()
+        in_gameplay = (game_state == addr.GameState.INGAME
+                       and menu_state == addr.MENU_STATE_NORMAL)
 
         # Dead/dying: the in-game death fade (MENU_STATE==DEATH while still INGAME) or the game-over
         # screen. The sub-state is gated on INGAME so we never misread the byte outside gameplay.
         dead = ((game_state == addr.GameState.INGAME and menu_state == addr.MENU_STATE_DEATH)
                 or game_state == addr.GameState.GAME_OVER)
 
-        # Re-arm first: once Soma is alive again in normal play and no kill is still pending, clear the
-        # latch so the next death in either direction is detected. The pending-kill guard covers the
-        # frames between requesting an incoming death and the ROM hook running it (state still NORMAL,
-        # flag still set), so we don't re-arm and then immediately re-broadcast that same death.
-        if (self.currently_dead and in_gameplay and await ram.get_current_hp() > 0
-                and not await ram.get_kill_request()):
+        # When the latch is unknown (a first connect, or a different seed), set it from the game's
+        # current state. A death already on screen began before the client connected, and a kill
+        # request the ROM hook has not run yet is another world's death. Neither should be
+        # broadcast as a new death of Soma's. If the latch starts set, a death queued before this
+        # read is dropped, just as the bounce handler drops one that arrives while Soma is dead.
+        if self.currently_dead is None:
+            self.currently_dead = dead or kill_request
+            if self.currently_dead:
+                self.death_causes.clear()
+
+        # Re-arm first: once Soma is alive again in normal play and no kill is still pending, clear
+        # the latch so the next death in either direction is detected. The pending-kill guard
+        # covers the frames between requesting an incoming death and the ROM hook running it
+        # (state still NORMAL, flag still set), so we don't re-arm and then immediately
+        # re-broadcast that same death.
+        if self.currently_dead and in_gameplay and current_hp > 0 and not kill_request:
             self.currently_dead = False
+
+        # The ROM hook skips a requested kill while Soma is already dying, and leaves the flag set.
+        # The flag is outside the save data, so loading a save does not clear it. The hook would
+        # then kill Soma again as soon as he is back in play. A received death kills him only once,
+        # and he is already dead, so clear the flag.
+        if dead and kill_request:
+            await ram.clear_kill_request()
 
         if "DeathLink" in ctx.tags and dead and not self.currently_dead:
             # Died on our own. Mark dead BEFORE awaiting so a same-tick re-entry can't double-send.
+            # A death still pending from another world is discarded, because Soma is already dead.
             self.currently_dead = True
+            self.death_causes.clear()
             await ctx.send_death(f"{ctx.player_names[ctx.slot]} was slain. Dracula has won!")
-            # Record AP's timestamp so the bounce handler can filter our own echo (overwritten later).
+            # Record AP's timestamp so the bounce handler can skip the echo of this death. It is
+            # copied because ctx.last_death_link changes when another world's death arrives.
             self.time_of_sent_death = ctx.last_death_link
 
         if self.death_causes and not self.currently_dead and in_gameplay:
-            # Apply an incoming death (the bounce handler queued the cause). Only while in normal
-            # gameplay -- requesting the kill during the fade/menu is unsafe. The currently_dead gate
-            # keeps us from re-killing Soma (and from re-broadcasting) for a death already in progress.
+            # Apply an incoming death, whose cause the bounce handler queued. This happens only in
+            # normal gameplay, because requesting the kill during the fade or a menu is unsafe. The
+            # currently_dead check keeps us from killing Soma again, or re-broadcasting, for a
+            # death already in progress.
             cause = self.death_causes.pop(0)
             await ram.request_kill()
             self.currently_dead = True
@@ -204,9 +570,10 @@ class CVAOSClientLogic:
         """
         Report seed completion when the player wins their chosen Goal.
 
-        graham: Graham defeated (BOSS_FLAGS & 0x01)
-        chaos: Chaos (phase 2) defeated (GLOBAL_FLAGS & 0x4000 due to nonpersistence
-          of the Chaos phase 2 bit BOSS_FLAGS & 0x80).
+        The graham goal is won once Graham is defeated (``BOSS_FLAGS & 0x01``). The chaos goal is
+        won once Chaos's second phase is defeated, which the client reads from the good-ending
+        flag (``GLOBAL_FLAGS & 0x4000``). The Chaos phase 2 bit (``BOSS_FLAGS & 0x80``) does not
+        persist, so it cannot be used.
         """
         from CommonClient import logger
 

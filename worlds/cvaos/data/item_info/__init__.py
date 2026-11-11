@@ -1,3 +1,11 @@
+"""
+The game's items, merged by name from ``item_info.csv`` and two companion CSVs.
+
+``item_importance.csv`` gives each item's ``item_number`` and its Archipelago classification.
+``item_info_extended.csv`` marks the items that break ceilings or floors. The file is optional,
+and without it no item is marked.
+"""
+
 from __future__ import annotations
 
 from ..._pydantic_compat import BaseModel, parse_obj_as

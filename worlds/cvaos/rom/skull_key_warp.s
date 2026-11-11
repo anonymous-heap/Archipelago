@@ -1,4 +1,10 @@
 @ Skull Key Warp - injected routine, linked at 0x08670100 (GBA), file 0x670100.
+@ skull_key_warp.py embeds the assembled bytes; this file is the source of truth for them.
+@ Assembled at DEV time (not at AP generation time). To regenerate after editing, from this
+@ directory (needs `pip install keystone-engine`; add --listing for a capstone disassembly):
+@   python thumb_assembler.py skull_key_warp.s 0x08670100   @ -> WARPHOOK_BLOB
+@ test_thumb_assembler.py fails if that blob and this file disagree.
+@
 @ Reached from a trampoline that overwrites the first 8 bytes of sub_0804B36C.
 @ On entry r0 = playerStats, r1 = menuState (live); r3 was clobbered by the trampoline.
 .syntax unified
@@ -24,12 +30,12 @@ DoWarp:
     push  {r4, r5, lr}
     @ The Skull Key is used from the pause menu, which suspends the overworld subsystems
     @ (sprites/objects/enemy spawner). The warp transfer un-pauses gameplay but does NOT resume
-    @ those, so enemies stop spawning. sub_08047B44 is the game's own "resume gameplay after the
-    @ menu" routine (the tail of the menu close); call it before launching so the new room spawns
-    @ normally. It takes no arguments.
+    @ those, so enemies would stop spawning without the call below. sub_08047B44 is the game's
+    @ own "resume gameplay after the menu" routine (the tail of the menu close); call it before
+    @ launching so the new room spawns normally. It takes no arguments.
     ldr   r4, =(0x08047B44 + 1)
     bl    CallR4
-    @ sub_08011F44(room_ptr, x, y, x_offset, y_offset)  -- 5th arg on the stack
+    @ sub_08011F44(room_ptr, x, y, x_offset, y_offset), with the 5th arg on the stack
     ldr   r4, =DestRecord
     ldr   r0, [r4, #0]           @ room_ptr
     ldrh  r1, [r4, #4]           @ x
@@ -45,9 +51,9 @@ DoWarp:
     ldr   r4, =(0x08011AD0 + 1)
     bl    CallR4
     @ sub_08047B44 (above) ran EntityDelete on the menu-state object (gEwramData+0xE2C), which
-    @ DMA-zeroes the whole struct -- including menuState[0x17], the selected-item index the caller's
-    @ consume (sub_0804B808) reads. Left at 0, the consume does itemInventory[0] -= 1, i.e. it
-    @ decrements Potion. Restore it to the Skull Key index (25) so the consume hits the Skull Key.
+    @ DMA-zeroes the whole struct. That includes menuState[0x17], the selected-item index the
+    @ caller's consume (sub_0804B808) reads. Left at 0, the consume would do itemInventory[0] -= 1
+    @ and decrement Potion, so restore it to the Skull Key index (25).
     ldr   r4, =0x02000E43        @ menuState (gEwramData+0xE2C) + 0x17 = selected consumable index
     movs  r0, #25
     strb  r0, [r4]
@@ -58,6 +64,7 @@ CallR4:
     bx    r4                     @ far-call trampoline; lr set by `bl CallR4`
 
     .align 2
+    @ The default destination. skull_key_warp.build_writes overwrites these 12 bytes.
 DestRecord:
     .word  0x0850EF9C            @ room_ptr  (room 000, start corridor)
     .hword 272                   @ x

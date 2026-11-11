@@ -1,40 +1,43 @@
 """
 Install a patched CVAoS ROM into the Steam Castlevania Advance Collection.
 
-The collection keeps every ROM inside ``windata/alldata.bin`` (payload) plus
-``windata/alldata.psb.m`` (encrypted index) — see ``cac_archive.py``.
-"Installing" a randomized ROM therefore means rebuilding that pair with the
-AoS member replaced. This module is the friendly wrapper around
-``cac_archive.replace_member`` behind the "CVAoS Collection ROM Installer"
-Launcher component (Messenger-style: the collection is located from the
-hash-validated ``CVAOSSettings.collection_exe`` path; AP opens a browse dialog
-once and persists the answer in host.yaml).
+The collection keeps every ROM inside ``windata/alldata.bin`` (the payload) and
+``windata/alldata.psb.m`` (an encrypted index), whose format ``cac_archive.py`` describes.
+Installing a randomized ROM therefore means rebuilding that pair with the AoS member replaced.
+This module wraps ``cac_archive.replace_member`` for the "CVAoS Collection ROM Installer"
+Launcher component.
 
-Safety model, in order:
+The install input may be a patched ``.gba`` or the ``.apcvaos`` patch itself. The installer
+applies a patch first, so a player handed only the patch file never has to handle an
+intermediate ROM. The patch is applied to the stock ROM of the collection being installed into,
+whatever target the seed was generated for.
 
-* the patched ROM is validated before anything is touched — exact 8 MiB, AoS
-  header, ``CVAOS_AP_V0.3`` marker at 0x670000, and M2's two additions (the
-  replacement graphic at 0x660000 and the audio bridge at 0x700000; a ROM
-  patched from a cart dump instead of the collection-extracted base lacks both
-  and would silently break the collection);
-* refuses while the collection is running (best effort via the client's own
-  process attach; Windows file locks are the backstop);
-* pristine ``*.apbackup`` copies of both windata files are made ONCE, ever —
-  installing later seeds never overwrites them, so ``restore_backup`` always
-  returns to stock, and once they exist the base ROM is extracted from them
-  rather than from the live archive (which then holds the installed seed);
-* the rebuilt pair is staged in a scratch subdirectory using the real
-  filenames (the MDF key is derived from the lowercased basename), verified by
-  re-extracting the member, and only then moved over the live files with
+The Launcher component finds the collection from the hash-validated
+``CVAOSSettings.collection_exe`` path. When the file at that path is missing or has another
+hash, it looks in every Steam library (``steam.py``), and it asks for game.exe with a browse
+dialog only when the collection isn't in any of them. A path from the search or the dialog is
+saved in host.yaml.
+
+An install protects the collection's files in four steps, in this order:
+
+* The patched ROM is validated before anything is touched. It must be exactly 8 MiB, with an
+  AoS header and a compatible ``CVAOS_AP_V0.x`` marker at 0x670000. It must also contain M2's
+  two additions, the replacement graphic at 0x660000 and the audio bridge at 0x700000. A ROM
+  patched from a cart dump instead of the collection's own ROM lacks both, and it would break
+  the collection without any error.
+* The installer stops with an error while the collection is running. That check attaches to
+  the process the way the client does. It is only best effort, so Windows file locks are the
+  fallback.
+* Pristine ``*.apbackup`` copies of both windata files are made once, and only while the live
+  archive still holds the stock AoS ROM. Later installs never overwrite them, so
+  ``restore_backup`` always returns to stock. Once the backups exist, the base ROM is
+  extracted from them rather than from the live archive, which then holds the installed seed.
+* The rebuilt pair is staged in a scratch subfolder under the real file names, and verified by
+  re-extracting the AoS member. Only then are both files moved over the live ones with
   ``os.replace``.
 
-Steam's "Verify integrity of game files" restores M2's stock files; the fix is
-simply to run the installer again (the backups stay valid).
-
-The install input may be a patched ``.gba`` or the ``.apcvaos`` patch itself — a patch is
-applied first (``Patch.create_rom_file``; an advance_collection-target patch auto-sources
-its base ROM from the installed collection), so a player handed only the patch file never
-touches an intermediate ROM.
+Steam's "Verify integrity of game files" restores M2's stock files, which removes the installed
+seed. Running the installer again puts it back, and the backups stay valid.
 
 CLI (from the Archipelago repo root)::
 
@@ -45,15 +48,21 @@ CLI (from the Archipelago repo root)::
 from __future__ import annotations
 
 import argparse
+import contextlib
+import filecmp
+import hashlib
 import os
 import shutil
+import tempfile
+import zlib
 from typing import Callable
 
-from . import cac_archive
+from . import cac_archive, steam
 from .._bytemaker_compat import Entry
-from ..constants import AC_DEFAULT_EXE_PATH
+from ..constants import AC_DEFAULT_EXE_PATH, AC_GAME_EXE_MD5, AC_USA_ROM_MD5
 from ..rom.address_space import M2_AUDIO_BRIDGE, M2_GRAPHIC, gba_space
-from ..rom.patch import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START
+from ..rom import (ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, COMPATIBLE_IDENTIFIERS,
+                   COMPATIBLE_RANGE)
 
 AOS_MEMBER = "system/roms/03_Akatsuki_US.patch_210623m.bin"
 ROM_SIZE = 0x800000
@@ -66,13 +75,15 @@ _AP_MARKER_PREFIX = b"CVAOS_AP_"   # shared by every patch version's identifier
 # in CommonClient, which the installer doesn't need).
 _ROM_TITLE = b"CASTLEVANIA2"
 _ROM_TITLE_OFFSET = 0xA0
-# M2's two additions, present only in the collection-extracted base ROM. Declared once on the
-# cart space (rom/address_space.py) and used here as file-offset (start, end) pairs.
+
+
 def _file_range(region: Entry) -> tuple[int, int]:
     start, size = region.bind(gba_space()).request()
     return start, start + size
 
 
+# M2's two additions, present only in the collection-extracted base ROM. They are declared once
+# on the cart space (rom/address_space.py) and used here as file-offset (start, end) pairs.
 _M2_GRAPHIC = _file_range(M2_GRAPHIC)
 _M2_AUDIO_BRIDGE = _file_range(M2_AUDIO_BRIDGE)
 
@@ -91,7 +102,8 @@ class InstallError(Exception):
 # ---------------------------------------------------------------------------
 
 def windata_dir_from_exe(exe_path: str) -> str:
-    """The windata/ directory next to game.exe, with both archive files present."""
+    """Return the windata/ directory next to game.exe, raising InstallError unless both archive
+    files are in it."""
     windata = os.path.join(os.path.dirname(os.path.abspath(exe_path)), "windata")
     if not os.path.isdir(windata):
         raise InstallError(
@@ -116,19 +128,21 @@ def _stock_archive_pair(windata: str) -> tuple[str, str]:
 
 
 def extract_base_rom_bytes(exe_path: str) -> bytes:
-    """Pull the collection's stock AoS ROM out of ``windata/`` next to *exe_path*.
+    """Return the collection's stock AoS ROM, extracted from ``windata/`` next to *exe_path*.
 
-    This is the base ROM AP patches against for collection play — it carries M2's
-    audio bridge, unlike a cart dump. Lets the world source its base ROM from the
-    installed collection instead of asking the user to run ``cac_archive extract`` by hand.
-    Once a seed has been installed the live archive holds that seed, so the pristine
-    backups are read instead; a patched ROM with no backups to fall back on is refused.
+    This is the base ROM that AP patches for collection play. Unlike a cart dump, it carries
+    M2's audio bridge. The world calls this to read its base ROM from the installed collection,
+    so the player never has to run ``cac_archive extract`` by hand.
+
+    Once a seed has been installed, the live archive holds that seed, so the pristine backups
+    are read instead. If the ROM this extracts is already patched, whether from the live archive
+    or from the backups, this raises InstallError.
     """
     windata = windata_dir_from_exe(exe_path)
     psb_m, bin_path = _stock_archive_pair(windata)
     try:
         rom = cac_archive.extract_member(psb_m, bin_path, AOS_MEMBER, index_key_name=INDEX_KEY_NAME)
-    except (OSError, ValueError, KeyError) as exc:
+    except (OSError, ValueError, KeyError, zlib.error) as exc:
         raise InstallError(f"Could not extract the AoS ROM from {windata!r}: {exc}") from exc
     if len(rom) != ROM_SIZE:
         raise InstallError(
@@ -138,10 +152,14 @@ def extract_base_rom_bytes(exe_path: str) -> bytes:
         raise InstallError(f"The member extracted from {windata!r} is not an Aria of Sorrow ROM.")
     marker = rom[ARCHIPELAGO_IDENTIFIER_START:ARCHIPELAGO_IDENTIFIER_START + len(_AP_MARKER_PREFIX)]
     if marker == _AP_MARKER_PREFIX:
+        missing = ", ".join(name + BACKUP_SUFFIX for name in WINDATA_FILES
+                            if not os.path.isfile(os.path.join(windata, name + BACKUP_SUFFIX)))
+        problem = (f"there is no complete pristine backup ({missing} missing)" if missing
+                   else "so are its backups")
         raise InstallError(
-            f"The AoS ROM in {windata!r} is already Archipelago-patched and no pristine backup "
-            f"({WINDATA_FILES[1]}{BACKUP_SUFFIX}) sits next to it. Use Steam's \"Verify integrity "
-            "of game files\" to restore the stock archive, then try again.")
+            f"The AoS ROM in {windata!r} is already Archipelago-patched, and {problem}. Use "
+            "Steam's \"Verify integrity of game files\" to restore the stock archive, then try "
+            "again.")
     return bytes(rom)
 
 
@@ -157,31 +175,31 @@ def extract_base_rom_to(out_path: str, exe_path: str, log: Log = print) -> str:
 
 
 def validate_patched_rom(rom_bytes: bytes) -> None:
-    """Reject anything that is not an AC-based, AP-patched AoS ROM (before touching files)."""
+    """Raise InstallError unless ``rom_bytes`` is an AoS ROM that a compatible version of this
+    world patched from the collection's own ROM."""
     if len(rom_bytes) != ROM_SIZE:
         raise InstallError(
             f"ROM is {len(rom_bytes)} bytes, expected exactly {ROM_SIZE} (8 MiB). "
-            "Select the patched .gba produced from your .apcvaos file.")
+            "Select your .apcvaos patch file instead.")
     if rom_bytes[_ROM_TITLE_OFFSET:_ROM_TITLE_OFFSET + len(_ROM_TITLE)] != _ROM_TITLE:
         raise InstallError("Not an Aria of Sorrow ROM (bad header title).")
     ident = rom_bytes[ARCHIPELAGO_IDENTIFIER_START:
                       ARCHIPELAGO_IDENTIFIER_START + len(ARCHIPELAGO_IDENTIFIER)]
-    if ident != ARCHIPELAGO_IDENTIFIER.encode("ascii"):
+    if ident.decode("ascii", "replace") not in COMPATIBLE_IDENTIFIERS:
         if ident.startswith(_AP_MARKER_PREFIX):
             raise InstallError(
                 f"ROM was patched by a different world version ({ident.decode('ascii', 'replace')}, "
-                f"this world writes {ARCHIPELAGO_IDENTIFIER}). Re-patch with the matching version.")
+                f"this world accepts {COMPATIBLE_RANGE}). Re-patch with the matching version.")
         raise InstallError(
-            "ROM is not Archipelago-patched (no CVAOS_AP marker). Patch your .apcvaos "
-            "first and select the resulting .gba.")
+            "ROM is not Archipelago-patched (no CVAOS_AP marker). Select your .apcvaos patch "
+            "file instead, and the installer patches the collection's own ROM.")
     for name, (start, end) in (("audio bridge", _M2_AUDIO_BRIDGE),
                                ("replacement graphic", _M2_GRAPHIC)):
         if not any(rom_bytes[start:end]):
             raise InstallError(
-                "ROM was patched from a cart dump, not from the ROM extracted from the "
-                f"collection — M2's {name} is missing, so the collection would break. "
-                "Extract the collection's ROM (cac_archive.py extract), set it as your "
-                "patch base, and re-patch.")
+                "ROM was patched from a cart dump, not from the collection's own ROM: M2's "
+                f"{name} is missing, so the collection would break. Install the .apcvaos patch "
+                "file instead, so that the installer patches the collection's own ROM.")
 
 
 def collection_running() -> bool:
@@ -203,10 +221,10 @@ def collection_running() -> bool:
 # ---------------------------------------------------------------------------
 
 def ensure_backup(windata: str, log: Log = print) -> bool:
-    """Create pristine *.apbackup copies of both archive files, exactly once.
+    """Create pristine ``*.apbackup`` copies of both archive files, exactly once.
 
-    Returns True if the backups were created by this call. A mixed state (only
-    one backup present) aborts: the pair must stay consistent with each other.
+    Returns True if the backups were created by this call. If only one backup exists, this
+    raises InstallError, because the two backups are only valid as a pair.
     """
     have = {name: os.path.isfile(os.path.join(windata, name + BACKUP_SUFFIX))
             for name in WINDATA_FILES}
@@ -218,13 +236,39 @@ def ensure_backup(windata: str, log: Log = print) -> bool:
         raise InstallError(
             f"Inconsistent backup state: only {present} exists. Verify the game files in "
             "Steam (restores stock), delete the stray backup, and run the installer again.")
-    for name in WINDATA_FILES:
-        src = os.path.join(windata, name)
-        dst = src + BACKUP_SUFFIX
-        log(f"backing up {name} -> {os.path.basename(dst)}")
-        tmp = dst + ".tmp"
-        shutil.copy2(src, tmp)
-        os.replace(tmp, dst)
+    # Only the stock files may be backed up, because restore copies the backups over the live
+    # files, and every later install and base ROM is read from them.
+    live_rom = cac_archive.extract_member(os.path.join(windata, "alldata.psb.m"),
+                                          os.path.join(windata, "alldata.bin"), AOS_MEMBER)
+    if hashlib.md5(live_rom).hexdigest() != AC_USA_ROM_MD5:
+        raise InstallError(
+            "The collection's archive is not the stock one (its Aria of Sorrow ROM has been "
+            "changed), so it cannot be kept as the backup. Use Steam's \"Verify integrity of "
+            "game files\" to restore the stock files, then run the installer again.")
+    # Both copies are made under temporary names before either is moved into place. If any step
+    # fails, the backups already moved are removed again, so a failure never leaves half a backup.
+    copies: list[tuple[str, str]] = []
+    created: list[str] = []
+    try:
+        for name in WINDATA_FILES:
+            src = os.path.join(windata, name)
+            dst = src + BACKUP_SUFFIX
+            log(f"backing up {name} -> {os.path.basename(dst)}")
+            # Listed before copying, so a copy that fails partway is removed too.
+            copies.append((dst + ".tmp", dst))
+            shutil.copy2(src, dst + ".tmp")
+        for tmp, dst in copies:
+            os.replace(tmp, dst)
+            created.append(dst)
+    except OSError:
+        for dst in created:
+            with contextlib.suppress(OSError):
+                os.remove(dst)
+        raise
+    finally:
+        for tmp, _dst in copies:
+            with contextlib.suppress(OSError):
+                os.remove(tmp)
     return True
 
 
@@ -239,48 +283,113 @@ def restore_backup(exe_path: str, log: Log = print) -> str:
         raise InstallError(
             f"No backup to restore ({', '.join(missing)} not found). If the archive needs "
             "resetting, use Steam's \"Verify integrity of game files\".")
-    try:
-        for name in WINDATA_FILES:
-            live = os.path.join(windata, name)
-            log(f"restoring {name} from backup")
-            tmp = live + ".tmp"
+    error = _restore_from_backups(windata, log)
+    if error is not None and not all(_matches_backup(windata, name) for name in WINDATA_FILES):
+        raise InstallError(
+            f"Restore failed ({error}). The collection's files do not match each other, so do not "
+            "play until they do. Close anything that may be using them (the collection, an "
+            "antivirus scan) and restore again, or use Steam's \"Verify integrity of game "
+            "files\". If this is a permissions problem, run as administrator.") from error
+    return f"Restored the stock archive in {windata} (backups kept)."
+
+
+def _restore_from_backups(windata: str, log: Log) -> OSError | None:
+    """Copy each backup over its live file, and return the first error, if any.
+
+    Each file is restored even if the other one fails, and no temporary file is left behind.
+    """
+    error: OSError | None = None
+    for name in WINDATA_FILES:
+        live = os.path.join(windata, name)
+        log(f"restoring {name} from backup")
+        tmp = live + ".tmp"
+        try:
             shutil.copy2(live + BACKUP_SUFFIX, tmp)
             os.replace(tmp, live)
-    except OSError as exc:
-        raise InstallError(f"Restore failed ({exc}). If this is a permissions problem, "
-                           "run as administrator.") from exc
-    return f"Restored the stock archive in {windata} (backups kept)."
+        except OSError as exc:
+            error = error or exc
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(tmp)
+    return error
 
 
 # ---------------------------------------------------------------------------
 # Install
 # ---------------------------------------------------------------------------
 
-def _apply_patch_file(patch_path: str, log: Log = print) -> str:
-    """Apply a ``.apcvaos`` with AP's own machinery; returns the produced ``.gba`` path.
+def _apply_patch_file(patch_path: str, exe_path: str, log: Log = print) -> bytes:
+    """Apply a ``.apcvaos`` with AP's own machinery, and return the patched ROM.
 
-    The patch itself decides where the base ROM comes from (``target_platform`` in its
-    rom_config.json): an advance_collection-target patch pulls the base out of the installed
-    collection automatically, so the player only ever handles the patch file.
+    The base ROM is always the stock ROM of the collection at *exe_path*, whatever target the
+    seed was generated for, because that is the only base the collection can run. A gba-target
+    patch applies to it as well as to a cart dump.
+
+    The patched ROM is written to a temporary folder, which is removed afterwards. Opening the
+    patch for BizHawk writes a ``.gba`` of the same name beside the patch, and the installer
+    leaves that file alone.
     """
     log(f"applying {os.path.basename(patch_path)}...")
-    import Patch  # deferred: full AP import chain, only needed for this path
-    _meta, out_path = Patch.create_rom_file(patch_path)
-    log(f"patched ROM written to {out_path}")
-    return out_path
+    from ..rom.patch import CVAOSProcedurePatch, base_rom_override
+    # AP looks up a patch's handler by its exact file extension, so it finds none for a file
+    # named ``.APCVAOS``. The handler class is used directly to accept any letter case.
+    handler = CVAOSProcedurePatch(patch_path)
+    with base_rom_override(extract_base_rom_bytes(exe_path)), \
+            tempfile.TemporaryDirectory(prefix="cvaos_patch_") as scratch:
+        out_path = os.path.join(scratch, "patched" + handler.result_file_ending)
+        try:
+            handler.patch(out_path)
+        except ValueError as exc:  # a failed base ROM check, reported as an install error
+            raise InstallError(str(exc)) from exc
+        with open(out_path, "rb") as f:
+            return f.read()
+
+
+def _swap_failed_message(windata: str, exc: OSError, log: Log) -> str:
+    """Restore both live files from the backups after the index swap fails, and return the message
+    to show.
+
+    By then the new payload is live, but the index is still the old one. Every member after the
+    AoS ROM would therefore be read from the wrong offset. Restoring both files from the backups
+    returns the collection to its stock, consistent state. Each file is restored even if the other
+    one fails. If a restore fails, the message depends on whether the files on disk still match
+    the backups. They can, because the file that failed may already have held the stock bytes.
+    """
+    log("restoring the stock files after the failed install")
+    restore_exc = _restore_from_backups(windata, log)
+    if restore_exc is None or all(_matches_backup(windata, name) for name in WINDATA_FILES):
+        return (f"Install failed ({exc}). The collection's files were restored to the stock game. "
+                "Close anything that may be using them (the collection, an antivirus scan) and run "
+                "the installer again.")
+    return (f"Install failed ({exc}), and restoring the stock files also failed "
+            f"({restore_exc}). The collection's files do not match each other, so run the "
+            "Launcher's \"CVAoS Collection Restore\" or Steam's \"Verify integrity of game "
+            "files\" before "
+            "playing.")
+
+
+def _matches_backup(windata: str, name: str) -> bool:
+    """Whether the live file has the same bytes as its backup (False if either can't be read)."""
+    live = os.path.join(windata, name)
+    try:
+        return filecmp.cmp(live, live + BACKUP_SUFFIX, shallow=False)
+    except OSError:
+        return False
 
 
 def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
-    """Install *rom_path* — a patched ``.gba`` **or** a ``.apcvaos`` patch (applied first) —
-    as the collection's AoS ROM. Returns a user-facing summary."""
+    """Install *rom_path* as the collection's AoS ROM, and return a summary for the user.
+
+    *rom_path* may be a patched ``.gba`` or a ``.apcvaos`` patch, which is applied first."""
     windata = windata_dir_from_exe(exe_path)
     if rom_path.lower().endswith(".apcvaos"):
-        rom_path = _apply_patch_file(rom_path, log)
-    try:
-        with open(rom_path, "rb") as f:
-            rom_bytes = f.read()
-    except OSError as exc:
-        raise InstallError(f"Could not read {rom_path!r}: {exc}") from exc
+        rom_bytes = _apply_patch_file(rom_path, exe_path, log)
+    else:
+        try:
+            with open(rom_path, "rb") as f:
+                rom_bytes = f.read()
+        except OSError as exc:
+            raise InstallError(f"Could not read {rom_path!r}: {exc}") from exc
     validate_patched_rom(rom_bytes)
     if collection_running():
         raise InstallError("The Castlevania Advance Collection is running — close it first.")
@@ -289,60 +398,122 @@ def install_rom(rom_path: str, exe_path: str, log: Log = print) -> str:
     live_psb = os.path.join(windata, "alldata.psb.m")
     free = shutil.disk_usage(windata).free
     needed = os.path.getsize(live_bin) + (64 << 20)  # rebuilt copy + slack
+    if not all(os.path.isfile(os.path.join(windata, name + BACKUP_SUFFIX)) for name in WINDATA_FILES):
+        needed += os.path.getsize(live_bin) + os.path.getsize(live_psb)  # the first install backs up
     if free < needed:
-        raise InstallError(f"Not enough free disk space on the game drive: the rebuild "
+        raise InstallError(f"Not enough free disk space on the game drive: the install "
                            f"needs ~{needed >> 20} MiB, {free >> 20} MiB free.")
 
-    ensure_backup(windata, log)
-
-    # Stage under the real filenames: the MDF key is derived from the basename, and
-    # os.replace within the same directory is atomic on the same volume.
+    # Stage under the real filenames. The rebuild is given the index's key name explicitly, but
+    # the verification below derives the key from the staged file's own name, as the game does.
+    # The staging folder is inside windata/, so each os.replace stays on one volume and is atomic.
     staging = os.path.join(windata, f"_ap_staging_{os.getpid()}")
+    # A killed install leaves its staging folder behind, holding up to a full archive copy.
+    for entry in os.listdir(windata):
+        if entry.startswith("_ap_staging_") and entry != os.path.basename(staging):
+            shutil.rmtree(os.path.join(windata, entry), ignore_errors=True)
     try:
+        ensure_backup(windata, log)
         os.makedirs(staging, exist_ok=True)
         out_bin = os.path.join(staging, "alldata.bin")
         out_psb = os.path.join(staging, "alldata.psb.m")
         log("rebuilding alldata.bin with the patched ROM (this can take a minute)...")
-        cac_archive.replace_member(live_psb, live_bin, AOS_MEMBER, rom_bytes,
-                                   out_psb, out_bin)
+        # Rebuild from the stock backups rather than the live pair, so whatever state an earlier
+        # install left the live files in never carries into this one.
+        stock_psb, stock_bin = _stock_archive_pair(windata)
+        cac_archive.replace_member(stock_psb, stock_bin, AOS_MEMBER, rom_bytes,
+                                   out_psb, out_bin, index_key_name=INDEX_KEY_NAME)
         if cac_archive.extract_member(out_psb, out_bin, AOS_MEMBER) != rom_bytes:
             raise InstallError("Verification failed: the rebuilt archive does not round-trip "
-                               "the ROM. Nothing was changed — please report this bug.")
-        # The AoS member is MDF-compressed, so its stored size (and every later member's
-        # offset) changes with the ROM's content: the two files only agree as a pair. Payload
-        # first, so the disagreement window is the single os.replace of the index.
+                               "the ROM. Nothing was changed. Please report this bug.")
+        # The AoS member is MDF-compressed, so its stored size, and with it every later member's
+        # offset, changes with the ROM's content. The two files are therefore only valid as a
+        # pair. The payload is replaced first, so they disagree only until the index's
+        # os.replace.
         os.replace(out_bin, live_bin)
-        os.replace(out_psb, live_psb)
+        try:
+            os.replace(out_psb, live_psb)
+        except OSError as exc:
+            raise InstallError(_swap_failed_message(windata, exc, log)) from exc
     except InstallError:
         raise
-    except (OSError, ValueError, KeyError) as exc:
-        raise InstallError(f"Install failed ({exc}). Nothing should be half-written — the "
-                           "live files are only touched by atomic replaces. If this is a "
-                           "permissions problem, run as administrator.") from exc
+    except (OSError, ValueError, KeyError, zlib.error) as exc:
+        raise InstallError(f"Install failed ({exc}). The live files were not changed. If this "
+                           "is a permissions problem, run as administrator.") from exc
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
     return (f"Installed {os.path.basename(rom_path)} into {windata}.\n"
             f"Stock files are kept as {WINDATA_FILES[0]}{BACKUP_SUFFIX} / "
-            f"{WINDATA_FILES[1]}{BACKUP_SUFFIX}; use the installer's restore option to go "
-            f"back.\n{_STEAM_VERIFY_NOTE}")
+            f"{WINDATA_FILES[1]}{BACKUP_SUFFIX}; use the Launcher's \"CVAoS Collection "
+            f"Restore\" to go back.\n{_STEAM_VERIFY_NOTE}")
 
 
 # ---------------------------------------------------------------------------
-# Launcher component entry point
+# Finding game.exe, and the Launcher component entry point
 # ---------------------------------------------------------------------------
 
-def _exe_path_from_settings() -> str:
-    # Triggers AP's browse dialog on first use; md5-validated (CVAOSSettings.CollectionExePath).
+def is_collection_exe(path: str) -> bool:
+    """Return whether the file at ``path`` is the collection's game.exe, judged by its hash."""
+    digest = hashlib.md5()
+    try:
+        with open(path, "rb") as file:
+            for chunk in iter(lambda: file.read(1 << 20), b""):
+                digest.update(chunk)
+    except OSError:
+        return False
+    return digest.hexdigest() == AC_GAME_EXE_MD5
+
+
+def find_collection_exe(options) -> str | None:
+    """Return the collection's game.exe, or None when it can't be found.
+
+    That is the ``collection_exe`` setting in ``options`` when the file there has the collection's
+    hash. Otherwise it is the first game.exe in the player's Steam libraries that has the hash,
+    and the setting is changed to it. The caller saves the settings, so the next search is
+    immediate.
+    """
+    current = options.collection_exe
+    if current and is_collection_exe(current):
+        return str(current)
+    found = next((exe for exe in steam.game_exe_candidates() if is_collection_exe(exe)), None)
+    if found is not None:
+        options.collection_exe = type(current)(found)
+    return found
+
+
+def _exe_path_from_settings() -> str | None:
+    """Return the collection's game.exe path, asking for it when it can't be found.
+
+    The path comes from host.yaml, or from the player's Steam libraries (find_collection_exe).
+    AP never asks for ``collection_exe`` itself, because the setting is optional. Without this
+    prompt, a collection the search misses would end in a "no windata" error. The chosen file
+    must match the collection's game.exe hash, and a mismatch raises ``ValueError``. A path that
+    was found or chosen is saved to host.yaml. Returns None when the player cancels the dialog.
+    """
+    from settings import get_settings
+
     from .. import CVAOSWorld
-    return str(CVAOSWorld.settings.collection_exe)
+    options = CVAOSWorld.settings
+    current = options.collection_exe
+    found = find_collection_exe(options)
+    if found is not None:
+        if found != str(current):
+            get_settings().save()
+        return found
+    chosen = current.browse()
+    if chosen is None:
+        return None
+    options.collection_exe = chosen
+    get_settings().save()
+    return chosen.resolve()
 
 
 def run_from_launcher(*args: str) -> None:
     """Body of the "CVAoS Collection ROM Installer" component (runs in the Launcher).
 
-    ``args`` may carry a patched .gba path or ``--restore``; with no args the user is
-    prompted for the ROM with a file dialog.
+    ``args`` may carry an .apcvaos patch or a patched .gba, or ``--restore``. With no args, a file
+    dialog asks the player for the patch or ROM.
     """
     import logging
 
@@ -356,6 +527,8 @@ def run_from_launcher(*args: str) -> None:
             messagebox("Wrong file", "Selected file did not match the Castlevania Advance "
                        "Collection's game.exe. Please try again.", True)
             return
+        if exe_path is None:
+            return  # the player cancelled the game.exe dialog
         if "--restore" in args:
             summary = restore_backup(exe_path, log)
         else:
@@ -370,6 +543,10 @@ def run_from_launcher(*args: str) -> None:
     except InstallError as exc:
         messagebox("CVAoS Collection ROM Installer", str(exc), True)
         return
+    except Exception as exc:  # noqa: BLE001 - the Launcher would otherwise only log it
+        logging.getLogger("CVAoSCollectionInstaller").exception("installer failed")
+        messagebox("CVAoS Collection ROM Installer", f"The installer failed: {exc}", True)
+        return
     log(summary)
     messagebox("CVAoS Collection ROM Installer", summary)
 
@@ -379,13 +556,17 @@ def main(argv=None) -> None:
         description="Install a patched CVAoS ROM into the Steam Castlevania Advance Collection.")
     parser.add_argument("rom", nargs="?",
                         help=".apcvaos patch or patched .gba (omit with --restore/--extract-base)")
-    parser.add_argument("--exe", default=AC_DEFAULT_EXE_PATH,
-                        help="path to the collection's game.exe (default: standard Steam path)")
+    parser.add_argument("--exe", default=None,
+                        help="path to the collection's game.exe (default: the one in your Steam "
+                             "libraries, or the standard Steam path)")
     parser.add_argument("--restore", action="store_true",
                         help="restore the stock archive from the *.apbackup files")
     parser.add_argument("--extract-base", metavar="OUT_GBA",
                         help="write the collection's stock (unpatched) AoS ROM to OUT_GBA and exit")
     args = parser.parse_args(argv)
+    if args.exe is None:
+        args.exe = next((exe for exe in steam.game_exe_candidates() if is_collection_exe(exe)),
+                        AC_DEFAULT_EXE_PATH)
     if args.extract_base:
         print(extract_base_rom_to(args.extract_base, args.exe))
     elif args.restore:
@@ -393,7 +574,8 @@ def main(argv=None) -> None:
     elif args.rom:
         print(install_rom(args.rom, args.exe))
     else:
-        parser.error("a patched .gba is required unless --restore or --extract-base is given")
+        parser.error("an .apcvaos patch or a patched .gba is required, unless --restore or "
+                     "--extract-base is given")
 
 
 if __name__ == "__main__":

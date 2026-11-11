@@ -1,0 +1,141 @@
+name,category,item_class,class_fit_depth,desirability,worth,basis
+Potion,consumable,hp,0.031758,0.1146,0.031758,class ladder
+High Potion,consumable,hp,0.116018,0.3021,0.116018,class ladder
+Super Potion,consumable,hp,0.5739,0.3854,0.5739,class ladder
+Meat Strip,consumable,hp,0.023221,,0.023221,class ladder
+Tasty Meat,consumable,hp,0.0391,0.2604,0.0391,class ladder
+Mind Up,consumable,mp,0.0609,0.1146,0.0609,class ladder
+High Mind Up,consumable,mp,0.197025,0.3021,0.197025,class ladder
+Mana Prism,consumable,mp,0.3,0.3854,0.3,class ladder
+Anti-Venom,consumable,cure,,0.1146,0.1146,desirability
+Uncurse Potion,consumable,cure,,0.1146,0.1146,desirability
+Potato Pancake,consumable,hp,0.116018,,0.116018,class ladder
+Beef Curry,consumable,hp,0.261968,,0.261968,class ladder
+Ramen,consumable,hp,0.169391,,0.169391,class ladder
+Cream Soda,consumable,hp,0.036538,,0.036538,class ladder
+Cream Puff,consumable,hp,0.035811,,0.035811,class ladder
+Milk,consumable,hp,0.034554,,0.034554,class ladder
+Coffee,consumable,hp,0.036538,,0.036538,class ladder
+Tea,consumable,hp,0.035811,,0.035811,class ladder
+Pudding,consumable,hp,0.036538,0.2292,0.036538,class ladder
+Strawberry,consumable,hp,0.047209,,0.047209,class ladder
+Melon,consumable,hp,0.213,0.3854,0.213,class ladder
+Grapes,consumable,hp,0.034554,,0.034554,class ladder
+Persimmon,consumable,hp,0.030219,,0.030219,class ladder
+Rotten Meat,consumable,harmful,,,0.1,default
+Spoiled Milk,consumable,harmful,,,0.1,default
+Skull Key,consumable,key,,,0.1,default
+Ancient Book 1,consumable,key,,0.0417,0.0417,desirability
+Ancient Book 2,consumable,key,,0.0417,0.0417,desirability
+Ancient Book 3,consumable,key,,0.0417,0.0417,desirability
+CASTLE MAP 1,consumable,key,,0.0,0.0,desirability
+CASTLE MAP 2,consumable,key,,,0.1,default
+CASTLE MAP 3,consumable,key,,0.0,0.0,desirability
+Knife,weapon,dagger,0.008125,,0.008125,class ladder
+Baselard,weapon,dagger,0.247825,,0.247825,class ladder
+Combat Knife,weapon,dagger,0.2681,,0.2681,class ladder
+Short Sword,weapon,sword,0.013,0.1979,0.1979,desirability
+Bastard Sword,weapon,sword,0.1957,0.2812,0.2812,desirability
+Whip Sword,weapon,whip,0.2348,0.2396,0.2396,desirability
+Gladius,weapon,sword,0.260886,,0.260886,class ladder
+Gram,weapon,sword,0.538062,,0.538062,class ladder
+Milican's Sword,weapon,sword,0.472467,0.5833,0.5833,desirability
+Hrunting,weapon,sword,0.3478,0.7708,0.7708,desirability
+Mystletain,weapon,sword,0.5348,0.7708,0.7708,desirability
+Rahab's Sword,weapon,sword,0.5609,0.5625,0.5625,desirability
+Durandal,weapon,sword,0.579375,,0.579375,class ladder
+Laevatain,weapon,sword,0.600929,0.8542,0.8542,desirability
+Burtgang,weapon,sword,0.557638,0.3542,0.557638,class ladder
+Kaladbolg,weapon,sword,0.659433,0.5104,0.659433,class ladder
+Vjaya,weapon,sword,0.3478,0.4792,0.4792,desirability
+Balmung,weapon,sword,0.7087,0.9271,0.9271,desirability
+Broadsword,weapon,great_sword,0.4217,0.3229,0.4217,class ladder
+Scimitar,weapon,great_sword,0.43601,,0.43601,class ladder
+Claymore,weapon,great_sword,0.456044,,0.456044,class ladder
+Great Sword,weapon,great_sword,0.478941,,0.478941,class ladder
+Joyeuse,weapon,great_sword,0.547629,0.4167,0.547629,class ladder
+Dainslef,weapon,great_sword,0.639214,0.5208,0.639214,class ladder
+Ascalon,weapon,great_sword,0.627766,,0.627766,class ladder
+Claimh Solais,weapon,great_sword,0.6478,0.9688,0.9688,desirability
+Final Sword,weapon,great_sword,1.0,,1.0,class ladder
+Bamboo Sword,weapon,katana,0.001625,0.0,0.001625,class ladder
+Katana,weapon,katana,0.273175,,0.273175,class ladder
+Osafune,weapon,katana,0.538062,0.2708,0.538062,class ladder
+Onikiri,weapon,katana,0.268825,,0.268825,class ladder
+Kunitsuna,weapon,katana,0.27245,,0.27245,class ladder
+Yasutsuna,weapon,katana,0.8478,0.2708,0.8478,class ladder
+Muramasa,weapon,katana,0.8478,,0.8478,class ladder
+Hammer,weapon,axe_hammer,0.4348,0.2396,0.4348,class ladder
+Warhammer,weapon,axe_hammer,0.6826,,0.6826,class ladder
+Excalibur,weapon,axe_hammer,1.0,,1.0,class ladder
+Tallhammer,weapon,axe_hammer,0.9304,0.3125,0.9304,class ladder
+Battle Axe,weapon,axe_hammer,0.795236,,0.795236,class ladder
+Death's Sickle,weapon,axe_hammer,1.0,0.7188,1.0,class ladder
+Rapier,weapon,rapier,0.1696,0.2812,0.2812,desirability
+Estoc,weapon,rapier,0.4478,,0.4478,class ladder
+Cutall,weapon,rapier,0.4478,0.1979,0.4478,class ladder
+Spear,weapon,spear,0.213075,,0.213075,class ladder
+Trident,weapon,spear,0.271,,0.271,class ladder
+Lance,weapon,spear,0.2739,0.3229,0.3229,desirability
+Partizan,weapon,spear,0.32781,,0.32781,class ladder
+Gabolg,weapon,spear,0.474137,,0.474137,class ladder
+Gungner,weapon,spear,0.271725,0.6458,0.6458,desirability
+Ronginus' Spear,weapon,spear,0.813,0.7708,0.813,class ladder
+Cestus,weapon,fist,0.2652,0.1667,0.2652,class ladder
+Kaiser Knuckle,weapon,fist,0.0652,0.2083,0.2083,desirability
+Mach Punch,weapon,fist,0.008125,,0.008125,class ladder
+Whip Knuckle,weapon,fist,0.556006,,0.556006,class ladder
+Poison Fist,weapon,fist,0.575691,,0.575691,class ladder
+Handgun,weapon,gun,0.001625,0.3125,0.3125,desirability
+Silver Gun,weapon,gun,0.544588,0.4271,0.544588,class ladder
+Positron Rifle,weapon,gun,0.557638,,0.557638,class ladder
+Valmanway,weapon,special,0.00325,,1.0,fixed
+Casual Clothes,armor,armor,0.0435,,0.0435,class ladder
+Cloth Tunic,armor,armor,0.0609,,0.0609,class ladder
+Gym Clothes,armor,armor,0.107,,0.107,class ladder
+War Fatigues,armor,armor,0.187,,0.187,class ladder
+Ninja Suit,armor,armor,0.3957,0.6562,0.6562,desirability
+Soldier Uniform,armor,armor,0.41525,,0.41525,class ladder
+Pitch Black Suit,armor,armor,0.585671,0.5208,0.585671,class ladder
+Olrox's Suit,armor,armor,0.606475,0.5938,0.606475,class ladder
+Dracula's Tunic,armor,armor,0.607925,0.9688,0.9688,desirability
+Leather Plate,armor,armor,0.087,0.1979,0.1979,desirability
+Copper Plate,armor,armor,0.247,0.3229,0.3229,desirability
+Iron Plate,armor,armor,0.45435,,0.45435,class ladder
+Steel Plate,armor,armor,0.567043,,0.567043,class ladder
+Silver Plate,armor,armor,0.60575,,0.60575,class ladder
+Gold Plate,armor,armor,0.607925,,0.607925,class ladder
+Eversing,armor,armor,0.613,0.9271,0.9271,desirability
+Samurai Armor,armor,armor,0.287,0.6875,0.6875,desirability
+Silk Robe,armor,armor,0.0783,0.2396,0.2396,desirability
+Elfin Robe,armor,armor,0.4739,0.3542,0.4739,class ladder
+Death's Robe,armor,armor,0.610825,0.9271,0.9271,desirability
+Demon's Mail,armor,armor,1.0,,1.0,class ladder
+Armor of Fire,armor,armor,0.605025,0.6042,0.605025,class ladder
+Armor of Water,armor,armor,0.6043,0.6042,0.6043,class ladder
+Blocking Mail,armor,armor,0.60575,,0.60575,class ladder
+Army Jacket,armor,armor,0.41525,,0.41525,class ladder
+Cape,accessory,accessory,,0.1979,0.1979,desirability
+Crimson Cloak,accessory,accessory,,,0.2,default
+Black Cloak,accessory,accessory,,0.3438,0.3438,desirability
+Pendant,accessory,accessory,,0.1562,0.1562,desirability
+Heart Pendant,accessory,accessory,,0.1979,0.1979,desirability
+Scarf,accessory,accessory,,0.1979,0.1979,desirability
+Red Scarf,accessory,accessory,,,0.2,default
+Ancient Belt,accessory,accessory,,,0.2,default
+Black Belt,accessory,accessory,,,0.2,default
+Skull Necklace,accessory,accessory,,,0.2,default
+Flame Necklace,accessory,accessory,,,0.2,default
+Satan's Ring,accessory,accessory,,0.8438,0.8438,desirability
+Tear of Blood,accessory,accessory,,0.4271,0.4271,desirability
+Lucky Charm,accessory,accessory,,0.1562,0.1562,desirability
+Rare Ring,accessory,accessory,,0.3438,0.3438,desirability
+Soul Eater Ring,accessory,accessory,,,1.0,fixed
+Rune Ring,accessory,accessory,,0.4271,0.4271,desirability
+Sherman Ring,accessory,accessory,,0.2083,0.2083,desirability
+Gold Ring,accessory,accessory,,0.25,0.25,desirability
+Chaos Ring,accessory,accessory,,,1.0,fixed
+100 Gold,money,gold,,,0.02,fixed
+500 Gold,money,gold,,,0.02,fixed
+1000 Gold,money,gold,,,0.02,fixed
+2000 Gold,money,gold,,,0.02,fixed

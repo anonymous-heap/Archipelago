@@ -1,3 +1,12 @@
+"""
+The game's doors, one per row of ``entrance_info.csv``.
+
+Each door belongs to one room and leads to a neighboring room, and its identifier is
+``"{room}:{neighbor}"``. Where two doors connect the same pair of rooms, both identifiers get a
+position tag such as ``" (left)"``. ``ambiguous_door_identifiers`` lists the untagged forms, which
+the routing loaders reject.
+"""
+
 from __future__ import annotations
 
 from ..._pydantic_compat import BaseModel, parse_obj_as, validator
@@ -31,8 +40,11 @@ class EntranceInfo(BaseModel):
     """
 
     door_identifier_unique: str
-    """Unique identifier for this door, combining door_identifier
-       and, if this is the nth nonunique door_identifier where n > 1, the last 5 hex digits of door_address.
+    """Unique identifier for this door.
+
+    It equals ``door_identifier_nonunique`` unless two doors share that room pair. Both doors of
+    such a pair then get a position tag, either "(upper)" and "(lower)" or "(left)" and "(right)",
+    as in "500:501 (left)" and "500:501 (right)".
     """
 
     room_identifier: str
@@ -79,14 +91,16 @@ class EntranceInfo(BaseModel):
     """
 
     x_pos_door: int
-    """X-coordinate of the door in the source room (in tiles or pixels).
+    """Column of the map cell just outside this door, relative to the source room's map position.
 
+    The value is a signed byte, so 255 means -1.
     Example: 2, 1, 255
     """
 
     y_pos_door: int
-    """Y-coordinate of the door in the source room (in tiles or pixels).
+    """Row of the map cell just outside this door, relative to the source room's map position.
 
+    The value is a signed byte, so 255 means -1.
     Example: 2, 0, 4, 255
     """
 
@@ -129,9 +143,9 @@ class EntranceInfo(BaseModel):
 
 def _disambiguation_suffixes(door_id: str, group: list[dict]) -> list[str]:
     """
-    Suffix for each row sharing one ``door_identifier``, in the order given.
+    Return the suffix for each row that shares one ``door_identifier``, in the order given.
 
-    A room usually reaches a neighbour through one door, and that door gets no suffix because
+    A room usually connects to a neighbour through one door, and that door gets no suffix because
     naming it cannot be ambiguous. Where two doors share a room pair, they always sit one map
     cell apart along a single axis, so both are named by that geometry: ``"(upper)"`` and
     ``"(lower)"``, or ``"(left)"`` and ``"(right)"``.

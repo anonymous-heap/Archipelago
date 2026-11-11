@@ -1,16 +1,22 @@
 """
-The enemy stat table, declared once.
+The enemy stat table, declared once for the features that edit it.
 
-A flat array at GBA 0x080E9644 of 113 rows (Bat..Chaos), 0x24 bytes each. Two features edit
-it -- ``soul_drop_rates`` (the +0x12 rate byte) and ``soul_shuffle`` (the +0x17 soul type,
-+0x18 soul index, and the rate) -- and each used to carry its own copy of the address, the
-stride and the field offsets. They share this declaration instead: ``EnemyDNA`` is the row,
-``ENEMY_TABLE`` places it, and ``offset_of`` / ``sizeof`` answer the numbers the features used
-to state by hand.
+The table is a flat array at GBA 0x080E9644 of 113 rows (Bat..Chaos), 0x24 bytes each. These
+features edit it:
+
+* ``soul_drop_rates`` edits the +0x12 soul rate byte.
+* ``soul_shuffle`` edits the +0x17 soul type, the +0x18 soul index and the soul rate.
+* ``drop_table`` edits both drop slots: the items at +0x08 and +0x0A, and their rarities at +0x15
+  and +0x16.
+* ``enemy_drop_rates`` edits the soul rate and the common drop's rarity at +0x15.
+
+They take the table's address, row size and field offsets from this declaration. ``EnemyDNA`` is
+the row layout, and ``ENEMY_TABLE`` places the rows in the ROM. ``soul_sources`` and
+``drop_sources`` also parse the whole table, to print what a ROM holds.
 """
 from __future__ import annotations
 
-from .._bytemaker_compat import Entry, Struct, UInt8, array, count, u8
+from .._bytemaker_compat import Entry, Struct, UInt8, array, count, u8, u16
 from .address_space import gba_space
 
 ENEMY_COUNT = 113  # rows in the table (Bat..Chaos)
@@ -19,22 +25,47 @@ ENEMY_COUNT = 113  # rows in the table (Bat..Chaos)
 class EnemyDNA(Struct, endian="little"):
     """One 0x24-byte row of the enemy stat table.
 
-    Only the bytes this world edits are modelled; the padding names the unmapped remainder
-    rather than pretending to know it.
+    Only the bytes this world reads or edits are modelled. The ``unk_`` arrays cover the rest of
+    the row, whose meaning is not mapped.
+
+    Each row has two item drop slots. The death routine (``sub_080683BC``) rolls for an item only
+    when no soul dropped. It picks slot 2 a quarter of the time, reading ``+0x0A`` and ``+0x16``
+    at 0x0806857C, and slot 1 otherwise, reading ``+0x08`` and ``+0x15`` at 0x08068586. A slot
+    that holds 0 drops no item. Otherwise its item drops with chance
+    ``4 / max(16, rarity*4 + 16 - LCK/16)``, so a lower rarity is a more common drop, and a rarity
+    of 0 is the most common one. The spawn routine (``sub_08044054``) subtracts 1 from the slot's
+    value to get the item number (0x080440E6).
     """
 
-    unk_00: list[int] = array(UInt8, 0x12)          # not yet mapped
-    soul_rate: u8                                   # +0x12: drop rarity; chance ~ n/(rate*8 + 32 - LCK/16)
-    unk_13: list[int] = array(UInt8, 4)             # not yet mapped
+    unk_00: list[int] = array(UInt8, 8)             # not yet mapped
+    drop_1: u16                                     # +0x08: the common drop's item number plus 1,
+                                                    # or 0 for none
+    drop_2: u16                                     # +0x0A: the rare drop, encoded the same way
+    unk_0C: list[int] = array(UInt8, 6)             # not yet mapped
+    soul_rate: u8                                   # +0x12: the soul's rarity, where
+                                                    # chance ~ n/(rate*8 + 32 - LCK/16)
+    unk_13: list[int] = array(UInt8, 2)             # not yet mapped
+    drop_1_rarity: u8                               # +0x15: the common drop's rarity
+    drop_2_rarity: u8                               # +0x16: the rare drop's rarity
     soul_type: u8                                   # +0x17: 0 red, 1 blue, 2 yellow, 3 ability
-    soul_index: u8                                  # +0x18: 1-based index within the type; 0 = no soul
+    soul_index: u8                                  # +0x18: 1-based index within the type,
+                                                    # or 0 for no soul
     unk_19: list[int] = array(UInt8, 0x24 - 0x19)   # not yet mapped
 
 
 ENEMY_TABLE = Entry(0x080E9644, EnemyDNA, count(ENEMY_COUNT), name="enemy table")
 
-# Address math only: the table bound to the cart's geometry, no image behind it.
+# The table bound to the cart's address space without a ROM image, for address math and for
+# parsing bytes read elsewhere.
 _TABLE_GEOMETRY = ENEMY_TABLE.bind(gba_space())
+
+# The whole table's file offset and size in bytes, for reading it from a running game.
+TABLE_OFFSET, TABLE_SIZE = _TABLE_GEOMETRY.request()
+
+
+def parse_table(data: bytes) -> list[EnemyDNA]:
+    """Decode the whole table from ``data``, its TABLE_SIZE bytes read from a ROM."""
+    return _TABLE_GEOMETRY.parse(data)
 
 
 def row_offset(enemy_id: int) -> int:

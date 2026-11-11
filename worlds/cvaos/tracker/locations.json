@@ -1,0 +1,7737 @@
+[
+ {
+  "name": "000",
+  "sections": [
+   {
+    "name": "Entrance Parapet [000 Lucky Charm]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 60,
+    "y": 497
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 60,
+    "y": 209
+   }
+  ]
+ },
+ {
+  "name": "002",
+  "sections": [
+   {
+    "name": "Outside Warp Suspended Platform [002 Vjaya]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 120,
+    "y": 476
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 120,
+    "y": 188
+   }
+  ]
+ },
+ {
+  "name": "002",
+  "sections": [
+   {
+    "name": "Outside Warp Alcove [002 Cestus]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 139,
+    "y": 487
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 139,
+    "y": 199
+   }
+  ]
+ },
+ {
+  "name": "005",
+  "sections": [
+   {
+    "name": "Fountain Room Left Stairs [005 Short Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 212,
+    "y": 551
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 212,
+    "y": 263
+   }
+  ]
+ },
+ {
+  "name": "005",
+  "sections": [
+   {
+    "name": "Fountain Room Top Staircase [005 Cape]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 216,
+    "y": 536
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 216,
+    "y": 248
+   }
+  ]
+ },
+ {
+  "name": "005",
+  "sections": [
+   {
+    "name": "Fountain Room in Front of Fountain [005 Grave Keeper]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 216,
+    "y": 563
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 216,
+    "y": 275
+   }
+  ]
+ },
+ {
+  "name": "009",
+  "sections": [
+   {
+    "name": "Tallest Ascent [009 Lance]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 316,
+    "y": 511
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 316,
+    "y": 223
+   }
+  ]
+ },
+ {
+  "name": "00B",
+  "sections": [
+   {
+    "name": "Secret Room behind Peeping Eye [00B Mind Up (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 388,
+    "y": 566
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 388,
+    "y": 278
+   }
+  ]
+ },
+ {
+  "name": "00D",
+  "sections": [
+   {
+    "name": "White Dragon Hallway [00D Potion (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 444,
+    "y": 424
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 444,
+    "y": 136
+   }
+  ]
+ },
+ {
+  "name": "00F",
+  "sections": [
+   {
+    "name": "Marble Staircase Pyramid Left Ledge [00F Potion (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 460,
+    "y": 412
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 460,
+    "y": 124
+   }
+  ]
+ },
+ {
+  "name": "00F",
+  "sections": [
+   {
+    "name": "Marble Staircase Pyramid Right Ledge [00F Leather Plate]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 524,
+    "y": 412
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 524,
+    "y": 124
+   }
+  ]
+ },
+ {
+  "name": "010",
+  "sections": [
+   {
+    "name": "Reservoir Entrance [010 Flying Armor]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 538,
+    "y": 562
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 538,
+    "y": 274
+   }
+  ]
+ },
+ {
+  "name": "019",
+  "sections": [
+   {
+    "name": "Tiny Alcove [019 Yasutsuna]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 963,
+    "y": 416
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 963,
+    "y": 128
+   }
+  ]
+ },
+ {
+  "name": "023",
+  "sections": [
+   {
+    "name": "Post-Creaking Skull Room [023 CASTLE MAP 1]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 428,
+    "y": 542
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 428,
+    "y": 254
+   }
+  ]
+ },
+ {
+  "name": "026",
+  "sections": [
+   {
+    "name": "Marble Staircase Underhang Left Ledge [026 Armor of Fire]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 608,
+    "y": 374
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 608,
+    "y": 86
+   }
+  ]
+ },
+ {
+  "name": "026",
+  "sections": [
+   {
+    "name": "Marble Staircase Underhang Right Ledge [026 Potion (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 616,
+    "y": 373
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 616,
+    "y": 85
+   }
+  ]
+ },
+ {
+  "name": "027",
+  "sections": [
+   {
+    "name": "Catoblepas Ledge [027 Copper Plate]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 688,
+    "y": 370
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 688,
+    "y": 82
+   }
+  ]
+ },
+ {
+  "name": "028",
+  "sections": [
+   {
+    "name": "White Dragon Ledge [028 Scarf]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 688,
+    "y": 397
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 688,
+    "y": 109
+   }
+  ]
+ },
+ {
+  "name": "029",
+  "sections": [
+   {
+    "name": "Right Reservoir: Left Annex [029 500 Gold (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 820,
+    "y": 470
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 820,
+    "y": 182
+   }
+  ]
+ },
+ {
+  "name": "02C",
+  "sections": [
+   {
+    "name": "Right Reservoir: Right Annex [02C Potion (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 978,
+    "y": 470
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 978,
+    "y": 182
+   }
+  ]
+ },
+ {
+  "name": "101",
+  "sections": [
+   {
+    "name": "Cathedral Cache [101 Anti-Venom]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1036,
+    "y": 491
+   },
+   {
+    "map": "Chapel",
+    "x": 100,
+    "y": 203
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Top-Left Corner Left Ledge [103 High Mind Up (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1068,
+    "y": 350
+   },
+   {
+    "map": "Chapel",
+    "x": 132,
+    "y": 62
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Bottom Left [103 100 Gold (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1068,
+    "y": 416
+   },
+   {
+    "map": "Chapel",
+    "x": 132,
+    "y": 128
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Center Left [103 Bamboo Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1085,
+    "y": 395
+   },
+   {
+    "map": "Chapel",
+    "x": 149,
+    "y": 107
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Top-Left Corner Right Ledge [103 High Potion (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1086,
+    "y": 350
+   },
+   {
+    "map": "Chapel",
+    "x": 150,
+    "y": 62
+   }
+  ]
+ },
+ {
+  "name": "103",
+  "sections": [
+   {
+    "name": "Big Belfry Top Right [103 Mind Up (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1130,
+    "y": 350
+   },
+   {
+    "map": "Chapel",
+    "x": 194,
+    "y": 62
+   }
+  ]
+ },
+ {
+  "name": "105",
+  "sections": [
+   {
+    "name": "Cathedral [105 100 Gold (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1094,
+    "y": 473
+   },
+   {
+    "map": "Chapel",
+    "x": 158,
+    "y": 185
+   }
+  ]
+ },
+ {
+  "name": "106",
+  "sections": [
+   {
+    "name": "Manticore Arena Alcove [106 Tallhammer]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1146,
+    "y": 467
+   },
+   {
+    "map": "Chapel",
+    "x": 210,
+    "y": 179
+   }
+  ]
+ },
+ {
+  "name": "107",
+  "sections": [
+   {
+    "name": "Attic [107 Rapier]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1210,
+    "y": 404
+   },
+   {
+    "map": "Chapel",
+    "x": 274,
+    "y": 116
+   }
+  ]
+ },
+ {
+  "name": "108",
+  "sections": [
+   {
+    "name": "Grand Staircase Secret Cache [108 1000 Gold (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1172,
+    "y": 494
+   },
+   {
+    "map": "Chapel",
+    "x": 236,
+    "y": 206
+   }
+  ]
+ },
+ {
+  "name": "108",
+  "sections": [
+   {
+    "name": "Grand Staircase Right Nook [108 100 Gold (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1215,
+    "y": 446
+   },
+   {
+    "map": "Chapel",
+    "x": 279,
+    "y": 158
+   }
+  ]
+ },
+ {
+  "name": "109",
+  "sections": [
+   {
+    "name": "Underneath Grand Staircase [109 Silk Robe]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1171,
+    "y": 515
+   },
+   {
+    "map": "Chapel",
+    "x": 235,
+    "y": 227
+   }
+  ]
+ },
+ {
+  "name": "200",
+  "sections": [
+   {
+    "name": "Secret Room atop Stairs [200 Melon]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 962,
+    "y": 611
+   },
+   {
+    "map": "Study",
+    "x": 50,
+    "y": 107
+   }
+  ]
+ },
+ {
+  "name": "200",
+  "sections": [
+   {
+    "name": "Secret Room Hard Mode Item [200 Kaiser Knuckle]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 972,
+    "y": 617
+   },
+   {
+    "map": "Study",
+    "x": 60,
+    "y": 113
+   }
+  ]
+ },
+ {
+  "name": "201",
+  "sections": [
+   {
+    "name": "Ectoplasm Room [201 100 Gold (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1026,
+    "y": 612
+   },
+   {
+    "map": "Study",
+    "x": 114,
+    "y": 108
+   }
+  ]
+ },
+ {
+  "name": "202",
+  "sections": [
+   {
+    "name": "Evil Butcher Hallway [202 Uncurse Potion]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1044,
+    "y": 617
+   },
+   {
+    "map": "Study",
+    "x": 132,
+    "y": 113
+   }
+  ]
+ },
+ {
+  "name": "205",
+  "sections": [
+   {
+    "name": "Hammer's Room Malphas [205 Malphas]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1034,
+    "y": 682
+   },
+   {
+    "map": "Study",
+    "x": 122,
+    "y": 178
+   }
+  ]
+ },
+ {
+  "name": "208",
+  "sections": [
+   {
+    "name": "Top Cache [208 Hammer]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1163,
+    "y": 569
+   },
+   {
+    "map": "Study",
+    "x": 251,
+    "y": 65
+   }
+  ]
+ },
+ {
+  "name": "209",
+  "sections": [
+   {
+    "name": "Box Room Ceiling [209 Heart Pendant]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1156,
+    "y": 588
+   },
+   {
+    "map": "Study",
+    "x": 244,
+    "y": 84
+   }
+  ]
+ },
+ {
+  "name": "20A",
+  "sections": [
+   {
+    "name": "Box Room [20A Broadsword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1191,
+    "y": 626
+   },
+   {
+    "map": "Study",
+    "x": 279,
+    "y": 122
+   }
+  ]
+ },
+ {
+  "name": "20B",
+  "sections": [
+   {
+    "name": "After Demon Door [20B Whip Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1156,
+    "y": 670
+   },
+   {
+    "map": "Study",
+    "x": 244,
+    "y": 166
+   }
+  ]
+ },
+ {
+  "name": "20E",
+  "sections": [
+   {
+    "name": "Behind Tunnel [20E Ancient Book 1]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1001,
+    "y": 689
+   },
+   {
+    "map": "Study",
+    "x": 89,
+    "y": 185
+   }
+  ]
+ },
+ {
+  "name": "211",
+  "sections": [
+   {
+    "name": "Bottom Cache [211 100 Gold (E)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1140,
+    "y": 666
+   },
+   {
+    "map": "Study",
+    "x": 228,
+    "y": 162
+   }
+  ]
+ },
+ {
+  "name": "215",
+  "sections": [
+   {
+    "name": "Student Witch Library [215 Bastard Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1084,
+    "y": 590
+   },
+   {
+    "map": "Study",
+    "x": 172,
+    "y": 86
+   }
+  ]
+ },
+ {
+  "name": "301",
+  "sections": [
+   {
+    "name": "Secret Room behind Minotaur [301 Samurai Armor]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 131,
+    "y": 353
+   },
+   {
+    "map": "Dance Hall",
+    "x": 83,
+    "y": 137
+   }
+  ]
+ },
+ {
+  "name": "303",
+  "sections": [
+   {
+    "name": "Big Window Room Left Annex [303 100 Gold (F)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 148,
+    "y": 305
+   },
+   {
+    "map": "Dance Hall",
+    "x": 100,
+    "y": 89
+   }
+  ]
+ },
+ {
+  "name": "306",
+  "sections": [
+   {
+    "name": "Grand Ballroom [306 Cutall]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 172,
+    "y": 392
+   },
+   {
+    "map": "Dance Hall",
+    "x": 124,
+    "y": 176
+   }
+  ]
+ },
+ {
+  "name": "307",
+  "sections": [
+   {
+    "name": "Big Window Room [307 Mana Prism (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 189,
+    "y": 274
+   },
+   {
+    "map": "Dance Hall",
+    "x": 141,
+    "y": 58
+   }
+  ]
+ },
+ {
+  "name": "308",
+  "sections": [
+   {
+    "name": "Wine Cellar underneath Killer Doll [308 High Potion (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 187,
+    "y": 450
+   },
+   {
+    "map": "Dance Hall",
+    "x": 139,
+    "y": 234
+   }
+  ]
+ },
+ {
+  "name": "30A",
+  "sections": [
+   {
+    "name": "Wine Cellar Basement [30A Skeleton Blaze]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 179,
+    "y": 496
+   },
+   {
+    "map": "Dance Hall",
+    "x": 131,
+    "y": 280
+   }
+  ]
+ },
+ {
+  "name": "30C",
+  "sections": [
+   {
+    "name": "Big Window Room Right Annex [30C 100 Gold (G)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 234,
+    "y": 305
+   },
+   {
+    "map": "Dance Hall",
+    "x": 186,
+    "y": 89
+   }
+  ]
+ },
+ {
+  "name": "310",
+  "sections": [
+   {
+    "name": "Secret Ceiling Room [310 Sherman Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 316,
+    "y": 353
+   },
+   {
+    "map": "Dance Hall",
+    "x": 268,
+    "y": 137
+   }
+  ]
+ },
+ {
+  "name": "400",
+  "sections": [
+   {
+    "name": "Left Wing Atrium: Left Item [400 Dainslef]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 336,
+    "y": 257
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 72,
+    "y": 161
+   }
+  ]
+ },
+ {
+  "name": "400",
+  "sections": [
+   {
+    "name": "Left Wing Atrium: Right Item [400 Ancient Book 2]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 346,
+    "y": 255
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 82,
+    "y": 159
+   }
+  ]
+ },
+ {
+  "name": "403",
+  "sections": [
+   {
+    "name": "Left Exit [403 High Mind Up (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 390,
+    "y": 344
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 126,
+    "y": 248
+   }
+  ]
+ },
+ {
+  "name": "405",
+  "sections": [
+   {
+    "name": "Secret Room [405 High Potion (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 412,
+    "y": 374
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 148,
+    "y": 278
+   }
+  ]
+ },
+ {
+  "name": "409",
+  "sections": [
+   {
+    "name": "Secret-er Room [409 Ninja Suit]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 450,
+    "y": 378
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 186,
+    "y": 282
+   }
+  ]
+ },
+ {
+  "name": "40A",
+  "sections": [
+   {
+    "name": "Stormy Tower Left Parapet [40A Hrunting]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 466,
+    "y": 161
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 202,
+    "y": 65
+   }
+  ]
+ },
+ {
+  "name": "40A",
+  "sections": [
+   {
+    "name": "Stormy Tower Right Parapet [40A Undine]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 518,
+    "y": 161
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 254,
+    "y": 65
+   }
+  ]
+ },
+ {
+  "name": "412",
+  "sections": [
+   {
+    "name": "Lower Quarters Lobby [412 Mind Up (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 564,
+    "y": 377
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 300,
+    "y": 281
+   }
+  ]
+ },
+ {
+  "name": "503",
+  "sections": [
+   {
+    "name": "Terrace [503 CASTLE MAP 3]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 665,
+    "y": 500
+   },
+   {
+    "map": "Floating Garden",
+    "x": 569,
+    "y": 500
+   }
+  ]
+ },
+ {
+  "name": "504",
+  "sections": [
+   {
+    "name": "1st Island Left Ledge [504 1000 Gold (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 162,
+    "y": 151
+   },
+   {
+    "map": "Floating Garden",
+    "x": 66,
+    "y": 151
+   }
+  ]
+ },
+ {
+  "name": "504",
+  "sections": [
+   {
+    "name": "1st Island Right Ledge [504 1000 Gold (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 222,
+    "y": 151
+   },
+   {
+    "map": "Floating Garden",
+    "x": 126,
+    "y": 151
+   }
+  ]
+ },
+ {
+  "name": "509",
+  "sections": [
+   {
+    "name": "6th Island [509 500 Gold (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1165,
+    "y": 254
+   },
+   {
+    "map": "Floating Garden",
+    "x": 1069,
+    "y": 254
+   }
+  ]
+ },
+ {
+  "name": "50A",
+  "sections": [
+   {
+    "name": "5th Island [50A 500 Gold (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1045,
+    "y": 182
+   },
+   {
+    "map": "Floating Garden",
+    "x": 949,
+    "y": 182
+   }
+  ]
+ },
+ {
+  "name": "50D",
+  "sections": [
+   {
+    "name": "2nd Island [50D 500 Gold (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 349,
+    "y": 86
+   },
+   {
+    "map": "Floating Garden",
+    "x": 253,
+    "y": 86
+   }
+  ]
+ },
+ {
+  "name": "603",
+  "sections": [
+   {
+    "name": "Basement [603 Pitch Black Suit]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 823,
+    "y": 401
+   },
+   {
+    "map": "Clock Tower",
+    "x": 55,
+    "y": 305
+   }
+  ]
+ },
+ {
+  "name": "609",
+  "sections": [
+   {
+    "name": "Pendulum Parkour [609 Burtgang]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 932,
+    "y": 347
+   },
+   {
+    "map": "Clock Tower",
+    "x": 164,
+    "y": 251
+   }
+  ]
+ },
+ {
+  "name": "611",
+  "sections": [
+   {
+    "name": "Clock Cache [611 Skula]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 851,
+    "y": 160
+   },
+   {
+    "map": "Clock Tower",
+    "x": 83,
+    "y": 64
+   }
+  ]
+ },
+ {
+  "name": "613",
+  "sections": [
+   {
+    "name": "Death's Door Hard Mode Item [613 Death's Sickle]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 931,
+    "y": 151
+   },
+   {
+    "map": "Clock Tower",
+    "x": 163,
+    "y": 55
+   }
+  ]
+ },
+ {
+  "name": "615",
+  "sections": [
+   {
+    "name": "Gearworks Floor [615 2000 Gold (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 908,
+    "y": 233
+   },
+   {
+    "map": "Clock Tower",
+    "x": 140,
+    "y": 137
+   }
+  ]
+ },
+ {
+  "name": "617",
+  "sections": [
+   {
+    "name": "Gearworks Crevice Hard Mode Item [617 Death's Robe]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 884,
+    "y": 245
+   },
+   {
+    "map": "Clock Tower",
+    "x": 116,
+    "y": 149
+   }
+  ]
+ },
+ {
+  "name": "61B",
+  "sections": [
+   {
+    "name": "Secret Room [61B Mystletain]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 827,
+    "y": 299
+   },
+   {
+    "map": "Clock Tower",
+    "x": 59,
+    "y": 203
+   }
+  ]
+ },
+ {
+  "name": "700",
+  "sections": [
+   {
+    "name": "Canal Entrance [700 Pendant]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 150,
+    "y": 593
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 54,
+    "y": 137
+   }
+  ]
+ },
+ {
+  "name": "701",
+  "sections": [
+   {
+    "name": "Canal [701 Tasty Meat]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 392,
+    "y": 587
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 296,
+    "y": 131
+   }
+  ]
+ },
+ {
+  "name": "702",
+  "sections": [
+   {
+    "name": "Canal Ceiling [702 Elfin Robe]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 316,
+    "y": 566
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 220,
+    "y": 110
+   }
+  ]
+ },
+ {
+  "name": "703",
+  "sections": [
+   {
+    "name": "Reservoir Air Bell [703 Rahab's Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 370,
+    "y": 632
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 274,
+    "y": 176
+   }
+  ]
+ },
+ {
+  "name": "708",
+  "sections": [
+   {
+    "name": "Cavern Air Bell [708 High Mind Up (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 404,
+    "y": 800
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 308,
+    "y": 344
+   }
+  ]
+ },
+ {
+  "name": "709",
+  "sections": [
+   {
+    "name": "Secret Storage Cavern [709 Pudding]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 388,
+    "y": 851
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 292,
+    "y": 395
+   }
+  ]
+ },
+ {
+  "name": "70C",
+  "sections": [
+   {
+    "name": "Cavern Attic [70C Mana Prism (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 478,
+    "y": 775
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 382,
+    "y": 319
+   }
+  ]
+ },
+ {
+  "name": "70E",
+  "sections": [
+   {
+    "name": "Aqueducts [70E Super Potion (A)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 501,
+    "y": 641
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 405,
+    "y": 185
+   }
+  ]
+ },
+ {
+  "name": "70F",
+  "sections": [
+   {
+    "name": "Behind the Waterfall [70F Super Potion (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 810,
+    "y": 686
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 714,
+    "y": 230
+   }
+  ]
+ },
+ {
+  "name": "711",
+  "sections": [
+   {
+    "name": "Boating Course [711 Milican's Sword]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 639,
+    "y": 563
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 543,
+    "y": 107
+   }
+  ]
+ },
+ {
+  "name": "715",
+  "sections": [
+   {
+    "name": "Watering Holes [715 Armor of Water]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 736,
+    "y": 782
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 640,
+    "y": 326
+   }
+  ]
+ },
+ {
+  "name": "716",
+  "sections": [
+   {
+    "name": "Cemetery: Right Crypt [716 Galamoth]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 834,
+    "y": 853
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 738,
+    "y": 397
+   }
+  ]
+ },
+ {
+  "name": "718",
+  "sections": [
+   {
+    "name": "Waterfall Aerie [718 Ronginus' Spear]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 724,
+    "y": 635
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 628,
+    "y": 179
+   }
+  ]
+ },
+ {
+  "name": "719",
+  "sections": [
+   {
+    "name": "Boat Jump Alcove [719 1000 Gold (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 766,
+    "y": 596
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 670,
+    "y": 140
+   }
+  ]
+ },
+ {
+  "name": "719",
+  "sections": [
+   {
+    "name": "Boat Jump Cache [719 Handgun]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 768,
+    "y": 617
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 672,
+    "y": 161
+   }
+  ]
+ },
+ {
+  "name": "71C",
+  "sections": [
+   {
+    "name": "Right Reservoir: Vertical Cavern [71C Ancient Book 3]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 855,
+    "y": 524
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 759,
+    "y": 68
+   }
+  ]
+ },
+ {
+  "name": "71D",
+  "sections": [
+   {
+    "name": "Right Reservoir [71D 2000 Gold (B)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 820,
+    "y": 572
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 724,
+    "y": 116
+   }
+  ]
+ },
+ {
+  "name": "71F",
+  "sections": [
+   {
+    "name": "Right Reservoir: Right Cavern [71F Rune Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 926,
+    "y": 560
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 830,
+    "y": 104
+   }
+  ]
+ },
+ {
+  "name": "720",
+  "sections": [
+   {
+    "name": "Right Reservoir: Secret Room [720 Osafune]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 904,
+    "y": 659
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 808,
+    "y": 203
+   }
+  ]
+ },
+ {
+  "name": "721",
+  "sections": [
+   {
+    "name": "Waterfall Crest [721 Super Potion (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 788,
+    "y": 638
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 692,
+    "y": 182
+   }
+  ]
+ },
+ {
+  "name": "721",
+  "sections": [
+   {
+    "name": "Waterfall Basin [721 Eversing]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 783,
+    "y": 734
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 687,
+    "y": 278
+   }
+  ]
+ },
+ {
+  "name": "722",
+  "sections": [
+   {
+    "name": "Cemetery: Left Ambulatory [722 2000 Gold (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 484,
+    "y": 829
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 388,
+    "y": 373
+   }
+  ]
+ },
+ {
+  "name": "733",
+  "sections": [
+   {
+    "name": "Cemetery: Central Crypt [733 High Potion (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 676,
+    "y": 829
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 580,
+    "y": 373
+   }
+  ]
+ },
+ {
+  "name": "736",
+  "sections": [
+   {
+    "name": "Cemetery: Right Ambulatory [736 Gold Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 812,
+    "y": 829
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 716,
+    "y": 373
+   }
+  ]
+ },
+ {
+  "name": "800",
+  "sections": [
+   {
+    "name": "Catacomb Depths [800 Giant Bat]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 56,
+    "y": 780
+   },
+   {
+    "map": "The Arena",
+    "x": 56,
+    "y": 204
+   }
+  ]
+ },
+ {
+  "name": "802",
+  "sections": [
+   {
+    "name": "Giant Armory [802 Laevatain]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 140,
+    "y": 662
+   },
+   {
+    "map": "The Arena",
+    "x": 140,
+    "y": 86
+   }
+  ]
+ },
+ {
+  "name": "808",
+  "sections": [
+   {
+    "name": "Lavatory [808 Black Cloak]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 161,
+    "y": 686
+   },
+   {
+    "map": "The Arena",
+    "x": 161,
+    "y": 110
+   }
+  ]
+ },
+ {
+  "name": "80F",
+  "sections": [
+   {
+    "name": "Wrecking Ball Trial Reward [80F Olrox's Suit]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 259,
+    "y": 733
+   },
+   {
+    "map": "The Arena",
+    "x": 259,
+    "y": 157
+   }
+  ]
+ },
+ {
+  "name": "810",
+  "sections": [
+   {
+    "name": "Conveyor Belt Trial Reward Hard Mode Item [810 Silver Gun]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 254,
+    "y": 758
+   },
+   {
+    "map": "The Arena",
+    "x": 254,
+    "y": 182
+   }
+  ]
+ },
+ {
+  "name": "810",
+  "sections": [
+   {
+    "name": "Conveyor Belt Trial Reward on Altar [810 Balmung]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 259,
+    "y": 757
+   },
+   {
+    "map": "The Arena",
+    "x": 259,
+    "y": 181
+   }
+  ]
+ },
+ {
+  "name": "811",
+  "sections": [
+   {
+    "name": "Simon Says Trial Reward [811 Rare Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 259,
+    "y": 781
+   },
+   {
+    "map": "The Arena",
+    "x": 259,
+    "y": 205
+   }
+  ]
+ },
+ {
+  "name": "812",
+  "sections": [
+   {
+    "name": "Iron Maiden Altar [812 High Potion (E)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 283,
+    "y": 636
+   },
+   {
+    "map": "The Arena",
+    "x": 283,
+    "y": 60
+   }
+  ]
+ },
+ {
+  "name": "900",
+  "sections": [
+   {
+    "name": "Balcony Item by Railing [900 Dracula's Tunic]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 606,
+    "y": 112
+   },
+   {
+    "map": "Top Floor",
+    "x": 54,
+    "y": 64
+   }
+  ]
+ },
+ {
+  "name": "900",
+  "sections": [
+   {
+    "name": "Balcony Center Item [900 Black Panther]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 611,
+    "y": 112
+   },
+   {
+    "map": "Top Floor",
+    "x": 59,
+    "y": 64
+   }
+  ]
+ },
+ {
+  "name": "901",
+  "sections": [
+   {
+    "name": "Final Staircase under the Stairs [901 Mana Prism (C)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 608,
+    "y": 136
+   },
+   {
+    "map": "Top Floor",
+    "x": 56,
+    "y": 88
+   }
+  ]
+ },
+ {
+  "name": "901",
+  "sections": [
+   {
+    "name": "Final Staircase Hard Mode Item [901 Tear of Blood]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 692,
+    "y": 104
+   },
+   {
+    "map": "Top Floor",
+    "x": 140,
+    "y": 56
+   }
+  ]
+ },
+ {
+  "name": "902",
+  "sections": [
+   {
+    "name": "Secret Ceiling Room [902 Gungner]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 612,
+    "y": 250
+   },
+   {
+    "map": "Top Floor",
+    "x": 60,
+    "y": 202
+   }
+  ]
+ },
+ {
+  "name": "906",
+  "sections": [
+   {
+    "name": "Secret Grave [906 Hippogryph]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 686,
+    "y": 254
+   },
+   {
+    "map": "Top Floor",
+    "x": 134,
+    "y": 206
+   }
+  ]
+ },
+ {
+  "name": "908",
+  "sections": [
+   {
+    "name": "Flaming Hall [908 Satan's Ring]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 692,
+    "y": 302
+   },
+   {
+    "map": "Top Floor",
+    "x": 140,
+    "y": 254
+   }
+  ]
+ },
+ {
+  "name": "910",
+  "sections": [
+   {
+    "name": "Outlook [910 Mana Prism (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 736,
+    "y": 134
+   },
+   {
+    "map": "Top Floor",
+    "x": 184,
+    "y": 86
+   }
+  ]
+ },
+ {
+  "name": "915",
+  "sections": [
+   {
+    "name": "Dragon Statue [915 Super Potion (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 782,
+    "y": 326
+   },
+   {
+    "map": "Top Floor",
+    "x": 230,
+    "y": 278
+   }
+  ]
+ },
+ {
+  "name": "917",
+  "sections": [
+   {
+    "name": "Courtyard [917 Kaladbolg]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 608,
+    "y": 155
+   },
+   {
+    "map": "Top Floor",
+    "x": 56,
+    "y": 107
+   }
+  ]
+ },
+ {
+  "name": "A04",
+  "sections": [
+   {
+    "name": "Secret Room by the Inferno [A04 Claimh Solais]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1036,
+    "y": 776
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 268,
+    "y": 152
+   }
+  ]
+ },
+ {
+  "name": "A06",
+  "sections": [
+   {
+    "name": "Treasure Chamber [A06 Joyeuse]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 956,
+    "y": 800
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 188,
+    "y": 176
+   }
+  ]
+ },
+ {
+  "name": "B18",
+  "sections": [
+   {
+    "name": "Marble Annex [B18 Super Potion (E)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Chaotic Realm",
+    "x": 172,
+    "y": 161
+   }
+  ]
+ },
+ {
+  "name": "B1C",
+  "sections": [
+   {
+    "name": "Chair Room [B1C High Mind Up (D)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Chaotic Realm",
+    "x": 232,
+    "y": 89
+   }
+  ]
+ },
+ {
+  "name": "B1D",
+  "sections": [
+   {
+    "name": "Hammer's Room [B1D Mana Prism (E)]"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Chaotic Realm",
+    "x": 218,
+    "y": 155
+   }
+  ]
+ },
+ {
+  "name": "Defeat Bat",
+  "sections": [
+   {
+    "name": "Defeat Bat"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 204,
+    "y": 542
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 204,
+    "y": 254
+   },
+   {
+    "map": "Castle",
+    "x": 492,
+    "y": 562
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 492,
+    "y": 274
+   },
+   {
+    "map": "Castle",
+    "x": 420,
+    "y": 552
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 420,
+    "y": 264
+   },
+   {
+    "map": "Castle",
+    "x": 616,
+    "y": 396
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 616,
+    "y": 108
+   },
+   {
+    "map": "Castle",
+    "x": 871,
+    "y": 463
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 871,
+    "y": 175
+   },
+   {
+    "map": "Castle",
+    "x": 1059,
+    "y": 538
+   },
+   {
+    "map": "Chapel",
+    "x": 123,
+    "y": 250
+   },
+   {
+    "map": "Castle",
+    "x": 1213,
+    "y": 526
+   },
+   {
+    "map": "Chapel",
+    "x": 277,
+    "y": 238
+   },
+   {
+    "map": "Castle",
+    "x": 154,
+    "y": 558
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 58,
+    "y": 102
+   },
+   {
+    "map": "Castle",
+    "x": 419,
+    "y": 780
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 323,
+    "y": 324
+   },
+   {
+    "map": "Castle",
+    "x": 449,
+    "y": 621
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 353,
+    "y": 165
+   }
+  ]
+ },
+ {
+  "name": "Defeat Zombie",
+  "sections": [
+   {
+    "name": "Defeat Zombie"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 84,
+    "y": 544
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 84,
+    "y": 256
+   },
+   {
+    "map": "Castle",
+    "x": 756,
+    "y": 426
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 756,
+    "y": 138
+   }
+  ]
+ },
+ {
+  "name": "Defeat Skeleton",
+  "sections": [
+   {
+    "name": "Defeat Skeleton"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 252,
+    "y": 544
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 252,
+    "y": 256
+   },
+   {
+    "map": "Castle",
+    "x": 372,
+    "y": 544
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 372,
+    "y": 256
+   },
+   {
+    "map": "Castle",
+    "x": 708,
+    "y": 424
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 708,
+    "y": 136
+   },
+   {
+    "map": "Castle",
+    "x": 774,
+    "y": 423
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 774,
+    "y": 135
+   },
+   {
+    "map": "Castle",
+    "x": 1173,
+    "y": 543
+   },
+   {
+    "map": "Chapel",
+    "x": 237,
+    "y": 255
+   },
+   {
+    "map": "Castle",
+    "x": 159,
+    "y": 584
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 63,
+    "y": 128
+   }
+  ]
+ },
+ {
+  "name": "Defeat Merman",
+  "sections": [
+   {
+    "name": "Defeat Merman"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 194,
+    "y": 572
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 194,
+    "y": 284
+   },
+   {
+    "map": "Castle",
+    "x": 912,
+    "y": 476
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 912,
+    "y": 188
+   },
+   {
+    "map": "Castle",
+    "x": 330,
+    "y": 568
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 234,
+    "y": 112
+   },
+   {
+    "map": "Castle",
+    "x": 663,
+    "y": 743
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 567,
+    "y": 287
+   },
+   {
+    "map": "Castle",
+    "x": 692,
+    "y": 784
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 596,
+    "y": 328
+   },
+   {
+    "map": "Castle",
+    "x": 576,
+    "y": 749
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 480,
+    "y": 293
+   }
+  ]
+ },
+ {
+  "name": "Defeat Axe Armor",
+  "sections": [
+   {
+    "name": "Defeat Axe Armor"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 336,
+    "y": 491
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 336,
+    "y": 203
+   },
+   {
+    "map": "Castle",
+    "x": 495,
+    "y": 424
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 495,
+    "y": 136
+   },
+   {
+    "map": "Castle",
+    "x": 545,
+    "y": 400
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 545,
+    "y": 112
+   },
+   {
+    "map": "Castle",
+    "x": 636,
+    "y": 376
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 636,
+    "y": 88
+   },
+   {
+    "map": "Castle",
+    "x": 1062,
+    "y": 361
+   },
+   {
+    "map": "Chapel",
+    "x": 126,
+    "y": 73
+   },
+   {
+    "map": "Castle",
+    "x": 1184,
+    "y": 414
+   },
+   {
+    "map": "Chapel",
+    "x": 248,
+    "y": 126
+   }
+  ]
+ },
+ {
+  "name": "Defeat Skull Archer",
+  "sections": [
+   {
+    "name": "Defeat Skull Archer"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 356,
+    "y": 518
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 356,
+    "y": 230
+   },
+   {
+    "map": "Castle",
+    "x": 417,
+    "y": 503
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 417,
+    "y": 215
+   },
+   {
+    "map": "Castle",
+    "x": 922,
+    "y": 424
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 922,
+    "y": 136
+   },
+   {
+    "map": "Castle",
+    "x": 563,
+    "y": 400
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 563,
+    "y": 112
+   },
+   {
+    "map": "Castle",
+    "x": 1008,
+    "y": 663
+   },
+   {
+    "map": "Study",
+    "x": 96,
+    "y": 159
+   }
+  ]
+ },
+ {
+  "name": "Defeat Peeping Eye",
+  "sections": [
+   {
+    "name": "Defeat Peeping Eye"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 581,
+    "y": 424
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 581,
+    "y": 136
+   },
+   {
+    "map": "Castle",
+    "x": 720,
+    "y": 424
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 720,
+    "y": 136
+   },
+   {
+    "map": "Castle",
+    "x": 414,
+    "y": 564
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 414,
+    "y": 276
+   }
+  ]
+ },
+ {
+  "name": "Defeat Killer Fish",
+  "sections": [
+   {
+    "name": "Defeat Killer Fish"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 468,
+    "y": 569
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 468,
+    "y": 281
+   },
+   {
+    "map": "Castle",
+    "x": 880,
+    "y": 472
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 880,
+    "y": 184
+   },
+   {
+    "map": "Castle",
+    "x": 216,
+    "y": 592
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 120,
+    "y": 136
+   },
+   {
+    "map": "Castle",
+    "x": 684,
+    "y": 665
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 588,
+    "y": 209
+   },
+   {
+    "map": "Castle",
+    "x": 1065,
+    "y": 779
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 297,
+    "y": 155
+   }
+  ]
+ },
+ {
+  "name": "Defeat Bone Pillar",
+  "sections": [
+   {
+    "name": "Defeat Bone Pillar"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1089,
+    "y": 408
+   },
+   {
+    "map": "Chapel",
+    "x": 153,
+    "y": 120
+   },
+   {
+    "map": "Castle",
+    "x": 1186,
+    "y": 398
+   },
+   {
+    "map": "Chapel",
+    "x": 250,
+    "y": 110
+   },
+   {
+    "map": "Castle",
+    "x": 1130,
+    "y": 616
+   },
+   {
+    "map": "Study",
+    "x": 218,
+    "y": 112
+   },
+   {
+    "map": "Castle",
+    "x": 992,
+    "y": 681
+   },
+   {
+    "map": "Study",
+    "x": 80,
+    "y": 177
+   },
+   {
+    "map": "Castle",
+    "x": 200,
+    "y": 280
+   },
+   {
+    "map": "Dance Hall",
+    "x": 152,
+    "y": 64
+   },
+   {
+    "map": "Castle",
+    "x": 172,
+    "y": 157
+   },
+   {
+    "map": "Floating Garden",
+    "x": 76,
+    "y": 157
+   }
+  ]
+ },
+ {
+  "name": "Defeat Blue Crow",
+  "sections": [
+   {
+    "name": "Defeat Blue Crow"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 420,
+    "y": 470
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 420,
+    "y": 182
+   },
+   {
+    "map": "Castle",
+    "x": 913,
+    "y": 416
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 913,
+    "y": 128
+   }
+  ]
+ },
+ {
+  "name": "Defeat Buer",
+  "sections": [
+   {
+    "name": "Defeat Buer"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 420,
+    "y": 455
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 420,
+    "y": 167
+   },
+   {
+    "map": "Castle",
+    "x": 1040,
+    "y": 663
+   },
+   {
+    "map": "Study",
+    "x": 128,
+    "y": 159
+   }
+  ]
+ },
+ {
+  "name": "Defeat White Dragon",
+  "sections": [
+   {
+    "name": "Defeat White Dragon"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 448,
+    "y": 415
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 448,
+    "y": 127
+   },
+   {
+    "map": "Castle",
+    "x": 678,
+    "y": 392
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 678,
+    "y": 104
+   },
+   {
+    "map": "Castle",
+    "x": 1059,
+    "y": 513
+   },
+   {
+    "map": "Chapel",
+    "x": 123,
+    "y": 225
+   },
+   {
+    "map": "Castle",
+    "x": 321,
+    "y": 342
+   },
+   {
+    "map": "Dance Hall",
+    "x": 273,
+    "y": 126
+   }
+  ]
+ },
+ {
+  "name": "Defeat Zombie Soldier",
+  "sections": [
+   {
+    "name": "Defeat Zombie Soldier"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 483,
+    "y": 424
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 483,
+    "y": 136
+   },
+   {
+    "map": "Castle",
+    "x": 552,
+    "y": 424
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 552,
+    "y": 136
+   },
+   {
+    "map": "Castle",
+    "x": 932,
+    "y": 452
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 932,
+    "y": 164
+   },
+   {
+    "map": "Castle",
+    "x": 968,
+    "y": 464
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 968,
+    "y": 176
+   }
+  ]
+ },
+ {
+  "name": "Defeat Skeleton Knight",
+  "sections": [
+   {
+    "name": "Defeat Skeleton Knight"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 478,
+    "y": 410
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 478,
+    "y": 122
+   },
+   {
+    "map": "Castle",
+    "x": 875,
+    "y": 425
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 875,
+    "y": 137
+   },
+   {
+    "map": "Castle",
+    "x": 657,
+    "y": 400
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 657,
+    "y": 112
+   },
+   {
+    "map": "Castle",
+    "x": 1173,
+    "y": 478
+   },
+   {
+    "map": "Chapel",
+    "x": 237,
+    "y": 190
+   },
+   {
+    "map": "Castle",
+    "x": 1161,
+    "y": 522
+   },
+   {
+    "map": "Chapel",
+    "x": 225,
+    "y": 234
+   },
+   {
+    "map": "Castle",
+    "x": 1034,
+    "y": 518
+   },
+   {
+    "map": "Chapel",
+    "x": 98,
+    "y": 230
+   },
+   {
+    "map": "Castle",
+    "x": 103,
+    "y": 385
+   },
+   {
+    "map": "Dance Hall",
+    "x": 55,
+    "y": 169
+   }
+  ]
+ },
+ {
+  "name": "Defeat Ghost",
+  "sections": [
+   {
+    "name": "Defeat Ghost"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 540,
+    "y": 420
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 540,
+    "y": 132
+   },
+   {
+    "map": "Castle",
+    "x": 1077,
+    "y": 342
+   },
+   {
+    "map": "Chapel",
+    "x": 141,
+    "y": 54
+   },
+   {
+    "map": "Castle",
+    "x": 1104,
+    "y": 444
+   },
+   {
+    "map": "Chapel",
+    "x": 168,
+    "y": 156
+   },
+   {
+    "map": "Castle",
+    "x": 1216,
+    "y": 540
+   },
+   {
+    "map": "Chapel",
+    "x": 280,
+    "y": 252
+   }
+  ]
+ },
+ {
+  "name": "Defeat Siren",
+  "sections": [
+   {
+    "name": "Defeat Siren"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 336,
+    "y": 432
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 336,
+    "y": 144
+   },
+   {
+    "map": "Castle",
+    "x": 846,
+    "y": 208
+   },
+   {
+    "map": "Clock Tower",
+    "x": 78,
+    "y": 112
+   }
+  ]
+ },
+ {
+  "name": "Defeat Tiny Devil",
+  "sections": [
+   {
+    "name": "Defeat Tiny Devil"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 900,
+    "y": 422
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 900,
+    "y": 134
+   },
+   {
+    "map": "Castle",
+    "x": 1020,
+    "y": 542
+   },
+   {
+    "map": "Chapel",
+    "x": 84,
+    "y": 254
+   },
+   {
+    "map": "Castle",
+    "x": 1179,
+    "y": 459
+   },
+   {
+    "map": "Chapel",
+    "x": 243,
+    "y": 171
+   },
+   {
+    "map": "Castle",
+    "x": 1217,
+    "y": 514
+   },
+   {
+    "map": "Chapel",
+    "x": 281,
+    "y": 226
+   },
+   {
+    "map": "Castle",
+    "x": 1107,
+    "y": 561
+   },
+   {
+    "map": "Study",
+    "x": 195,
+    "y": 57
+   },
+   {
+    "map": "Castle",
+    "x": 153,
+    "y": 570
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 57,
+    "y": 114
+   }
+  ]
+ },
+ {
+  "name": "Defeat Durga",
+  "sections": [
+   {
+    "name": "Defeat Durga"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1160,
+    "y": 410
+   },
+   {
+    "map": "Chapel",
+    "x": 224,
+    "y": 122
+   },
+   {
+    "map": "Castle",
+    "x": 1096,
+    "y": 569
+   },
+   {
+    "map": "Study",
+    "x": 184,
+    "y": 65
+   },
+   {
+    "map": "Castle",
+    "x": 155,
+    "y": 378
+   },
+   {
+    "map": "Dance Hall",
+    "x": 107,
+    "y": 162
+   },
+   {
+    "map": "Castle",
+    "x": 224,
+    "y": 384
+   },
+   {
+    "map": "Dance Hall",
+    "x": 176,
+    "y": 168
+   },
+   {
+    "map": "Castle",
+    "x": 399,
+    "y": 354
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 135,
+    "y": 258
+   },
+   {
+    "map": "Castle",
+    "x": 419,
+    "y": 285
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 155,
+    "y": 189
+   }
+  ]
+ },
+ {
+  "name": "Defeat Rock Armor",
+  "sections": [
+   {
+    "name": "Defeat Rock Armor"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 942,
+    "y": 425
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 942,
+    "y": 137
+   },
+   {
+    "map": "Castle",
+    "x": 1071,
+    "y": 542
+   },
+   {
+    "map": "Chapel",
+    "x": 135,
+    "y": 254
+   },
+   {
+    "map": "Castle",
+    "x": 1185,
+    "y": 543
+   },
+   {
+    "map": "Chapel",
+    "x": 249,
+    "y": 255
+   },
+   {
+    "map": "Castle",
+    "x": 1020,
+    "y": 518
+   },
+   {
+    "map": "Chapel",
+    "x": 84,
+    "y": 230
+   },
+   {
+    "map": "Castle",
+    "x": 1001,
+    "y": 621
+   },
+   {
+    "map": "Study",
+    "x": 89,
+    "y": 117
+   }
+  ]
+ },
+ {
+  "name": "Defeat Giant Ghost",
+  "sections": [
+   {
+    "name": "Defeat Giant Ghost"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1167,
+    "y": 453
+   },
+   {
+    "map": "Chapel",
+    "x": 231,
+    "y": 165
+   },
+   {
+    "map": "Castle",
+    "x": 1089,
+    "y": 608
+   },
+   {
+    "map": "Study",
+    "x": 177,
+    "y": 104
+   },
+   {
+    "map": "Castle",
+    "x": 1104,
+    "y": 586
+   },
+   {
+    "map": "Study",
+    "x": 192,
+    "y": 82
+   }
+  ]
+ },
+ {
+  "name": "Defeat Winged Skeleton",
+  "sections": [
+   {
+    "name": "Defeat Winged Skeleton"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 111,
+    "y": 441
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 111,
+    "y": 153
+   },
+   {
+    "map": "Castle",
+    "x": 996,
+    "y": 516
+   },
+   {
+    "map": "Chapel",
+    "x": 60,
+    "y": 228
+   },
+   {
+    "map": "Castle",
+    "x": 1056,
+    "y": 584
+   },
+   {
+    "map": "Study",
+    "x": 144,
+    "y": 80
+   },
+   {
+    "map": "Castle",
+    "x": 297,
+    "y": 417
+   },
+   {
+    "map": "Dance Hall",
+    "x": 249,
+    "y": 201
+   }
+  ]
+ },
+ {
+  "name": "Defeat Minotaur",
+  "sections": [
+   {
+    "name": "Defeat Minotaur"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1094,
+    "y": 666
+   },
+   {
+    "map": "Study",
+    "x": 182,
+    "y": 162
+   },
+   {
+    "map": "Castle",
+    "x": 153,
+    "y": 354
+   },
+   {
+    "map": "Dance Hall",
+    "x": 105,
+    "y": 138
+   },
+   {
+    "map": "Castle",
+    "x": 262,
+    "y": 378
+   },
+   {
+    "map": "Dance Hall",
+    "x": 214,
+    "y": 162
+   },
+   {
+    "map": "Castle",
+    "x": 202,
+    "y": 354
+   },
+   {
+    "map": "Dance Hall",
+    "x": 154,
+    "y": 138
+   },
+   {
+    "map": "Castle",
+    "x": 204,
+    "y": 449
+   },
+   {
+    "map": "Dance Hall",
+    "x": 156,
+    "y": 233
+   }
+  ]
+ },
+ {
+  "name": "Defeat Student Witch",
+  "sections": [
+   {
+    "name": "Defeat Student Witch"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1179,
+    "y": 657
+   },
+   {
+    "map": "Study",
+    "x": 267,
+    "y": 153
+   },
+   {
+    "map": "Castle",
+    "x": 1020,
+    "y": 663
+   },
+   {
+    "map": "Study",
+    "x": 108,
+    "y": 159
+   },
+   {
+    "map": "Castle",
+    "x": 1114,
+    "y": 593
+   },
+   {
+    "map": "Study",
+    "x": 202,
+    "y": 89
+   },
+   {
+    "map": "Castle",
+    "x": 424,
+    "y": 369
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 160,
+    "y": 273
+   },
+   {
+    "map": "Castle",
+    "x": 605,
+    "y": 354
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 341,
+    "y": 258
+   }
+  ]
+ },
+ {
+  "name": "Defeat Arachne",
+  "sections": [
+   {
+    "name": "Defeat Arachne"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1066,
+    "y": 640
+   },
+   {
+    "map": "Study",
+    "x": 154,
+    "y": 136
+   },
+   {
+    "map": "Castle",
+    "x": 260,
+    "y": 399
+   },
+   {
+    "map": "Dance Hall",
+    "x": 212,
+    "y": 183
+   }
+  ]
+ },
+ {
+  "name": "Defeat Fleaman",
+  "sections": [
+   {
+    "name": "Defeat Fleaman"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1047,
+    "y": 542
+   },
+   {
+    "map": "Chapel",
+    "x": 111,
+    "y": 254
+   },
+   {
+    "map": "Castle",
+    "x": 1046,
+    "y": 640
+   },
+   {
+    "map": "Study",
+    "x": 134,
+    "y": 136
+   },
+   {
+    "map": "Castle",
+    "x": 161,
+    "y": 297
+   },
+   {
+    "map": "Dance Hall",
+    "x": 113,
+    "y": 81
+   },
+   {
+    "map": "Castle",
+    "x": 184,
+    "y": 468
+   },
+   {
+    "map": "Dance Hall",
+    "x": 136,
+    "y": 252
+   },
+   {
+    "map": "Castle",
+    "x": 250,
+    "y": 466
+   },
+   {
+    "map": "Dance Hall",
+    "x": 202,
+    "y": 250
+   }
+  ]
+ },
+ {
+  "name": "Defeat Evil Butcher",
+  "sections": [
+   {
+    "name": "Defeat Evil Butcher"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1080,
+    "y": 616
+   },
+   {
+    "map": "Study",
+    "x": 168,
+    "y": 112
+   },
+   {
+    "map": "Castle",
+    "x": 178,
+    "y": 441
+   },
+   {
+    "map": "Dance Hall",
+    "x": 130,
+    "y": 225
+   },
+   {
+    "map": "Castle",
+    "x": 195,
+    "y": 474
+   },
+   {
+    "map": "Dance Hall",
+    "x": 147,
+    "y": 258
+   },
+   {
+    "map": "Castle",
+    "x": 256,
+    "y": 477
+   },
+   {
+    "map": "Dance Hall",
+    "x": 208,
+    "y": 261
+   }
+  ]
+ },
+ {
+  "name": "Defeat Quezlcoatl",
+  "sections": [
+   {
+    "name": "Defeat Quezlcoatl"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1116,
+    "y": 546
+   },
+   {
+    "map": "Chapel",
+    "x": 180,
+    "y": 258
+   },
+   {
+    "map": "Castle",
+    "x": 124,
+    "y": 375
+   },
+   {
+    "map": "Dance Hall",
+    "x": 76,
+    "y": 159
+   },
+   {
+    "map": "Castle",
+    "x": 235,
+    "y": 330
+   },
+   {
+    "map": "Dance Hall",
+    "x": 187,
+    "y": 114
+   },
+   {
+    "map": "Castle",
+    "x": 178,
+    "y": 348
+   },
+   {
+    "map": "Dance Hall",
+    "x": 130,
+    "y": 132
+   }
+  ]
+ },
+ {
+  "name": "Defeat Ectoplasm",
+  "sections": [
+   {
+    "name": "Defeat Ectoplasm"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 993,
+    "y": 630
+   },
+   {
+    "map": "Study",
+    "x": 81,
+    "y": 126
+   },
+   {
+    "map": "Castle",
+    "x": 1056,
+    "y": 634
+   },
+   {
+    "map": "Study",
+    "x": 144,
+    "y": 130
+   },
+   {
+    "map": "Castle",
+    "x": 1080,
+    "y": 660
+   },
+   {
+    "map": "Study",
+    "x": 168,
+    "y": 156
+   }
+  ]
+ },
+ {
+  "name": "Defeat Catoblepas",
+  "sections": [
+   {
+    "name": "Defeat Catoblepas"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 680,
+    "y": 377
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 680,
+    "y": 89
+   },
+   {
+    "map": "Castle",
+    "x": 1011,
+    "y": 640
+   },
+   {
+    "map": "Study",
+    "x": 99,
+    "y": 136
+   },
+   {
+    "map": "Castle",
+    "x": 1070,
+    "y": 666
+   },
+   {
+    "map": "Study",
+    "x": 158,
+    "y": 162
+   },
+   {
+    "map": "Castle",
+    "x": 1168,
+    "y": 687
+   },
+   {
+    "map": "Study",
+    "x": 256,
+    "y": 183
+   },
+   {
+    "map": "Castle",
+    "x": 159,
+    "y": 306
+   },
+   {
+    "map": "Dance Hall",
+    "x": 111,
+    "y": 90
+   },
+   {
+    "map": "Castle",
+    "x": 183,
+    "y": 306
+   },
+   {
+    "map": "Dance Hall",
+    "x": 135,
+    "y": 90
+   },
+   {
+    "map": "Castle",
+    "x": 332,
+    "y": 354
+   },
+   {
+    "map": "Dance Hall",
+    "x": 284,
+    "y": 138
+   }
+  ]
+ },
+ {
+  "name": "Defeat Ghost Dancer",
+  "sections": [
+   {
+    "name": "Defeat Ghost Dancer"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1068,
+    "y": 492
+   },
+   {
+    "map": "Chapel",
+    "x": 132,
+    "y": 204
+   },
+   {
+    "map": "Castle",
+    "x": 1124,
+    "y": 507
+   },
+   {
+    "map": "Chapel",
+    "x": 188,
+    "y": 219
+   },
+   {
+    "map": "Castle",
+    "x": 184,
+    "y": 387
+   },
+   {
+    "map": "Dance Hall",
+    "x": 136,
+    "y": 171
+   }
+  ]
+ },
+ {
+  "name": "Defeat Waiter Skeleton",
+  "sections": [
+   {
+    "name": "Defeat Waiter Skeleton"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 175,
+    "y": 330
+   },
+   {
+    "map": "Dance Hall",
+    "x": 127,
+    "y": 114
+   },
+   {
+    "map": "Castle",
+    "x": 174,
+    "y": 297
+   },
+   {
+    "map": "Dance Hall",
+    "x": 126,
+    "y": 81
+   },
+   {
+    "map": "Castle",
+    "x": 224,
+    "y": 297
+   },
+   {
+    "map": "Dance Hall",
+    "x": 176,
+    "y": 81
+   },
+   {
+    "map": "Castle",
+    "x": 273,
+    "y": 399
+   },
+   {
+    "map": "Dance Hall",
+    "x": 225,
+    "y": 183
+   }
+  ]
+ },
+ {
+  "name": "Defeat Killer Doll",
+  "sections": [
+   {
+    "name": "Defeat Killer Doll"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 104,
+    "y": 452
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 104,
+    "y": 164
+   },
+   {
+    "map": "Castle",
+    "x": 716,
+    "y": 380
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 716,
+    "y": 92
+   },
+   {
+    "map": "Castle",
+    "x": 104,
+    "y": 370
+   },
+   {
+    "map": "Dance Hall",
+    "x": 56,
+    "y": 154
+   },
+   {
+    "map": "Castle",
+    "x": 179,
+    "y": 283
+   },
+   {
+    "map": "Dance Hall",
+    "x": 131,
+    "y": 67
+   },
+   {
+    "map": "Castle",
+    "x": 172,
+    "y": 426
+   },
+   {
+    "map": "Dance Hall",
+    "x": 124,
+    "y": 210
+   },
+   {
+    "map": "Castle",
+    "x": 234,
+    "y": 297
+   },
+   {
+    "map": "Dance Hall",
+    "x": 186,
+    "y": 81
+   },
+   {
+    "map": "Castle",
+    "x": 250,
+    "y": 489
+   },
+   {
+    "map": "Dance Hall",
+    "x": 202,
+    "y": 273
+   },
+   {
+    "map": "Castle",
+    "x": 306,
+    "y": 425
+   },
+   {
+    "map": "Dance Hall",
+    "x": 258,
+    "y": 209
+   },
+   {
+    "map": "Castle",
+    "x": 216,
+    "y": 446
+   },
+   {
+    "map": "Dance Hall",
+    "x": 168,
+    "y": 230
+   },
+   {
+    "map": "Castle",
+    "x": 513,
+    "y": 367
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 249,
+    "y": 271
+   }
+  ]
+ },
+ {
+  "name": "Defeat Zombie Officer",
+  "sections": [
+   {
+    "name": "Defeat Zombie Officer"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 120,
+    "y": 464
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 120,
+    "y": 176
+   },
+   {
+    "map": "Castle",
+    "x": 1012,
+    "y": 570
+   },
+   {
+    "map": "Chapel",
+    "x": 76,
+    "y": 282
+   },
+   {
+    "map": "Castle",
+    "x": 1002,
+    "y": 533
+   },
+   {
+    "map": "Chapel",
+    "x": 66,
+    "y": 245
+   },
+   {
+    "map": "Castle",
+    "x": 188,
+    "y": 330
+   },
+   {
+    "map": "Dance Hall",
+    "x": 140,
+    "y": 114
+   },
+   {
+    "map": "Castle",
+    "x": 208,
+    "y": 426
+   },
+   {
+    "map": "Dance Hall",
+    "x": 160,
+    "y": 210
+   },
+   {
+    "map": "Castle",
+    "x": 222,
+    "y": 306
+   },
+   {
+    "map": "Dance Hall",
+    "x": 174,
+    "y": 90
+   },
+   {
+    "map": "Castle",
+    "x": 189,
+    "y": 354
+   },
+   {
+    "map": "Dance Hall",
+    "x": 141,
+    "y": 138
+   },
+   {
+    "map": "Castle",
+    "x": 156,
+    "y": 402
+   },
+   {
+    "map": "Dance Hall",
+    "x": 108,
+    "y": 186
+   },
+   {
+    "map": "Castle",
+    "x": 228,
+    "y": 402
+   },
+   {
+    "map": "Dance Hall",
+    "x": 180,
+    "y": 186
+   },
+   {
+    "map": "Castle",
+    "x": 246,
+    "y": 425
+   },
+   {
+    "map": "Dance Hall",
+    "x": 198,
+    "y": 209
+   },
+   {
+    "map": "Castle",
+    "x": 228,
+    "y": 446
+   },
+   {
+    "map": "Dance Hall",
+    "x": 180,
+    "y": 230
+   }
+  ]
+ },
+ {
+  "name": "Defeat Creaking Skull",
+  "sections": [
+   {
+    "name": "Defeat Creaking Skull"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 384,
+    "y": 544
+   },
+   {
+    "map": "Castle Corridor",
+    "x": 384,
+    "y": 256
+   },
+   {
+    "map": "Castle",
+    "x": 222,
+    "y": 426
+   },
+   {
+    "map": "Dance Hall",
+    "x": 174,
+    "y": 210
+   }
+  ]
+ },
+ {
+  "name": "Defeat Wooden Golem",
+  "sections": [
+   {
+    "name": "Defeat Wooden Golem"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 208,
+    "y": 474
+   },
+   {
+    "map": "Dance Hall",
+    "x": 160,
+    "y": 258
+   },
+   {
+    "map": "Castle",
+    "x": 260,
+    "y": 425
+   },
+   {
+    "map": "Dance Hall",
+    "x": 212,
+    "y": 209
+   }
+  ]
+ },
+ {
+  "name": "Defeat Tsuchinoko",
+  "sections": [
+   {
+    "name": "Defeat Tsuchinoko"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 174,
+    "y": 489
+   },
+   {
+    "map": "Dance Hall",
+    "x": 126,
+    "y": 273
+   }
+  ]
+ },
+ {
+  "name": "Defeat Persephone",
+  "sections": [
+   {
+    "name": "Defeat Persephone"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 356,
+    "y": 279
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 92,
+    "y": 183
+   },
+   {
+    "map": "Castle",
+    "x": 395,
+    "y": 378
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 131,
+    "y": 282
+   },
+   {
+    "map": "Castle",
+    "x": 447,
+    "y": 306
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 183,
+    "y": 210
+   },
+   {
+    "map": "Castle",
+    "x": 467,
+    "y": 354
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 203,
+    "y": 258
+   },
+   {
+    "map": "Castle",
+    "x": 464,
+    "y": 330
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 200,
+    "y": 234
+   },
+   {
+    "map": "Castle",
+    "x": 521,
+    "y": 378
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 257,
+    "y": 282
+   },
+   {
+    "map": "Castle",
+    "x": 540,
+    "y": 369
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 276,
+    "y": 273
+   }
+  ]
+ },
+ {
+  "name": "Defeat Lilith",
+  "sections": [
+   {
+    "name": "Defeat Lilith"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 438,
+    "y": 354
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 174,
+    "y": 258
+   },
+   {
+    "map": "Castle",
+    "x": 552,
+    "y": 372
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 288,
+    "y": 276
+   },
+   {
+    "map": "Castle",
+    "x": 150,
+    "y": 680
+   },
+   {
+    "map": "The Arena",
+    "x": 150,
+    "y": 104
+   }
+  ]
+ },
+ {
+  "name": "Defeat Nemesis",
+  "sections": [
+   {
+    "name": "Defeat Nemesis"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 115,
+    "y": 391
+   },
+   {
+    "map": "Dance Hall",
+    "x": 67,
+    "y": 175
+   },
+   {
+    "map": "Castle",
+    "x": 425,
+    "y": 315
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 161,
+    "y": 219
+   },
+   {
+    "map": "Castle",
+    "x": 567,
+    "y": 307
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 303,
+    "y": 211
+   }
+  ]
+ },
+ {
+  "name": "Defeat Kyoma Demon",
+  "sections": [
+   {
+    "name": "Defeat Kyoma Demon"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 465,
+    "y": 298
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 201,
+    "y": 202
+   },
+   {
+    "map": "Castle",
+    "x": 474,
+    "y": 322
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 210,
+    "y": 226
+   }
+  ]
+ },
+ {
+  "name": "Defeat Chronomage",
+  "sections": [
+   {
+    "name": "Defeat Chronomage"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 384,
+    "y": 304
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 120,
+    "y": 208
+   }
+  ]
+ },
+ {
+  "name": "Defeat Valkyrie",
+  "sections": [
+   {
+    "name": "Defeat Valkyrie"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 456,
+    "y": 346
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 192,
+    "y": 250
+   },
+   {
+    "map": "Castle",
+    "x": 484,
+    "y": 191
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 220,
+    "y": 95
+   },
+   {
+    "map": "Castle",
+    "x": 486,
+    "y": 301
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 222,
+    "y": 205
+   },
+   {
+    "map": "Castle",
+    "x": 486,
+    "y": 324
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 222,
+    "y": 228
+   },
+   {
+    "map": "Castle",
+    "x": 528,
+    "y": 302
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 264,
+    "y": 206
+   },
+   {
+    "map": "Castle",
+    "x": 856,
+    "y": 385
+   },
+   {
+    "map": "Clock Tower",
+    "x": 88,
+    "y": 289
+   },
+   {
+    "map": "Castle",
+    "x": 966,
+    "y": 364
+   },
+   {
+    "map": "Clock Tower",
+    "x": 198,
+    "y": 268
+   },
+   {
+    "map": "Castle",
+    "x": 868,
+    "y": 254
+   },
+   {
+    "map": "Clock Tower",
+    "x": 100,
+    "y": 158
+   }
+  ]
+ },
+ {
+  "name": "Defeat Witch",
+  "sections": [
+   {
+    "name": "Defeat Witch"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 440,
+    "y": 372
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 176,
+    "y": 276
+   },
+   {
+    "map": "Castle",
+    "x": 476,
+    "y": 273
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 212,
+    "y": 177
+   },
+   {
+    "map": "Castle",
+    "x": 593,
+    "y": 348
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 329,
+    "y": 252
+   }
+  ]
+ },
+ {
+  "name": "Defeat Curly",
+  "sections": [
+   {
+    "name": "Defeat Curly"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 500,
+    "y": 200
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 236,
+    "y": 104
+   },
+   {
+    "map": "Castle",
+    "x": 475,
+    "y": 306
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 211,
+    "y": 210
+   },
+   {
+    "map": "Castle",
+    "x": 528,
+    "y": 280
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 264,
+    "y": 184
+   },
+   {
+    "map": "Castle",
+    "x": 563,
+    "y": 285
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 299,
+    "y": 189
+   },
+   {
+    "map": "Castle",
+    "x": 536,
+    "y": 378
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 272,
+    "y": 282
+   }
+  ]
+ },
+ {
+  "name": "Defeat Altair",
+  "sections": [
+   {
+    "name": "Defeat Altair"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 480,
+    "y": 33
+   },
+   {
+    "map": "Floating Garden",
+    "x": 384,
+    "y": 33
+   }
+  ]
+ },
+ {
+  "name": "Defeat Red Crow",
+  "sections": [
+   {
+    "name": "Defeat Red Crow"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 589,
+    "y": 449
+   },
+   {
+    "map": "Floating Garden",
+    "x": 493,
+    "y": 449
+   },
+   {
+    "map": "Castle",
+    "x": 660,
+    "y": 451
+   },
+   {
+    "map": "Floating Garden",
+    "x": 564,
+    "y": 451
+   },
+   {
+    "map": "Castle",
+    "x": 677,
+    "y": 510
+   },
+   {
+    "map": "Floating Garden",
+    "x": 581,
+    "y": 510
+   }
+  ]
+ },
+ {
+  "name": "Defeat Cockatrice",
+  "sections": [
+   {
+    "name": "Defeat Cockatrice"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 606,
+    "y": 501
+   },
+   {
+    "map": "Floating Garden",
+    "x": 510,
+    "y": 501
+   },
+   {
+    "map": "Castle",
+    "x": 706,
+    "y": 501
+   },
+   {
+    "map": "Floating Garden",
+    "x": 610,
+    "y": 501
+   }
+  ]
+ },
+ {
+  "name": "Defeat Dead Warrior",
+  "sections": [
+   {
+    "name": "Defeat Dead Warrior"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 675,
+    "y": 522
+   },
+   {
+    "map": "Floating Garden",
+    "x": 579,
+    "y": 522
+   },
+   {
+    "map": "Castle",
+    "x": 176,
+    "y": 177
+   },
+   {
+    "map": "Floating Garden",
+    "x": 80,
+    "y": 177
+   },
+   {
+    "map": "Castle",
+    "x": 852,
+    "y": 102
+   },
+   {
+    "map": "Floating Garden",
+    "x": 756,
+    "y": 102
+   }
+  ]
+ },
+ {
+  "name": "Defeat Devil",
+  "sections": [
+   {
+    "name": "Defeat Devil"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 852,
+    "y": 85
+   },
+   {
+    "map": "Floating Garden",
+    "x": 756,
+    "y": 85
+   },
+   {
+    "map": "Castle",
+    "x": 1044,
+    "y": 208
+   },
+   {
+    "map": "Floating Garden",
+    "x": 948,
+    "y": 208
+   },
+   {
+    "map": "Castle",
+    "x": 874,
+    "y": 326
+   },
+   {
+    "map": "Clock Tower",
+    "x": 106,
+    "y": 230
+   }
+  ]
+ },
+ {
+  "name": "Defeat Imp",
+  "sections": [
+   {
+    "name": "Defeat Imp"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 354,
+    "y": 330
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 90,
+    "y": 234
+   },
+   {
+    "map": "Castle",
+    "x": 556,
+    "y": 303
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 292,
+    "y": 207
+   },
+   {
+    "map": "Castle",
+    "x": 584,
+    "y": 466
+   },
+   {
+    "map": "Floating Garden",
+    "x": 488,
+    "y": 466
+   },
+   {
+    "map": "Castle",
+    "x": 633,
+    "y": 574
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 537,
+    "y": 118
+   }
+  ]
+ },
+ {
+  "name": "Defeat Werewolf",
+  "sections": [
+   {
+    "name": "Defeat Werewolf"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1036,
+    "y": 222
+   },
+   {
+    "map": "Floating Garden",
+    "x": 940,
+    "y": 222
+   },
+   {
+    "map": "Castle",
+    "x": 334,
+    "y": 126
+   },
+   {
+    "map": "Floating Garden",
+    "x": 238,
+    "y": 126
+   }
+  ]
+ },
+ {
+  "name": "Defeat Gorgon",
+  "sections": [
+   {
+    "name": "Defeat Gorgon"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 610,
+    "y": 453
+   },
+   {
+    "map": "Floating Garden",
+    "x": 514,
+    "y": 453
+   },
+   {
+    "map": "Castle",
+    "x": 671,
+    "y": 474
+   },
+   {
+    "map": "Floating Garden",
+    "x": 575,
+    "y": 474
+   },
+   {
+    "map": "Castle",
+    "x": 561,
+    "y": 782
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 465,
+    "y": 326
+   }
+  ]
+ },
+ {
+  "name": "Defeat Disc Armor",
+  "sections": [
+   {
+    "name": "Defeat Disc Armor"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 484,
+    "y": 169
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 220,
+    "y": 73
+   },
+   {
+    "map": "Castle",
+    "x": 1164,
+    "y": 277
+   },
+   {
+    "map": "Floating Garden",
+    "x": 1068,
+    "y": 277
+   },
+   {
+    "map": "Castle",
+    "x": 348,
+    "y": 126
+   },
+   {
+    "map": "Floating Garden",
+    "x": 252,
+    "y": 126
+   },
+   {
+    "map": "Castle",
+    "x": 923,
+    "y": 303
+   },
+   {
+    "map": "Clock Tower",
+    "x": 155,
+    "y": 207
+   },
+   {
+    "map": "Castle",
+    "x": 580,
+    "y": 716
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 484,
+    "y": 260
+   }
+  ]
+ },
+ {
+  "name": "Defeat Golem",
+  "sections": [
+   {
+    "name": "Defeat Golem"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 348,
+    "y": 109
+   },
+   {
+    "map": "Floating Garden",
+    "x": 252,
+    "y": 109
+   },
+   {
+    "map": "Castle",
+    "x": 924,
+    "y": 281
+   },
+   {
+    "map": "Clock Tower",
+    "x": 156,
+    "y": 185
+   }
+  ]
+ },
+ {
+  "name": "Defeat Manticore",
+  "sections": [
+   {
+    "name": "Defeat Manticore"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1128,
+    "y": 546
+   },
+   {
+    "map": "Chapel",
+    "x": 192,
+    "y": 258
+   },
+   {
+    "map": "Castle",
+    "x": 1164,
+    "y": 294
+   },
+   {
+    "map": "Floating Garden",
+    "x": 1068,
+    "y": 294
+   }
+  ]
+ },
+ {
+  "name": "Defeat Gremlin",
+  "sections": [
+   {
+    "name": "Defeat Gremlin"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 968,
+    "y": 342
+   },
+   {
+    "map": "Clock Tower",
+    "x": 200,
+    "y": 246
+   },
+   {
+    "map": "Castle",
+    "x": 872,
+    "y": 239
+   },
+   {
+    "map": "Clock Tower",
+    "x": 104,
+    "y": 143
+   }
+  ]
+ },
+ {
+  "name": "Defeat Harpy",
+  "sections": [
+   {
+    "name": "Defeat Harpy"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 834,
+    "y": 202
+   },
+   {
+    "map": "Clock Tower",
+    "x": 66,
+    "y": 106
+   },
+   {
+    "map": "Castle",
+    "x": 848,
+    "y": 270
+   },
+   {
+    "map": "Clock Tower",
+    "x": 80,
+    "y": 174
+   },
+   {
+    "map": "Castle",
+    "x": 851,
+    "y": 321
+   },
+   {
+    "map": "Clock Tower",
+    "x": 83,
+    "y": 225
+   },
+   {
+    "map": "Castle",
+    "x": 962,
+    "y": 202
+   },
+   {
+    "map": "Clock Tower",
+    "x": 194,
+    "y": 106
+   },
+   {
+    "map": "Castle",
+    "x": 954,
+    "y": 338
+   },
+   {
+    "map": "Clock Tower",
+    "x": 186,
+    "y": 242
+   },
+   {
+    "map": "Castle",
+    "x": 921,
+    "y": 168
+   },
+   {
+    "map": "Clock Tower",
+    "x": 153,
+    "y": 72
+   },
+   {
+    "map": "Castle",
+    "x": 894,
+    "y": 251
+   },
+   {
+    "map": "Clock Tower",
+    "x": 126,
+    "y": 155
+   },
+   {
+    "map": "Castle",
+    "x": 1084,
+    "y": 757
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 316,
+    "y": 133
+   }
+  ]
+ },
+ {
+  "name": "Defeat Medusa Head",
+  "sections": [
+   {
+    "name": "Defeat Medusa Head"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 828,
+    "y": 348
+   },
+   {
+    "map": "Clock Tower",
+    "x": 60,
+    "y": 252
+   },
+   {
+    "map": "Castle",
+    "x": 846,
+    "y": 372
+   },
+   {
+    "map": "Clock Tower",
+    "x": 78,
+    "y": 276
+   },
+   {
+    "map": "Castle",
+    "x": 876,
+    "y": 348
+   },
+   {
+    "map": "Clock Tower",
+    "x": 108,
+    "y": 252
+   },
+   {
+    "map": "Castle",
+    "x": 951,
+    "y": 372
+   },
+   {
+    "map": "Clock Tower",
+    "x": 183,
+    "y": 276
+   },
+   {
+    "map": "Castle",
+    "x": 942,
+    "y": 276
+   },
+   {
+    "map": "Clock Tower",
+    "x": 174,
+    "y": 180
+   },
+   {
+    "map": "Castle",
+    "x": 948,
+    "y": 324
+   },
+   {
+    "map": "Clock Tower",
+    "x": 180,
+    "y": 228
+   },
+   {
+    "map": "Castle",
+    "x": 894,
+    "y": 204
+   },
+   {
+    "map": "Clock Tower",
+    "x": 126,
+    "y": 108
+   },
+   {
+    "map": "Castle",
+    "x": 876,
+    "y": 228
+   },
+   {
+    "map": "Clock Tower",
+    "x": 108,
+    "y": 132
+   },
+   {
+    "map": "Castle",
+    "x": 636,
+    "y": 732
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 540,
+    "y": 276
+   },
+   {
+    "map": "Castle",
+    "x": 144,
+    "y": 756
+   },
+   {
+    "map": "The Arena",
+    "x": 144,
+    "y": 180
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 84,
+    "y": 84
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 228,
+    "y": 120
+   }
+  ]
+ },
+ {
+  "name": "Defeat Bomber Armor",
+  "sections": [
+   {
+    "name": "Defeat Bomber Armor"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 851,
+    "y": 354
+   },
+   {
+    "map": "Clock Tower",
+    "x": 83,
+    "y": 258
+   },
+   {
+    "map": "Castle",
+    "x": 947,
+    "y": 399
+   },
+   {
+    "map": "Clock Tower",
+    "x": 179,
+    "y": 303
+   },
+   {
+    "map": "Castle",
+    "x": 875,
+    "y": 279
+   },
+   {
+    "map": "Clock Tower",
+    "x": 107,
+    "y": 183
+   },
+   {
+    "map": "Castle",
+    "x": 875,
+    "y": 303
+   },
+   {
+    "map": "Clock Tower",
+    "x": 107,
+    "y": 207
+   },
+   {
+    "map": "Castle",
+    "x": 660,
+    "y": 686
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 564,
+    "y": 230
+   }
+  ]
+ },
+ {
+  "name": "Defeat Lightning Doll",
+  "sections": [
+   {
+    "name": "Defeat Lightning Doll"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 340,
+    "y": 279
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 76,
+    "y": 183
+   },
+   {
+    "map": "Castle",
+    "x": 822,
+    "y": 324
+   },
+   {
+    "map": "Clock Tower",
+    "x": 54,
+    "y": 228
+   },
+   {
+    "map": "Castle",
+    "x": 844,
+    "y": 282
+   },
+   {
+    "map": "Clock Tower",
+    "x": 76,
+    "y": 186
+   },
+   {
+    "map": "Castle",
+    "x": 859,
+    "y": 372
+   },
+   {
+    "map": "Clock Tower",
+    "x": 91,
+    "y": 276
+   },
+   {
+    "map": "Castle",
+    "x": 940,
+    "y": 378
+   },
+   {
+    "map": "Clock Tower",
+    "x": 172,
+    "y": 282
+   },
+   {
+    "map": "Castle",
+    "x": 956,
+    "y": 276
+   },
+   {
+    "map": "Clock Tower",
+    "x": 188,
+    "y": 180
+   },
+   {
+    "map": "Castle",
+    "x": 979,
+    "y": 348
+   },
+   {
+    "map": "Clock Tower",
+    "x": 211,
+    "y": 252
+   },
+   {
+    "map": "Castle",
+    "x": 872,
+    "y": 207
+   },
+   {
+    "map": "Clock Tower",
+    "x": 104,
+    "y": 111
+   },
+   {
+    "map": "Castle",
+    "x": 907,
+    "y": 204
+   },
+   {
+    "map": "Clock Tower",
+    "x": 139,
+    "y": 108
+   },
+   {
+    "map": "Castle",
+    "x": 907,
+    "y": 252
+   },
+   {
+    "map": "Clock Tower",
+    "x": 139,
+    "y": 156
+   },
+   {
+    "map": "Castle",
+    "x": 932,
+    "y": 264
+   },
+   {
+    "map": "Clock Tower",
+    "x": 164,
+    "y": 168
+   },
+   {
+    "map": "Castle",
+    "x": 833,
+    "y": 306
+   },
+   {
+    "map": "Clock Tower",
+    "x": 65,
+    "y": 210
+   },
+   {
+    "map": "Castle",
+    "x": 970,
+    "y": 328
+   },
+   {
+    "map": "Clock Tower",
+    "x": 202,
+    "y": 232
+   }
+  ]
+ },
+ {
+  "name": "Defeat Great Armor",
+  "sections": [
+   {
+    "name": "Defeat Great Armor"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1070,
+    "y": 686
+   },
+   {
+    "map": "Study",
+    "x": 158,
+    "y": 182
+   },
+   {
+    "map": "Castle",
+    "x": 894,
+    "y": 186
+   },
+   {
+    "map": "Clock Tower",
+    "x": 126,
+    "y": 90
+   }
+  ]
+ },
+ {
+  "name": "Defeat Une",
+  "sections": [
+   {
+    "name": "Defeat Une"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1048,
+    "y": 498
+   },
+   {
+    "map": "Chapel",
+    "x": 112,
+    "y": 210
+   },
+   {
+    "map": "Castle",
+    "x": 1160,
+    "y": 544
+   },
+   {
+    "map": "Chapel",
+    "x": 224,
+    "y": 256
+   },
+   {
+    "map": "Castle",
+    "x": 662,
+    "y": 674
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 566,
+    "y": 218
+   },
+   {
+    "map": "Castle",
+    "x": 492,
+    "y": 758
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 396,
+    "y": 302
+   }
+  ]
+ },
+ {
+  "name": "Defeat Giant Worm",
+  "sections": [
+   {
+    "name": "Defeat Giant Worm"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 421,
+    "y": 709
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 325,
+    "y": 253
+   },
+   {
+    "map": "Castle",
+    "x": 910,
+    "y": 566
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 814,
+    "y": 110
+   },
+   {
+    "map": "Castle",
+    "x": 506,
+    "y": 756
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 410,
+    "y": 300
+   }
+  ]
+ },
+ {
+  "name": "Defeat Needles",
+  "sections": [
+   {
+    "name": "Defeat Needles"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 888,
+    "y": 329
+   },
+   {
+    "map": "Clock Tower",
+    "x": 120,
+    "y": 233
+   },
+   {
+    "map": "Castle",
+    "x": 918,
+    "y": 398
+   },
+   {
+    "map": "Clock Tower",
+    "x": 150,
+    "y": 302
+   },
+   {
+    "map": "Castle",
+    "x": 376,
+    "y": 639
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 280,
+    "y": 183
+   },
+   {
+    "map": "Castle",
+    "x": 368,
+    "y": 809
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 272,
+    "y": 353
+   },
+   {
+    "map": "Castle",
+    "x": 412,
+    "y": 612
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 316,
+    "y": 156
+   },
+   {
+    "map": "Castle",
+    "x": 582,
+    "y": 636
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 486,
+    "y": 180
+   },
+   {
+    "map": "Castle",
+    "x": 822,
+    "y": 602
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 726,
+    "y": 146
+   }
+  ]
+ },
+ {
+  "name": "Defeat Man-Eater",
+  "sections": [
+   {
+    "name": "Defeat Man-Eater"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 394,
+    "y": 636
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 298,
+    "y": 180
+   },
+   {
+    "map": "Castle",
+    "x": 710,
+    "y": 782
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 614,
+    "y": 326
+   }
+  ]
+ },
+ {
+  "name": "Defeat Fish Head",
+  "sections": [
+   {
+    "name": "Defeat Fish Head"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 374,
+    "y": 796
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 278,
+    "y": 340
+   },
+   {
+    "map": "Castle",
+    "x": 483,
+    "y": 640
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 387,
+    "y": 184
+   },
+   {
+    "map": "Castle",
+    "x": 591,
+    "y": 592
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 495,
+    "y": 136
+   },
+   {
+    "map": "Castle",
+    "x": 836,
+    "y": 614
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 740,
+    "y": 158
+   },
+   {
+    "map": "Castle",
+    "x": 879,
+    "y": 644
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 783,
+    "y": 188
+   },
+   {
+    "map": "Castle",
+    "x": 1076,
+    "y": 786
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 308,
+    "y": 162
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 99,
+    "y": 232
+   }
+  ]
+ },
+ {
+  "name": "Defeat Nightmare",
+  "sections": [
+   {
+    "name": "Defeat Nightmare"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 708,
+    "y": 568
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 612,
+    "y": 112
+   },
+   {
+    "map": "Castle",
+    "x": 477,
+    "y": 761
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 381,
+    "y": 305
+   }
+  ]
+ },
+ {
+  "name": "Defeat Triton",
+  "sections": [
+   {
+    "name": "Defeat Triton"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 456,
+    "y": 783
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 360,
+    "y": 327
+   },
+   {
+    "map": "Castle",
+    "x": 471,
+    "y": 640
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 375,
+    "y": 184
+   },
+   {
+    "map": "Castle",
+    "x": 776,
+    "y": 608
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 680,
+    "y": 152
+   },
+   {
+    "map": "Castle",
+    "x": 840,
+    "y": 578
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 744,
+    "y": 122
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 87,
+    "y": 232
+   }
+  ]
+ },
+ {
+  "name": "Defeat Slime",
+  "sections": [
+   {
+    "name": "Defeat Slime"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 800,
+    "y": 562
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 704,
+    "y": 106
+   },
+   {
+    "map": "Castle",
+    "x": 850,
+    "y": 536
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 754,
+    "y": 80
+   },
+   {
+    "map": "Castle",
+    "x": 638,
+    "y": 632
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 542,
+    "y": 176
+   },
+   {
+    "map": "Castle",
+    "x": 658,
+    "y": 653
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 562,
+    "y": 197
+   },
+   {
+    "map": "Castle",
+    "x": 588,
+    "y": 727
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 492,
+    "y": 271
+   },
+   {
+    "map": "Castle",
+    "x": 617,
+    "y": 751
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 521,
+    "y": 295
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 34,
+    "y": 82
+   }
+  ]
+ },
+ {
+  "name": "Defeat Big Golem",
+  "sections": [
+   {
+    "name": "Defeat Big Golem"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 204,
+    "y": 497
+   },
+   {
+    "map": "Dance Hall",
+    "x": 156,
+    "y": 281
+   },
+   {
+    "map": "Castle",
+    "x": 618,
+    "y": 713
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 522,
+    "y": 257
+   }
+  ]
+ },
+ {
+  "name": "Defeat Dryad",
+  "sections": [
+   {
+    "name": "Defeat Dryad"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 702,
+    "y": 734
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 606,
+    "y": 278
+   },
+   {
+    "map": "Castle",
+    "x": 862,
+    "y": 736
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 94,
+    "y": 112
+   },
+   {
+    "map": "Castle",
+    "x": 1032,
+    "y": 738
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 264,
+    "y": 114
+   }
+  ]
+ },
+ {
+  "name": "Defeat Poison Worm",
+  "sections": [
+   {
+    "name": "Defeat Poison Worm"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 508,
+    "y": 780
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 412,
+    "y": 324
+   },
+   {
+    "map": "Castle",
+    "x": 718,
+    "y": 734
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 622,
+    "y": 278
+   },
+   {
+    "map": "Castle",
+    "x": 1010,
+    "y": 734
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 242,
+    "y": 110
+   }
+  ]
+ },
+ {
+  "name": "Defeat Arc Demon",
+  "sections": [
+   {
+    "name": "Defeat Arc Demon"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 332,
+    "y": 246
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 68,
+    "y": 150
+   },
+   {
+    "map": "Castle",
+    "x": 648,
+    "y": 770
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 552,
+    "y": 314
+   },
+   {
+    "map": "Castle",
+    "x": 764,
+    "y": 540
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 668,
+    "y": 84
+   },
+   {
+    "map": "Castle",
+    "x": 207,
+    "y": 756
+   },
+   {
+    "map": "The Arena",
+    "x": 207,
+    "y": 180
+   }
+  ]
+ },
+ {
+  "name": "Defeat Cagnazzo",
+  "sections": [
+   {
+    "name": "Defeat Cagnazzo"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 438,
+    "y": 636
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 342,
+    "y": 180
+   },
+   {
+    "map": "Castle",
+    "x": 738,
+    "y": 826
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 642,
+    "y": 370
+   },
+   {
+    "map": "Castle",
+    "x": 1136,
+    "y": 810
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 368,
+    "y": 186
+   }
+  ]
+ },
+ {
+  "name": "Defeat Ripper",
+  "sections": [
+   {
+    "name": "Defeat Ripper"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 540,
+    "y": 855
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 444,
+    "y": 399
+   },
+   {
+    "map": "Castle",
+    "x": 735,
+    "y": 855
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 639,
+    "y": 399
+   }
+  ]
+ },
+ {
+  "name": "Defeat Werejaguar",
+  "sections": [
+   {
+    "name": "Defeat Werejaguar"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 442,
+    "y": 854
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 346,
+    "y": 398
+   },
+   {
+    "map": "Castle",
+    "x": 498,
+    "y": 831
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 402,
+    "y": 375
+   },
+   {
+    "map": "Castle",
+    "x": 904,
+    "y": 735
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 136,
+    "y": 111
+   }
+  ]
+ },
+ {
+  "name": "Defeat Ukoback",
+  "sections": [
+   {
+    "name": "Defeat Ukoback"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 418,
+    "y": 792
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 322,
+    "y": 336
+   },
+   {
+    "map": "Castle",
+    "x": 436,
+    "y": 660
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 340,
+    "y": 204
+   },
+   {
+    "map": "Castle",
+    "x": 690,
+    "y": 732
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 594,
+    "y": 276
+   }
+  ]
+ },
+ {
+  "name": "Defeat Alura Une",
+  "sections": [
+   {
+    "name": "Defeat Alura Une"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 504,
+    "y": 855
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 408,
+    "y": 399
+   },
+   {
+    "map": "Castle",
+    "x": 990,
+    "y": 735
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 222,
+    "y": 111
+   }
+  ]
+ },
+ {
+  "name": "Defeat Biphron",
+  "sections": [
+   {
+    "name": "Defeat Biphron"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 456,
+    "y": 855
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 360,
+    "y": 399
+   },
+   {
+    "map": "Castle",
+    "x": 552,
+    "y": 855
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 456,
+    "y": 399
+   }
+  ]
+ },
+ {
+  "name": "Defeat Mandragora",
+  "sections": [
+   {
+    "name": "Defeat Mandragora"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 192,
+    "y": 201
+   },
+   {
+    "map": "Floating Garden",
+    "x": 96,
+    "y": 201
+   },
+   {
+    "map": "Castle",
+    "x": 611,
+    "y": 761
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 515,
+    "y": 305
+   }
+  ]
+ },
+ {
+  "name": "Defeat Flesh Golem",
+  "sections": [
+   {
+    "name": "Defeat Flesh Golem"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 800,
+    "y": 680
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 704,
+    "y": 224
+   },
+   {
+    "map": "Castle",
+    "x": 720,
+    "y": 568
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 624,
+    "y": 112
+   }
+  ]
+ },
+ {
+  "name": "Defeat Sky Fish",
+  "sections": [
+   {
+    "name": "Defeat Sky Fish"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 432,
+    "y": 783
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 336,
+    "y": 327
+   },
+   {
+    "map": "Castle",
+    "x": 600,
+    "y": 711
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 504,
+    "y": 255
+   }
+  ]
+ },
+ {
+  "name": "Defeat Dead Crusader",
+  "sections": [
+   {
+    "name": "Defeat Dead Crusader"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 488,
+    "y": 616
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 392,
+    "y": 160
+   },
+   {
+    "map": "Castle",
+    "x": 133,
+    "y": 645
+   },
+   {
+    "map": "The Arena",
+    "x": 133,
+    "y": 69
+   },
+   {
+    "map": "Castle",
+    "x": 236,
+    "y": 712
+   },
+   {
+    "map": "The Arena",
+    "x": 236,
+    "y": 136
+   },
+   {
+    "map": "Castle",
+    "x": 252,
+    "y": 682
+   },
+   {
+    "map": "The Arena",
+    "x": 252,
+    "y": 106
+   },
+   {
+    "map": "Castle",
+    "x": 273,
+    "y": 759
+   },
+   {
+    "map": "The Arena",
+    "x": 273,
+    "y": 183
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 104,
+    "y": 208
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 254,
+    "y": 108
+   }
+  ]
+ },
+ {
+  "name": "Defeat Kicker Skeleton",
+  "sections": [
+   {
+    "name": "Defeat Kicker Skeleton"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 527,
+    "y": 64
+   },
+   {
+    "map": "Floating Garden",
+    "x": 431,
+    "y": 64
+   }
+  ]
+ },
+ {
+  "name": "Defeat Weretiger",
+  "sections": [
+   {
+    "name": "Defeat Weretiger"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 136,
+    "y": 714
+   },
+   {
+    "map": "The Arena",
+    "x": 136,
+    "y": 138
+   },
+   {
+    "map": "Castle",
+    "x": 159,
+    "y": 639
+   },
+   {
+    "map": "The Arena",
+    "x": 159,
+    "y": 63
+   },
+   {
+    "map": "Castle",
+    "x": 178,
+    "y": 663
+   },
+   {
+    "map": "The Arena",
+    "x": 178,
+    "y": 87
+   }
+  ]
+ },
+ {
+  "name": "Defeat Killer Mantle",
+  "sections": [
+   {
+    "name": "Defeat Killer Mantle"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 122,
+    "y": 711
+   },
+   {
+    "map": "The Arena",
+    "x": 122,
+    "y": 135
+   },
+   {
+    "map": "Castle",
+    "x": 107,
+    "y": 733
+   },
+   {
+    "map": "The Arena",
+    "x": 107,
+    "y": 157
+   },
+   {
+    "map": "Castle",
+    "x": 172,
+    "y": 636
+   },
+   {
+    "map": "The Arena",
+    "x": 172,
+    "y": 60
+   },
+   {
+    "map": "Castle",
+    "x": 195,
+    "y": 658
+   },
+   {
+    "map": "The Arena",
+    "x": 195,
+    "y": 82
+   },
+   {
+    "map": "Castle",
+    "x": 282,
+    "y": 742
+   },
+   {
+    "map": "The Arena",
+    "x": 282,
+    "y": 166
+   }
+  ]
+ },
+ {
+  "name": "Defeat Mudman",
+  "sections": [
+   {
+    "name": "Defeat Mudman"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 886,
+    "y": 733
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 118,
+    "y": 109
+   },
+   {
+    "map": "Castle",
+    "x": 976,
+    "y": 831
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 208,
+    "y": 207
+   }
+  ]
+ },
+ {
+  "name": "Defeat Gargoyle",
+  "sections": [
+   {
+    "name": "Defeat Gargoyle"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 1118,
+    "y": 477
+   },
+   {
+    "map": "Chapel",
+    "x": 182,
+    "y": 189
+   },
+   {
+    "map": "Castle",
+    "x": 416,
+    "y": 807
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 320,
+    "y": 351
+   },
+   {
+    "map": "Castle",
+    "x": 181,
+    "y": 702
+   },
+   {
+    "map": "The Arena",
+    "x": 181,
+    "y": 126
+   },
+   {
+    "map": "Castle",
+    "x": 244,
+    "y": 634
+   },
+   {
+    "map": "The Arena",
+    "x": 244,
+    "y": 58
+   },
+   {
+    "map": "Castle",
+    "x": 292,
+    "y": 736
+   },
+   {
+    "map": "The Arena",
+    "x": 292,
+    "y": 160
+   },
+   {
+    "map": "Castle",
+    "x": 622,
+    "y": 136
+   },
+   {
+    "map": "Top Floor",
+    "x": 70,
+    "y": 88
+   },
+   {
+    "map": "Castle",
+    "x": 636,
+    "y": 291
+   },
+   {
+    "map": "Top Floor",
+    "x": 84,
+    "y": 243
+   },
+   {
+    "map": "Castle",
+    "x": 688,
+    "y": 323
+   },
+   {
+    "map": "Top Floor",
+    "x": 136,
+    "y": 275
+   },
+   {
+    "map": "Castle",
+    "x": 718,
+    "y": 255
+   },
+   {
+    "map": "Top Floor",
+    "x": 166,
+    "y": 207
+   },
+   {
+    "map": "Castle",
+    "x": 724,
+    "y": 322
+   },
+   {
+    "map": "Top Floor",
+    "x": 172,
+    "y": 274
+   },
+   {
+    "map": "Castle",
+    "x": 942,
+    "y": 712
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 174,
+    "y": 88
+   },
+   {
+    "map": "Castle",
+    "x": 918,
+    "y": 803
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 150,
+    "y": 179
+   }
+  ]
+ },
+ {
+  "name": "Defeat Red Minotaur",
+  "sections": [
+   {
+    "name": "Defeat Red Minotaur"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 165,
+    "y": 658
+   },
+   {
+    "map": "The Arena",
+    "x": 165,
+    "y": 82
+   },
+   {
+    "map": "Castle",
+    "x": 728,
+    "y": 282
+   },
+   {
+    "map": "Top Floor",
+    "x": 176,
+    "y": 234
+   },
+   {
+    "map": "Castle",
+    "x": 632,
+    "y": 213
+   },
+   {
+    "map": "Top Floor",
+    "x": 80,
+    "y": 165
+   }
+  ]
+ },
+ {
+  "name": "Defeat Beam Skeleton",
+  "sections": [
+   {
+    "name": "Defeat Beam Skeleton"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 116,
+    "y": 663
+   },
+   {
+    "map": "The Arena",
+    "x": 116,
+    "y": 87
+   },
+   {
+    "map": "Castle",
+    "x": 152,
+    "y": 714
+   },
+   {
+    "map": "The Arena",
+    "x": 152,
+    "y": 138
+   },
+   {
+    "map": "Castle",
+    "x": 150,
+    "y": 786
+   },
+   {
+    "map": "The Arena",
+    "x": 150,
+    "y": 210
+   },
+   {
+    "map": "Castle",
+    "x": 267,
+    "y": 710
+   },
+   {
+    "map": "The Arena",
+    "x": 267,
+    "y": 134
+   },
+   {
+    "map": "Castle",
+    "x": 272,
+    "y": 735
+   },
+   {
+    "map": "The Arena",
+    "x": 272,
+    "y": 159
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 28,
+    "y": 93
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 244,
+    "y": 72
+   }
+  ]
+ },
+ {
+  "name": "Defeat Alastor",
+  "sections": [
+   {
+    "name": "Defeat Alastor"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Chaotic Realm",
+    "x": 58,
+    "y": 84
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 84,
+    "y": 150
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 208,
+    "y": 100
+   }
+  ]
+ },
+ {
+  "name": "Defeat Skull Millione",
+  "sections": [
+   {
+    "name": "Defeat Skull Millione"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 104,
+    "y": 653
+   },
+   {
+    "map": "The Arena",
+    "x": 104,
+    "y": 77
+   },
+   {
+    "map": "Castle",
+    "x": 225,
+    "y": 706
+   },
+   {
+    "map": "The Arena",
+    "x": 225,
+    "y": 130
+   }
+  ]
+ },
+ {
+  "name": "Defeat Giant Skeleton",
+  "sections": [
+   {
+    "name": "Defeat Giant Skeleton"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 224,
+    "y": 639
+   },
+   {
+    "map": "The Arena",
+    "x": 224,
+    "y": 63
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 96,
+    "y": 64
+   }
+  ]
+ },
+ {
+  "name": "Defeat Gladiator",
+  "sections": [
+   {
+    "name": "Defeat Gladiator"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 192,
+    "y": 708
+   },
+   {
+    "map": "The Arena",
+    "x": 192,
+    "y": 132
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 144,
+    "y": 64
+   }
+  ]
+ },
+ {
+  "name": "Defeat Bael",
+  "sections": [
+   {
+    "name": "Defeat Bael"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 100,
+    "y": 640
+   },
+   {
+    "map": "The Arena",
+    "x": 100,
+    "y": 64
+   },
+   {
+    "map": "Castle",
+    "x": 716,
+    "y": 226
+   },
+   {
+    "map": "Top Floor",
+    "x": 164,
+    "y": 178
+   }
+  ]
+ },
+ {
+  "name": "Defeat Succubus",
+  "sections": [
+   {
+    "name": "Defeat Succubus"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 151,
+    "y": 688
+   },
+   {
+    "map": "The Arena",
+    "x": 151,
+    "y": 112
+   },
+   {
+    "map": "Castle",
+    "x": 662,
+    "y": 330
+   },
+   {
+    "map": "Top Floor",
+    "x": 110,
+    "y": 282
+   },
+   {
+    "map": "Castle",
+    "x": 718,
+    "y": 243
+   },
+   {
+    "map": "Top Floor",
+    "x": 166,
+    "y": 195
+   },
+   {
+    "map": "Castle",
+    "x": 705,
+    "y": 282
+   },
+   {
+    "map": "Top Floor",
+    "x": 153,
+    "y": 234
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 96,
+    "y": 159
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 206,
+    "y": 177
+   }
+  ]
+ },
+ {
+  "name": "Defeat Mimic",
+  "sections": [
+   {
+    "name": "Defeat Mimic"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 340,
+    "y": 345
+   },
+   {
+    "map": "Dance Hall",
+    "x": 292,
+    "y": 129
+   },
+   {
+    "map": "Castle",
+    "x": 948,
+    "y": 810
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 180,
+    "y": 186
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 60,
+    "y": 153
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 180,
+    "y": 185
+   }
+  ]
+ },
+ {
+  "name": "Defeat Stolas",
+  "sections": [
+   {
+    "name": "Defeat Stolas"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 672,
+    "y": 282
+   },
+   {
+    "map": "Top Floor",
+    "x": 120,
+    "y": 234
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 120,
+    "y": 88
+   }
+  ]
+ },
+ {
+  "name": "Defeat Erinys",
+  "sections": [
+   {
+    "name": "Defeat Erinys"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 159,
+    "y": 756
+   },
+   {
+    "map": "The Arena",
+    "x": 159,
+    "y": 180
+   },
+   {
+    "map": "Castle",
+    "x": 615,
+    "y": 284
+   },
+   {
+    "map": "Top Floor",
+    "x": 63,
+    "y": 236
+   },
+   {
+    "map": "Castle",
+    "x": 674,
+    "y": 322
+   },
+   {
+    "map": "Top Floor",
+    "x": 122,
+    "y": 274
+   },
+   {
+    "map": "Castle",
+    "x": 716,
+    "y": 276
+   },
+   {
+    "map": "Top Floor",
+    "x": 164,
+    "y": 228
+   },
+   {
+    "map": "Castle",
+    "x": 619,
+    "y": 200
+   },
+   {
+    "map": "Top Floor",
+    "x": 67,
+    "y": 152
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 32,
+    "y": 189
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 54,
+    "y": 72
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 200,
+    "y": 134
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 228,
+    "y": 108
+   }
+  ]
+ },
+ {
+  "name": "Defeat Lubicant",
+  "sections": [
+   {
+    "name": "Defeat Lubicant"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 149,
+    "y": 730
+   },
+   {
+    "map": "The Arena",
+    "x": 149,
+    "y": 154
+   },
+   {
+    "map": "Castle",
+    "x": 662,
+    "y": 274
+   },
+   {
+    "map": "Top Floor",
+    "x": 110,
+    "y": 226
+   },
+   {
+    "map": "Castle",
+    "x": 756,
+    "y": 274
+   },
+   {
+    "map": "Top Floor",
+    "x": 204,
+    "y": 226
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 250,
+    "y": 84
+   }
+  ]
+ },
+ {
+  "name": "Defeat Basilisk",
+  "sections": [
+   {
+    "name": "Defeat Basilisk"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 712,
+    "y": 315
+   },
+   {
+    "map": "Top Floor",
+    "x": 160,
+    "y": 267
+   },
+   {
+    "map": "Castle",
+    "x": 616,
+    "y": 231
+   },
+   {
+    "map": "Top Floor",
+    "x": 64,
+    "y": 183
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 168,
+    "y": 64
+   }
+  ]
+ },
+ {
+  "name": "Defeat Iron Golem",
+  "sections": [
+   {
+    "name": "Defeat Iron Golem"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 659,
+    "y": 258
+   },
+   {
+    "map": "Top Floor",
+    "x": 107,
+    "y": 210
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 224,
+    "y": 80
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 230,
+    "y": 158
+   }
+  ]
+ },
+ {
+  "name": "Defeat Demon Lord",
+  "sections": [
+   {
+    "name": "Defeat Demon Lord"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Chaotic Realm",
+    "x": 56,
+    "y": 216
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 93,
+    "y": 138
+   }
+  ]
+ },
+ {
+  "name": "Defeat Final Guard",
+  "sections": [
+   {
+    "name": "Defeat Final Guard"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 624,
+    "y": 306
+   },
+   {
+    "map": "Top Floor",
+    "x": 72,
+    "y": 258
+   },
+   {
+    "map": "Castle",
+    "x": 678,
+    "y": 306
+   },
+   {
+    "map": "Top Floor",
+    "x": 126,
+    "y": 258
+   },
+   {
+    "map": "Castle",
+    "x": 712,
+    "y": 330
+   },
+   {
+    "map": "Top Floor",
+    "x": 160,
+    "y": 282
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 184,
+    "y": 160
+   }
+  ]
+ },
+ {
+  "name": "Defeat Flame Demon",
+  "sections": [
+   {
+    "name": "Defeat Flame Demon"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 468,
+    "y": 855
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 372,
+    "y": 399
+   },
+   {
+    "map": "Castle",
+    "x": 792,
+    "y": 830
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 696,
+    "y": 374
+   },
+   {
+    "map": "Castle",
+    "x": 960,
+    "y": 831
+   },
+   {
+    "map": "Forbidden Area",
+    "x": 192,
+    "y": 207
+   }
+  ]
+ },
+ {
+  "name": "Defeat Shadow Knight",
+  "sections": [
+   {
+    "name": "Defeat Shadow Knight"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Chaotic Realm",
+    "x": 144,
+    "y": 184
+   },
+   {
+    "map": "Chaotic Realm",
+    "x": 168,
+    "y": 88
+   }
+  ]
+ },
+ {
+  "name": "Defeat Headhunter",
+  "sections": [
+   {
+    "name": "Defeat Headhunter"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 484,
+    "y": 282
+   },
+   {
+    "map": "Inner Quarters",
+    "x": 220,
+    "y": 186
+   }
+  ]
+ },
+ {
+  "name": "Defeat Death",
+  "sections": [
+   {
+    "name": "Defeat Death"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 888,
+    "y": 156
+   },
+   {
+    "map": "Clock Tower",
+    "x": 120,
+    "y": 60
+   }
+  ]
+ },
+ {
+  "name": "Defeat Legion",
+  "sections": [
+   {
+    "name": "Defeat Legion"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 648,
+    "y": 840
+   },
+   {
+    "map": "Underground Reservoir",
+    "x": 552,
+    "y": 384
+   }
+  ]
+ },
+ {
+  "name": "Defeat Balore",
+  "sections": [
+   {
+    "name": "Defeat Balore"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 96,
+    "y": 780
+   },
+   {
+    "map": "The Arena",
+    "x": 96,
+    "y": 204
+   }
+  ]
+ },
+ {
+  "name": "Defeat Belmont",
+  "sections": [
+   {
+    "name": "Defeat Belmont"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 507,
+    "y": 88
+   },
+   {
+    "map": "Floating Garden",
+    "x": 411,
+    "y": 88
+   }
+  ]
+ },
+ {
+  "name": "Defeat Graham",
+  "sections": [
+   {
+    "name": "Defeat Graham"
+   }
+  ],
+  "map_locations": [
+   {
+    "map": "Castle",
+    "x": 646,
+    "y": 112
+   },
+   {
+    "map": "Top Floor",
+    "x": 94,
+    "y": 64
+   }
+  ]
+ }
+]

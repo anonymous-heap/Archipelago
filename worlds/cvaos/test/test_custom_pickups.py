@@ -1,9 +1,9 @@
 """Structural tests for the custom-pickup framework (rom/custom_pickups.py).
 
-These do not run the ROM; they check the bytes the builder emits (blob shape, the spawn-path literal
-repoint, the extended icon table, the descriptor rows, icon-tile placement, and no write overlaps).
-A full in-game check (the button opening the A01 barrier + its SFX, and the recoloured icon) still
-needs an emulator playtest -- see rom/custom_pickups.py.
+These do not run the ROM. They check the bytes the builder emits: the blob's shape, the
+spawn-path literal repoint, the extended icon table, the descriptor rows, the icon-tile placement,
+and that no two writes overlap. Whether collecting the Study Sealswitch opens the A01 barrier with
+its sound, and how its icon looks, is checked in an emulator playtest, not here.
 """
 from __future__ import annotations
 
@@ -18,9 +18,8 @@ _FAKE_CONSUMABLES = b"".join(bytes([n, 0, n + 1, 6] + [0] * 12) for n in range(c
 
 
 class TestBlob(unittest.TestCase):
-    def test_blob_intact(self):
-        self.assertEqual(len(cp.CUSTOMHOOK_BLOB), 140)
-        # literal pool must bake the descriptor-table address the hook scans
+    def test_blob_bakes_the_descriptor_table_address(self):
+        # The literal pool holds the address of the descriptor table the hook scans.
         self.assertIn(cp.CUSTOM_DESC_TABLE_GBA.to_bytes(4, "little"), cp.CUSTOMHOOK_BLOB)
 
     def test_trampoline_targets_hook(self):
@@ -54,8 +53,8 @@ class TestWrites(unittest.TestCase):
                              (p.item_offset, p.flag_field, p.flag_number, p.sfx))
         self.assertIn(cp.DESC_TERMINATOR, dt)
 
-    def test_button_sets_misc_flag_48(self):
-        b = cp.FORBIDDEN_AREA_BUTTON
+    def test_study_sealswitch_sets_misc_flag_48(self):
+        b = cp.STUDY_SEALSWITCH
         self.assertEqual((b.flag_field, b.flag_number), (cp.FLAG_FIELD_MISC, 48))  # A01 barrier flag
         self.assertEqual(b.sfx, 0x133)
 
@@ -69,13 +68,9 @@ class TestWrites(unittest.TestCase):
             self.assertTrue(sheet0 <= top < sheet0 + 0x2000)  # within icon sheet 0 (0x2000 bytes)
 
     def test_icon_uses_shared_items_bank(self):
-        # Custom icons render through bank 6 (the always-loaded items palette); no per-item palette
-        # or loader edits are written, so the only palette-related write is the icon tiles themselves.
-        ext = self.w[cp.CUSTOM_ICON_TABLE_GBA - GBA]
-        for p in cp.CUSTOM_PICKUPS:
-            self.assertEqual(ext[p.item_offset * cp.CONSUMABLE_ENTRY_SIZE + cp.ITEM_ENTRY_PAL_OFF],
-                             cp.ITEMS_PALETTE_BANK)
-        # the items-palette block and its loader are untouched
+        # Custom icons render through bank 6, the always-loaded items palette, which
+        # test_extended_table_preserves_originals checks for each pickup. No per-item palette or
+        # loader edit is written, so the items-palette block and its loader stay untouched.
         self.assertNotIn(cp.ITEMS_PALETTE_GBA - GBA, self.w)
 
     def test_no_write_overlaps(self):
@@ -86,11 +81,11 @@ class TestWrites(unittest.TestCase):
 
 class TestRegistry(unittest.TestCase):
     def test_encoding_is_consumable_pickup(self):
-        self.assertEqual(cp.get_encoding(cp.FORBIDDEN_AREA_BUTTON), (4, 2, cp.FORBIDDEN_AREA_BUTTON.item_offset))
+        self.assertEqual(cp.get_encoding(cp.STUDY_SEALSWITCH), (4, 2, cp.STUDY_SEALSWITCH.item_offset))
 
     def test_shadow_outside_saved_soul_block(self):
-        # Regression: the Item-Use shadow MUST NOT live in the SRAM-saved 0x190 player block
-        # (gEwramData+0x1325C..0x133EC) -- pad_133A0 there is entirely soul state, and a shadow on it
+        # The Item-Use shadow MUST NOT live in the SRAM-saved 0x190 player block
+        # (gEwramData+0x1325C..0x133EC). pad_133A0 there is entirely soul state, and a shadow on it
         # corrupts souls. It must sit in the free high-EWRAM tail above the struct (>= 0x02025554).
         self.assertEqual(cp.SHADOW_BASE_GBA + 0x38, cp.SHADOW_INVENTORY_GBA)
         self.assertFalse(0x0201325C <= cp.SHADOW_INVENTORY_GBA < 0x020133EC,

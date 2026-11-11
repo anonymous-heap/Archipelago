@@ -1,0 +1,114 @@
+enemy_id,name,hp,drop_1_rarity,drop_2_rarity
+0,Bat,10,20,30
+1,Zombie,18,20,30
+2,Skeleton,20,10,30
+3,Merman,20,30,30
+4,Axe Armor,60,20,30
+5,Skull Archer,42,20,30
+6,Peeping Eye,38,20,30
+7,Killer Fish,25,20,30
+8,Bone Pillar,75,20,30
+9,Blue Crow,25,20,30
+10,Buer,20,20,30
+11,White Dragon,95,20,30
+12,Zombie Soldier,46,10,15
+13,Skeleton Knight,48,20,30
+14,Ghost,10,20,30
+15,Siren,50,20,30
+16,Tiny Devil,20,20,30
+17,Durga,34,20,30
+18,Rock Armor,72,15,30
+19,Giant Ghost,75,20,30
+20,Winged Skeleton,20,20,30
+21,Minotaur,200,25,30
+22,Student Witch,80,25,30
+23,Arachne,100,20,30
+24,Fleaman,10,20,30
+25,Evil Butcher,112,20,30
+26,Quezlcoatl,60,20,30
+27,Ectoplasm,30,15,30
+28,Catoblepas,200,20,30
+29,Ghost Dancer,25,20,30
+30,Waiter Skeleton,120,15,20
+31,Killer Doll,110,20,30
+32,Zombie Officer,150,15,30
+33,Creaking Skull,240,20,30
+34,Wooden Golem,250,22,30
+35,Tsuchinoko,300,20,30
+36,Persephone,150,20,30
+37,Lilith,220,20,30
+38,Nemesis,170,20,30
+39,Kyoma Demon,220,20,30
+40,Chronomage,80,20,30
+41,Valkyrie,55,20,30
+42,Witch,180,20,35
+43,Curly,90,20,35
+44,Altair,30,20,30
+45,Red Crow,70,20,30
+46,Cockatrice,380,20,30
+47,Dead Warrior,110,15,25
+48,Devil,300,20,30
+49,Imp,52,20,30
+50,Werewolf,290,20,30
+51,Gorgon,320,20,30
+52,Disc Armor,240,15,30
+53,Golem,200,20,30
+54,Manticore,440,20,30
+55,Gremlin,70,20,30
+56,Harpy,150,20,30
+57,Medusa Head,30,20,30
+58,Bomber Armor,200,20,30
+59,Lightning Doll,170,20,30
+60,Great Armor,650,15,25
+61,Une,10,20,30
+62,Giant Worm,100,20,30
+63,Needles,1,20,30
+64,Man-Eater,666,15,20
+65,Fish Head,280,20,30
+66,Nightmare,260,20,30
+67,Triton,400,15,25
+68,Slime,200,20,30
+69,Big Golem,1200,15,20
+70,Dryad,350,30,35
+71,Poison Worm,100,20,30
+72,Arc Demon,500,20,35
+73,Cagnazzo,180,20,35
+74,Ripper,80,25,30
+75,Werejaguar,380,25,30
+76,Ukoback,80,20,30
+77,Alura Une,800,20,30
+78,Biphron,380,20,30
+79,Mandragora,200,20,30
+80,Flesh Golem,2000,15,25
+81,Sky Fish,100,20,30
+82,Dead Crusader,180,20,35
+83,Kicker Skeleton,200,20,30
+84,Weretiger,400,25,30
+85,Killer Mantle,200,20,30
+86,Mudman,200,20,30
+87,Gargoyle,70,20,30
+88,Red Minotaur,929,20,30
+89,Beam Skeleton,400,20,30
+90,Alastor,1200,20,30
+91,Skull Millione,250,15,30
+92,Giant Skeleton,2000,20,30
+93,Gladiator,600,20,30
+94,Bael,300,20,30
+95,Succubus,550,20,30
+96,Mimic,100,20,30
+97,Stolas,1500,20,35
+98,Erinys,200,20,35
+99,Lubicant,500,20,40
+100,Basilisk,700,20,35
+101,Iron Golem,9999,20,30
+102,Demon Lord,1800,35,45
+103,Final Guard,1200,30,50
+104,Flame Demon,500,20,35
+105,Shadow Knight,3000,30,35
+106,Headhunter,700,20,30
+107,Death,4444,20,30
+108,Legion,5000,20,30
+109,Balore,4000,20,30
+110,Belmont,6000,20,30
+111,Graham,5000,20,30
+112,Chaos,9999,20,30

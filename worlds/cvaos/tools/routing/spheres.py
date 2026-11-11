@@ -1,12 +1,20 @@
 """
-Iterative sphere-building for CVAoS routing.
+Reachability spheres over the routing graph with pickup nodes.
 
-A "sphere" is one round of item collection:
-  - Sphere 0: pickups reachable with no abilities from the starting entrance.
-  - Sphere N: pickups newly reachable after gaining all abilities from spheres 0..N-1.
+A sphere is one round of item collection. Sphere 0 holds the pickups reachable from the starting
+entrance with the starting abilities, which are none by default. Sphere N holds the pickups that
+become reachable once the player has every ability granted in spheres 0 to N-1. The rounds stop
+when a round reaches no new pickup.
 
-This models the dependency chain: collect pickups → gain abilities → reach more pickups.
-Run directly to print sphere generation results from Soma's starting entrance:
+Each pickup grants the abilities of its item in the unrandomized game, so the spheres describe
+the vanilla item placement. An ability soul such as Malphas grants its ability, which is DJump
+for Malphas. An item that breaks ceilings or floors, such as Balmung, grants Ceil or Floor,
+because generation satisfies those bits with such an item.
+
+The Kick and Tform souls come only from enemies, and the Chronomage soul has no pickup, so no
+pickup grants Kick, Tform or Chronomage. Pass them in ``initial_have_mask`` to assume them.
+
+Run it from the repository root to print the spheres from Soma's starting entrance:
 
     python -m worlds.cvaos.tools.routing.spheres
 """
@@ -15,25 +23,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import FrozenSet, Set, Tuple
 
-from ...data import AbilityCombo
+from ...data import AbilityCombo, item_info_collection, pickup_info_collection
 from .entrances import MaskUtils, RoutingQueries
-from .entrances_to_items import (
-    PickupNodeId,
-    RoutingGraph,
-    default_graph,
-)
-from ...data import pickup_info_collection
+from .entrances_to_items import PickupNodeId, RoutingGraph, default_graph
 
 NodeId = str
 ReqMask = int
 
+START_ENTRANCE: NodeId = "000:003"
+"""The entrance node where Soma starts, which generation connects to its Menu region."""
+
 
 # ─────────────────────────────────────────────────────────────
-# Pickup-name → ability mapping
+# Item → ability mapping
 # ─────────────────────────────────────────────────────────────
 
-# Maps pickup simple_name → the AbilityCombo flag it grants.
-# Technique flags (PixPer, Clip, Enemy, etc.) are situational and not item-based.
+# The ability each soul grants, for the souls that are ground pickups. This matches the soul
+# items in regions._ABILITY_TO_ITEM, which also lists the souls that no pickup holds.
 _SOUL_NAME_TO_ABILITY: dict[str, AbilityCombo] = {
     "Flying Armor":    AbilityCombo.Glide,
     "Skeleton Blaze":  AbilityCombo.Slide,
@@ -44,23 +50,39 @@ _SOUL_NAME_TO_ABILITY: dict[str, AbilityCombo] = {
     "Black Panther":   AbilityCombo.Panth,
     "Giant Bat":       AbilityCombo.Bat,
     "Grave Keeper":    AbilityCombo.BDash,
-    "Kicker Skeleton": AbilityCombo.Kick,
-    "Devil":           AbilityCombo.Tform,
-    "Curly":           AbilityCombo.Tform,
-    "Manticore":       AbilityCombo.Tform,
+    "Galamoth":        AbilityCombo.Galamoth,
 }
+
+# Ceil and Floor for each item that breaks ceilings or floors, as regions.py satisfies those bits.
+_BREAKER_ABILITIES: dict[str, ReqMask] = {
+    info.name: (int(AbilityCombo.Ceil) if info.breaks_ceilings else 0)
+    | (int(AbilityCombo.Floor) if info.breaks_floors else 0)
+    for info in item_info_collection
+}
+
+
+def ability_mask_for_item(item_name: str) -> ReqMask:
+    """
+    Return the abilities that holding ``item_name`` gives, as a mask.
+
+    The mask holds the soul's ability for an ability soul, and Ceil or Floor for an item that
+    breaks ceilings or floors. Black Panther is both, so it gives Panth, Ceil and Floor.
+    """
+    soul_ability = _SOUL_NAME_TO_ABILITY.get(item_name, AbilityCombo.None_)
+    return int(soul_ability) | _BREAKER_ABILITIES.get(item_name, 0)
 
 
 def build_pickup_to_ability_mask() -> dict[int, ReqMask]:
     """
-    Return a mapping from pickup_number → ability ReqMask granted by collecting it.
-    Only pickups whose simple_name matches a known soul are included.
+    Return a mapping from each pickup number to the abilities its vanilla item gives.
+
+    Pickups whose item gives no ability are left out.
     """
     result: dict[int, ReqMask] = {}
     for pickup in pickup_info_collection:
-        ability = _SOUL_NAME_TO_ABILITY.get(pickup.simple_name)
-        if ability is not None:
-            result[pickup.pickup_number] = int(ability)
+        mask = ability_mask_for_item(pickup.simple_name)
+        if mask:
+            result[pickup.pickup_number] = mask
     return result
 
 
@@ -74,7 +96,7 @@ class Sphere:
     have_mask_before: ReqMask          # abilities when entering this sphere
     have_mask_after: ReqMask           # abilities after collecting this sphere's pickups
     newly_reachable_pickups: FrozenSet[int]
-    abilities_gained: ReqMask          # new ability bits unlocked this sphere
+    abilities_gained: ReqMask          # ability bits that this sphere adds
 
 
 @dataclass(frozen=True)
@@ -96,23 +118,21 @@ def build_reachability_spheres(
     initial_have_mask: ReqMask = 0,
 ) -> SphereResult:
     """
-    Iteratively expand the reachable pickup set from start_entrance.
+    Build the reachability spheres from ``start_entrance``.
 
-    Each iteration (sphere):
-      1. BFS the graph with the current have_mask.
-      2. Collect all newly reachable pickup_numbers.
-      3. OR their ability grants into have_mask.
-      4. Repeat until stable.
+    Each round searches the graph with the abilities held so far. The pickups that the search
+    reaches for the first time form that round's sphere, and the abilities they grant are added
+    before the next round. The rounds stop when a search reaches no new pickup.
 
     Args:
-        graph: Combined entrance+pickup routing graph (from default_graph()).
-        start_entrance: NodeId to begin BFS from, e.g. ``"000:003"``.
-        pickup_to_abilities: Maps pickup_number → ReqMask granted by that pickup.
-        initial_have_mask: Abilities assumed before sphere 0 (default 0).
+        graph: The extended graph with pickup nodes, as ``default_graph()`` returns.
+        start_entrance: The node id to start each search from, such as ``"000:003"``.
+        pickup_to_abilities: Maps a pickup number to the abilities that collecting it grants.
+        initial_have_mask: The abilities held before sphere 0, which default to none.
 
     Returns:
-        SphereResult with one Sphere per iteration plus the set of permanently
-        unreachable pickups.
+        A SphereResult with one Sphere for each round that reached a new pickup, the pickups
+        that no round reached, and the abilities held at the end.
     """
     all_pickup_numbers: FrozenSet[int] = frozenset(
         PickupNodeId.number(node_id)
@@ -133,21 +153,18 @@ def build_reachability_spheres(
 
         newly_reachable = reachable_pickups - collected_pickups
         if not newly_reachable:
-            break  # stable — nothing new opened up
+            break
 
-        # OR together ability grants from every newly reachable pickup
         new_ability_bits: ReqMask = 0
         for pnum in newly_reachable:
             new_ability_bits |= pickup_to_abilities.get(pnum, 0)
-
-        abilities_gained = new_ability_bits & ~have_mask  # bits that are genuinely new
 
         spheres.append(Sphere(
             index=len(spheres),
             have_mask_before=have_mask,
             have_mask_after=have_mask | new_ability_bits,
             newly_reachable_pickups=frozenset(newly_reachable),
-            abilities_gained=abilities_gained,
+            abilities_gained=new_ability_bits & ~have_mask,
         ))
 
         collected_pickups |= newly_reachable
@@ -202,26 +219,12 @@ def print_sphere_result(
         print("All pickups reachable.")
 
 
-# ─────────────────────────────────────────────────────────────
-# Test / demo entry point
-# ─────────────────────────────────────────────────────────────
-
-def test_sphere_generation_from_000_003() -> SphereResult:
-    """
-    Build reachability spheres starting from Soma's starting entrance (000:003).
-    Asserts at least one sphere is produced and returns the result.
-    """
-    graph = default_graph()
-    start = "000:003"
+def main() -> None:
+    """Print the reachability spheres from Soma's starting entrance."""
     pickup_to_abilities = build_pickup_to_ability_mask()
-
-    result = build_reachability_spheres(graph, start, pickup_to_abilities)
+    result = build_reachability_spheres(default_graph(), START_ENTRANCE, pickup_to_abilities)
     print_sphere_result(result, pickup_to_abilities, verbose=True)
-
-    assert result.spheres, "No spheres produced — nothing reachable from start?"
-    assert "000:003" in graph.adj, "Start entrance not in graph"
-    return result
 
 
 if __name__ == "__main__":
-    test_sphere_generation_from_000_003()
+    main()

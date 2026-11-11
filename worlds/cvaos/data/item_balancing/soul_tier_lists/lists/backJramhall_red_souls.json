@@ -1,0 +1,82 @@
+[
+  {
+    "tier": "Elite",
+    "items": [
+      "Dryad",
+      "Lightning Doll",
+      "Nightmare",
+      "Legion",
+      "Red Minotaur",
+      "Giant Skeleton"
+    ]
+  },
+  {
+    "tier": "Excellent",
+    "items": [
+      "Valkyrie",
+      "Beam Skeleton",
+      "Demon Lord",
+      "Chronomage",
+      "Gladiator",
+      "Balore",
+      "Slime",
+      "Flame Demon",
+      "Weretiger",
+      "Mandragora",
+      "Killer Mantle"
+    ]
+  },
+  {
+    "tier": "Good",
+    "items": [
+      "Disc Armor",
+      "Biphron",
+      "Werejaguar",
+      "Waiter Skeleton",
+      "Bomber Armor",
+      "Skull Millione",
+      "Werewolf",
+      "Killer Doll"
+    ]
+  },
+  {
+    "tier": "Falls off/I don't use enough",
+    "items": [
+      "Axe Armor",
+      "Siren",
+      "Man-Eater",
+      "Ripper",
+      "Altair",
+      "Kyoma Demon",
+      "Student Witch",
+      "Fish Head",
+      "Blue Crow",
+      "Harpy",
+      "Ukoback",
+      "Needles",
+      "Arachne",
+      "Rock Armor",
+      "Skull Archer",
+      "Ghost",
+      "Tiny Devil",
+      "Durga",
+      "Evil Butcher",
+      "Skeleton",
+      "Zombie Soldier",
+      "Cockatrice"
+    ]
+  },
+  {
+    "tier": "Trash",
+    "items": [
+      "Mudman",
+      "Winged Skeleton",
+      "Nemesis",
+      "Bat",
+      "Fleaman",
+      "Merman",
+      "Une",
+      "Killer Fish"
+    ]
+  }
+]

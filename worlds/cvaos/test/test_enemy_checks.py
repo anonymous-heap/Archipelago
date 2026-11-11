@@ -1,0 +1,519 @@
+"""
+Tests for the Enemy Checks option, which makes the first defeat of each kind of enemy a check.
+
+    python -m pytest worlds/cvaos/test/test_enemy_checks.py -v
+"""
+from __future__ import annotations
+
+import unittest
+from collections import Counter
+from types import SimpleNamespace
+from unittest import mock
+
+from BaseClasses import CollectionState, Entrance, LocationProgressType, MultiWorld
+from test.general import setup_multiworld
+
+from .. import CVAOSWorld, item_smoothing, regions
+from ..client_logic import ITEMS_FROM_OTHER_WORLDS, ITEMS_INCLUDING_OWN, CVAOSClientLogic
+from ..data import (enemy_placements, enemy_type_by_name, enemy_type_collection,
+                    item_info_collection, pickup_info_collection)
+from ..data.item_balancing.worth import MID_GAME_WORTH, item_worth
+from ..enemy_checks import (ARENA_PLACEMENTS, BOSS_TYPES, FALLBACK_SOULS, SPAWNS_AFTER_BOSS_IN,
+                            defeat_location_id, defeat_location_name, enemy_check_types,
+                            enemy_id_for_location, has_recorded_route, placements_of)
+from ..items import (CHECK_ITEM_CHOICES, CONSUMABLE_CAP, ENEMY_GOLD_NAME, HP_RESTORATIVES,
+                     check_item_names, create_item, item_table)
+from ..locations import (defeat_hint_text, defeat_location_names, location_name_to_id,
+                         pickup_location_ids)
+from ..options import EnemyChecks, Goal
+from ..regions import UT_TRICKS_ITEM, can_reach_room
+from ..rom.entity import GBA_ROM_BASE, PICKUP
+from ..rom.patch import _ITEM_OFF, _TYPE_OFF, get_location_data, rom_gives_item
+from . import generate
+from .test_universal_tracker import generate as generate_for_tracker, regenerate_from, state_with
+
+BUILD_STEPS = ("generate_early", "create_regions", "create_items", "set_rules")
+POOL_STEPS = ("generate_early", "create_regions", "create_items")
+
+
+def options(enemy_checks: int, goal: int = Goal.default) -> SimpleNamespace:
+    return SimpleNamespace(enemy_checks=EnemyChecks(enemy_checks), goal=Goal(goal))
+
+
+def build(enemy_checks: str, steps=BUILD_STEPS, seed: int = 1, **extra) -> MultiWorld:
+    return setup_multiworld(CVAOSWorld, steps, seed=seed,
+                            options={"enemy_checks": enemy_checks, **extra})
+
+
+def item_pool(multiworld: MultiWorld) -> Counter:
+    items = [*multiworld.itempool, *multiworld.worlds[1].get_pre_fill_items()]
+    return Counter(item.name for item in items)
+
+
+def state_with_all_items_but(multiworld: MultiWorld, left_out: str = "") -> CollectionState:
+    state = CollectionState(multiworld)
+    for item in [*multiworld.itempool, *multiworld.worlds[1].get_pre_fill_items()]:
+        if item.name != left_out:
+            state.collect(item, prevent_sweep=True)
+    return state
+
+
+class EnemyTypeTableTest(unittest.TestCase):
+    def test_the_table_lists_every_enemy_id_in_the_games_order(self):
+        self.assertEqual([enemy.id for enemy in enemy_type_collection], list(range(113)))
+        self.assertEqual([enemy_type_by_name[name].id for name in ("Belmont", "Graham", "Chaos")],
+                         [110, 111, 112])
+
+    def test_every_placement_names_a_type_from_the_table(self):
+        names = {placement.name for placement in enemy_placements}
+        self.assertEqual(names - set(enemy_type_by_name), set())
+
+    def test_every_type_but_chaos_has_a_location_with_an_id_of_its_own(self):
+        names = {defeat_location_name(enemy.name) for enemy in enemy_type_collection}
+        self.assertEqual(names - defeat_location_names, {"Defeat Chaos"})
+        ids = {location_name_to_id[name] for name in defeat_location_names}
+        self.assertEqual(len(ids), 112)
+        self.assertEqual(ids & pickup_location_ids, set())
+
+    def test_a_defeat_location_id_maps_back_to_its_enemy(self):
+        for enemy in enemy_type_collection:
+            self.assertEqual(enemy_id_for_location(defeat_location_id(enemy.id)), enemy.id)
+        for location_id in pickup_location_ids:
+            self.assertIsNone(enemy_id_for_location(location_id))
+
+    def test_boss_rush_arenas_are_not_placements(self):
+        rooms = {placement.room for enemy in enemy_type_collection
+                 for placement in placements_of(enemy.name)}
+        self.assertEqual({room for room in rooms if room.startswith("C")}, set())
+        # Man-Eater fights in a Boss Rush arena, but it is an ordinary enemy in the castle too.
+        self.assertTrue(placements_of("Man-Eater"))
+
+    def test_every_type_has_a_placement_outside_boss_rush(self):
+        self.assertEqual([enemy.name for enemy in enemy_type_collection
+                          if not placements_of(enemy.name)], [])
+
+
+class WhichTypesTest(unittest.TestCase):
+    def test_off_checks_no_types(self):
+        self.assertEqual(enemy_check_types(options(EnemyChecks.option_off)), ())
+
+    def test_bosses_checks_the_bosses(self):
+        types = enemy_check_types(options(EnemyChecks.option_bosses))
+        self.assertEqual({enemy.name for enemy in types}, set(BOSS_TYPES))
+
+    def test_all_checks_every_type_but_chaos(self):
+        types = enemy_check_types(options(EnemyChecks.option_all))
+        self.assertEqual(len(types), 112)
+        self.assertNotIn("Chaos", {enemy.name for enemy in types})
+
+    def test_graham_is_not_a_check_when_defeating_him_is_the_goal(self):
+        for setting, count in ((EnemyChecks.option_bosses, 9), (EnemyChecks.option_all, 111)):
+            types = enemy_check_types(options(setting, Goal.option_graham))
+            with self.subTest(setting=setting):
+                self.assertEqual(len(types), count)
+                self.assertNotIn("Graham", {enemy.name for enemy in types})
+
+
+class GenerationTest(unittest.TestCase):
+    def test_seeds_generate_beatable_with_one_defeat_location_per_type(self):
+        for setting in ("bosses", "all"):
+            multiworld = generate(0, {"enemy_checks": setting})
+            types = enemy_check_types(multiworld.worlds[1].options)
+            with self.subTest(setting=setting):
+                self.assertTrue(multiworld.can_beat_game(multiworld.state))
+                defeats = [location for location in multiworld.get_locations(1)
+                           if location.name in defeat_location_names]
+                self.assertEqual(len(defeats), len(types))
+
+    def test_iron_golem_and_final_guard_hold_only_filler(self):
+        # Every other check is an ordinary location, Kyoma Demon's included.
+        multiworld = generate(0, {"enemy_checks": "all"})
+        excluded = {location.name: location.item for location in multiworld.get_locations(1)
+                    if location.name in defeat_location_names
+                    and location.progress_type == LocationProgressType.EXCLUDED}
+        self.assertEqual(set(excluded), {"Defeat Iron Golem", "Defeat Final Guard"})
+        for name, item in excluded.items():
+            with self.subTest(location=name, item=item.name):
+                self.assertFalse(item.advancement or item.useful)
+
+    def test_each_checked_type_adds_one_cheap_item_to_the_pool(self):
+        without_checks = item_pool(build("off", steps=POOL_STEPS))
+        for setting in ("bosses", "all"):
+            multiworld = build(setting, steps=POOL_STEPS)
+            types = enemy_check_types(multiworld.worlds[1].options)
+            pool = item_pool(multiworld)
+            added = pool - without_checks
+            with self.subTest(setting=setting):
+                self.assertEqual(pool - added, without_checks)
+                self.assertEqual(added.total(), len(types))
+                # Nothing a check adds is mid-game gear, and no consumable passes the game's cap.
+                self.assertEqual([name for name in added if item_worth(name) >= MID_GAME_WORTH], [])
+                self.assertEqual({name: count for name, count in pool.items()
+                                  if name in CONSUMABLES and count > CONSUMABLE_CAP}, {})
+
+    def test_off_adds_no_defeat_locations(self):
+        multiworld = build("off")
+        self.assertEqual([location.name for location in multiworld.get_locations(1)
+                          if location.name in defeat_location_names], [])
+
+
+CONSUMABLES = frozenset(info.name for info in item_info_collection
+                        if info.item_category == "consumable")
+
+
+class CheckItemTest(unittest.TestCase):
+    """Which item each check adds to the pool, from the worth of its enemy's common drop."""
+
+    def names(self, enemies: tuple[str, ...], pool_names: list[str] = ()) -> list[str]:
+        pool = [create_item(SimpleNamespace(player=1), name) for name in pool_names]
+        return check_item_names([enemy_type_by_name[name] for name in enemies], pool)
+
+    def test_a_check_copies_a_cheap_drop_and_replaces_a_dear_one(self):
+        # Arachne drops a Potion, Flame Demon drops Laevatain, and Bat drops nothing.
+        self.assertLess(item_worth("Potion"), 0.25)
+        self.assertGreater(item_worth("Laevatain"), 0.25)
+        self.assertEqual(self.names(("Arachne", "Flame Demon", "Bat")),
+                         ["Potion", HP_RESTORATIVES[0], ENEMY_GOLD_NAME])
+
+    def test_a_dear_drop_adds_the_hp_restorative_the_pool_holds_fewest_of(self):
+        self.assertEqual(self.names(("Flame Demon", "Flame Demon"), list(HP_RESTORATIVES[:-1])),
+                         [HP_RESTORATIVES[-1], HP_RESTORATIVES[0]])
+        self.assertTrue(all(item_worth(name) <= 0.25 for name in HP_RESTORATIVES))
+
+    def test_no_check_adds_a_consumable_the_pool_holds_nine_of(self):
+        self.assertEqual(CONSUMABLE_CAP, 9)
+        nine_potions = ["Potion"] * 9
+        self.assertEqual(self.names(("Arachne",), nine_potions), [HP_RESTORATIVES[0]])
+        every_restorative = [name for name in HP_RESTORATIVES for _ in range(9)]
+        self.assertEqual(self.names(("Flame Demon",), every_restorative), [ENEMY_GOLD_NAME])
+
+
+class LogicTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.multiworld = build("all")
+
+    def can_reach(self, state: CollectionState, enemy_name: str) -> bool:
+        return state.can_reach(defeat_location_name(enemy_name), "Location", 1)
+
+    def test_a_type_without_a_route_needs_every_fallback_soul(self):
+        enemy = next(enemy for enemy in enemy_check_types(self.multiworld.worlds[1].options)
+                     if not has_recorded_route(enemy.name))
+        self.assertTrue(self.can_reach(state_with_all_items_but(self.multiworld), enemy.name))
+        for soul in FALLBACK_SOULS:
+            with self.subTest(enemy=enemy.name, without=soul):
+                self.assertFalse(
+                    self.can_reach(state_with_all_items_but(self.multiworld, soul), enemy.name))
+
+    def test_a_boss_without_routing_counts_once_its_arena_is_reached(self):
+        # Without Giant Bat, logic reaches no placement through the fallback, so only an arena can
+        # make these checks reachable. The arenas become reachable one by one as the other items
+        # are collected.
+        world = self.multiworld.worlds[1]
+        arenas = {placement.name: placement.room for placement in enemy_placements
+                  if placement.enemy_number in ARENA_PLACEMENTS}
+        self.assertEqual(len(arenas), 8)
+        self.assertTrue(all(has_recorded_route(boss) for boss in arenas))
+        pool = [*self.multiworld.itempool, *world.get_pre_fill_items()]
+        items = sorted((item for item in pool if item.advancement and item.name != "Giant Bat"),
+                       key=lambda item: item.name)
+        state = CollectionState(self.multiworld)
+        seen = set()
+        for item in [None, *items]:
+            if item is not None:
+                state.collect(item, prevent_sweep=True)
+            for boss, room in arenas.items():
+                reached = can_reach_room(state, world, room)
+                seen.add((boss, reached))
+                with self.subTest(boss=boss, after=item and item.name):
+                    self.assertEqual(self.can_reach(state, boss), reached)
+        self.assertIn(("Death", False), seen)
+        self.assertIn(("Death", True), seen)
+
+    def test_a_routed_placement_uses_its_routing_instead(self):
+        # Room 003's Zombie can be reached from the start with nothing.
+        self.assertTrue(has_recorded_route("Zombie"))
+        self.assertTrue(self.can_reach(CollectionState(self.multiworld), "Zombie"))
+
+    def placement_entrances(self, enemy_number: int) -> list[Entrance]:
+        """Return the entrances from a placement's doors into its type's defeat region."""
+        return [entrance for region in self.multiworld.get_regions(1) for entrance in region.exits
+                if entrance.connected_region.name.startswith("Defeat: ")
+                and entrance.name.endswith(f" #{enemy_number}")]
+
+    def test_in_room_710_only_alura_une_and_the_rippers_wait_for_legion(self):
+        # Every item is in hand, and Legion's room counts as out of reach.
+        def legion_unbeaten(state: CollectionState, world: CVAOSWorld, room: str) -> bool:
+            return room != "725"
+
+        everything = state_with_all_items_but(self.multiworld)
+        with mock.patch.object(regions, "can_reach_room", legion_unbeaten):
+            for enemy_number, waits in ((555, True), (556, True), (557, False), (558, True)):
+                entrances = self.placement_entrances(enemy_number)
+                with self.subTest(enemy_number=enemy_number):
+                    self.assertTrue(entrances)
+                    self.assertEqual({entrance.access_rule(everything) for entrance in entrances},
+                                     {not waits})
+
+    def test_placements_that_wait_for_a_boss_elsewhere_recheck_when_its_room_opens(self):
+        world = self.multiworld.worlds[1]
+        for enemy_number, boss_room in SPAWNS_AFTER_BOSS_IN.items():
+            boss_doors = [self.multiworld.get_region(name, 1)
+                          for name in world.entrance_region_names_by_room[boss_room]]
+            watched = set().union(*(self.multiworld.indirect_connections.get(door, set())
+                                    for door in boss_doors))
+            entrances = self.placement_entrances(enemy_number)
+            with self.subTest(enemy_number=enemy_number):
+                self.assertTrue(entrances)
+                self.assertEqual([entrance.name for entrance in entrances
+                                  if entrance not in watched], [])
+
+    def test_a_route_to_a_defeat_names_what_it_needs(self):
+        # Universal Tracker's routes list each step's uses.
+        state = CollectionState(self.multiworld)
+        defeat_entrances = [entrance for region in self.multiworld.get_regions(1)
+                            for entrance in region.exits
+                            if entrance.connected_region.name.startswith("Defeat: ")]
+        everything = self.multiworld.get_all_state(False)
+        for entrance in defeat_entrances:
+            # A way that needs nothing keeps the default rule, and no route crosses a way that
+            # nothing opens.
+            if (entrance.access_rule is Entrance.access_rule
+                    or not entrance.access_rule(everything)):
+                continue
+            with self.subTest(entrance=entrance.name):
+                self.assertTrue(hasattr(entrance.access_rule, "uses"))
+        options = self.multiworld.worlds[1].options
+        fallback_only = next(enemy.name for enemy in enemy_check_types(options)
+                             if not has_recorded_route(enemy.name))
+        entrance = next(entrance for entrance in defeat_entrances
+                        if entrance.connected_region.name == f"Defeat: {fallback_only}")
+        self.assertEqual(tuple(entrance.access_rule.uses(state)), FALLBACK_SOULS)
+        alura_une_in_710 = self.placement_entrances(555)[0]
+        self.assertIn("beating the boss in room 725", alura_une_in_710.access_rule.uses(state))
+
+
+class UniversalTrackerTest(unittest.TestCase):
+    """How Universal Tracker shows the checks, in the world it rebuilds from the slot data."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.generated = generate_for_tracker({"enemy_checks": "all"})
+        cls.rebuilt = regenerate_from(cls.generated.worlds[1].fill_slot_data())
+
+    def test_an_unrouted_check_shows_with_tricks_once_its_room_is_reachable(self):
+        world = self.rebuilt.worlds[1]
+        unrouted = [enemy.name for enemy in enemy_check_types(world.options)
+                    if not has_recorded_route(enemy.name)]
+        for items in ([], ["Malphas"], ["Malphas", "Hippogryph"]):
+            without = state_with(self.rebuilt, items)
+            with_tricks = state_with(self.rebuilt, items + [UT_TRICKS_ITEM])
+
+            def room_open(placement) -> bool:
+                boss_room = SPAWNS_AFTER_BOSS_IN.get(placement.enemy_number)
+                return (can_reach_room(with_tricks, world, placement.room)
+                        and (boss_room is None or can_reach_room(with_tricks, world, boss_room)))
+
+            for name in unrouted:
+                location = defeat_location_name(name)
+                with self.subTest(items=items, enemy=name):
+                    self.assertFalse(without.can_reach(location, "Location", 1))
+                    self.assertEqual(with_tricks.can_reach(location, "Location", 1),
+                                     any(map(room_open, placements_of(name))))
+        # The route there says why it needs tricks.
+        state = state_with(self.rebuilt, [UT_TRICKS_ITEM])
+        entrance = next(entrance for entrance in self.rebuilt.get_entrances(1)
+                        if entrance.connected_region.name == "Defeat: Bat"
+                        and entrance.can_reach(state))
+        self.assertEqual(entrance.access_rule.uses(state),
+                         ("the route to this enemy isn't recorded",))
+
+    def test_a_real_generation_still_needs_the_fallback_souls(self):
+        state = state_with(self.generated, [UT_TRICKS_ITEM])
+        self.assertFalse(state.can_reach(defeat_location_name("Bat"), "Location", 1))
+
+
+class LocationGroupTest(unittest.TestCase):
+    groups = CVAOSWorld.location_name_groups
+
+    def test_groups_hold_every_check_the_bosses_and_the_unrouted_types(self):
+        self.assertEqual(self.groups["Enemy Defeats"], defeat_location_names)
+        self.assertEqual(self.groups["Boss Defeats"],
+                         {defeat_location_name(name) for name in BOSS_TYPES})
+        unrouted = self.groups["Unrouted Enemy Defeats"]
+        self.assertEqual(len(unrouted), 94)
+        self.assertEqual(unrouted, {defeat_location_name(enemy.name)
+                                    for enemy in enemy_type_collection if enemy.name != "Chaos"
+                                    and not has_recorded_route(enemy.name)})
+        self.assertIn("Defeat Bat", unrouted)
+        self.assertNotIn("Defeat Death", unrouted)
+
+    def test_a_type_joins_the_group_of_every_area_where_it_appears(self):
+        areas = {name for name in self.groups if name.endswith(" Defeats")
+                 and name not in ("Enemy Defeats", "Boss Defeats", "Unrouted Enemy Defeats")}
+        self.assertEqual(len(areas), 12)
+        self.assertEqual(set().union(*(self.groups[area] for area in areas)), defeat_location_names)
+        self.assertEqual({area for area in areas if "Defeat Creaking Skull" in self.groups[area]},
+                         {"Castle Corridor Defeats", "Dance Hall Defeats"})
+
+
+class HintTest(unittest.TestCase):
+    def test_a_hint_names_the_enemy_s_rooms_by_area(self):
+        self.assertEqual(defeat_hint_text("Kyoma Demon"), "Inner Quarters 40C, 40D")
+        self.assertEqual(defeat_hint_text("Final Guard"),
+                         "Top Floor 903, 908, 90F; Chaotic Realm B18")
+
+    def test_a_room_where_the_enemy_waits_for_a_boss_elsewhere_names_the_boss(self):
+        self.assertEqual(defeat_hint_text("Alura Une"),
+                         "Underground Reservoir 710 (after Legion); Forbidden Area A03")
+        self.assertEqual(defeat_hint_text("Biphron"), "Underground Reservoir 70D, 710")
+
+    def test_each_defeat_location_in_the_seed_gets_its_hint(self):
+        for setting in ("off", "all"):
+            world = build(setting, steps=("generate_early",)).worlds[1]
+            hint_data: dict[int, dict[int, str]] = {}
+            world.extend_hint_information(hint_data)
+            expected = {location_name_to_id[defeat_location_name(enemy.name)]:
+                        defeat_hint_text(enemy.name) for enemy in enemy_check_types(world.options)}
+            with self.subTest(setting=setting):
+                self.assertEqual(hint_data.get(1, {}), expected)
+                self.assertTrue(all(hint_data.get(1, {}).values()))
+
+
+class PriorityCapTest(unittest.TestCase):
+    def test_at_most_ten_defeats_without_a_route_stay_priority(self):
+        fallback_only = sorted(defeat_location_name(enemy.name)
+                               for enemy in enemy_check_types(options(EnemyChecks.option_all))
+                               if not has_recorded_route(enemy.name))[:15]
+        routed = defeat_location_name("Zombie")
+        with self.assertLogs(level="WARNING") as logs:
+            multiworld = build("all", steps=("generate_early",),
+                               priority_locations={*fallback_only, routed})
+        priority = multiworld.worlds[1].options.priority_locations.value
+        self.assertEqual(len(priority & set(fallback_only)), CVAOSWorld.MAX_FALLBACK_PRIORITY)
+        self.assertIn(routed, priority)
+        self.assertIn(fallback_only[-1], "\n".join(logs.output))
+
+    def test_a_few_priority_defeats_are_left_alone(self):
+        chosen = {defeat_location_name("Bat"), defeat_location_name("Skeleton")}
+        multiworld = build("all", steps=("generate_early",), priority_locations=chosen)
+        self.assertEqual(multiworld.worlds[1].options.priority_locations.value, chosen)
+
+
+class DeliveryTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.with_checks = generate(3, {"enemy_checks": "all"})
+
+    def test_slot_data_lists_exactly_the_pickups_the_rom_hands_out(self):
+        world = self.with_checks.worlds[1]
+        listed = set(world.fill_slot_data()["rom_given_locations"])
+        expected = {location.address for location in self.with_checks.get_locations(1)
+                    if location.address in pickup_location_ids and rom_gives_item(world, location)}
+        self.assertEqual(listed, expected)
+        self.assertTrue(listed)
+
+    def test_the_rom_shows_an_enemy_only_item_by_its_categorys_rule(self):
+        # An item that only enemies hold has no vanilla pickup to copy, so it takes the subtype
+        # that vanilla pickups of its category use. Its item_offset is its id plus that
+        # category's fixed amount. Accessories use the armor subtype, with an item_offset 25 more
+        # than their id.
+        rules = {"consumable": (2, 0), "weapon": (3, 0), "armor": (4, 0), "accessory": (4, 25)}
+        info_by_name = {info.name: info for info in item_info_collection}
+        held_by_a_pickup = {pickup.item_name for pickup in pickup_info_collection}
+        enemy_only = CHECK_ITEM_CHOICES - held_by_a_pickup
+        world = self.with_checks.worlds[1]
+        pickups = [location for location in self.with_checks.get_locations(1)
+                   if location.address in pickup_location_ids]
+        writes = get_location_data(world, pickups)
+        placed = [location for location in pickups if location.item.name in enemy_only]
+        self.assertTrue(placed)
+        for location in placed:
+            info = info_by_name[location.item.name]
+            subtype_num, added = rules[info.item_category]
+            with self.subTest(location=location.name, item=location.item.name):
+                self.assertTrue(rom_gives_item(world, location))
+                offset = location.address - GBA_ROM_BASE
+                self.assertEqual(writes[offset + _TYPE_OFF], bytes([PICKUP, subtype_num]))
+                self.assertEqual(writes[offset + _ITEM_OFF],
+                                 (info.id + added).to_bytes(2, "little"))
+
+    def test_item_smoothing_moves_items_only_between_pickups(self):
+        positions = item_smoothing._run_position(self.with_checks, 1)
+        self.assertTrue(positions)
+        self.assertEqual([location.name for location in positions
+                          if location.address not in pickup_location_ids], [])
+
+
+class FakeRam:
+    def __init__(self, defeated: set[int]) -> None:
+        self.defeat_bytes = bytearray(16)
+        for enemy_id in defeated:
+            self.defeat_bytes[enemy_id >> 3] |= 1 << (enemy_id & 7)
+        self.defeats_read = 0
+
+    async def read_pickup_flags(self) -> bytes:
+        return bytes(0x40)
+
+    async def read_enemy_defeats(self) -> bytes:
+        self.defeats_read += 1
+        return bytes(self.defeat_bytes)
+
+    async def cap_skull_keys(self, floor: int) -> None:
+        pass
+
+
+class ClientTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self.client = CVAOSClientLogic()
+        self.client._reset_session_state()
+
+    def ctx(self, server_locations, items_handling: int = ITEMS_INCLUDING_OWN, items=(),
+            slot_data=None):
+        return SimpleNamespace(server_locations=set(server_locations), checked_locations=set(),
+                               slot=1, items_handling=items_handling, items_received=list(items),
+                               slot_data=slot_data or {}, send_msgs=mock.AsyncMock())
+
+    async def test_each_first_defeat_the_server_tracks_is_sent(self):
+        bat, zombie, chaos = (enemy_type_by_name[name].id for name in ("Bat", "Zombie", "Chaos"))
+        ctx = self.ctx({defeat_location_id(bat), defeat_location_id(zombie)})
+        await self.client._send_location_checks(ctx, FakeRam({bat, zombie, chaos}))
+        ctx.send_msgs.assert_awaited_once_with(
+            [{"cmd": "LocationChecks",
+              "locations": sorted([defeat_location_id(bat), defeat_location_id(zombie)])}])
+
+    async def test_a_seed_without_enemy_checks_never_reads_the_defeats(self):
+        ram = FakeRam({enemy_type_by_name["Bat"].id})
+        ctx = self.ctx(sorted(pickup_location_ids)[:5], items_handling=ITEMS_FROM_OTHER_WORLDS)
+        await self.client._send_location_checks(ctx, ram)
+        self.assertEqual(ram.defeats_read, 0)
+        ctx.send_msgs.assert_not_awaited()
+
+    def test_own_items_the_rom_gave_are_not_given_again(self):
+        from NetUtils import NetworkItem
+        pickup, other_pickup = sorted(pickup_location_ids)[:2]
+        defeat = defeat_location_id(enemy_type_by_name["Bat"].id)
+        code = item_table["Potion"].code
+        given_by_rom = NetworkItem(code, pickup, 1)
+        at_a_defeat = NetworkItem(code, defeat, 1)
+        from_another_world = NetworkItem(code, pickup, 2)
+        own_copy_not_from_rom = NetworkItem(code, other_pickup, 1)
+        ctx = self.ctx((), items=[given_by_rom, at_a_defeat, from_another_world,
+                                  own_copy_not_from_rom],
+                       slot_data={"rom_given_locations": [pickup],
+                                  "starting_inventory_from_server": True})
+        self.assertEqual(CVAOSClientLogic._grantable_items(ctx),
+                         [at_a_defeat, from_another_world, own_copy_not_from_rom])
+
+    def test_the_rom_given_list_is_ignored_when_own_items_are_not_requested(self):
+        from NetUtils import NetworkItem
+        pickup = min(pickup_location_ids)
+        item = NetworkItem(item_table["Potion"].code, pickup, 1)
+        ctx = self.ctx((), items_handling=ITEMS_FROM_OTHER_WORLDS, items=[item],
+                       slot_data={"rom_given_locations": [pickup],
+                                  "starting_inventory_from_server": True})
+        self.assertEqual(CVAOSClientLogic._grantable_items(ctx), [item])
+
+
+if __name__ == "__main__":
+    unittest.main()

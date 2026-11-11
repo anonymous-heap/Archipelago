@@ -1,3 +1,11 @@
+"""
+The castle's item pickups, merged by ``pickup_number`` from three CSVs.
+
+``pickup_identifiers.csv`` holds each pickup's ROM data and item, ``pickup_rooms.csv`` holds its
+room and position, and ``friendly_location_names.csv`` holds the friendly name that its location
+name starts with.
+"""
+
 from __future__ import annotations
 
 from ..._pydantic_compat import BaseModel, parse_obj_as, validator
@@ -6,10 +14,18 @@ from ..parse_int import parse_hex
 
 __all__ = [
     "PickupInfo",
+    "area_names",
     "rows",
 ]
 
 class PickupInfo(BaseModel):
+    """
+    One item pickup placed in a room.
+
+    ``flag_offset`` is the pickup's bit number in the collected-pickup flags at 0x02000360, not a
+    byte offset. ``specifier``, such as ``_a``, tells apart pickups that hold the same item.
+    """
+
     pickup_number: int
     ptr_address: int
     simple_name: str
@@ -86,11 +102,29 @@ class PickupInfo(BaseModel):
         return f"{self.simple_name}{self.specifier or ''}"
 
     @property
+    def item_name(self) -> str:
+        """
+        The Archipelago name of the item this pickup holds.
+
+        Money (subtype 1) stores its gold value in ``simple_name``, so its item name is that
+        value followed by "Gold", as in ``500 Gold``. Every pickup that holds the same item has
+        the same ``item_name``, so use ``display_name`` to tell the pickups apart.
+        """
+        if self.subtype_num == 1:  # money: simple_name is the gold value
+            return f"{int(self.simple_name)} Gold"
+        return self.simple_name
+
+    @property
     def display_name(self) -> str:
         """
-        Human-readable AP item/location name. Money (subtype 1) renders its gold value
-        (``500 Gold``) instead of the bare number; a duplicate-suffix like ``_a`` becomes `` (A)``.
-        ``identifier_key`` stays the internal key; this is display-only (codes/ids are unaffected).\
+        The item name followed by this pickup's specifier, which tells apart the pickups that
+        hold the same item.
+
+        The specifier appears in parentheses without its leading underscore, and a one-letter
+        specifier is capitalized, so a Potion with specifier ``_a`` is ``Potion (A)``. A pickup
+        without a specifier shows the bare item name.
+        Location and region names use this form, while ``identifier_key`` remains the internal
+        lookup key.
         """
         spec = (self.specifier or "").lstrip("_")
         if not spec:
@@ -99,18 +133,17 @@ class PickupInfo(BaseModel):
             suffix = f" ({spec.upper()})"
         else:
             suffix = f" ({spec})"
-        if self.subtype_num == 1:  # money: simple_name is the gold value
-            return f"{int(self.simple_name)} Gold{suffix}"
-        return f"{self.simple_name}{suffix}"
+        return f"{self.item_name}{suffix}"
 
     @property
     def location_name(self) -> str:
         """
-        Human-readable AP *location* name: the friendly room-area name followed by a bracketed
-        tag of the room id and the item's ``display_name`` -- e.g. ``White Dragon Hallway [00D
-        Potion (A)]``. When no friendly name is mapped it falls back to the bare tag ``00D Potion
-        (A)``. This is the location (check) name only; ``display_name`` (the item name) and all
-        ids are unaffected.
+        The Archipelago location name for this pickup.
+
+        It is the pickup's friendly name followed by a bracketed tag that holds the room
+        identifier and ``display_name``, as in ``White Dragon Hallway [00D Potion (A)]``. A
+        pickup with no friendly name uses the bare tag, ``00D Potion (A)``. The name of the item
+        it holds is ``item_name``.
         """
         tag = f"{self.room_identifier} {self.display_name}"
         return f"{self.friendly_name} [{tag}]" if self.friendly_name else tag
@@ -213,6 +246,11 @@ by_identifier_key: dict[str, PickupInfo] = {row.identifier_key: row for row in r
 by_simple_name: dict[str, list[PickupInfo]] = {}
 for row in rows:
     by_simple_name.setdefault(row.simple_name, []).append(row)
+
+# Each area's name, keyed by the first character of its room identifiers, as the region column of
+# friendly_location_names.csv gives it ("Dance Hall" for the 3xx rooms).
+area_names: dict[str, str] = {row["room_identifier"][0]: row["region"] for row in open_csv(
+    __name__, "friendly_location_names.csv")}
 
 
 def find(key: int | str) -> PickupInfo:

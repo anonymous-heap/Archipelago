@@ -1,29 +1,32 @@
 @ DeathLink "real kill" ROM hook for Castlevania: Aria of Sorrow (USA).
-@ Design rationale is inline below; deathlink_hook.py embeds the assembled bytes.
-@
-@ SOURCE of truth for the trampoline bytes embedded in deathlink_hook.py. Assembled at DEV time
-@ (not at AP generation time). To regenerate after editing:
-@   python thumb_assembler.py deathlink_hook.s 0x08670040   @ -> _TRAMPOLINE (from this directory;
-@                                                            @ needs pip install keystone-engine)
+@ deathlink_hook.py embeds the assembled bytes; this file is the source of truth for them.
+@ Assembled at DEV time (not at AP generation time). To regenerate after editing, from this
+@ directory (needs `pip install keystone-engine`; add --listing for a capstone disassembly):
+@   python thumb_assembler.py deathlink_hook.s 0x08670040   @ -> _TRAMPOLINE
+@ test_thumb_assembler.py fails if that blob and this file disagree.
 @
 @ WHERE WE HOOK (and why not the obvious spot):
-@   AoS has no per-frame "if HP<=0 die" check. Death is driven by the damage routine: the player
-@   update sub_0801B0D8 only runs its HP<=0 -> bl sub_0801AF20 block when the "damage active" guard
-@   gEwramData[0x131D6] != 0. So hooking that block only fires the kill when Soma takes damage (the
-@   bug we hit first). Instead we hook _0801B9D0 (0x0801B9D0) -- the per-frame position/animation
-@   tail that runs every normal frame (the guard's else-branch `b _0801B9D0`) and is exactly where
-@   the engine's own death path lands after `bl sub_0801AF20`. There r6 = player. If the client's
-@   kill-request flag is set we call the real death handler, then fall through into the tail, which
-@   reads the death animation index (entity+0xa = 0x10, set by the handler) and plays it -- i.e. the
-@   identical flow a damage death takes. When the flag is clear we reproduce the stolen prologue of
-@   _0801B9D0 and resume, so normal play (and normal damage deaths, which also pass through here) is
-@   untouched.
+@   AoS has no per-frame "if HP<=0 die" check, because death is driven by the damage routine.
+@   The player update sub_0801B0D8 only runs its HP<=0 -> bl sub_0801AF20 block when the
+@   "damage active" guard gEwramData[0x131D6] != 0, so a hook in that block would fire the kill
+@   only when Soma takes damage. Instead we hook _0801B9D0 (0x0801B9D0), the per-frame
+@   position/animation tail. It runs every normal frame (the guard's else-branch `b _0801B9D0`),
+@   and it is exactly where the engine's own death path lands after `bl sub_0801AF20`. There
+@   r6 = player.
+@
+@ WHAT WE DO:
+@   If the client's kill-request flag is set and Soma is not already dying, we clear the flag
+@   and call the real death handler, then fall through into the tail. The tail reads the death
+@   animation index the handler set (entity+0xa = 0x10) and plays it, which is the same flow a
+@   damage death takes. When the flag is clear we only reproduce the stolen prologue of
+@   _0801B9D0 and resume, so normal play is untouched. That includes normal damage deaths,
+@   which also pass through here.
 
         .syntax unified
         .arch   armv4t
         .thumb
 
-        .equ    KILL_REQUEST,  0x0201324C   @ EWRAM kill-request flag (pad_1324C, verified dead)
+        .equ    KILL_REQUEST,  0x0201324C   @ EWRAM kill-request flag (pad_1324C, unused by AoS)
         .equ    DEATH_HANDLER, 0x0801AF21   @ sub_0801AF20 | thumb bit
         .equ    GEWRAMDATA,    0x084F0B14   @ ROM word holding the EWRAM struct base (=gEwramData)
         .equ    STATUS_OFF,    0x000131B8   @ gEwramData player status bitfield (used by the tail)
@@ -43,6 +46,17 @@ deathlink_tramp:                    @ r6 = player entity; entered every frame at
         beq     .Lresume
         movs    r3, #0
         strb    r3, [r1]            @ one-shot: clear the request
+        @ Clear status bits 0x820 first, as the damage path does before its own call (0x0801B3EA).
+        @ The handler skips the death animation while bit 0x800 (set by the Sky Fish soul) is on.
+        ldr     r3, =GEWRAMDATA
+        ldr     r3, [r3]
+        ldr     r2, =STATUS_OFF
+        adds    r3, r3, r2
+        ldr     r2, [r3]
+        movs    r0, #0x82
+        lsls    r0, r0, #4          @ r0 = 0x820
+        bics    r2, r0
+        str     r2, [r3]
         adds    r0, r6, #0          @ r0 = player entity (death-handler arg)
         ldr     r3, =DEATH_HANDLER
         ldr     r1, =(.Lresume + 1) @ THUMB return addr after the call

@@ -1,8 +1,8 @@
 """sys.path bootstrap for pure-Python dependencies vendored in ``worlds/cvaos/vendor``.
 
-Works both as a loose world folder and inside a zipped .apworld: zipimport accepts
-sys.path entries that point inside a zip archive, as long as the path is normalized
-(no ``..`` segments).
+This works both from a loose world folder and from inside a zipped .apworld, because
+zipimport accepts sys.path entries that point inside a zip archive, as long as the path is
+normalized (no ``..`` segments).
 """
 
 import importlib.machinery
@@ -16,8 +16,8 @@ _VENDOR_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__fi
 def ensure_vendor_on_sys_path() -> None:
     """Make the vendored packages importable (idempotent).
 
-    The vendor dir is appended rather than prepended so that packages installed in the
-    environment win; the vendored copies are a fallback for frozen Archipelago
+    The vendor dir is appended rather than prepended, so packages installed in the
+    environment take precedence. The vendored copies are a fallback for frozen Archipelago
     installs, which cannot pip-install anything.
     """
     if _VENDOR_DIR not in sys.path:
@@ -25,19 +25,21 @@ def ensure_vendor_on_sys_path() -> None:
 
 
 def prefer_vendored(package: str) -> None:
-    """Re-resolve ``package`` from the vendor dir even though an (older) copy is installed.
+    """Load ``package`` from the vendor dir in place of an installed copy that is too old.
 
-    ``ensure_vendor_on_sys_path`` appends, so an environment install always wins the
-    first resolution. When that install is too old for this world, the caller uses this
-    to evict it from ``sys.modules`` and load the vendored copy under the same name.
+    ``ensure_vendor_on_sys_path`` appends the vendor dir, so an installed package always
+    takes precedence on the first import. When that install is too old for this world, the
+    caller uses this function to remove it from ``sys.modules`` and load the vendored copy
+    under the same name.
 
-    The override is scoped to ``package`` alone: rather than promoting the whole vendor
-    dir to the front of ``sys.path`` (which would also shadow every *other* vendored
-    package — e.g. hand pydantic imports the vendored 1.10 in an environment that has
-    pydantic 2), the package is located on the vendor path explicitly. Submodule imports
-    then resolve through the loaded package's own ``__path__``, which points into the
-    vendor dir. Safe only while no other module holds references to the evicted classes,
-    i.e. when called from the package's single import point.
+    Only ``package`` is replaced. The function finds it in the vendor dir directly, instead
+    of moving the whole vendor dir to the front of ``sys.path``. Moving the dir would also
+    shadow every other vendored package, so pydantic imports would load the vendored 1.10 even
+    in an environment that has pydantic 2. Submodule imports resolve through the loaded package's
+    own ``__path__``, which points into the vendor dir.
+
+    This is safe only while no other module holds references to the removed modules'
+    classes, so call it only from the package's single import point.
     """
     for name in [m for m in sys.modules if m == package or m.startswith(package + ".")]:
         del sys.modules[name]

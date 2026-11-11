@@ -1,9 +1,26 @@
+"""
+Routing requirements: what the player needs to cross rooms and to reach pickups and enemies.
+
+``rows`` holds the requirements for crossing a room from one of its doors to another, and
+``transdoor_connection_rows`` pairs the two sides of each door. ``pickup_region_rows`` and
+``enemy_region_rows`` hold the requirements for reaching a pickup or an enemy from a door of its
+room. ``enemy_placements`` lists every enemy placement in the enemy CSV, whether or not it has
+routing.
+
+Each row keeps its CSV ability columns and combo cells, and ``get_requirement_bitmasks`` turns
+them into :class:`AbilityCombo` masks.
+
+Where two doors connect the same pair of rooms, a door reference must carry the door's position
+tag. An untagged reference raises ``ValueError`` at import. The one exception is a row of the
+override file that neither adds nor removes a crossing, because such a row has no effect.
+"""
+
 from __future__ import annotations
 
 import logging
 import re
 from enum import IntFlag, auto
-from typing import Iterable
+from typing import Iterable, NamedTuple
 
 from ..._pydantic_compat import BaseModel
 from .._csv_resources import open_csv, open_csv_if_exists
@@ -18,10 +35,11 @@ __all__ = [
     "lookup_pickup_region_requirement",
     "EntranceToEnemyRegionInfo",
     "enemy_region_rows",
+    "EnemyPlacement",
+    "enemy_placements",
     "by_enemy_name_for_enemy_regions",
     "by_enemy_number_for_enemy_regions",
     "enemy_meta_by_number",
-    "resolve_enemy_number",
     "TransdoorConnection",
     "transdoor_connection_rows",
     "by_from_entrance_for_transdoor",
@@ -32,10 +50,10 @@ def _reject_ambiguous(node: str, where: str) -> str:
     """
     Return ``node`` unchanged, or raise if it names a room pair served by two doors.
 
-    Two doors sometimes share a room pair, and each is named for where it sits, so
-    ``"500:501"`` on its own does not say which one is meant. Guessing here is what previously
-    bound every such rule to one door and left the other unreachable, so an untagged reference
-    fails at load instead.
+    Where two doors connect the same pair of rooms, each identifier carries a position tag such
+    as ``(left)``, so ``"500:501"`` on its own does not say which door is meant. Guessing would
+    bind every such rule to one of the doors and leave the other unreachable, so an untagged
+    reference fails at load instead.
     """
     if node in ambiguous_door_identifiers:
         raise ValueError(
@@ -57,7 +75,11 @@ def _canonical_ability_name(name: str) -> str:
 
 class AbilityCombo(IntFlag):
     """
-    Requirement-mask bitflag.
+    Bit flags for the abilities and conditions that routing requirements name.
+
+    A requirement mask ORs flags together, and it is met only when every flag in it is met. Most
+    flags stand for a soul's ability. The rest are movement techniques, room conditions, and
+    ``Impossible``, which is never met.
     """
 
     None_ = 0
@@ -102,14 +124,18 @@ class AbilityCombo(IntFlag):
     QSave = auto()   # Quick Save entrance reset
     """Quick Save entrance reset"""
 
-    # Enemy/guardian souls used as gating items, appended here so adding them doesn't shift the
-    # bit values of the abilities above. Galamoth is a real ground-pickup soul (gated on
-    # ``state.has`` via ``_ABILITY_TO_ITEM`` in regions.py); Chronomage has no pickup, so gating
-    # on it resolves to an item that is never placed and is therefore always inert.
+    # Souls that gate routes as items. New flags go at the end so that the bit values above never
+    # change. regions.py maps each soul to its item through _ABILITY_TO_ITEM. Galamoth is a ground
+    # pickup, but Chronomage has no pickup, so its item is never placed and a requirement that
+    # includes it is never met.
     Galamoth = auto()
     """Galamoth soul"""
     Chronomage = auto()
-    """Chronomage soul (enemy-only; the gate is inert)"""
+    """Chronomage soul (it has no pickup, so a requirement that includes it is never met)"""
+
+    # Appended after the souls for the same reason: earlier bit values stay as they are.
+    InZip = auto()   # Inbounds zip
+    """Inbounds zip"""
 
 # Canonical enum-key -> bitflag
 _ABILITY_BY_NAME: dict[str, AbilityCombo] = {
@@ -134,14 +160,18 @@ _ABILITY_BY_NAME: dict[str, AbilityCombo] = {
     "Vert": AbilityCombo.Vert,
     "QSave": AbilityCombo.QSave,
     "Galamoth": AbilityCombo.Galamoth,
-    # Chronomage has no pickup, so this resolves to an item that is never placed -- an inert gate.
+    # Chronomage has no pickup, so a requirement that includes it is never met.
     "Chronomage": AbilityCombo.Chronomage,
+    "InZip": AbilityCombo.InZip,
 }
 
 
 def _minimize_req_masks(reqs: Iterable[int]) -> tuple[int, ...]:
     """
-    Remove dominated requirement masks. If A \\subseteq B, drop B.
+    Return the masks in ``reqs`` that no other mask makes redundant.
+
+    A mask is dropped when another mask is a subset of it, because meeting the larger mask always
+    meets the smaller one too. The result is ordered by bit count, then by value.
     """
     uniq = sorted(set(int(r) for r in reqs), key=lambda m: (m.bit_count(), m))
     out: list[int] = []
@@ -161,11 +191,11 @@ _PAREN_RE = re.compile(r"\(([^)]+)\)")
 
 def _parse_combo_text_to_mask(text: str, *, strict: bool) -> int | None:
     """
-    Parse a combo cell by extracting enum keys inside parentheses only.
+    Return the mask for one ``Misc. combo`` cell, or None when the cell sets no flag.
 
-    Example:
-      "Malphas (DJump), ..." -> DJump | ...
-
+    Only the flag names inside parentheses count, so ``"Malphas (DJump), Flying Armor (Glide)"``
+    gives ``DJump | Glide``. An unknown name raises when ``strict`` is set and is skipped
+    otherwise.
     """
     if not text or not text.strip():
         return None
@@ -247,9 +277,10 @@ def _load_transdoor_connections() -> tuple[TransdoorConnection, ...]:
                                           "default_transdoor_entrance_connections.csv"),
         ))
 
-    # Apply overrides: rows with does_exist=FALSE are removed, rows with
-    # is_override=TRUE are added in their place.
-    override_reader = open_csv_if_exists(__name__, "override_transdoor_entrance_connections.csv")
+    # Apply the overrides: a row with does_exist=FALSE removes that crossing, and a row with
+    # is_override=TRUE adds one. A row that does neither restates a crossing and has no effect.
+    override_file = "override_transdoor_entrance_connections.csv"
+    override_reader = open_csv_if_exists(__name__, override_file)
     if override_reader is not None:
         removals: set[tuple[str, str]] = set()
         additions: list[TransdoorConnection] = []
@@ -258,10 +289,21 @@ def _load_transdoor_connections() -> tuple[TransdoorConnection, ...]:
                 continue
             from_e = row["from_entrance"].strip()
             to_e = row["to_entrance"].strip()
-            if not _truthy(row.get("does_exist")):
+            removes = not _truthy(row.get("does_exist"))
+            adds = _truthy(row.get("is_override"))
+            if removes or adds:
+                # A row that changes the table has to name each door exactly. An untagged name
+                # for a room pair with two doors would match no crossing and do nothing.
+                _reject_ambiguous(from_e, override_file)
+                _reject_ambiguous(to_e, override_file)
+            if removes:
                 removals.add((from_e, to_e))
-            if _truthy(row.get("is_override")):
+            if adds:
                 additions.append(TransdoorConnection(from_entrance=from_e, to_entrance=to_e))
+        unmatched = removals - {(c.from_entrance, c.to_entrance) for c in out}
+        if unmatched:
+            raise ValueError(f"{override_file}: these removals match no crossing in "
+                             f"default_transdoor_entrance_connections.csv: {sorted(unmatched)}")
         out = [c for c in out if (c.from_entrance, c.to_entrance) not in removals]
         out.extend(additions)
 
@@ -270,15 +312,15 @@ def _load_transdoor_connections() -> tuple[TransdoorConnection, ...]:
 
 def _entrance_identifiers_from_cell(room_id: str, cell: str | None) -> set[str]:
     """
-    Interpret the dest_room_identifier column and return the set of entrance identifiers
-    for arrivals in room_id.
+    Return the entrance nodes in ``room_id`` that a ``dest_room_identifier`` cell names.
 
-    For "Any", returns all entrance nodes that arrive in room_id according to _arrivals_by_room
-    -- the door on room_id's own side of each transdoor, so it sits behind any gate on the
-    crossing. For a specific neighbor room (or comma-separated list), constructs
-    f"{room_id}:{neighbor}" and includes it only if it exists in by_from_entrance_for_transdoor.
-    This means removing a door from default_transdoor_entrance_connections.csv automatically
-    excludes it here.
+    A cell of ``Any`` names every node in ``_arrivals_by_room`` for the room. Each of those is
+    the door on ``room_id``'s own side of a crossing, so it sits behind any gate on the crossing.
+
+    Otherwise the cell lists neighbor rooms separated by commas, and each one names the node
+    ``f"{room_id}:{neighbor}"``. A listed node is kept only if it is a ``from_entrance`` in
+    ``by_from_entrance_for_transdoor``, so removing a door from
+    default_transdoor_entrance_connections.csv also removes it here. A blank cell names nothing.
     """
     if cell is None:
         return set()
@@ -333,6 +375,16 @@ def _requirement_bitmasks_from(
 
 
 class RoutingInfo(BaseModel):
+    """
+    Requirements for crossing one room from one of its doors to another.
+
+    Each instance is one row of ``entrance_to_entrance_requirements.csv``, and it covers one
+    direction only. The doors are named by the rooms they lead to: the route starts at the door
+    to ``from_room`` and ends at the door to ``to_room``, both inside ``room_id``. Where two doors
+    of ``room_id`` lead to the same room, the name also carries the door's position tag, as in
+    ``"500 (left)"``.
+    """
+
     class Config:
         extra = "allow"
         frozen = True
@@ -405,12 +457,11 @@ class RoutingInfo(BaseModel):
         strict_combo_tokens: bool = True,
     ) -> tuple[int, ...]:
         """
-        Return requirement masks (each mask is one conjunctive option).
+        Return the requirement masks for this crossing, any one of which is enough.
 
-        Interpretation:
-          - Each TRUE base ability column creates a singleton option mask.
-          - "None" set to true generates the empty requirement option mask=0.
-          - Each Misc. combo cell is parsed as a conjunction mask from parenthetical tokens.
+        A ``TRUE`` ability column gives a mask holding that one flag, and a ``TRUE`` in the
+        ``None`` column gives the empty mask ``0``. Each ``Misc. combo`` cell gives one mask
+        holding every flag it names.
         """
         return _requirement_bitmasks_from(
             self.abilities,
@@ -550,9 +601,9 @@ by_from_entrance_for_transdoor: dict[str, TransdoorConnection] = {
 }
 _arrivals_by_room: dict[str, set[str]] = {}
 for _r in transdoor_connection_rows:
-    # The arrival node is the door on the side you end up at -- the to_entrance, whose
-    # room_identifier is room_id. Using from_entrance would attach pickups/enemies to the
-    # neighbor's side of the door, i.e. in front of any gate on the crossing.
+    # The arrival node is the to_entrance: the door on the side the player ends up on, inside the
+    # arrival room. Using from_entrance instead would attach pickups and enemies to the neighbor's
+    # side of the door, in front of any gate on the crossing.
     _arrival_room, _ = _r.to_entrance.split(":", 1)
     _arrivals_by_room.setdefault(_arrival_room, set()).add(_r.to_entrance)
 
@@ -574,16 +625,17 @@ def lookup_pickup_region_requirement(entrance_identifier: str, pickup_number: in
 
 class EntranceToEnemyRegionInfo(BaseModel):
     """
-    Requirements for reaching an enemy *instance* from a specific entrance.
+    Requirements for reaching one enemy placement from a specific entrance.
 
-    Mirrors :class:`EntranceToPickupRegionInfo`, but for enemy regions — used to put
-    enemy-drop souls (e.g. Flame Demon, Succubus) into logic, since those souls are not
-    ground pickups and never enter the item pool. Requirements are symmetric (they apply
-    both to reaching the enemy and returning).
+    This is the enemy counterpart of :class:`EntranceToPickupRegionInfo`. Logic uses these rows
+    to reach the enemies whose souls it relies on, such as Flame Demon and Succubus, since those
+    souls are not ground pickups and never enter the item pool. Enemy checks also use them to
+    decide when a placement can be reached. The requirements are symmetric, so they apply both to
+    reaching the enemy and to returning from it.
 
-    ``enemy_number`` is globally unique (one per CSV instance). ``enemy_name`` +
-    ``specifier`` is unique only *within a room* (e.g. "Succubus_a" exists in both room
-    90D and 90E), so use ``enemy_number`` to identify a single instance.
+    Each placement has its own ``enemy_number``. ``enemy_name`` plus ``specifier`` is unique only
+    *within a room* (``Succubus_a`` is in both room 90D and room 90E), so use ``enemy_number`` to
+    identify a single placement.
     """
 
     class Config:
@@ -692,8 +744,6 @@ by_enemy_number_for_enemy_regions: dict[int, list[EntranceToEnemyRegionInfo]] = 
 by_enemy_name_for_enemy_regions: dict[str, set[int]] = {}
 # enemy_number -> (enemy_name, specifier, room) for region naming / reverse lookup
 enemy_meta_by_number: dict[int, tuple[str, str, str]] = {}
-# (room, enemy_name, specifier) -> enemy_number (unique within a room)
-_enemy_number_by_room_name_spec: dict[tuple[str, str, str], int] = {}
 
 for _enemy_row in enemy_region_rows:
     by_enemy_number_for_enemy_regions.setdefault(_enemy_row.enemy_number, []).append(_enemy_row)
@@ -701,11 +751,38 @@ for _enemy_row in enemy_region_rows:
     enemy_meta_by_number[_enemy_row.enemy_number] = (
         _enemy_row.enemy_name, _enemy_row.specifier, _enemy_row.enemy_room,
     )
-    _enemy_number_by_room_name_spec[
-        (_enemy_row.enemy_room, _enemy_row.enemy_name, _enemy_row.specifier)
-    ] = _enemy_row.enemy_number
 
 
-def resolve_enemy_number(room_id: str, enemy_name: str, specifier: str = "") -> int:
-    """Map the human form ``(room, name, specifier)`` to the unique ``enemy_number``."""
-    return _enemy_number_by_room_name_spec[(room_id, enemy_name, specifier)]
+class EnemyPlacement(NamedTuple):
+    """One enemy in one room, as the enemy routing CSV lists it, with or without routing."""
+
+    enemy_number: int  # unique per placement, which can span several CSV rows
+    room: str
+    name: str
+    specifier: str
+    x: int  # position in the room, in pixels
+    y: int
+
+
+def _load_enemy_placements() -> tuple[EnemyPlacement, ...]:
+    """Return every enemy placement in the enemy routing CSV.
+
+    Unlike :data:`enemy_region_rows`, this keeps the placements whose ``dest_room_identifier`` is
+    blank, which are most of them. Enemy checks need every placement, and their logic applies a
+    fallback rule to those that have no routing yet. A placement routed from several entrances can
+    span several CSV rows, but it is listed here once.
+    """
+    placements = []
+    seen: set[int] = set()
+    for row in open_csv(__name__, "symmetric_entrance_to_enemy_region_requirements.csv"):
+        name = (row.get("Enemy Name") or "").strip()
+        if not name or int(row["enemy_number"]) in seen:
+            continue
+        seen.add(int(row["enemy_number"]))
+        placements.append(EnemyPlacement(int(row["enemy_number"]), (row.get("room_id") or "").strip(),
+                                         name, (row.get("Specifier") or "").strip(),
+                                         int(row.get("x") or 0), int(row.get("-y") or 0)))
+    return tuple(placements)
+
+
+enemy_placements: tuple[EnemyPlacement, ...] = _load_enemy_placements()

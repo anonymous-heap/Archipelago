@@ -1,3 +1,11 @@
+"""
+The game's rooms, from ``room_info.csv`` joined to the identifiers in ``room_identifiers.csv``.
+
+A room can be identified three ways: by its identifier (such as ``"003"``), by its ROM address,
+or by its 1-based ``room_number``. The ``room_info.csv`` columns that :class:`RoomInfo` does not
+declare, such as the per-entity columns, are kept as extra attributes.
+"""
+
 from __future__ import annotations
 
 from ..._pydantic_compat import BaseModel, parse_obj_as, validator

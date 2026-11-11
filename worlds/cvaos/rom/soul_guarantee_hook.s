@@ -3,14 +3,16 @@
 @ Assembled at DEV time (not at AP generation time). To regenerate after editing, from this
 @ directory (needs `pip install keystone-engine`; add --listing for a capstone disassembly):
 @   python thumb_assembler.py soul_guarantee_hook.s 0x08670600   @ -> _TRAMPOLINE
-@ test_thumb_assembler.py holds that blob and this file together, so neither can drift.
+@ test_thumb_assembler.py fails if that blob and this file disagree.
 @
 @ WHERE WE HOOK:
-@   The enemy-death routine decides a soul drop at _080684C8..0x080684F0: it rolls
+@   The enemy-death routine decides a soul drop at 0x080684C8..0x080684F0: it rolls
 @   (Random() >> 2) mod max(16, rate*8 + 32 - LCK/16) and drops when the roll is below the
-@   numerator (3 owned / 6 new / 7 on Hard, +8 with the Soul Eater Ring). A rate byte of 0 skips
-@   the roll entirely (that is how bosses avoid a second, generic drop), so no table value can
-@   force a drop; only the comparison can. We steal the 10 bytes at 0x080684EE
+@   numerator (3 owned / 6 new / 7 on Hard, +8 with the Soul Eater Ring). The denominator never
+@   goes below 16 and the numerator never reaches it, so no table value can force a drop. Only
+@   the comparison can. A rate byte of 0 does not force one either: it skips the roll entirely,
+@   and the table uses it for bosses, whose own scripts grant their souls.
+@   We steal the 10 bytes at 0x080684EE
 @   (cmp r4,r5 ; bhs nodrop ; ldrb r2,[r6,#0x17] ; ldrb r3,[r6,#0x18] ; subs r3,#1) for a far
 @   jump here. On entry r4 = roll, r5 = numerator, r6 = the dying enemy's table row (ROM), and
 @   r0..r3 are dead.
@@ -20,11 +22,12 @@
 @   Book 2 the Giant Bat (blue, index 2), Book 3 the Succubus (yellow, index 7). If the dying
 @   enemy's soul is one of those AND the matching book is in the inventory (its count byte in
 @   the consumable array, items 26..28, is nonzero), the roll is forced to 0, which is below
-@   every numerator. Matching on the soul rather than the enemy means Soul Shuffle needs no
-@   special handling: whichever enemy carries the soul now is the one that always drops it.
-@   Everything is read from the game's own memory, so no client is involved and the behaviour
-@   is the same in any emulator. The stolen instructions then run and control returns to the
-@   drop path (0x080684F8) or the no-drop path (0x0806852C) exactly as the original code would.
+@   every numerator. The stolen instructions then run and control returns to the drop path
+@   (0x080684F8) or the no-drop path (0x0806852C) exactly as the original code would.
+@   Matching on the soul rather than the enemy means Soul Shuffle needs no special handling:
+@   whichever enemy carries the soul now is the one that always drops it. Everything is read
+@   from the game's own memory, so no client is involved and the behaviour is the same in any
+@   emulator.
 
         .syntax unified
         .arch   armv4t

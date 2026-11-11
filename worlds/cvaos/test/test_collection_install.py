@@ -9,6 +9,7 @@ against it for real. ``collection_running`` is stubbed so no process attach happ
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import tempfile
@@ -16,24 +17,40 @@ import types
 import unittest
 from unittest import mock
 
+from worlds.Files import APTokenTypes
+
 from ..advance_collection import cac_archive, install
 from ..advance_collection.install import (
     AOS_MEMBER, BACKUP_SUFFIX, ROM_SIZE, InstallError, extract_base_rom_bytes,
     extract_base_rom_to, install_rom, restore_backup, validate_patched_rom, windata_dir_from_exe,
 )
-from ..rom.patch import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START
+from ..rom import ARCHIPELAGO_IDENTIFIER, ARCHIPELAGO_IDENTIFIER_START, CVAOSProcedurePatch
 
 _OTHER_MEMBER = "system/roms/99_other_game.bin"
 _OTHER_BYTES = b"\x11untouched-neighbor-member\x22" * 4
 _STOCK_AOS_BYTES = b"stock collection AoS rom stand-in"  # size need not be 8 MiB in the archive
+_FAKE_EXE_BYTES = b"MZ fake collection exe"
 
 
 def _quiet(_msg: str) -> None:
     pass
 
 
+def _treat_as_stock(test: unittest.TestCase, aos_bytes: bytes) -> None:
+    """Make the installer accept ``aos_bytes`` as the collection's stock ROM for this test."""
+    patcher = mock.patch.object(install, "AC_USA_ROM_MD5", hashlib.md5(aos_bytes).hexdigest())
+    patcher.start()
+    test.addCleanup(patcher.stop)
+
+
 def _make_patched_rom(marker: str = ARCHIPELAGO_IDENTIFIER, with_bridge: bool = True,
                       with_graphic: bool = True) -> bytes:
+    """Return an 8 MiB stand-in for a ROM patched from the collection's stock ROM.
+
+    It holds the AoS header title and ``marker`` at the identifier's address. It also holds
+    stand-ins for M2's audio bridge and replacement graphic, unless ``with_bridge`` or
+    ``with_graphic`` leaves them out.
+    """
     rom = bytearray(ROM_SIZE)
     rom[0xA0:0xAC] = b"CASTLEVANIA2"
     rom[ARCHIPELAGO_IDENTIFIER_START:ARCHIPELAGO_IDENTIFIER_START + len(marker)] = \
@@ -46,12 +63,38 @@ def _make_patched_rom(marker: str = ARCHIPELAGO_IDENTIFIER, with_bridge: bool = 
 
 
 def _make_stock_base_rom() -> bytes:
-    """A valid 8 MiB unpatched collection base ROM (AoS header + M2's additions, no AP marker)."""
-    rom = bytearray(ROM_SIZE)
-    rom[0xA0:0xAC] = b"CASTLEVANIA2"
-    rom[0x700000:0x700010] = b"\xEA" * 16
-    rom[0x660000:0x660010] = b"\x10" * 16
+    """Return an 8 MiB stand-in for the collection's stock ROM, which has no Archipelago marker."""
+    return _make_patched_rom(marker="")
+
+
+def _another_seed_rom() -> bytes:
+    """Return a patched ROM for a second seed.
+
+    It differs from ``_make_patched_rom()`` in one byte that no validation reads, so the
+    archive an install builds from it differs too.
+    """
+    rom = bytearray(_make_patched_rom())
+    rom[0x100000] = 0x77
     return bytes(rom)
+
+
+def _accept_fake_exe():
+    """Make the installer take the fake collection's game.exe for the real one."""
+    return mock.patch.object(install, "AC_GAME_EXE_MD5", hashlib.md5(_FAKE_EXE_BYTES).hexdigest())
+
+
+def _write_marker_patch(path: str) -> None:
+    """Write a ``.apcvaos`` that only writes the Archipelago marker into its base ROM.
+
+    A seed's patch also applies the ROM features, which check the real ROM's code, so they would
+    fail on the stand-in base ROMs used here.
+    """
+    patch = CVAOSProcedurePatch(player=1, player_name="Soma")
+    patch.procedure = [("apply_tokens", ["token_data.bin"])]
+    patch.write_token(APTokenTypes.WRITE, ARCHIPELAGO_IDENTIFIER_START,
+                      ARCHIPELAGO_IDENTIFIER.encode("ascii"))
+    patch.write_file("token_data.bin", patch.get_token_binary())
+    patch.write(path)
 
 
 def _build_fake_collection(root: str, aos_bytes: bytes = _STOCK_AOS_BYTES) -> str:
@@ -60,7 +103,7 @@ def _build_fake_collection(root: str, aos_bytes: bytes = _STOCK_AOS_BYTES) -> st
     os.makedirs(windata)
     exe_path = os.path.join(root, "game.exe")
     with open(exe_path, "wb") as f:
-        f.write(b"MZ fake collection exe")
+        f.write(_FAKE_EXE_BYTES)
 
     members = {AOS_MEMBER: aos_bytes, _OTHER_MEMBER: _OTHER_BYTES}
     file_info: dict[str, list[int]] = {}
@@ -81,7 +124,8 @@ def _build_fake_collection(root: str, aos_bytes: bytes = _STOCK_AOS_BYTES) -> st
 
 
 class _InstallerCase(unittest.TestCase):
-    """Temp fake collection + collection_running stubbed to 'not running'."""
+    """A temporary fake collection whose stock ROM the installer accepts, with
+    collection_running stubbed to report that the game is not running."""
 
     def setUp(self) -> None:
         self.root = tempfile.mkdtemp(prefix="cvaos_install_test_")
@@ -91,6 +135,7 @@ class _InstallerCase(unittest.TestCase):
         patcher = mock.patch.object(install, "collection_running", return_value=False)
         self.running_stub = patcher.start()
         self.addCleanup(patcher.stop)
+        _treat_as_stock(self, _STOCK_AOS_BYTES)
         self.rom_path = os.path.join(self.root, "patched.gba")
         with open(self.rom_path, "wb") as f:
             f.write(_make_patched_rom())
@@ -104,6 +149,28 @@ class _InstallerCase(unittest.TestCase):
             f.write(rom_bytes)
         return self.rom_path
 
+    def lock_the_live_index(self, *, from_staging_only: bool = False):
+        """Return a patch under which a move onto the live index fails, as it does while another
+        program holds the file open.
+
+        With ``from_staging_only``, only the install's move of its rebuilt index fails, so a
+        restore from the backups can still replace the index.
+        """
+        real_replace = os.replace
+        live_psb = os.path.join(self.windata, "alldata.psb.m")
+
+        def fail_on_live_index(src, dst):
+            if (os.path.normcase(dst) == os.path.normcase(live_psb)
+                    and (not from_staging_only or "_ap_staging" in src)):
+                raise PermissionError("index is locked")
+            return real_replace(src, dst)
+
+        # install and cac_archive import the same os module, so this one patch covers both.
+        return mock.patch.object(os, "replace", side_effect=fail_on_live_index)
+
+    def leftover_temp_files(self) -> list[str]:
+        return [name for name in os.listdir(self.windata) if name.endswith(".tmp")]
+
 
 class InstallTest(_InstallerCase):
     def test_install_swaps_member_and_creates_backups(self) -> None:
@@ -116,23 +183,145 @@ class InstallTest(_InstallerCase):
         self.assertFalse([p for p in os.listdir(self.windata) if p.startswith("_ap_staging")],
                          "staging directory must be cleaned up")
 
-    def test_backups_hold_stock_bytes_and_survive_second_install(self) -> None:
+    def test_a_second_install_leaves_the_backups_alone(self) -> None:
         install_rom(self.rom_path, self.exe_path, log=_quiet)
         backup_bin = os.path.join(self.windata, "alldata.bin" + BACKUP_SUFFIX)
         first_backup = open(backup_bin, "rb").read()
-        # Second seed: different ROM content; backups must not be overwritten.
-        rom2 = bytearray(_make_patched_rom())
-        rom2[0x100000] = 0x77
-        install_rom(self._write_rom(bytes(rom2)), self.exe_path, log=_quiet)
+        install_rom(self._write_rom(_another_seed_rom()), self.exe_path, log=_quiet)
         self.assertEqual(open(backup_bin, "rb").read(), first_backup,
                          "pristine backup must never be overwritten")
-        self.assertEqual(self._member(AOS_MEMBER), bytes(rom2))
+        self.assertEqual(self._member(AOS_MEMBER), _another_seed_rom())
 
     def test_refuses_while_collection_running(self) -> None:
         self.running_stub.return_value = True
         with self.assertRaisesRegex(InstallError, "running"):
             install_rom(self.rom_path, self.exe_path, log=_quiet)
         self.assertEqual(self._member(AOS_MEMBER), _STOCK_AOS_BYTES, "must not modify anything")
+
+    def test_replace_member_can_rebuild_the_archive_in_place(self) -> None:
+        psb = os.path.join(self.windata, "alldata.psb.m")
+        bin_ = os.path.join(self.windata, "alldata.bin")
+        cac_archive.replace_member(psb, bin_, AOS_MEMBER, b"a new member", psb, bin_)
+        self.assertEqual(self._member(AOS_MEMBER), b"a new member")
+        self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
+        self.assertEqual(self.leftover_temp_files(), [])
+
+    def test_a_non_stock_archive_is_never_backed_up(self) -> None:
+        # A seed installed by other means: its live archive must not become the "pristine" copy.
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        for name in install.WINDATA_FILES:
+            os.remove(os.path.join(self.windata, name + BACKUP_SUFFIX))
+        with self.assertRaisesRegex(InstallError, "not the stock one"):
+            install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertFalse(any(os.path.exists(os.path.join(self.windata, name + BACKUP_SUFFIX))
+                             for name in install.WINDATA_FILES))
+
+    def test_a_reinstall_rebuilds_from_the_backups_not_the_live_files(self) -> None:
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        # Damage the member every install copies through. The AoS member is replaced anyway, so
+        # damage there would not show which pair the rebuild read.
+        live_psb = os.path.join(self.windata, "alldata.psb.m")
+        offset = cac_archive.load_index(live_psb)["file_info"][_OTHER_MEMBER][0]
+        with open(os.path.join(self.windata, "alldata.bin"), "r+b") as f:
+            f.seek(offset)
+            f.write(b"\xff" * len(_OTHER_BYTES))
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
+        self.assertEqual(self._member(AOS_MEMBER), _make_patched_rom())
+
+    def test_a_failed_index_swap_restores_the_stock_pair(self) -> None:
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        with self.lock_the_live_index(from_staging_only=True):
+            with self.assertRaisesRegex(InstallError, "restored to the stock game"):
+                install_rom(self._write_rom(_another_seed_rom()), self.exe_path, log=_quiet)
+        self.assertEqual(self._member(AOS_MEMBER), _STOCK_AOS_BYTES)
+        self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
+
+    def test_a_first_install_whose_index_stays_locked_leaves_the_stock_game(self) -> None:
+        with self.lock_the_live_index():
+            with self.assertRaisesRegex(InstallError, "restored to the stock game"):
+                install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertEqual(self._member(AOS_MEMBER), _STOCK_AOS_BYTES)
+        self.assertEqual(self._member(_OTHER_MEMBER), _OTHER_BYTES)
+        self.assertEqual(self.leftover_temp_files(), [])
+
+    def test_a_reinstall_whose_index_stays_locked_says_the_files_do_not_match(self) -> None:
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        with self.lock_the_live_index():
+            with self.assertRaisesRegex(InstallError, "do not match each other"):
+                install_rom(self._write_rom(_another_seed_rom()), self.exe_path, log=_quiet)
+        self.assertEqual(self.leftover_temp_files(), [])
+
+    def test_a_damaged_archive_is_reported_as_an_install_error(self) -> None:
+        live_psb = os.path.join(self.windata, "alldata.psb.m")
+        with open(live_psb, "r+b") as f:
+            f.seek(32)
+            f.write(b"\x00" * 64)
+        with self.assertRaises(InstallError):
+            install_rom(self.rom_path, self.exe_path, log=_quiet)
+
+    def test_an_in_place_rebuild_that_cannot_move_its_index_keeps_it(self) -> None:
+        psb = os.path.join(self.windata, "alldata.psb.m")
+        bin_ = os.path.join(self.windata, "alldata.bin")
+        with self.lock_the_live_index():
+            with self.assertRaisesRegex(OSError, "rename it"):
+                cac_archive.replace_member(psb, bin_, AOS_MEMBER, b"a new member", psb, bin_)
+        kept = cac_archive.extract_member(psb + ".tmp", bin_, AOS_MEMBER,
+                                          index_key_name="alldata.psb.m")
+        self.assertEqual(kept,
+                         b"a new member", "the kept index must match the new payload")
+
+    def test_a_failed_first_backup_leaves_no_backup_behind(self) -> None:
+        # A backup of one file without the other would make every later install refuse to run.
+        real_replace = os.replace
+        moves = []
+
+        def fail_on_second_backup(src, dst):
+            if dst.endswith(BACKUP_SUFFIX):
+                moves.append(dst)
+                if len(moves) == 2:
+                    raise PermissionError("disk full")
+            return real_replace(src, dst)
+
+        with mock.patch.object(os, "replace", side_effect=fail_on_second_backup):
+            with self.assertRaises(InstallError):
+                install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertFalse([name for name in os.listdir(self.windata)
+                          if BACKUP_SUFFIX in name], "no backup or temporary copy may remain")
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertEqual(self._member(AOS_MEMBER), _make_patched_rom())
+
+    def test_a_backup_copy_that_fails_partway_leaves_nothing_behind(self) -> None:
+        def write_half_then_fail(src, dst):
+            with open(src, "rb") as source, open(dst, "wb") as target:
+                target.write(source.read(16))
+            raise OSError("disk full")
+
+        with mock.patch.object(install.shutil, "copy2", side_effect=write_half_then_fail):
+            with self.assertRaises(InstallError):
+                install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertFalse([name for name in os.listdir(self.windata) if BACKUP_SUFFIX in name],
+                         "a partial temporary copy must be removed")
+
+    def test_patched_backups_are_reported_as_patched(self) -> None:
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        for name in install.WINDATA_FILES:
+            live = os.path.join(self.windata, name)
+            with open(live, "rb") as source, open(live + BACKUP_SUFFIX, "wb") as target:
+                target.write(source.read())
+        with self.assertRaisesRegex(InstallError, "so are its backups"):
+            install.extract_base_rom_bytes(self.exe_path)
+
+    def test_a_killed_installs_staging_folder_is_removed(self) -> None:
+        stale = os.path.join(self.windata, "_ap_staging_1")
+        os.makedirs(stale)
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        self.assertFalse(os.path.exists(stale))
+
+    def test_the_archive_tool_reads_a_backup_index_by_its_own_name(self) -> None:
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        backup = os.path.join(self.windata, "alldata.psb.m" + BACKUP_SUFFIX)
+        self.assertIn(AOS_MEMBER, cac_archive.load_index(backup)["file_info"])
 
     def test_inconsistent_backup_state_aborts(self) -> None:
         install_rom(self.rom_path, self.exe_path, log=_quiet)
@@ -150,28 +339,74 @@ class InstallTest(_InstallerCase):
 
 
 class PatchFileInstallTest(_InstallerCase):
-    """Handing the installer the .apcvaos itself: applied first, then installed."""
+    """A .apcvaos handed to the installer is applied to the collection's own stock ROM."""
 
-    def test_apcvaos_is_applied_then_installed(self) -> None:
-        apc = os.path.join(self.root, "AP_1_P1_SomaAC.apcvaos")
-        with open(apc, "wb") as f:
-            f.write(b"patch container stand-in")
-        produced = os.path.join(self.root, "AP_1_P1_SomaAC.gba")
+    def test_a_patch_is_applied_to_the_collection_it_installs_into(self) -> None:
+        # Whatever target the seed was made for, the base is the collection's own ROM. The
+        # installer does not read host.yaml's rom_file, which is often a cart dump for BizHawk.
+        from ..options import TARGET_GBA
+        from ..rom import patch as patch_module
+        bases = []
 
-        def fake_apply(path: str, log=_quiet) -> str:
-            self.assertEqual(path, apc)
-            with open(produced, "wb") as f:
+        def fake_patch(_handler, target: str) -> None:
+            bases.append(patch_module.get_base_rom_bytes(TARGET_GBA))
+            with open(target, "wb") as f:
                 f.write(_make_patched_rom())
-            return produced
 
-        with mock.patch.object(install, "_apply_patch_file", side_effect=fake_apply):
+        with mock.patch.object(CVAOSProcedurePatch, "patch", autospec=True,
+                               side_effect=fake_patch), \
+                mock.patch.object(install, "extract_base_rom_bytes",
+                                  return_value=b"the collection's ROM"):
+            install._apply_patch_file("seed.apcvaos", self.exe_path, _quiet)
+        self.assertEqual(bases, [b"the collection's ROM"])
+
+
+class PatchApplicationTest(unittest.TestCase):
+    """A real ``.apcvaos`` applied by AP's patch machinery to the collection's stock ROM."""
+
+    def setUp(self) -> None:
+        self.root = tempfile.mkdtemp(prefix="cvaos_patch_apply_")
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.stock = _make_stock_base_rom()
+        self.exe_path = _build_fake_collection(os.path.join(self.root, "collection"), self.stock)
+        self.windata = os.path.join(self.root, "collection", "windata")
+        _treat_as_stock(self, self.stock)
+        # The patch checks its base ROM's md5, so the stand-in's md5 replaces the real ones.
+        for patcher in (mock.patch.object(install, "collection_running", return_value=False),
+                        mock.patch.object(CVAOSProcedurePatch, "hash",
+                                          [hashlib.md5(self.stock).hexdigest()])):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.downloads = os.path.join(self.root, "downloads")
+        os.makedirs(self.downloads)
+        self.patched = _make_patched_rom()
+
+    def installed_rom(self) -> bytes:
+        return cac_archive.extract_member(os.path.join(self.windata, "alldata.psb.m"),
+                                          os.path.join(self.windata, "alldata.bin"), AOS_MEMBER)
+
+    def test_installing_a_patch_leaves_the_bizhawk_rom_beside_it_alone(self) -> None:
+        apc = os.path.join(self.downloads, "AP_1_P1_Soma.apcvaos")
+        _write_marker_patch(apc)
+        bizhawk_rom = os.path.join(self.downloads, "AP_1_P1_Soma.gba")
+        with open(bizhawk_rom, "wb") as f:
+            f.write(b"the ROM patched from a cart for BizHawk")
+        temp = os.path.join(self.root, "temp")
+        os.makedirs(temp)
+        with mock.patch.object(tempfile, "tempdir", temp):
             install_rom(apc, self.exe_path, log=_quiet)
-        self.assertEqual(self._member(AOS_MEMBER), _make_patched_rom())
+        self.assertEqual(self.installed_rom(), self.patched)
+        with open(bizhawk_rom, "rb") as f:
+            self.assertEqual(f.read(), b"the ROM patched from a cart for BizHawk")
+        self.assertEqual(sorted(os.listdir(self.downloads)),
+                         ["AP_1_P1_Soma.apcvaos", "AP_1_P1_Soma.gba"])
+        self.assertEqual(os.listdir(temp), [], "the temporary patched ROM must be removed")
 
-    def test_gba_input_skips_patch_application(self) -> None:
-        with mock.patch.object(install, "_apply_patch_file") as apply_stub:
-            install_rom(self.rom_path, self.exe_path, log=_quiet)
-        apply_stub.assert_not_called()
+    def test_a_patch_with_an_upper_case_extension_installs(self) -> None:
+        apc = os.path.join(self.downloads, "AP_1_P1_SOMA.APCVAOS")
+        _write_marker_patch(apc)
+        install_rom(apc, self.exe_path, log=_quiet)
+        self.assertEqual(self.installed_rom(), self.patched)
 
 
 class RomValidationTest(_InstallerCase):
@@ -194,6 +429,9 @@ class RomValidationTest(_InstallerCase):
     def test_rejects_version_mismatch(self) -> None:
         with self.assertRaisesRegex(InstallError, "different world version"):
             validate_patched_rom(_make_patched_rom(marker="CVAOS_AP_V9.9"))
+
+    def test_accepts_a_rom_from_the_oldest_compatible_version(self) -> None:
+        validate_patched_rom(_make_patched_rom(marker="CVAOS_AP_V0.3"))
 
     def test_rejects_cart_based_patch(self) -> None:
         with self.assertRaisesRegex(InstallError, "audio bridge"):
@@ -218,6 +456,13 @@ class RestoreTest(_InstallerCase):
             self.assertTrue(os.path.isfile(os.path.join(self.windata, name + BACKUP_SUFFIX)),
                             "restore must keep the backups")
 
+    def test_a_restore_whose_index_stays_locked_says_the_files_do_not_match(self) -> None:
+        install_rom(self.rom_path, self.exe_path, log=_quiet)
+        with self.lock_the_live_index():
+            with self.assertRaisesRegex(InstallError, "do not match each other"):
+                restore_backup(self.exe_path, log=_quiet)
+        self.assertEqual(self.leftover_temp_files(), [])
+
     def test_restore_without_backup_raises(self) -> None:
         with self.assertRaisesRegex(InstallError, "No backup"):
             restore_backup(self.exe_path, log=_quiet)
@@ -236,11 +481,6 @@ class ExtractBaseRomTest(unittest.TestCase):
         root = tempfile.mkdtemp(prefix="cvaos_extract_test_")
         self.addCleanup(shutil.rmtree, root, ignore_errors=True)
         return _build_fake_collection(root, aos_bytes)
-
-    def test_extracts_stock_base_rom(self) -> None:
-        stock = _make_stock_base_rom()
-        exe = self._collection(stock)
-        self.assertEqual(extract_base_rom_bytes(exe), stock)
 
     def test_extract_to_writes_file(self) -> None:
         stock = _make_stock_base_rom()
@@ -262,6 +502,7 @@ class ExtractBaseRomTest(unittest.TestCase):
 
     def test_prefers_the_pristine_backups_once_a_seed_is_installed(self) -> None:
         stock = _make_stock_base_rom()
+        _treat_as_stock(self, stock)
         exe = self._collection(stock)
         rom_path = os.path.join(os.path.dirname(exe), "patched.gba")
         with open(rom_path, "wb") as f:
@@ -288,10 +529,17 @@ class BaseRomSourceTest(unittest.TestCase):
         self.TARGET_AC = TARGET_ADVANCE_COLLECTION
         self.root = tempfile.mkdtemp(prefix="cvaos_baserom_test_")
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        # What a search of the Steam libraries finds: nothing, unless a test says otherwise.
+        self.in_libraries: list[str] = []
+        search = mock.patch.object(install.steam, "game_exe_candidates",
+                                   side_effect=lambda: iter(self.in_libraries))
+        search.start()
+        self.addCleanup(search.stop)
 
     def _patch_settings(self, collection_exe: str, rom_file: str) -> None:
-        fake = types.SimpleNamespace(cvaos_options=types.SimpleNamespace(
+        fake = types.SimpleNamespace(save=mock.Mock(), cvaos_options=types.SimpleNamespace(
             collection_exe=collection_exe, rom_file=rom_file))
+        self.settings = fake
         p = mock.patch.object(self.patch, "get_settings", return_value=fake)
         p.start()
         self.addCleanup(p.stop)
@@ -301,7 +549,18 @@ class BaseRomSourceTest(unittest.TestCase):
         exe = _build_fake_collection(self.root, stock)
         # rom_file points somewhere that must NOT be read for an AC-target seed.
         self._patch_settings(exe, os.path.join(self.root, "unused-cart.gba"))
-        self.assertEqual(self.patch.get_base_rom_bytes(self.TARGET_AC), stock)
+        with _accept_fake_exe():
+            self.assertEqual(self.patch.get_base_rom_bytes(self.TARGET_AC), stock)
+
+    def test_ac_target_finds_the_collection_in_a_steam_library(self) -> None:
+        stock = _make_stock_base_rom()
+        exe = _build_fake_collection(self.root, stock)
+        self.in_libraries = [exe]
+        self._patch_settings(os.path.join(self.root, "no-such-game.exe"), "unused-cart.gba")
+        with _accept_fake_exe():
+            self.assertEqual(self.patch.get_base_rom_bytes(self.TARGET_AC), stock)
+        self.assertEqual(self.settings.cvaos_options.collection_exe, exe)
+        self.settings.save.assert_called_once()
 
     def test_ac_target_falls_back_to_rom_file_without_a_collection(self) -> None:
         cart = os.path.join(self.root, "cart.gba")
@@ -333,6 +592,118 @@ class BaseRomSourceTest(unittest.TestCase):
             f.write(b"default-target cart")
         self._patch_settings(os.path.join(self.root, "no-such-game.exe"), cart)
         self.assertEqual(self.patch.get_base_rom_bytes(), b"default-target cart")
+
+
+class ExePromptTest(unittest.TestCase):
+    """The installer asks for game.exe only when neither the configured path nor a Steam library
+    holds a file with the collection's hash.
+
+    It saves the chosen path to host.yaml, so it does not ask again. A cancelled dialog saves
+    nothing.
+    """
+
+    class FakePath(str):
+        chosen: "str | None" = None
+
+        def browse(self):
+            return None if self.chosen is None else ExePromptTest.FakePath(self.chosen)
+
+        def resolve(self) -> str:
+            return str(self)
+
+    def setUp(self) -> None:
+        from .. import CVAOSWorld
+        self.root = tempfile.mkdtemp(prefix="cvaos_exe_prompt_")
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.in_libraries: list[str] = []
+        search = mock.patch.object(install.steam, "game_exe_candidates",
+                                   side_effect=lambda: iter(self.in_libraries))
+        search.start()
+        self.addCleanup(search.stop)
+        self.options = types.SimpleNamespace()
+        self.saved = mock.Mock()
+        # CVAOSWorld.settings is a read-only metaclass property. It caches the settings group in
+        # _AutoWorldRegister__settings, so the test replaces that cache instead.
+        for patcher in (mock.patch.object(CVAOSWorld, "_AutoWorldRegister__settings", self.options),
+                        mock.patch("settings.get_settings",
+                                   return_value=types.SimpleNamespace(save=self.saved))):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def exe(self) -> str:
+        path = os.path.join(self.root, "game.exe")
+        with open(path, "wb") as f:
+            f.write(_FAKE_EXE_BYTES)
+        return path
+
+    def test_an_existing_configured_path_is_used_without_asking(self) -> None:
+        self.options.collection_exe = self.FakePath(self.exe())
+        with _accept_fake_exe(), mock.patch.object(self.FakePath, "browse") as browse:
+            self.assertEqual(install._exe_path_from_settings(), self.options.collection_exe)
+        browse.assert_not_called()
+
+    def test_a_configured_file_with_another_hash_gives_way_to_a_steam_library(self) -> None:
+        self.options.collection_exe = self.FakePath(self.exe())  # not the hash patched in below
+        found = os.path.join(self.root, "library", "game.exe")
+        os.makedirs(os.path.dirname(found))
+        with open(found, "wb") as f:
+            f.write(b"MZ the collection")
+        self.in_libraries = [found]
+        with mock.patch.object(install, "AC_GAME_EXE_MD5",
+                               hashlib.md5(b"MZ the collection").hexdigest()), \
+                mock.patch.object(self.FakePath, "browse") as browse:
+            self.assertEqual(install._exe_path_from_settings(), found)
+        browse.assert_not_called()
+        self.assertEqual(self.options.collection_exe, found)
+        self.saved.assert_called_once()
+
+    def test_a_missing_path_is_asked_for_and_saved(self) -> None:
+        chosen = self.exe()
+        self.options.collection_exe = self.FakePath(os.path.join(self.root, "missing", "game.exe"))
+        self.FakePath.chosen = chosen
+        self.addCleanup(setattr, self.FakePath, "chosen", None)
+        self.assertEqual(install._exe_path_from_settings(), chosen)
+        self.assertEqual(self.options.collection_exe, chosen)
+        self.saved.assert_called_once()
+
+    def test_cancelling_the_dialog_returns_none_and_saves_nothing(self) -> None:
+        self.options.collection_exe = self.FakePath(os.path.join(self.root, "missing", "game.exe"))
+        self.assertIsNone(install._exe_path_from_settings())
+        self.saved.assert_not_called()
+
+    def test_a_game_exe_in_a_steam_library_is_used_and_saved_without_asking(self) -> None:
+        found = self.exe()
+        self.in_libraries = [found]
+        self.options.collection_exe = self.FakePath(os.path.join(self.root, "missing", "game.exe"))
+        with _accept_fake_exe(), mock.patch.object(self.FakePath, "browse") as browse:
+            self.assertEqual(install._exe_path_from_settings(), found)
+        browse.assert_not_called()
+        self.assertEqual(self.options.collection_exe, found)
+        self.saved.assert_called_once()
+
+    def test_a_game_exe_with_another_hash_is_passed_over(self) -> None:
+        self.in_libraries = [self.exe()]  # without _accept_fake_exe, not the collection's hash
+        self.options.collection_exe = self.FakePath(os.path.join(self.root, "missing", "game.exe"))
+        self.assertIsNone(install._exe_path_from_settings())  # asked, and the dialog cancelled
+        self.saved.assert_not_called()
+
+
+class ExePathSettingTest(unittest.TestCase):
+    """A game.exe saved relative to the Archipelago folder reads back from that folder."""
+
+    def test_a_relative_path_reads_back_from_the_archipelago_folder(self) -> None:
+        import Utils
+
+        from .. import CVAOSSettings
+        relative = os.path.join("collection", "game.exe")
+        group = CVAOSSettings()
+        group.collection_exe = CVAOSSettings.CollectionExePath(relative)
+        elsewhere = tempfile.mkdtemp(prefix="cvaos_cwd_")
+        self.addCleanup(shutil.rmtree, elsewhere, ignore_errors=True)
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(elsewhere)  # the Launcher may start in another folder than last time
+        self.assertEqual(os.path.normcase(group.collection_exe),
+                         os.path.normcase(Utils.user_path(relative)))
 
 
 if __name__ == "__main__":

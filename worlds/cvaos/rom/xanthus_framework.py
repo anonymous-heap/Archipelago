@@ -2,14 +2,14 @@
 The Xanthus update-hook framework: shared infrastructure for per-frame ROM hooks.
 
 Ported from Xanthus's aos_patches (https://github.com/Xanthus1/aos_patches) with their generous
-permission, as part of the Classicvania Movement patch. It is kept here rather than inside any
-one feature because the GBA offers exactly one seat for it, so every per-frame hook must share
-this one installation:
+permission, as part of the Classicvania Movement patch. It lives in its own module, rather than
+inside any one feature, because the ROM has only one per-frame function pointer to take over.
+Every per-frame hook therefore shares this one installation:
 
-* The USA ROM keeps a per-frame function pointer -- vanilla ``0x0804306D``, the HP-display
-  update -- at GBA ``0x08043104``.
-* :data:`DISPATCHER` is repointed there. It calls the original function, then walks a
-  :data:`SLOT_COUNT`-entry pointer list at ``0x087D0040`` and calls every non-zero entry.
+* The USA ROM keeps a per-frame function pointer at GBA ``0x08043104``. Its vanilla value is
+  ``0x0804306D``, the HP-display update.
+* That pointer is repointed to :data:`DISPATCHER`, which calls the original function, then walks
+  a :data:`SLOT_COUNT`-entry pointer list at ``0x087D0040`` and calls every non-zero entry.
 * Slot bodies live at ``0x087D0100 + 0x200*(slot-1)``, so each slot has 0x200 bytes.
 
 A hook body must preserve r0-r7 and lr: the dispatcher's loop keeps its list pointer and offset
@@ -23,11 +23,11 @@ live in r0/r1 across the call. The convention both current bodies use is::
     pop {r0-r7}
     bx  lr
 
-:func:`writes` installs the framework and registers one slot. The framework half is idempotent
-and tolerant: patch.py hands each module the ROM as patched so far, so a second feature finds
-the dispatcher already in place and simply emits the same bytes. That makes the features
-independent of each other and of their apply order. The slot half is strict, so two features
-claiming one slot, or a body landing on an occupied region, fails loudly.
+:func:`writes` installs the framework and registers one slot. Installing the framework is
+idempotent: patch.py passes each module the ROM as patched so far, so a second feature finds the
+dispatcher already in place and emits the same bytes again. The features are therefore
+independent of each other and of their apply order. Registering the slot is strict, so two
+features claiming one slot, or a body landing on an occupied region, raises ValueError.
 
 Slot allocations (keep this list current; a slot may have exactly one owner):
 

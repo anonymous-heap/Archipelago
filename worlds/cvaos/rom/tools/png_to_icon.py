@@ -1,21 +1,31 @@
 #!/usr/bin/env python3
 """
-Convert a 16x16 RGBA PNG into an AoS "common item icon": four 4bpp GBA tiles laid out as the
-two 0x40-byte halves the engine DMAs (top row = tiles 0,1; bottom row = tiles 2,3), against a
-given 16-colour OBJ palette.
+Convert an RGBA PNG into an AoS "common item icon", and print its bytes as Python source.
 
-AoS pickup icons are loaded on demand by DMAing the 0x40 bytes (top half) from
-sheet_base+off and another 0x40 (bottom half) from sheet_base+off+0x200. So a 16x16 icon is
-0x80 bytes split into two 0x40 blocks; this tool emits that 0x80-byte blob.
+The icon is four 4bpp GBA tiles, with each pixel mapped to the nearest colour of a 16-colour OBJ
+palette. The engine loads a pickup icon on demand with two DMAs: 0x40 bytes for the top half
+(tiles 0 and 1) from sheet_base+off, and 0x40 bytes for the bottom half (tiles 2 and 3) from
+sheet_base+off+0x200. This tool prints the two halves together as one 0x80-byte blob. A source
+image that is not 16x16 is cropped to its opaque content and centred, so that content must fit in
+16x16.
 
-Palette: floor pickups all render through OBJ palette bank 6 -- the shared items palette, loaded for
-every pickup in every room (so it never gets clobbered). Bank 6 is items-palette sub-palette 2: its
-16 colours are static in the ROM at 0x082099FC + 4 + 2*0x20 = 0x08209A40 (a rainbow incl. gold
-#F8D848, tan #F8B070, greys #A0A0A8/#E8D8D0). Pass them via --palette (BGR555 hwords; they are also
-kept as ``BANK6_PALETTE`` in rom/custom_pickups.py). Index 0 is transparent. If --palette is omitted,
-a palette is derived from the image (provisional structure only; in-game colours wrong until re-run
-against bank 6). Nearest-colour can pull mid-tones to off-hues (e.g. dark brass -> brown/red); for a
-deliberate look, pre-map the source colours (see how custom_pickups._BUTTON_TILES was generated).
+rom/icon.py also imports this module's PNG decoder, quantiser, 16x16 fit and tile packer to build
+icons, so this module is imported during a build, not only run by hand. Those functions raise
+ValueError for unusable input, and the command-line entry point turns that error into an exit
+message.
+
+Palette: floor pickups all render through OBJ palette bank 6, the shared items palette. Because it
+is loaded for every pickup in every room, it holds the same colours wherever a pickup appears. Bank
+6 is items-palette sub-palette 2, and its 16 colours are static in the ROM at
+0x082099FC + 4 + 2*0x20 = 0x08209A40. They form a rainbow that includes gold #F8D848, tan #F8B070,
+and greys #A0A0A8 and #E8D8D0. Pass them as BGR555 hwords with --palette. ``BANK6_PALETTE`` in
+rom/custom_pickups.py holds the same values. Index 0 is transparent.
+
+Without --palette, the tool derives a palette from the image's own colours. That output has the
+right tile structure, but its in-game colours are wrong until the tool is rerun with --palette.
+
+Nearest-colour matching can map a mid-tone to a different hue, so dark brass may come out brown or
+red. For a deliberate look, recolour the source to bank-6 colours before converting it.
 
 Usage:
   python png_to_icon.py button_pickup.png                       # provisional (image's own colours)
@@ -29,24 +39,36 @@ import sys
 import zlib
 
 
-def decode_png_rgba(path: str) -> tuple[int, int, list[tuple[int, int, int, int]]]:
-    data = open(path, "rb").read()
-    assert data[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"
+def decode_png_rgba(data: bytes) -> tuple[int, int, list[tuple[int, int, int, int]]]:
+    """Decode the bytes of a PNG file into its width, height and row-major RGBA pixels.
+
+    Only non-interlaced 8-bit RGBA images are supported. Raises ValueError when ``data`` is not a
+    PNG, when the image is not 8-bit RGBA, and when the image is interlaced. The rows of an
+    interlaced image are stored in a different order, so decoding them as plain rows would return
+    the wrong pixels."""
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not a PNG file (the 8-byte PNG signature is missing)")
     pos = 8
-    w = h = bd = ct = None
+    w = h = bd = ct = interlace = None
     idat = b""
     while pos < len(data):
         ln = struct.unpack(">I", data[pos:pos + 4])[0]
         typ = data[pos + 4:pos + 8]
         chunk = data[pos + 8:pos + 8 + ln]
         if typ == b"IHDR":
-            w, h, bd, ct = struct.unpack(">IIBB", chunk[:10])
+            # width, height, bit depth, colour type, compression, filter method, interlace method
+            w, h, bd, ct, _, _, interlace = struct.unpack(">IIBBBBB", chunk[:13])
         elif typ == b"IDAT":
             idat += chunk
         elif typ == b"IEND":
             break
         pos += 12 + ln
-    assert ct == 6 and bd == 8, f"expected 8-bit RGBA, got colortype={ct} depth={bd}"
+    if ct != 6 or bd != 8:
+        raise ValueError(f"expected an 8-bit RGBA PNG (colour type 6, bit depth 8), "
+                         f"got colour type {ct} with bit depth {bd}")
+    if interlace != 0:
+        raise ValueError("the PNG is interlaced, which is not supported; "
+                         "save it again with interlacing turned off")
     raw = zlib.decompress(idat)
     ch = 4
     stride = w * ch
@@ -94,11 +116,12 @@ def derive_palette(px) -> list[int]:
         if c not in seen:
             seen.append(c)
     if len(seen) > 15:
-        raise SystemExit(f"image has {len(seen)} opaque colours; 4bpp allows 15 (+transparent)")
+        raise ValueError(f"image has {len(seen)} opaque colours; 4bpp allows 15 (+transparent)")
     return [0] + seen + [0] * (15 - len(seen))
 
 
 def nearest_index(r: int, g: int, b: int, pal_rgb: list[tuple[int, int, int]]) -> int:
+    """Return the index from 1 to 15 whose palette colour is nearest to ``(r, g, b)``."""
     best, bi = 1 << 30, 1
     for idx in range(1, 16):  # never map opaque pixels to index 0 (transparent)
         pr, pg, pb = pal_rgb[idx]
@@ -109,6 +132,10 @@ def nearest_index(r: int, g: int, b: int, pal_rgb: list[tuple[int, int, int]]) -
 
 
 def to_indices(px, w, h, pal: list[int]) -> list[list[int]]:
+    """Quantise RGBA pixels to a grid of indices into ``pal``, a list of 16 BGR555 colours.
+
+    A pixel with alpha 0 becomes index 0, which is transparent. Every other pixel becomes the
+    index of its nearest palette colour, so it is never index 0."""
     pal_rgb = [bgr555_to_rgb(c) for c in pal]
     grid = [[0] * w for _ in range(h)]
     for y in range(h):
@@ -129,23 +156,27 @@ def tile_4bpp(grid, tx: int, ty: int) -> bytes:
     return bytes(out)
 
 
-def fit_16x16(w, h, px):
-    """Crop the opaque bounding box and centre it in a 16x16 transparent canvas. Lets a tightly- or
-    loosely-cropped source (e.g. a 32x48 DSVEdit object frame) become a 16x16 icon."""
-    opaque = [(x, y) for y in range(h) for x in range(w) if px[y * w + x][3] != 0]
+def fit_16x16(grid: list[list[int]]) -> list[list[int]]:
+    """Crop an index grid to its opaque content, and centre that content in a 16x16 grid.
+
+    Index 0 is transparent and every other index is opaque. The source can be any size, such as a
+    32x48 object frame exported from DSVEdit, as long as its opaque content fits in 16x16. Raises
+    ValueError when the grid has no opaque pixels, or when its opaque content is larger than
+    16x16."""
+    opaque = [(x, y) for y in range(len(grid)) for x in range(len(grid[0])) if grid[y][x] != 0]
     if not opaque:
-        raise SystemExit("image is fully transparent")
+        raise ValueError("icon source is fully transparent")
     x0 = min(x for x, _ in opaque); x1 = max(x for x, _ in opaque)
     y0 = min(y for _, y in opaque); y1 = max(y for _, y in opaque)
     cw, ch = x1 - x0 + 1, y1 - y0 + 1
     if cw > 16 or ch > 16:
-        raise SystemExit(f"opaque content is {cw}x{ch}; must be <= 16x16 to fit an icon")
-    ox, oy = (16 - cw) // 2, (16 - ch) // 2          # centre
-    out = [(0, 0, 0, 0)] * (16 * 16)
-    for y in range(ch):
-        for x in range(cw):
-            out[(oy + y) * 16 + (ox + x)] = px[(y0 + y) * w + (x0 + x)]
-    return 16, 16, out
+        raise ValueError(f"opaque content is {cw}x{ch} pixels, which does not fit in a 16x16 icon")
+    ox, oy = (16 - cw) // 2, (16 - ch) // 2
+    out = [[0] * 16 for _ in range(16)]
+    for yy in range(ch):
+        for xx in range(cw):
+            out[oy + yy][ox + xx] = grid[y0 + yy][x0 + xx]
+    return out
 
 
 def main() -> None:
@@ -154,9 +185,8 @@ def main() -> None:
     ap.add_argument("--palette", default=None,
                     help="16 BGR555 hwords (comma/space separated) = OBJ bank 6; omit to derive")
     args = ap.parse_args()
-    w, h, px = decode_png_rgba(args.png)
-    if (w, h) != (16, 16):
-        w, h, px = fit_16x16(w, h, px)   # crop transparent edges + centre into 16x16
+    with open(args.png, "rb") as f:
+        w, h, px = decode_png_rgba(f.read())
 
     if args.palette:
         toks = [t for t in args.palette.replace(",", " ").split() if t]
@@ -169,6 +199,8 @@ def main() -> None:
         provisional = True
 
     grid = to_indices(px, w, h, pal)
+    if (w, h) != (16, 16):
+        grid = fit_16x16(grid)   # crop transparent edges + centre into 16x16
     t0, t1 = tile_4bpp(grid, 0, 0), tile_4bpp(grid, 1, 0)   # top-left, top-right
     t2, t3 = tile_4bpp(grid, 0, 1), tile_4bpp(grid, 1, 1)   # bottom-left, bottom-right
     top, bottom = t0 + t1, t2 + t3                          # two 0x40 halves
@@ -186,4 +218,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ValueError as err:
+        sys.exit(str(err))

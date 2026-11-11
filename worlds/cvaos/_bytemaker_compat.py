@@ -1,28 +1,31 @@
 """Single import point for bytemaker.
 
-bytemaker is pure Python (bitarray is only an optional ``[speedups]`` extra with a
-pure-Python ``BitVector`` fallback), so it can be vendored for frozen Archipelago
-installs, which cannot pip-install. An installed bytemaker wins over the copy vendored
-in ``worlds/cvaos/vendor`` — unless it is too old for this world.
+bytemaker is pure Python, so a copy is vendored in ``worlds/cvaos/vendor`` for frozen
+Archipelago installs, which cannot pip-install. Its bitarray dependency is an optional
+``[speedups]`` extra, and without bitarray it uses a pure-Python ``BitVector``.
 
-This world needs the ``bytemaker.spaces`` surface (>= 0.13), so that import doubles as
-the version probe: no bytemaker at all falls back to the vendored copy the usual way
-(vendor dir appended to ``sys.path``), while an installed-but-stale bytemaker is
-*detected* rather than silently preferred — its modules are evicted and the vendored
-copy is loaded in their place (see ``_vendor.prefer_vendored``). A version-number check
-would be worse: a vendored copy carries no dist metadata, so the probe asks for the
-surface itself.
+An installed bytemaker takes precedence over the vendored copy, unless it is too old for
+this world. This world needs the ``bytemaker.spaces`` module, which only bytemaker 0.13 and
+later have, so importing that module is the version check:
 
-Note for frozen installs: bytemaker >= 0.13 hard-imports ``typing_extensions`` below
-Python 3.13. Archipelago's root requirements pin it (and the vendored pydantic needs it
-too), so nothing extra is vendored here — but it is load-bearing.
+- When no bytemaker is installed, the import falls back to the vendored copy by appending
+  the vendor directory to ``sys.path``.
+- When the installed bytemaker is too old, its modules are removed from ``sys.modules`` and
+  the vendored copy is loaded in their place (see ``_vendor.prefer_vendored``).
 
-Type checkers read the vendored copy through the ``TYPE_CHECKING`` branch below, so
-pyright/Pylance resolve every name without configuration. mypy cannot: the vendored
-package's own absolute imports (``bytemaker.structs`` and so on) need the vendor directory
-on its search path, and with it there mypy sees each file under two module names and
-refuses. To mypy-check this world, install bytemaker >= 0.13 in the checking environment;
-against the vendored copy alone mypy treats the bytemaker names as ``Any``.
+Checking the version number instead would not work, because a vendored copy has no
+distribution metadata.
+
+Below Python 3.13, bytemaker 0.13 and later require ``typing_extensions``. It is not vendored
+here, because Archipelago's root requirements include it and the vendored pydantic needs it
+too. Frozen installs therefore rely on the copy that Archipelago ships.
+
+Type checkers read the vendored copy through the ``TYPE_CHECKING`` branch below, so pyright
+and Pylance resolve every name without configuration. mypy does not. The vendored package's
+own absolute imports, such as ``bytemaker.structs``, need the vendor directory on mypy's
+search path, but with it there mypy finds each file under two module names and reports an
+error. To check this world with mypy, install bytemaker 0.13 or later in the checking
+environment. Against the vendored copy alone, mypy treats the bytemaker names as ``Any``.
 """
 
 __all__ = [
@@ -66,7 +69,8 @@ if TYPE_CHECKING:
                                           through, unknown, until)
 else:
     try:
-        import bytemaker.spaces  # noqa: F401  — the probe: a surface only bytemaker >= 0.13 has
+        # The version check: only bytemaker 0.13 and later have this module.
+        import bytemaker.spaces  # noqa: F401
     except ImportError:
         import sys
 
@@ -78,7 +82,8 @@ else:
             prefer_vendored("bytemaker")
         else:
             ensure_vendor_on_sys_path()
-        import bytemaker.spaces  # noqa: F401,F811  — re-probe; a failure here is a real error
+        # Check again. A failure now is a real error rather than a missing or outdated install.
+        import bytemaker.spaces  # noqa: F401,F811
 
     from bytemaker import Buffer, Struct, UInt8, array, field, offset_of, s16, sizeof, u4, u8, u16, u32
     from bytemaker.spaces import (Entry, Patch, PatchConflict, PatchVerifyError, Ptr, Space, count, through,
