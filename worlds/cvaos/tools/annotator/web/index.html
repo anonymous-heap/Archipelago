@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CVAoS Routing Annotator</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <strong>Routing Annotator</strong>
+  <span id="status"></span>
+  <button id="sign-in" hidden>Sign in to Google</button>
+  <button id="grant" hidden>Pick the sheet</button>
+  <button id="refresh">Refresh</button>
+  <label>Annotated by <input id="annotator" size="14"></label>
+  <span id="progress"></span>
+</header>
+<main>
+  <section id="worklist-pane">
+    <h2>Worklist <small>(N for next)</small></h2>
+    <div id="worklist-tools">
+      <input id="filter" placeholder="Filter by enemy or room" size="22">
+      <label title="A type needs only one routed placement to stop depending on the fallback souls"><input id="one-per-type" type="checkbox"> One per type</label>
+    </div>
+    <ul id="worklist"></ul>
+  </section>
+  <section id="map-pane">
+    <div id="map-bar"><button id="castle" hidden>Castle map</button> <span id="room-title"></span>
+      <label id="background-toggle" hidden><input id="background" type="checkbox" checked> Background</label>
+      <span id="pick-hint"></span></div>
+    <svg id="map" xmlns="http://www.w3.org/2000/svg"></svg>
+  </section>
+  <section id="panel"></section>
+</main>
+<div id="toast" hidden></div>
+<script src="/app.js"></script>
+</body>
+</html>
